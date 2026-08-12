@@ -30,6 +30,29 @@ jobs:
         uses: actions/checkout@v7.0.0
         with:
           persist-credentials: false
+      - name: Set up Python for runtime tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install runtime test dependency
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Validate packaged Discovery runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_dir="$RUNNER_TEMP/switch-vision-discovery-runtime"
+          rm -rf "$runtime_dir"
+          mkdir -p "$runtime_dir"
+          tar -xzf ./switch_vision_discovery/runtime.tar.gz -C "$runtime_dir"
+          test -f "$runtime_dir/opt/switch-vision/devices/supported_devices.json"
+          test -d "$runtime_dir/opt/switch-vision/mib_database"
+          test -d "$runtime_dir/opt/switch-vision/vendors"
+          python -m py_compile \
+            "$runtime_dir/support_web.py" \
+            "$runtime_dir/registry_lookup.py" \
+            "$runtime_dir/vendor_sensor_scan.py" \
+            "$runtime_dir/unifi_dashboard_cards.py"
+          sh "$runtime_dir/self-test.sh"
       - name: Get app information
         id: info
         uses: home-assistant/actions/helpers/info@master
@@ -39,7 +62,7 @@ jobs:
         id: normalize
         shell: bash
         run: |
-          image=${{ steps.info.outputs.image }}
+          image='${{ steps.info.outputs.image }}'
           echo "image_name=${image##*/}" >> "$GITHUB_OUTPUT"
           echo "registry_prefix=${image%/*}" >> "$GITHUB_OUTPUT"
           echo "version=${{ steps.info.outputs.version }}" >> "$GITHUB_OUTPUT"
