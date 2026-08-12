@@ -1,0 +1,67 @@
+configuration:
+  switches:
+    name: Switches
+    description: "Configure each switch that Discovery should walk and generate. ⚠️ After editing a switch, click Save in the editor, then click Save again on the Configuration page. ⚠️"
+    fields:
+      switch_name:
+        name: Switch Name (Used internally only)
+        description: "Stable internal identifier used for walk folders, calibration profiles, switch mapping, and generated entity references. It is not used as the visible card title. Example: SW4."
+      display_name:
+        name: Display Name
+        description: "Optional friendly name used for the generated card title and default faceplate label. Example: 3650 Garage."
+      switch_host:
+        name: Management IP or host
+        description: "Address used for the SNMP walk. Example: 192.168.1.4."
+      sensor_prefix:
+        name: Sensor Prefix
+        description: "Prefix used for generated Home Assistant entity names. Example: sw4."
+      snmp_community:
+        name: SNMP Community
+        description: "Read-only SNMP community used for Discovery. Example: readonly."
+      walk_mode:
+        name: Walk Mode
+        description: "Targeted is recommended; full collects the complete tree. Example: targeted."
+      switch_model:
+        name: Switch Model
+        description: "Auto-detect is the default and recommended setting. Select an exact model to try its visual mapping and generated-card settings as an experimental compatibility override. The real detected model is always retained. Example: auto."
+      card_header_title:
+        name: Card header title
+        description: "Optional custom text shown as the card header. Leave blank to use the automatic Switch Vision and switch-name title. Example: Garage Core Switch."
+  stack_member_prefixes:
+    name: Stack Members
+    description: "Map each detected stack member to its stable ID, display name, and sensor prefix. ⚠️ After editing a stack member, click Save in the editor, then click Save again on the Configuration page. ⚠️"
+    fields:
+      switch_name:
+        name: Parent Switch Name (Used internally only)
+        description: "Must match the parent switch internal name. Example: SW5."
+      member:
+        name: Stack Member Number
+        description: "Physical stack member number reported by the switch. Example: 2."
+      display_name:
+        name: Display Name
+        description: "Friendly name used for this member's card title and default faceplate label. Example: Desktop Stack Member 2."
+      sensor_prefix:
+        name: Sensor Prefix
+        description: "Prefix used for this member's generated entities. Example: sw6."
+      card_header_title:
+        name: Card header title
+        description: "Optional custom text shown as this member card header. Leave blank to use the automatic title. Example: Desktop Stack Member 2."
+
+  generate_support_my_switch_bundle:
+    name: Support My Switch
+    description: "Create a contribution archive from the complete Switch Vision data folder without changing live files."
+  support_mask_management_ips:
+    name: Mask management IP addresses
+    description: "Replace IPv4 addresses in the contribution copy with safe example addresses."
+  support_mask_mac_addresses:
+    name: Mask MAC addresses
+    description: "Replace MAC addresses in the contribution copy while preserving consistent relationships."
+  support_mask_hostnames:
+    name: Mask hostnames and domains
+    description: "Replace detected switch names, hostnames, and domains in the contribution copy."
+  support_mask_vlan_names:
+    name: Mask VLAN names
+    description: "Replace detected VLAN names. Leaving them visible can improve device analysis."
+  support_mask_interface_descriptions:
+    name: Mask interface descriptions
+    description: "Replace interface aliases and descriptions. Leaving them visible can improve port-mapping analysis."

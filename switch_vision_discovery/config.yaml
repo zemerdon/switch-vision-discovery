@@ -1,0 +1,118 @@
+name: Switch Vision Discovery
+version: "2.1.1"
+slug: switch_vision_discovery
+description: Read-only multi-vendor switch discovery, capability reporting, and review-only SNMP2MQTT/dashboard generation for Switch Vision.
+url: https://github.com/zemerdon/switch-vision-discovery
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+hassio_api: true
+homeassistant_api: true
+hassio_role: manager
+panel_icon: mdi:lan-connect
+panel_title: Support My Switch
+map:
+  - share:rw
+options:
+  # Core files
+  input_path: /share/switch_vision/snmpwalk.txt
+  snmpwalks_dir: /share/switch_vision/snmpwalks
+  report_path: /share/switch_vision/discovery-report.txt
+
+  # Preferred switch-list workflow. Each row is self-contained.
+  # Switch Name (Used internally only): stable internal target ID, e.g. SW5. It links walk folders,
+  # stack mappings, generated profiles, and report sections.
+  # display_name is optional and intentionally omitted from the blank default row.
+  # When left blank, generated cards use "Switch Vision" as the friendly title.
+  run_snmp_walks: "true"
+  enable_switch_list: "true"
+  switches:
+    - switch_name: ""
+      switch_host: ""
+      sensor_prefix: ""
+      snmp_community: readonly
+      walk_mode: targeted
+      switch_model: auto
+      card_header_title: ""
+
+  # Optional stack member map. Each member may have its own friendly display name.
+  stack_member_prefixes: []
+
+  # Parser / generator controls
+  parse_all_walks: "false"
+  generate_snmp2mqtt: "true"
+  clean_output_before_walk: "false"
+
+  # Optional CSV/import fallback
+  targets_csv: /share/switch_vision/discovery-targets.csv
+
+  # Output files and SNMP timing
+  last_run_summary_path: /share/switch_vision/last-discovery-run.txt
+  generated_yaml_path: /share/switch_vision/generated-snmp2mqtt.yaml
+  generated_card_path: /share/switch_vision/generated-dashboard-card.yaml
+  snmp_timeout: "3"
+  snmp_retries: "1"
+  snmp_log_path: /share/switch_vision/snmpwalk.log
+  minimum_valid_walk_lines: "100"
+
+  # Support My Switch contribution bundle.
+  # Creates a ZIP from /share/switch_vision without changing live data.
+  # Includes a manifest, device summary, stable fingerprints, and privacy report.
+  # Secrets are always removed from the temporary copy. Review the ZIP before sharing.
+  generate_support_my_switch_bundle: "true"
+  support_mask_management_ips: "true"
+  support_mask_mac_addresses: "true"
+  support_mask_hostnames: "true"
+  support_mask_vlan_names: "false"
+  support_mask_interface_descriptions: "false"
+
+  # Optional contributor recognition. Nothing is published automatically.
+  # Select how you would like to be acknowledged, or leave anonymous.
+  support_contributor_type: anonymous
+  support_contributor_value: ""
+schema:
+  input_path: str
+  snmpwalks_dir: str
+  report_path: str
+  run_snmp_walks: list(false|true)
+  enable_switch_list: list(false|true)
+  switches:
+    - switch_name: str
+      display_name: str?
+      switch_host: str
+      sensor_prefix: str
+      snmp_community: str
+      walk_mode: list(targeted|full)
+      switch_model: list(auto|WS-C3650-48PD-E|WS-C3650-48PD-L|WS-C2960X-48FPD-L|WS-C2960X-24PS-L|WS-C2960X-24TS-L|WS-C2960S-48FPD-L|WS-C3560CG-8PC-S|EX3300-48P|SG500X-24|S5720-12TP-LI-AC|S5735-L8P4X-A1)?
+      card_header_title: str?
+  stack_member_prefixes:
+    - switch_name: str
+      member: str
+      display_name: str?
+      sensor_prefix: str
+      card_header_title: str?
+  parse_all_walks: list(false|true)
+  generate_snmp2mqtt: list(false|true)
+  clean_output_before_walk: list(false|true)
+  targets_csv: str
+  last_run_summary_path: str
+  generated_yaml_path: str
+  generated_card_path: str
+  snmp_timeout: str
+  snmp_retries: str
+  snmp_log_path: str
+  minimum_valid_walk_lines: str
+  generate_support_my_switch_bundle: list(false|true)
+  support_mask_management_ips: list(false|true)
+  support_mask_mac_addresses: list(false|true)
+  support_mask_hostnames: list(false|true)
+  support_mask_vlan_names: list(false|true)
+  support_mask_interface_descriptions: list(false|true)
+  support_contributor_type: list(anonymous|first_name|full_name|github|forum)
+  support_contributor_value: str
+image: ghcr.io/zemerdon/switch-vision-discovery
