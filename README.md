@@ -14,7 +14,7 @@ Repository URL:
 
 ## Current app
 
-- Switch Vision Discovery v2.1.5
+- Switch Vision Discovery v2.1.6
 - Architectures: amd64, aarch64
 - Container image: `ghcr.io/zemerdon/switch-vision-discovery`
 

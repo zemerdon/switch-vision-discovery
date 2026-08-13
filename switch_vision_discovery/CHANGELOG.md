@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.6
+
+- Harden Support My Switch privacy processing for loose/canonical/Cisco-style MAC addresses.
+- Always mask device serial numbers while preserving stable correlation inside contribution bundles.
+- Expand credential sanitization to SNMP command-line communities, authorization headers, URL credentials, and the positional community field in `discovery-targets.csv`.
+- Add always-enforced residual audits for credentials and serial numbers; bundles are withheld when either category remains.
+- Bump sanitization/report schema to version 12 and add regression coverage for the new privacy guarantees.
+
 ## 2.1.5
 
 - Reconciles the legacy human-readable Discovery parser with the current Juniper EX3300-48P registry and capability path.
