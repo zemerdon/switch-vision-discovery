@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.7
+
+- Adds Experimental Zyxel XS1930-10 support from Support My Switch contribution `SV-2026-000004` with contributor credit to `jpedrot`.
+- Detects exact `XS1930-10` hardware / sysObjectID `1.3.6.1.4.1.890.1.15` and maps `swp00`-`swp07` as eight RJ45 ports plus `swp08`-`swp09` as two 10G SFP+ uplinks.
+- Generates standards-based IF-MIB link/speed and 64-bit RX/TX telemetry plus Q-BRIDGE PVID/native-VLAN sensors without inferring trunk/access mode.
+- Adds contribution/MIB-proven Zyxel model, firmware, serial, CPU, memory, FAN1 RPM/status, and MAC/BOARD/PHY temperature telemetry.
+- Keeps PoE and transceiver/DDMI telemetry unclaimed where the contribution does not prove them.
+- Adds a curated Zyxel vendor/MIB pack and XS1930-10 regression coverage, including priority protection so proven sensor OIDs cannot be displaced by the generic enterprise candidate cap.
+- Requires Switch Vision main/core v2.1.5 or later for the XS1930-10 model-aware 8-RJ45 + 2-SFP visual; older core versions can consume Discovery data but may render the generic fallback geometry.
+- Keeps support status Experimental pending contributor runtime/dashboard validation; this model is not project-owner hardware validated.
+
 ## 2.1.6
 
 - Harden Support My Switch privacy processing for loose/canonical/Cisco-style MAC addresses.

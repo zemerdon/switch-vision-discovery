@@ -1,4 +1,4 @@
-# Switch Vision Discovery v2.1.6
+# Switch Vision Discovery v2.1.7
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
 
@@ -44,6 +44,8 @@ Discovery uses **Auto-detect** by default. A recognised exact SKU receives its r
 Unknown models receive a visible generic fallback and can be customised until a registered profile is available. A registered model can also be selected as an experimental compatibility override while the real detected model remains recorded.
 
 Confirmed and Experimental status applies only to the exact models in the shipped supported-device registry.
+
+For the Experimental Zyxel `XS1930-10` profile, model-aware 8-RJ45 + 2-SFP frontend geometry requires Switch Vision main/core v2.1.5 or later. Discovery and generated SNMP2MQTT data remain standards-based, but older core cards may use a generic fallback visual.
 
 ## Display names and stack members
 
