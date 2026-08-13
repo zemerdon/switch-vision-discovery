@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.5
+
+- Reconciles the legacy human-readable Discovery parser with the current Juniper EX3300-48P registry and capability path.
+- Detects EX3300-48P and JUNOS correctly in the legacy report instead of reporting an unknown/unsupported platform.
+- Maps 48 zero-based `ge-0/0/N` copper ports and the currently exposed dual-rate `ge-0/1/N` / `xe-0/1/N` uplink cages without fabricating empty IF-MIB interfaces.
+- Reports the confirmed `juniper-ex3300-48p` profile and supported status while keeping Virtual Chassis explicitly unvalidated.
+- Keeps the working v2.1.4 Juniper generated-YAML validator and SNMP2MQTT generator behaviour unchanged.
+- Adds packaged regression guards for the EX3300 legacy parser and support-metadata reconciliation.
+
 ## 2.1.4
 
 - Fixes generated SNMP2MQTT YAML validation for Juniper EX VLAN helper sensors, which intentionally use `source: juniper_ex_vlan` with `interface` and `attribute` instead of a direct `oid`.
