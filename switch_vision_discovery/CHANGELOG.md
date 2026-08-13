@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.3
+
+- Fixes fresh installs so the blank starter switch row is treated as zero configured SNMP switches instead of being walked as a bogus target.
+- Replaces whitespace-sensitive TSV switch-row parsing with a non-whitespace field separator so empty optional fields remain in their correct positions.
+- Applies the same field-preserving parsing to stack-member rows.
+- Aligns the packaged Discovery job version marker with the v2.1.3 app/runtime version.
+- Adds packaged-runtime regression coverage for blank starter rows and field-position preservation.
+
 ## 2.1.2
 
 - Fixes the repository-backed container runtime layout so the supported-device registry, vendor database, and MIB database are installed under `/opt/switch-vision/` where Discovery expects them.
