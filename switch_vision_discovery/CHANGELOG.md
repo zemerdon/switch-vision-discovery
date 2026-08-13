@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.4
+
+- Fixes generated SNMP2MQTT YAML validation for Juniper EX VLAN helper sensors, which intentionally use `source: juniper_ex_vlan` with `interface` and `attribute` instead of a direct `oid`.
+- Keeps direct SNMP sensors strict: ordinary sensors still require an OID, and unknown derived sensor sources remain rejected.
+- Validates Juniper VLAN helper interface, attribute, and the supported attribute set before allowing generated YAML to be applied.
+- Adds packaged-runtime regression coverage for valid and invalid source-aware generated-YAML sensor schemas.
+
 ## 2.1.3
 
 - Fixes fresh installs so the blank starter switch row is treated as zero configured SNMP switches instead of being walked as a bogus target.
