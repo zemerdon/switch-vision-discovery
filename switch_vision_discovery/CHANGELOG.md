@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.9
+
+- Adds **Switch Vision Hub → Devices → Enable / Disable Devices** with a one-click state control for every saved switch.
+- Adds **Enable / Disable Devices** as a bullet on the Hub Devices tile for at-a-glance discoverability.
+- Saves quick-toggle changes through Home Assistant Supervisor's authoritative app-options API, keeping the native Configuration editor and Hub on the same persisted state.
+- Keeps SNMP communities and unrelated settings server-side; the browser receives only safe switch identity/display fields.
+- Blocks state changes while Discovery is running so every toggle has unambiguous next-run semantics.
+- Retains the native Home Assistant Configuration field as a fallback and all v2.1.8 enabled/disabled generation safeguards.
+- Adds regression coverage for Supervisor-backed Hub state changes, secret preservation, browser-safe output, and stale-row rejection.
+
 ## 2.1.8
 
 - Adds persistent per-switch **Discovery State** with `enabled` / `disabled` choices.

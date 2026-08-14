@@ -14,7 +14,7 @@ Repository URL:
 
 ## Current app
 
-- Switch Vision Discovery v2.1.8
+- Switch Vision Discovery v2.1.9
 - Architectures: amd64, aarch64
 - Container image: `ghcr.io/zemerdon/switch-vision-discovery`
 - Zyxel XS1930-10 frontend visual dependency: Switch Vision main/core v2.1.5+

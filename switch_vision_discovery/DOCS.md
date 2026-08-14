@@ -1,4 +1,4 @@
-# Switch Vision Discovery v2.1.8
+# Switch Vision Discovery v2.1.9
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
 
@@ -29,6 +29,12 @@ Existing pre-v2.1.8 switch rows are treated as enabled and are migrated to an ex
 When a real switch inventory exists, `parse_all_walks` respects that inventory and scans only enabled switch folders. An all-disabled inventory cannot fall through to the legacy single `snmpwalk.txt` source. If there are no real configured switch rows, the historical offline `parse_all_walks` directory workflow remains available for backward compatibility.
 
 Generated capability caches and generated SNMP/dashboard output are rebuilt from the active source set, so disabled switches do not remain visible through stale generated artifacts. **Support My Switch is intentionally different:** it privacy-processes a temporary copy of the complete `/share/switch_vision/` data folder, so retained historical files for a disabled switch may still be present in a contribution bundle.
+
+### Hub quick controls
+
+Discovery v2.1.9 adds **Switch Vision Hub → Devices → Enable / Disable Devices**. Each saved switch has a one-click Enabled/Disabled control, so routine state changes no longer require opening the nested Home Assistant Configuration editor. The Devices tile on the Hub home page also advertises **Enable / Disable Devices** as a dedicated capability.
+
+The Hub reads and writes the same authoritative Home Assistant app options through the Supervisor API; it does not maintain a second switch-state database. Only browser-safe switch identity/display fields are returned to the page—SNMP community strings and unrelated app settings remain server-side. State controls are temporarily disabled while a Discovery run is active; changes apply to the next run. The native Home Assistant Discovery Configuration screen remains the fallback editor.
 
 ## Main outputs
 
