@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.10
+
+- Fixes a Support My Switch privacy leak exposed by full Cisco SNMP walks: ENTITY-MIB `entLogicalCommunity` values are now always redacted, including VLAN-qualified community forms.
+- Bumps Support My Switch sanitization/report schema to version 13 and blocks contribution readiness if any unredacted logical-community value survives the residual credential audit.
+- Splits Juniper full walks into the standard MIB and Juniper enterprise tree so a timeout in one branch cannot prevent collection of the other; partial full walks are marked `warning`, never `pass`.
+- Reconciles exact-model support status with the authoritative supported-device registry so confirmed Catalyst 2960S/2960X models are no longer reported as Experimental by legacy contribution/report paths.
+- Corrects normalized uplink capability counts: WS-C2960S-48FPD-L and WS-C2960X-48FPD-L deduplicate Gi aliases for their two physical dual-rate SFP+ cages; WS-C2960X-24PS-L retains four genuine 1G SFP uplinks; Catalyst 3650 distinguishes 1G SFP from 10G SFP+ uplinks.
+- Adds regression coverage for ENTITY-MIB community sanitization, full-walk warning semantics, registry status reconciliation, and 2960 uplink alias handling.
+
 ## 2.1.9
 
 - Adds **Switch Vision Hub → Devices → Enable / Disable Devices** with a one-click state control for every saved switch.

@@ -1,4 +1,4 @@
-# Switch Vision Discovery v2.1.9
+# Switch Vision Discovery v2.1.10
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
 
@@ -16,6 +16,8 @@ Switch Vision Discovery is a read-only Home Assistant app that walks or imports 
 - Run Discovery manually when adding, validating, or re-walking switches
 - Use targeted mode for known switches
 - Use full mode when investigating new hardware
+
+Discovery v2.1.10 hardens **full-walk** handling. On Juniper EX devices, full mode walks the standard MIB and Juniper enterprise tree independently so a timeout in one branch cannot hide the other. A partial full walk is marked **warning**, never pass.
 
 ## Persistent switch inventory
 
@@ -89,6 +91,8 @@ Import validates the JSON, path roots, numeric limits, switch rows, and stack ro
 ## Support My Switch
 
 Support My Switch creates a privacy-processed bundle from a temporary copy of `/share/switch_vision/`. The live folder is not modified.
+
+Discovery v2.1.10 uses privacy schema **13** and always redacts ENTITY-MIB `entLogicalCommunity` values from full SNMP walks, including VLAN-qualified community forms. The residual credential audit treats any unredacted logical-community value as a blocking leak, so a contribution cannot be marked ready to send while one remains.
 
 Clean, fully inspected bundles can include:
 
