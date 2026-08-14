@@ -1,0 +1,7 @@
+# Python build/test residue
+__pycache__/
+*.pyc
+*.pyo
+
+# Local Switch Vision patch backups
+.v*-backup-*/

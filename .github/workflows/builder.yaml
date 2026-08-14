@@ -36,6 +36,31 @@ jobs:
           python-version: '3.12'
       - name: Install runtime test dependency
         run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Validate runtime archive hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY_AUDIT'
+          from pathlib import PurePosixPath
+          import tarfile
+
+          path = "./switch_vision_discovery/runtime.tar.gz"
+          problems = []
+          with tarfile.open(path, "r:gz") as archive:
+              for member in archive.getmembers():
+                  p = PurePosixPath(member.name)
+                  if p.is_absolute() or ".." in p.parts:
+                      problems.append(f"unsafe path: {member.name}")
+                  if member.issym() or member.islnk() or member.isdev() or member.isfifo():
+                      problems.append(f"link/special entry: {member.name}")
+                  if "__pycache__" in p.parts or p.suffix in {".pyc", ".pyo"}:
+                      problems.append(f"Python bytecode/cache entry: {member.name}")
+          if problems:
+              for problem in problems:
+                  print(f"ERROR: {problem}")
+              raise SystemExit(1)
+          print("Runtime archive hygiene: PASS")
+          PY_AUDIT
       - name: Validate packaged Discovery runtime
         shell: bash
         run: |

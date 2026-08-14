@@ -1,5 +1,5 @@
 name: Switch Vision Discovery
-version: "2.1.7"
+version: "2.1.8"
 slug: switch_vision_discovery
 description: Read-only multi-vendor switch discovery, capability reporting, and review-only SNMP2MQTT/dashboard generation for Switch Vision.
 url: https://github.com/zemerdon/switch-vision-discovery
@@ -24,7 +24,10 @@ options:
   snmpwalks_dir: /share/switch_vision/snmpwalks
   report_path: /share/switch_vision/discovery-report.txt
 
-  # Preferred switch-list workflow. Each row is self-contained.
+  # Preferred switch-list workflow. Each row is self-contained and persistent.
+  # Existing rows without an enabled field are treated as enabled and are
+  # migrated to an explicit enabled state on the first v2.1.8 app start.
+  # enabled = generate this switch; disabled = keep the row saved but skip it.
   # Switch Name (Used internally only): stable internal target ID, e.g. SW5. It links walk folders,
   # stack mappings, generated profiles, and report sections.
   # display_name is optional and intentionally omitted from the blank default row.
@@ -36,6 +39,7 @@ options:
       switch_host: ""
       sensor_prefix: ""
       snmp_community: readonly
+      enabled: enabled
       walk_mode: targeted
       switch_model: auto
       card_header_title: ""
@@ -87,6 +91,7 @@ schema:
       switch_host: str
       sensor_prefix: str
       snmp_community: str
+      enabled: list(enabled|disabled)?
       walk_mode: list(targeted|full)
       switch_model: list(auto|WS-C3650-48PD-E|WS-C3650-48PD-L|WS-C2960X-48FPD-L|WS-C2960X-24PS-L|WS-C2960X-24TS-L|WS-C2960S-48FPD-L|WS-C3560CG-8PC-S|EX3300-48P|SG500X-24|S5720-12TP-LI-AC|S5735-L8P4X-A1|XS1930-10)?
       card_header_title: str?

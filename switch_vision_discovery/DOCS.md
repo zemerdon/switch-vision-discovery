@@ -1,4 +1,4 @@
-# Switch Vision Discovery v2.1.7
+# Switch Vision Discovery v2.1.8
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
 
@@ -16,6 +16,19 @@ Switch Vision Discovery is a read-only Home Assistant app that walks or imports 
 - Run Discovery manually when adding, validating, or re-walking switches
 - Use targeted mode for known switches
 - Use full mode when investigating new hardware
+
+## Persistent switch inventory
+
+Discovery v2.1.8 lets each saved switch remain permanently configured with a **Discovery State**:
+
+- `enabled` — walk, parse, and generate the switch;
+- `disabled` — keep the switch saved but exclude it from Discovery walking/parsing/generation.
+
+Existing pre-v2.1.8 switch rows are treated as enabled and are migrated to an explicit enabled state on the first v2.1.8 app start. Disabling a switch does **not** delete its stored SNMP walk history; re-enabling it later requires no re-entry of its configuration.
+
+When a real switch inventory exists, `parse_all_walks` respects that inventory and scans only enabled switch folders. An all-disabled inventory cannot fall through to the legacy single `snmpwalk.txt` source. If there are no real configured switch rows, the historical offline `parse_all_walks` directory workflow remains available for backward compatibility.
+
+Generated capability caches and generated SNMP/dashboard output are rebuilt from the active source set, so disabled switches do not remain visible through stale generated artifacts. **Support My Switch is intentionally different:** it privacy-processes a temporary copy of the complete `/share/switch_vision/` data folder, so retained historical files for a disabled switch may still be present in a contribution bundle.
 
 ## Main outputs
 
@@ -53,14 +66,17 @@ For the Experimental Zyxel `XS1930-10` profile, model-aware 8-RJ45 + 2-SFP front
 - `display_name` is optional friendly card text.
 - Stack-member `display_name` becomes that member's generated card title.
 - Member/profile identity remains based on the stable sensor prefix.
+- Stack-member mappings belonging to a disabled parent switch are excluded from generation while the saved mapping remains intact.
 
 ## Port activity
 
-Dashboard activity is derived from RX/TX byte-counter changes. Separate `_last_change` MQTT entities are not required.
+Discovery supplies the generated switch/card data; Activity LED behaviour itself is rendered by Switch Vision Core. Core v2.2.0 uses utilisation relative to negotiated link speed with configurable sensitivity, thresholds, blink periods, hold time, and hysteresis.
 
 ## Configuration export and import
 
 The Configuration page exports the switch list, stack mappings, and Discovery settings to portable JSON. Store exports securely because they may contain management addresses and SNMP community strings.
+
+v2.1.8 writes `switch-vision-discovery-config-v2` exports so persistent enabled/disabled state is explicit. It continues to import legacy `switch-vision-discovery-config-v1` exports, defaulting missing switch state to enabled. Unknown future export formats are rejected rather than guessed.
 
 Import validates the JSON, path roots, numeric limits, switch rows, and stack rows before writing anything. It creates `/data/options.before-import.json` and preserves current Support My Switch privacy and recognition preferences.
 
@@ -95,4 +111,6 @@ Switch Vision Installer manages Discovery installation and updates through this 
 
 ## Home Assistant app compatibility
 
-Discovery uses only the shared `/share` data mapping; it does not request direct Home Assistant `/config` access. The Dockerfile is the single build source and uses the supported Home Assistant Alpine 3.22 base. On startup, Discovery removes the retired `show_card_header` option from older saved app options so current Supervisor schema validation stays clean after the first migrated start.
+Discovery uses only the shared `/share` data mapping; it does not request direct Home Assistant `/config` access. The Dockerfile is the single build source and uses the supported Home Assistant Alpine 3.22 base. The repository build workflow uses Home Assistant builder actions and publishes matching multi-architecture image tags from the `config.yaml` version.
+
+On startup, Discovery removes the retired `show_card_header` option from older saved app options. v2.1.8 also adds an explicit `enabled` state to pre-v2.1.8 switch rows after Supervisor accepts the backward-compatible optional schema, keeping current Supervisor schema validation and future exports clean.

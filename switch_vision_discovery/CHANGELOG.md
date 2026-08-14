@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.8
+
+- Adds persistent per-switch **Discovery State** with `enabled` / `disabled` choices.
+- Enabled switches are walked, parsed, and included in generated SNMP2MQTT/dashboard output.
+- Disabled switches remain saved but are excluded from Discovery source selection and generation; stored walk history is retained for easy re-enabling.
+- Existing pre-v2.1.8 switch rows default to enabled and are migrated to an explicit enabled state on first v2.1.8 start.
+- Prevents `parse_all_walks` from reintroducing disabled switches through stored per-switch walk folders.
+- Prevents an all-disabled configured inventory from falling through to the legacy single `snmpwalk.txt` source.
+- Preserves the legacy offline `parse_all_walks` directory workflow when no real switch rows are configured.
+- Excludes stack-member mappings belonging to disabled parent switches.
+- Rebuilds capability/generated output from the active source set so disabled switches do not survive through stale generated artifacts.
+- Bumps portable Discovery configuration exports to `switch-vision-discovery-config-v2` while retaining import compatibility with v1; this prevents older Discovery releases from silently ignoring disabled-state semantics on downgrade/import.
+- Adds CI/runtime packaging hygiene checks that reject Python bytecode/cache residue, unsafe archive paths, links, and special files before container build.
+- Keeps all v2.1.7 Zyxel XS1930-10 support and prior privacy/Juniper fixes unchanged.
+
 ## 2.1.7
 
 - Adds Experimental Zyxel XS1930-10 support from Support My Switch contribution `SV-2026-000004` with contributor credit to `jpedrot`.

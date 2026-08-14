@@ -1,7 +1,7 @@
 configuration:
   switches:
     name: Switches
-    description: "Configure each switch that Discovery should walk and generate. ⚠️ After editing a switch, click Save in the editor, then click Save again on the Configuration page. ⚠️"
+    description: "Configure each switch that Discovery should walk and generate. Keep switches saved permanently and set Discovery State to disabled whenever you want Discovery to skip them. ⚠️ After editing a switch, click Save in the editor, then click Save again on the Configuration page. ⚠️"
     fields:
       switch_name:
         name: Switch Name (Used internally only)
@@ -18,6 +18,9 @@ configuration:
       snmp_community:
         name: SNMP Community
         description: "Read-only SNMP community used for Discovery. Example: readonly."
+      enabled:
+        name: Discovery State
+        description: "enabled = walk, parse, and generate this switch. disabled = keep the switch saved but exclude it from Discovery output. Stored walk history is retained so the switch can be re-enabled later."
       walk_mode:
         name: Walk Mode
         description: "Targeted is recommended; full collects the complete tree. Example: targeted."
