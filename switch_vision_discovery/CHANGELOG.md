@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.12
+
+- Fixes disabled saved switches continuing to render as stale/offline cards in `generated-dashboard-card.yaml` even though v2.1.11 correctly excluded them from SNMP walking and active SNMP2MQTT generation.
+- Applies the same Enabled/Disabled predicate used by the walk/parser path directly to the production generated-dashboard row selector.
+- Excludes all stack-member cards belonging to a disabled parent switch while keeping the saved switch and stack-member configuration intact for later re-enable.
+- Keeps legacy pre-v2.1.8 rows without an explicit state backward-compatible by treating them as Enabled.
+- Adds an executable regression against the exact jq program used by the dashboard-card writer, proving enabled stacks render, disabled switches do not render, and legacy rows remain enabled.
+- Preserves all v2.1.11 authoritative Supervisor run-option handling and v2.1.10 full-walk privacy protections.
+
 ## 2.1.11
 
 - Fixes Discovery walking switches that were disabled from **Switch Vision Hub → Devices** or Home Assistant Configuration while the Discovery app remained running.
