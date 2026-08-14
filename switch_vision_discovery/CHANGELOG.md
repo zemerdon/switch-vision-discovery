@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.13
+
+- Makes Home Assistant Supervisor the single authoritative persistence path for Discovery options. Configuration import and startup migrations no longer edit `/data/options.json` directly.
+- Adds one exclusive Discovery operation coordinator so Discovery, Support My Switch bundle creation, configuration import, device-state changes, SNMP reset, and UniFi2MQTT install/settings mutations cannot race each other. Conflicting requests fail with HTTP 409; Stop Discovery remains available while Discovery is running.
+- Rejects duplicate saved `switch_name` values and generated `sensor_prefix` identities across switch rows and stack-member prefixes, including disabled rows. Member 1 may intentionally reuse its own parent prefix for a stack.
+- Validates the authoritative Supervisor inventory before a Discovery run snapshot is written, so duplicate identities entered through native Home Assistant Configuration fail closed before any SNMP command starts.
+- Changes nested `snmp_community` to Home Assistant's native `password` schema type so community strings are masked in the app configuration UI without changing stored values.
+- Stops creating the secret-bearing `options.before-import.json` import backup and removes any legacy copy left by an earlier import. Imports preserve unrelated current Supervisor options/secrets and verify the saved result directly with Supervisor.
+- Configuration export now reads the authoritative Supervisor options instead of a potentially stale local copy.
+- Preserves v2.1.12 disabled-dashboard filtering, v2.1.11 live Supervisor run snapshots, and v2.1.10 privacy protections.
+
 ## 2.1.12
 
 - Fixes disabled saved switches continuing to render as stale/offline cards in `generated-dashboard-card.yaml` even though v2.1.11 correctly excluded them from SNMP walking and active SNMP2MQTT generation.

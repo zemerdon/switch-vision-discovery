@@ -1,4 +1,4 @@
-# Switch Vision Discovery v2.1.12
+# Switch Vision Discovery v2.1.13
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
 
@@ -41,6 +41,8 @@ The Hub reads and writes the same authoritative Home Assistant app options throu
 Discovery v2.1.11 also makes the **run itself** use that same authoritative state. Immediately before any SNMP command starts, the Hub captures a fresh Supervisor options snapshot and passes it to the Discovery job. The running job no longer depends on a possibly stale `/data/options.json` copy for switch enable/disable decisions. If Supervisor state cannot be read, Discovery fails closed and starts no SNMP walk.
 
 Discovery v2.1.12 extends that same authoritative Enabled/Disabled contract to generated dashboard cards. Disabled saved switches and their stack-member cards are retained in configuration but are omitted from `generated-dashboard-card.yaml`; legacy rows with no explicit state continue to default to Enabled.
+
+Discovery v2.1.13 hardens configuration persistence and concurrency. Supervisor is now the single authoritative write path for imports, migrations, and Hub device state; conflicting Discovery/Support/configuration operations are serialized; duplicate switch and generated sensor identities are rejected before polling; and native Home Assistant configuration masks SNMP community values using the `password` schema type.
 
 ## Main outputs
 
@@ -127,4 +129,4 @@ Switch Vision Installer manages Discovery installation and updates through this 
 
 Discovery uses only the shared `/share` data mapping; it does not request direct Home Assistant `/config` access. The Dockerfile is the single build source and uses the supported Home Assistant Alpine 3.22 base. The repository build workflow uses Home Assistant builder actions and publishes matching multi-architecture image tags from the `config.yaml` version.
 
-On startup, Discovery removes the retired `show_card_header` option from older saved app options. v2.1.8 also adds an explicit `enabled` state to pre-v2.1.8 switch rows after Supervisor accepts the backward-compatible optional schema, keeping current Supervisor schema validation and future exports clean.
+On startup, Discovery v2.1.13 performs legacy option migration through the Supervisor API instead of editing `/data/options.json`: it removes the retired `show_card_header` option and makes pre-v2.1.8 switch `enabled` state explicit when required. It also deletes any legacy `options.before-import.json` backup created by older import code because that file could contain stored secrets. Missing `enabled` remains backward-compatible and is treated as Enabled if Supervisor migration is temporarily unavailable.
