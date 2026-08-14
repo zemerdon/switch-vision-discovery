@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.11
+
+- Fixes Discovery walking switches that were disabled from **Switch Vision Hub → Devices** or Home Assistant Configuration while the Discovery app remained running.
+- Captures a fresh authoritative Home Assistant Supervisor options snapshot immediately before every Discovery run and passes that exact snapshot to the Discovery job.
+- Stops the runtime walk/parser/generator path from depending on a potentially stale `/data/options.json` copy for switch enable/disable decisions.
+- Fails closed when authoritative Supervisor options cannot be read: no SNMP walk is started rather than risking use of stale switch state.
+- Keeps disabled switches saved while excluding them from walking, parsing, generation, stack-member mappings, and current-run source selection.
+- Adds regression coverage for the full **toggle state → authoritative run snapshot → Discovery job** contract while preserving all v2.1.10 full-walk privacy protections.
+
 ## 2.1.10
 
 - Fixes a Support My Switch privacy leak exposed by full Cisco SNMP walks: ENTITY-MIB `entLogicalCommunity` values are now always redacted, including VLAN-qualified community forms.

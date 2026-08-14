@@ -1,4 +1,4 @@
-# Switch Vision Discovery v2.1.10
+# Switch Vision Discovery v2.1.11
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
 
@@ -37,6 +37,8 @@ Generated capability caches and generated SNMP/dashboard output are rebuilt from
 Discovery v2.1.9 adds **Switch Vision Hub → Devices → Enable / Disable Devices**. Each saved switch has a one-click Enabled/Disabled control, so routine state changes no longer require opening the nested Home Assistant Configuration editor. The Devices tile on the Hub home page also advertises **Enable / Disable Devices** as a dedicated capability.
 
 The Hub reads and writes the same authoritative Home Assistant app options through the Supervisor API; it does not maintain a second switch-state database. Only browser-safe switch identity/display fields are returned to the page—SNMP community strings and unrelated app settings remain server-side. State controls are temporarily disabled while a Discovery run is active; changes apply to the next run. The native Home Assistant Discovery Configuration screen remains the fallback editor.
+
+Discovery v2.1.11 also makes the **run itself** use that same authoritative state. Immediately before any SNMP command starts, the Hub captures a fresh Supervisor options snapshot and passes it to the Discovery job. The running job no longer depends on a possibly stale `/data/options.json` copy for switch enable/disable decisions. If Supervisor state cannot be read, Discovery fails closed and starts no SNMP walk.
 
 ## Main outputs
 
