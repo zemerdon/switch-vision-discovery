@@ -1,4 +1,4 @@
-# Switch Vision Discovery v2.1.16
+# Switch Vision Discovery v2.1.17
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
 
@@ -109,6 +109,8 @@ Clean, fully inspected bundles can include:
 Unsupported binary, oversized, unreadable, unwritable, symlink, or special files are excluded and force **REVIEW REQUIRED**. Blocked bundles provide the ZIP and privacy reports but withhold prepared send actions. Nothing is sent automatically.
 
 If the experimental UniFi2MQTT snapshot exists at `/share/switch_vision/unifi/devices.json`, Support My Switch always masks stable UniFi device IDs and, when hostname masking is enabled, masks the user-assigned UniFi device names.
+
+Discovery v2.1.17 also includes the privacy-safe `/share/switch_vision/unifi/diagnostics.json` produced by UniFi2MQTT v2.0.43. This preserves polling status, safe hardware models/features, and switch-classification reasons even when a normal UniFi device snapshot could not be produced.
 
 ## Diagnostics
 

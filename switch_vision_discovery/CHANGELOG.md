@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.17
+
+- Adds first-class support for the privacy-safe UniFi2MQTT `diagnostics.json` introduced in UniFi2MQTT v2.0.43.
+- Exposes UniFi polling status, poll stage, accepted/rejected device counts, safe model names, feature names, and switch-classification reasons through Discovery diagnostics.
+- Includes sanitized UniFi diagnostic evidence in Support My Switch contribution bundles so controller/API/classification failures can be diagnosed even when no `devices.json` snapshot was produced.
+- Adds defense-in-depth allowlist sanitization for UniFi diagnostic bundles; credentials, controller addresses, device identifiers, names, MAC addresses, IP addresses, and serial numbers are not accepted into the diagnostic evidence.
+- Fixes stale/default switch rows with no switch name or host but a leftover sensor prefix being treated as configured switches and causing `requires switch_name for a stable identity`.
+- Fixes generated dashboard and SNMP2MQTT headers reporting stale `Switch Vision Discovery v2.1.14`; runtime-generated files now report v2.1.17.
+- Adds regression coverage for stale switch placeholders, UniFi diagnostic privacy, persistent UniFi polling failures, and safe diagnostic classification data.
+- Preserves the validated Juniper EX3300 interface/SFP discovery implementation unchanged.
+
 ## 2.1.16
 
 - Adds Experimental UniFi API dashboard support for `US 48 PoE 500W` from live Support My Switch evidence.
