@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.18
+
+- Adds Experimental UniFi API dashboard support for five models from Support My Switch contribution `SV-2026-000003`: `USW-24-PoE`, `USW-16-PoE`, `USW-Lite-8-PoE`, `USW Flex 2.5G 8 PoE`, and `USW Flex`.
+- Adds exact registry entries and API mapping profiles using live contributed port topology, connector, negotiated-speed, PoE, CPU, memory, uptime, and uplink evidence.
+- Records `USW-24-PoE` as 24 RJ45 + 2x 1G SFP, with PoE on ports 1-16.
+- Records `USW-16-PoE` as 16 RJ45 + 2x 1G SFP, with PoE on ports 1-8.
+- Records `USW-Lite-8-PoE` as 8 RJ45, with PoE on ports 1-4.
+- Records `USW Flex 2.5G 8 PoE` as eight 2.5G PoE RJ45 ports, one 10G RJ45 port, and one 10G SFP+ port.
+- Records `USW Flex` as five 1G RJ45 ports, with contributed PoE-output metadata on ports 2-5.
+- Preserves real API port counts when a dedicated Switch Vision visual is not yet available and uses the existing universal temporary visual fallback where required.
+- Keeps all five models Experimental pending rendered-dashboard validation.
+- Records that the current UniFi API path does not expose reliable per-port RX/TX traffic; SNMP remains required for per-port Activity LED animation.
+- Adds contribution regression coverage ensuring all five models emit dashboard cards from the authoritative runtime registry.
+- Preserves the validated Juniper EX3300 live-interface implementation and registry entry unchanged.
+
 ## 2.1.17
 
 - Adds first-class support for the privacy-safe UniFi2MQTT `diagnostics.json` introduced in UniFi2MQTT v2.0.43.
