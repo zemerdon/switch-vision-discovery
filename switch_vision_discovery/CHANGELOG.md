@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.16
+
+- Adds Experimental UniFi API dashboard support for `US 48 PoE 500W` from live Support My Switch evidence.
+- Registers 48 RJ45 ports, two 1G SFP ports, two 10G SFP+ ports, and PoE capability.
+- Uses the existing 48 RJ45 + 4 SFP visual and `default_cisco_48_port` calibration profile.
+- Adds regression coverage for 48+4 UniFi card generation and confirms `UPS 2U` is never emitted as a switch card.
+- Records that the current UniFi API path does not expose reliable per-port RX/TX traffic for this device; SNMP is required for per-port Activity LED animation.
+- Preserves all Discovery v2.1.14 EX3300 live SFP/SFP+ runtime code unchanged.
+
 ## 2.1.15
 
 - Adds a **Copy Debug Info** button beneath Discovery debug output.
