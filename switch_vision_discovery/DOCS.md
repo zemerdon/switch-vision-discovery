@@ -1,4 +1,4 @@
-# Switch Vision Discovery v2.1.13
+# Switch Vision Discovery v2.1.16
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
 
