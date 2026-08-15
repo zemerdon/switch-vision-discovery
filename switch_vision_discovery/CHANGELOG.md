@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.15
+
+- Adds a **Copy Debug Info** button beneath Discovery debug output.
+- Reuses the existing Home Assistant Ingress-compatible clipboard fallback.
+- Applies an additional client-side credential sanitisation pass before debug text is copied.
+- Masks common community strings, passwords, tokens, API keys, authentication secrets, SNMP command-line credentials, and URL credentials.
+- Provides clear copied/error status feedback without changing Discovery execution, polling, generation, or device handling.
+- Preserves Discovery v2.1.14 Juniper EX3300 live SFP/SFP+ behaviour unchanged.
+
 ## 2.1.14
 
 - Adds live Juniper EX3300 SFP/SFP+ cage resolution with Switch Vision SNMP2MQTT Core v0.9.9.
