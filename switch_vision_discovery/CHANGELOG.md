@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.14
+
+- Adds live Juniper EX3300 SFP/SFP+ cage resolution with Switch Vision SNMP2MQTT Core v0.9.9.
+- Always generates all four EX3300 uplink cages from the confirmed hardware profile, even when an empty cage is absent from the current IF-MIB walk.
+- Generates ordered `xe-0/1/N` then `ge-0/1/N` interface candidates so 10G/1G mode changes, hot-plug events, and Junos ifIndex changes are followed at runtime without rerunning Discovery.
+- Moves EX3300 uplink status, admin status, speed, RX/TX counters, and alias sensors away from fixed numeric ifIndex OIDs.
+- Extends Juniper VLAN helper sensors to use the same live interface candidates for all four uplink cages.
+- Extends generated-YAML validation and self-tests for `source: interface` and candidate interface lists.
+- Preserves existing fixed-OID generation for EX3300 copper ports and all existing non-EX3300 devices.
+
 ## 2.1.13
 
 - Makes Home Assistant Supervisor the single authoritative persistence path for Discovery options. Configuration import and startup migrations no longer edit `/data/options.json` directly.
