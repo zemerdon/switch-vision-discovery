@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.19
+
+- Adds four Experimental UniFi API profile families from Support My Switch contribution `SV-2026-000057`: `USW Flex Mini`, `USW Pro 24`, `US 8 60W`, and `UniFi Dream Machine PRO SE`.
+- Records `USW Flex Mini` from three independent live devices as five 1G RJ45 ports with no PoE-output metadata exposed.
+- Records `USW Pro 24` as 24 1G RJ45 ports plus two confirmed 10G SFP+ uplinks and no PoE output.
+- Records `US 8 60W` as eight 1G RJ45 ports with 802.3af PoE output capability on ports 5-8 only.
+- Records `UniFi Dream Machine PRO SE` as ports 1-8 1G PoE RJ45, port 9 2.5G RJ45, and ports 10-11 10G SFP+; ports 9-11 remain role-neutral pending WAN/LAN validation.
+- Independently revalidates the existing `USW-24-PoE` Experimental profile as 24 1G RJ45 + two 1G SFP uplinks with PoE output on ports 1-16 only.
+- Adds regression coverage distinguishing `USW-24-PoE` 1G SFP uplinks from `USW Pro 24` 10G SFP+ uplinks.
+- Adds contribution-backed card-emission coverage for all four new model families, including all three contributed Flex Mini devices.
+- Preserves `per_port_traffic: false`; SNMP remains required where per-port traffic/Activity LED telemetry is needed.
+- Keeps all new profiles Experimental pending rendered-dashboard/faceplate validation.
+- Preserves the validated Juniper EX3300 live-interface implementation and registry entry unchanged.
+
 ## 2.1.18
 
 - Adds Experimental UniFi API dashboard support for five models from Support My Switch contribution `SV-2026-000003`: `USW-24-PoE`, `USW-16-PoE`, `USW-Lite-8-PoE`, `USW Flex 2.5G 8 PoE`, and `USW Flex`.
