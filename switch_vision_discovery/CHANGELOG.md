@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.1.20 — Dell EMC Networking N2128PX-ON Experimental support
+
+- Adds Experimental Dell EMC Networking N2128PX-ON support from a Support My Switch bundle received 2026-08-16.
+- Confirms sysObjectID `1.3.6.1.4.1.674.10895.3077` across standalone and two-member stack captures.
+- Maps `Gi<member>/0/1-28` as 28 RJ45 ports and `Te<member>/0/1-2` as two 10G SFP+ uplinks per member.
+- Adds exact Dell model extraction, front-panel capability classification, parser/report mapping, SNMP2MQTT labels, registry metadata, and mapping-profile coverage.
+- Records matching topology on firmware 6.7.1.27 and 6.6.0.7.
+- Uses the generic 48 RJ45 + 4 SFP visual temporarily while preserving the real 28 RJ45 + 2 uplink card counts.
+- Keeps VLAN/trunk semantics, detailed PoE presentation, rendered dashboard validation, and Dell-specific faceplate calibration Experimental/pending.
+- Preserves the validated Juniper EX3300 live-interface path unchanged.
+- Disambiguates this Dell evidence by date because its locally generated contribution ID collides with an older `SV-2026-000004` Zyxel contribution ID.
+
 ## 2.1.19
 
 - Adds four Experimental UniFi API profile families from Support My Switch contribution `SV-2026-000057`: `USW Flex Mini`, `USW Pro 24`, `US 8 60W`, and `UniFi Dream Machine PRO SE`.

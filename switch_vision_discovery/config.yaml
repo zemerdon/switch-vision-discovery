@@ -1,5 +1,5 @@
 name: Switch Vision Discovery
-version: "2.1.19"
+version: "2.1.20"
 slug: switch_vision_discovery
 description: Read-only multi-vendor switch discovery, capability reporting, and review-only SNMP2MQTT/dashboard generation for Switch Vision.
 url: https://github.com/zemerdon/switch-vision-discovery
@@ -93,7 +93,7 @@ schema:
       snmp_community: password
       enabled: list(enabled|disabled)?
       walk_mode: list(targeted|full)
-      switch_model: list(auto|WS-C3650-48PD-E|WS-C3650-48PD-L|WS-C2960X-48FPD-L|WS-C2960X-24PS-L|WS-C2960X-24TS-L|WS-C2960S-48FPD-L|WS-C3560CG-8PC-S|EX3300-48P|SG500X-24|S5720-12TP-LI-AC|S5735-L8P4X-A1|XS1930-10)?
+      switch_model: list(auto|WS-C3650-48PD-E|WS-C3650-48PD-L|WS-C2960X-48FPD-L|WS-C2960X-24PS-L|WS-C2960X-24TS-L|WS-C2960S-48FPD-L|WS-C3560CG-8PC-S|EX3300-48P|SG500X-24|S5720-12TP-LI-AC|S5735-L8P4X-A1|XS1930-10|N2128PX-ON)?
       card_header_title: str?
   stack_member_prefixes:
     - switch_name: str
