@@ -1,5 +1,5 @@
 name: Switch Vision Discovery
-version: "2.1.20"
+version: "2.1.21"
 slug: switch_vision_discovery
 description: Read-only multi-vendor switch discovery, capability reporting, and review-only SNMP2MQTT/dashboard generation for Switch Vision.
 url: https://github.com/zemerdon/switch-vision-discovery
@@ -72,8 +72,8 @@ options:
   support_mask_management_ips: "true"
   support_mask_mac_addresses: "true"
   support_mask_hostnames: "true"
-  support_mask_vlan_names: "false"
-  support_mask_interface_descriptions: "false"
+  support_mask_vlan_names: "true"
+  support_mask_interface_descriptions: "true"
 
   # Optional contributor recognition. Nothing is published automatically.
   # Select how you would like to be acknowledged, or leave anonymous.
