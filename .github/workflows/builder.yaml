@@ -27,11 +27,11 @@ jobs:
       url: ${{ steps.normalize.outputs.url }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - name: Set up Python for runtime tests
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Install runtime test dependency
@@ -80,7 +80,7 @@ jobs:
           sh "$runtime_dir/self-test.sh"
       - name: Get app information
         id: info
-        uses: home-assistant/actions/helpers/info@master
+        uses: home-assistant/actions/helpers/info@a7c616ce81ccda50150bf1595786c71b1883fabb
         with:
           path: ./switch_vision_discovery
       - name: Normalize app information
@@ -96,7 +96,7 @@ jobs:
           echo "url=${{ steps.info.outputs.url }}" >> "$GITHUB_OUTPUT"
       - name: Prepare build matrix
         id: matrix
-        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@2026.06.0
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
         with:
           architectures: ${{ steps.info.outputs.architectures }}
           image-name: ${{ steps.normalize.outputs.image_name }}
@@ -115,11 +115,11 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare.outputs.build_matrix) }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - name: Build image
-        uses: home-assistant/builder/actions/build-image@2026.06.0
+        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
         with:
           arch: ${{ matrix.arch }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -148,7 +148,7 @@ jobs:
       packages: write
     steps:
       - name: Publish multi-arch manifest
-        uses: home-assistant/builder/actions/publish-multi-arch-manifest@2026.06.0
+        uses: home-assistant/builder/actions/publish-multi-arch-manifest@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
         with:
           architectures: ${{ needs.prepare.outputs.architectures }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
