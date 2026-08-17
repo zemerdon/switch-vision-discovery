@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.21 — Support My Switch privacy-safe defaults
+
+- Enable VLAN-name masking by default for new Support My Switch configurations.
+- Enable interface-description masking by default for new Support My Switch configurations.
+- Management IP, MAC-address, and hostname masking remain enabled by default.
+- Existing saved Home Assistant app options are preserved; this release does not silently override a contributor who already changed either privacy control.
+- Preserve switch detection, generated dashboard/SNMP2MQTT output, Dell N2128PX-ON support, UniFi diagnostics, and Juniper EX3300 live-interface behaviour unchanged.
+- Add a packaged regression protecting the runtime-side privacy-option contract.
+
 ## v2.1.20 — Dell EMC Networking N2128PX-ON Experimental support
 
 - Adds Experimental Dell EMC Networking N2128PX-ON support from a Support My Switch bundle received 2026-08-16.
