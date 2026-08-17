@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.1.22 — Immutable Home Assistant base image
+
+- Pin the Discovery container's Home Assistant `base:3.22` image to its resolved immutable multi-architecture OCI digest.
+- Preserve automatic amd64 and arm64 platform selection through the pinned OCI index.
+- Prevent future Discovery rebuilds from silently consuming a different `base:3.22` image without an explicit source change.
+- Discovery runtime logic, device profiles, Support My Switch behavior, privacy defaults, SNMP2MQTT generation, UniFi diagnostics, and validated Juniper EX3300 behavior are unchanged.
+
 ## v2.1.21 — Support My Switch privacy-safe defaults
 
 - Enable VLAN-name masking by default for new Support My Switch configurations.
