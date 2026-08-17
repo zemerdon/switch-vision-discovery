@@ -1,0 +1,579 @@
+profiles:
+  cisco-3650-48p-2x10g:
+    status: supported
+    vendor: Cisco
+    family: Catalyst 3650
+    model_patterns:
+    - WS-C3650-48PD-E
+    - WS-C3650-48PD-L
+    layout:
+      members: auto
+      rj45_ports: 48
+      sfp_1g_ports: 2
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_1g:
+      - Gi{member}/1/{port}
+      - GigabitEthernet{member}/1/{port}
+      sfp_10g:
+      - Te{member}/1/{port}
+      - TenGigabitEthernet{member}/1/{port}
+  cisco-3750x-24p:
+    status: experimental
+    vendor: Cisco
+    family: Catalyst 3750X
+    model_patterns:
+    - WS-C3750X-24P
+    - WS-C3750X-24P-L
+    layout:
+      members: auto
+      rj45_ports: 24
+      sfp_1g_ports: 4
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_1g:
+      - Gi{member}/1/{port}
+      - GigabitEthernet{member}/1/{port}
+      sfp_10g:
+      - Te{member}/1/{port}
+      - TenGigabitEthernet{member}/1/{port}
+  cisco-2960x-48fpd-48p-2x10g:
+    status: experimental
+    vendor: Cisco
+    family: Catalyst 2960X
+    model_patterns:
+    - WS-C2960X-48FPD-L
+    layout:
+      members: auto
+      rj45_ports: 48
+      sfp_1g_ports: 2
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_1g:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_10g:
+      - Te{member}/0/{port}
+      - TenGigabitEthernet{member}/0/{port}
+  cisco-2960x-24ps-24p-4sfp:
+    status: experimental
+    vendor: Cisco
+    family: Catalyst 2960X
+    model_patterns:
+    - WS-C2960X-24PS-L
+    layout:
+      members: auto
+      rj45_ports: 24
+      sfp_1g_ports: 4
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_1g:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_10g: []
+  cisco-2960s-48fpd-48p-2x10g:
+    status: experimental
+    vendor: Cisco
+    family: Catalyst 2960S
+    model_patterns:
+    - WS-C2960S-48FPD-L
+    layout:
+      members: auto
+      rj45_ports: 48
+      sfp_1g_ports: 2
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_1g:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_10g:
+      - Te{member}/0/{port}
+      - TenGigabitEthernet{member}/0/{port}
+  juniper-ex3300-48p:
+    status: supported
+    vendor: Juniper
+    family: EX3300
+    model_patterns:
+    - EX3300-48P
+    - ex3300-48p
+    sys_object_ids:
+    - 1.3.6.1.4.1.2636.1.1.1.2.76
+    layout:
+      members: 1
+      rj45_ports: 48
+      sfp_1g_ports: 0
+      sfp_10g_ports: 4
+    interface_patterns:
+      rj45:
+      - ge-0/0/{port_zero_based}
+      sfp_1g: []
+      sfp_10g:
+      - xe-0/1/{port_zero_based}
+      - ge-0/1/{port_zero_based}
+    notes:
+    - ge-0/0/0 through ge-0/0/47 map directly to faceplate labels 0 through 47.
+    - ge-0/1/N and xe-0/1/N are alternate names for the same four uplink cages and
+      must be deduplicated.
+    - Logical unit interfaces ending in .0, me0, and vlan are excluded from the front
+      panel.
+  cisco-3560cg-8pc-8p-2dual:
+    status: experimental
+    vendor: Cisco
+    family: Catalyst 3560-C
+    model_patterns:
+    - WS-C3560CG-8PC-S
+    sys_object_ids:
+    - 1.3.6.1.4.1.9.1.1317
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - Gi0/{port}
+      - GigabitEthernet0/{port}
+      sfp_1g:
+      - Gi0/9
+      - Gi0/10
+      - GigabitEthernet0/9
+      - GigabitEthernet0/10
+      sfp_10g: []
+    notes:
+    - Gi0/1 through Gi0/8 are access-port positions.
+    - Gi0/9 and Gi0/10 are mapped as dual-purpose uplinks.
+    - Temporary 24 RJ45 / 2 SFP visual profile; only eight copper overlays are active.
+  cisco-2960x-24ts-24p-4sfp:
+    status: experimental
+    vendor: Cisco
+    family: Catalyst 2960X
+    model_patterns:
+    - WS-C2960X-24TS-L
+    layout:
+      members: auto
+      rj45_ports: 24
+      sfp_1g_ports: 4
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_1g:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_10g: []
+  cisco-sg500x-24-24p-4x10g:
+    status: experimental
+    vendor: Cisco
+    family: Small Business SG500X
+    model_patterns:
+    - SG500X-24
+    - Unknown Cisco SG500X-24 24-Port Gigabit with 4-Port 10-Gigabit Stackable Managed
+      Switch
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 0
+      sfp_10g_ports: 4
+    interface_patterns:
+      rj45:
+      - gi1/{port}
+      - Gi1/{port}
+      - GigabitEthernet1/{port}
+      sfp_1g: []
+      sfp_10g:
+      - te1/{port}
+      - Te1/{port}
+      - TenGigabitEthernet1/{port}
+  ubiquiti-usw-enterprise-8-poe:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch Enterprise
+    model_patterns:
+    - USW-Enterprise-8-PoE
+    - Unknown USW-Enterprise-8-PoE
+    - Ubiquiti UniFi USW-Enterprise-8-PoE
+    - USW Enterprise 8 PoE
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - tw{port}
+      - TW{port}
+      sfp_1g: []
+      sfp_10g:
+      - te{port}
+      - TE{port}
+  ubiquiti-usw-pro-24-poe:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch Pro
+    model_patterns:
+    - USW-Pro-24-PoE
+    - Unknown USW-Pro-24-PoE
+    - Ubiquiti UniFi USW-Pro-24-PoE
+    - USW Pro 24 PoE
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - 0/{port}
+      sfp_1g: []
+      sfp_10g:
+      - 0/25
+      - 0/26
+  ubiquiti-usw-pro-xg-8-poe-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch Pro XG
+    model_patterns:
+    - USW Pro XG 8 PoE
+    - USW-Pro-XG-8-PoE
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g:
+      - api-port-9
+      - api-port-10
+  huawei-s5735-l8p4x-a1:
+    status: experimental
+    vendor: Huawei
+    family: S5735-L
+    model_patterns:
+    - S5735-L8P4X-A1
+    - Unknown Huawei S5735-L8P4X-A1
+    sys_object_ids:
+    - 1.3.6.1.4.1.2011.2.23.849
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 0
+      sfp_10g_ports: 4
+    interface_patterns:
+      rj45:
+      - GigabitEthernet0/0/{port}
+      sfp_1g: []
+      sfp_10g:
+      - XGigabitEthernet0/0/{port}
+    notes:
+    - Profile derived from two matching SV-2026-000010 devices.
+    - XGigabitEthernet0/0/1-4 are treated as high-speed uplink interfaces.
+  ubiquiti-udm-pro-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Dream Machine Pro
+    model_patterns:
+    - UDM Pro
+    - UDM-Pro
+    layout:
+      members: 1
+      rj45_ports: 9
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g:
+      - api-port-10
+      - api-port-11
+  ubiquiti-usw-24-poe-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch 24 PoE
+    model_patterns:
+    - USW-24-PoE
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g:
+      - api-port-25
+      - api-port-26
+      sfp_10g: []
+
+  ubiquiti-usw-16-poe-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch 16 PoE
+    model_patterns:
+    - USW-16-PoE
+    layout:
+      members: 1
+      rj45_ports: 16
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g:
+      - api-port-17
+      - api-port-18
+      sfp_10g: []
+
+  ubiquiti-usw-lite-8-poe-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch Lite 8 PoE
+    model_patterns:
+    - USW-Lite-8-PoE
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g: []
+
+  ubiquiti-usw-flex-2p5g-8-poe-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch Flex 2.5G 8 PoE
+    model_patterns:
+    - USW Flex 2.5G 8 PoE
+    layout:
+      members: 1
+      rj45_ports: 9
+      sfp_1g_ports: 0
+      sfp_10g_ports: 1
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g:
+      - api-port-10
+    notes:
+    - API ports 1-8 are 2.5G-capable PoE RJ45.
+    - API port 9 is 10G-capable RJ45.
+    - API port 10 is 10G SFP+.
+
+  ubiquiti-usw-flex-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch Flex
+    model_patterns:
+    - USW Flex
+    layout:
+      members: 1
+      rj45_ports: 5
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g: []
+
+  huawei-s5720-12tp-li-ac:
+    status: experimental
+    vendor: Huawei
+    family: S5720
+    model_patterns:
+    - S5720-12TP-LI-AC
+    - Unknown Huawei S5720-12TP-LI-AC
+    sys_object_ids:
+    - 1.3.6.1.4.1.2011.2.23.394
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 4
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - GigabitEthernet0/0/{port}
+      sfp_1g:
+      - GigabitEthernet0/0/9
+      - GigabitEthernet0/0/10
+      - GigabitEthernet0/0/11
+      - GigabitEthernet0/0/12
+      sfp_10g: []
+    notes:
+    - Profile derived from Support My Switch contributions SV-2026-000006 and SV-2026-000014.
+    - SV-2026-000014 confirms an ifDescr-only IF-MIB layout with GigabitEthernet0/0/1-12.
+    - Ports 1-8 are mapped as RJ45 and ports 9-12 as 1G SFP positions for this exact
+      model.
+    - Dashboard uses the generic 48 RJ45 + 4 SFP fallback visual until a smaller generic
+      faceplate is supplied.
+  zyxel-xs1930-10:
+    status: experimental
+    vendor: Zyxel
+    family: XS1930
+    model_patterns:
+    - XS1930-10
+    - Unknown XS1930-10
+    - Unknown Zyxel XS1930-10
+    sys_object_ids:
+    - 1.3.6.1.4.1.890.1.15
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - swp0{port_zero_based}
+      sfp_1g: []
+      sfp_10g:
+      - swp08
+      - swp09
+    notes:
+    - Profile derived from Support My Switch contribution SV-2026-000004.
+    - ifIndex 1-10 maps directly to swp00-swp09.
+    - swp00-swp07 map to faceplate ports 1-8; swp08-swp09 map to SFP+ uplinks 1-2.
+    - Q-BRIDGE PVID is generated only when the current walk contains the direct bridge-port join.
+    - Trunk/access mode and transceiver DDMI remain intentionally unclassified in v2.1.7.
+
+  ubiquiti-usw-flex-mini-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch Flex Mini
+    model_patterns:
+    - USW Flex Mini
+    - USW-Flex-Mini
+    layout:
+      members: 1
+      rj45_ports: 5
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g: []
+    notes:
+    - SV-2026-000057 contains three independent live devices with the same five-port layout.
+    - No PoE-output port mask is exposed for this exact model.
+
+  ubiquiti-usw-pro-24-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch Pro 24
+    model_patterns:
+    - USW Pro 24
+    - USW-Pro-24
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g:
+      - api-port-25
+      - api-port-26
+    notes:
+    - SV-2026-000057 confirms ports 25-26 as 10G SFP+.
+    - This profile intentionally differs from USW-24-PoE, whose two uplinks are 1G SFP.
+
+  ubiquiti-us-8-60w-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch 8 60W
+    model_patterns:
+    - US 8 60W
+    - US-8-60W
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g: []
+    notes:
+    - SV-2026-000057 confirms PoE output capability on ports 5-8 only.
+    - PoE-active state is independent from Ethernet link state.
+
+  ubiquiti-udm-pro-se-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Dream Machine Pro SE
+    model_patterns:
+    - UniFi Dream Machine PRO SE
+    - UDM Pro SE
+    - UDM-Pro-SE
+    layout:
+      members: 1
+      rj45_ports: 9
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g:
+      - api-port-10
+      - api-port-11
+    notes:
+    - SV-2026-000057 confirms ports 1-8 as 1G PoE RJ45, port 9 as 2.5G RJ45, and ports 10-11 as 10G SFP+.
+    - Ports 9-11 remain role-neutral pending WAN/LAN role validation.
+
+  dell-n2128px-on:
+    status: experimental
+    vendor: Dell
+    family: Dell EMC Networking N2000
+    model_patterns:
+      - N2128PX-ON
+      - Dell EMC Networking N2128PX-ON
+    sys_object_ids:
+      - 1.3.6.1.4.1.674.10895.3077
+    layout:
+      members: 1
+      rj45_ports: 28
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+        - Gi{member}/0/{port}
+        - GigabitEthernet{member}/0/{port}
+      sfp_1g: []
+      sfp_10g:
+        - Te{member}/0/1
+        - Te{member}/0/2
+        - TenGigabitEthernet{member}/0/1
+        - TenGigabitEthernet{member}/0/2
+    notes:
+      - Profile derived from the Support My Switch Dell bundle received 2026-08-16.
+      - The same sysObjectID and topology are present on firmware 6.7.1.27 and 6.6.0.7.
+      - Gi<member>/0/1-28 map to 28 RJ45 ports per stack member.
+      - Te<member>/0/1-2 map to two 10G SFP+ uplinks per stack member.
+      - Standalone and two-member stack captures are both present in the contribution.
+      - Generic 48 RJ45 + 4 SFP visual is temporary pending a Dell-specific faceplate.

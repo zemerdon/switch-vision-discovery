@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "vendor": "juniper",
+  "detection": {
+    "sys_object_id_prefixes": [
+      "1.3.6.1.4.1.2636."
+    ],
+    "sys_descr_patterns": [
+      "Juniper",
+      "JUNOS",
+      "JunOS"
+    ]
+  },
+  "capabilities": [
+    "identity",
+    "vendor_sensor_candidates"
+  ]
+}

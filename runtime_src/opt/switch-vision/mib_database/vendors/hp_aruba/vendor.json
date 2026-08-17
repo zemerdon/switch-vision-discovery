@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "hp_aruba",
+  "name": "HPE / Aruba",
+  "enterprise_number": 11,
+  "enterprise_oid": "1.3.6.1.4.1.11",
+  "enterprise_oids": [
+    "1.3.6.1.4.1.11",
+    "1.3.6.1.4.1.14823"
+  ],
+  "adapter": "known_vendor",
+  "support_status": "vendor-pack",
+  "notes": "Curated discovery knowledge; standard MIB scanning remains enabled."
+}

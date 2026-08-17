@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "dell",
+  "name": "Dell Technologies",
+  "enterprise_number": 674,
+  "enterprise_oid": "1.3.6.1.4.1.674",
+  "enterprise_oids": [
+    "1.3.6.1.4.1.674"
+  ],
+  "adapter": "known_vendor",
+  "support_status": "vendor-pack",
+  "notes": "Curated discovery knowledge; standard MIB scanning remains enabled."
+}

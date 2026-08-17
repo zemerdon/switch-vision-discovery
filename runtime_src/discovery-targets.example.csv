@@ -1,0 +1,3 @@
+switch name,switch host,sensor prefix,switch snmp community,output_dir,display name
+SW5,192.168.1.102,sw5,readonly,/share/switch_vision/snmpwalks/SW5,Core Stack
+SW7,192.168.1.103,sw7,readonly,/share/switch_vision/snmpwalks/SW7,Access Switch

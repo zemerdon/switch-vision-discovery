@@ -1,0 +1,1719 @@
+#!/usr/bin/env sh
+set -eu
+
+# v2.1.15 Copy Debug Info regression checks
+SV_COPY_DEBUG_TEST_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+grep -Fq 'id="copyDebugButton"' \
+    "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
+
+grep -Fq 'id="copyDebugStatus"' \
+    "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
+
+grep -Fq 'function sanitizeDebugText(text)' \
+    "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
+
+grep -Fq 'async function copyDebugInfo()' \
+    "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
+
+grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
+    "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
+
+BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -d "$BASE_DIR/mib_database" ]; then
+  RUNTIME_DATA_DIR="$BASE_DIR"
+elif [ -d "$BASE_DIR/opt/switch-vision/mib_database" ]; then
+  RUNTIME_DATA_DIR="$BASE_DIR/opt/switch-vision"
+elif [ -d /opt/switch-vision/mib_database ]; then
+  RUNTIME_DATA_DIR=/opt/switch-vision
+else
+  echo "ERROR: Switch Vision runtime data directory is missing." >&2
+  exit 1
+fi
+export CV_MIB_DATABASE_DIR="$RUNTIME_DATA_DIR/mib_database"
+export CV_VENDOR_DIR="$RUNTIME_DATA_DIR/vendors"
+RUNTIME_REGISTRY="$RUNTIME_DATA_DIR/devices/supported_devices.json"
+[ -f "$RUNTIME_REGISTRY" ]
+. "$CV_VENDOR_DIR/base.sh"
+. "$CV_VENDOR_DIR/generic.sh"
+. "$CV_VENDOR_DIR/cisco.sh"
+. "$CV_VENDOR_DIR/known_vendor.sh"
+. "$CV_VENDOR_DIR/interface.sh"
+. "$CV_VENDOR_DIR/loader.sh"
+cv_vendor_database_self_test
+
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' EXIT
+walk="$tmp_dir/test-walk.txt"
+cat > "$walk" <<'WALK'
+.1.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, C3650 Software"
+.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.9.1.2066
+.1.3.6.1.2.1.1.5.0 = STRING: "SW5"
+.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "GigabitEthernet1/0/1"
+.1.3.6.1.2.1.31.1.1.1.1.49 = STRING: "TenGigabitEthernet1/1/1"
+.1.3.6.1.2.1.31.1.1.1.1.10101 = STRING: "Vlan1"
+WALK
+cv_detect_vendor_identity "$walk"
+[ "$CV_ID_VENDOR" = "cisco" ]
+[ "$CV_ID_FAMILY" = "Catalyst 3650" ]
+[ "$CV_ID_PRODUCT_MATCH" = "exact" ]
+cv_write_capabilities_json "$walk" "$tmp_dir/capabilities.json" "$tmp_dir/latest.json"
+jq -e '(.device.vendor == "cisco") and (.summary.interface_count == 3) and (.summary.physical_count == 2) and (.summary.rj45_count == 1) and (.summary.sfp_plus_count == 1)' "$tmp_dir/capabilities.json" >/dev/null
+
+# Catalyst uplink normalization: 48FPD Gi aliases represent the same two
+# physical SFP+ cages as Te1/0/1-2; 24PS has four genuine 1G SFP ports.
+c2960_fpd="$tmp_dir/c2960-fpd.txt"
+cat > "$c2960_fpd" <<'WALK'
+.1.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, C2960X Software"
+.1.3.6.1.2.1.47.1.1.1.1.13.1 = STRING: "WS-C2960X-48FPD-L"
+.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"
+.1.3.6.1.2.1.31.1.1.1.1.49 = STRING: "Gi1/0/49"
+.1.3.6.1.2.1.31.1.1.1.1.50 = STRING: "Gi1/0/50"
+.1.3.6.1.2.1.31.1.1.1.1.201 = STRING: "Te1/0/1"
+.1.3.6.1.2.1.31.1.1.1.1.202 = STRING: "Te1/0/2"
+WALK
+cv_write_capabilities_json "$c2960_fpd" "$tmp_dir/c2960-fpd-capabilities.json" ""
+jq -e '(.summary.rj45_count == 1) and (.summary.sfp_count == 0) and (.summary.sfp_plus_count == 2) and (.summary.physical_count == 3)' "$tmp_dir/c2960-fpd-capabilities.json" >/dev/null
+
+c2960_24ps="$tmp_dir/c2960-24ps.txt"
+cat > "$c2960_24ps" <<'WALK'
+.1.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, C2960X Software"
+.1.3.6.1.2.1.47.1.1.1.1.13.1 = STRING: "WS-C2960X-24PS-L"
+.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"
+.1.3.6.1.2.1.31.1.1.1.1.25 = STRING: "Gi1/0/25"
+.1.3.6.1.2.1.31.1.1.1.1.26 = STRING: "Gi1/0/26"
+.1.3.6.1.2.1.31.1.1.1.1.27 = STRING: "Gi1/0/27"
+.1.3.6.1.2.1.31.1.1.1.1.28 = STRING: "Gi1/0/28"
+WALK
+cv_write_capabilities_json "$c2960_24ps" "$tmp_dir/c2960-24ps-capabilities.json" ""
+jq -e '(.summary.rj45_count == 1) and (.summary.sfp_count == 4) and (.summary.sfp_plus_count == 0) and (.summary.physical_count == 5)' "$tmp_dir/c2960-24ps-capabilities.json" >/dev/null
+
+cat >> "$walk" <<'WALK'
+.1.3.6.1.2.1.47.1.1.1.1.7.1001 = STRING: "Chassis inlet temperature"
+.1.3.6.1.2.1.99.1.1.1.1.1001 = INTEGER: 8
+.1.3.6.1.2.1.99.1.1.1.2.1001 = INTEGER: 9
+.1.3.6.1.2.1.99.1.1.1.3.1001 = INTEGER: 0
+.1.3.6.1.2.1.99.1.1.1.4.1001 = INTEGER: 42
+.1.3.6.1.2.1.99.1.1.1.5.1001 = INTEGER: 1
+.1.3.6.1.2.1.105.1.3.1.1.2.1 = Gauge32: 740
+.1.3.6.1.2.1.105.1.3.1.1.4.1 = Gauge32: 120
+WALK
+python3 "$BASE_DIR/standard_sensor_scan.py" --walk "$walk" --enrich "$tmp_dir/capabilities.json"
+jq -e '(.standard_sensor_discovery.candidate_count == 3) and (.capabilities.environment == true) and (.capabilities.poe == true)' "$tmp_dir/capabilities.json" >/dev/null
+
+
+juniper_walk="$tmp_dir/juniper-walk.txt"
+cat > "$juniper_walk" <<'WALK'
+.1.3.6.1.2.1.1.1.0 = STRING: "Juniper Networks, Inc. ex4300-48p"
+.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.2636.1.1.1.2.63
+.1.3.6.1.2.1.1.5.0 = STRING: "edge-juniper"
+JUNIPER-MIB::jnxOperatingTemp.1 = INTEGER: 42
+JUNIPER-MIB::jnxOperatingCPU.1 = INTEGER: 17
+WALK
+cv_detect_vendor_identity "$juniper_walk"
+[ "$CV_ID_VENDOR" = "juniper" ]
+cv_write_capabilities_json "$juniper_walk" "$tmp_dir/juniper-capabilities.json" ""
+python3 "$BASE_DIR/vendor_sensor_scan.py" --walk "$juniper_walk" --database "$CV_MIB_DATABASE_DIR" --enrich "$tmp_dir/juniper-capabilities.json"
+jq -e '(.device.vendor == "juniper") and (.vendor_sensor_discovery.pack_loaded == true) and (.vendor_sensor_discovery.counts_by_category.temperature == 1) and (.vendor_sensor_discovery.counts_by_category.cpu == 1)' "$tmp_dir/juniper-capabilities.json" >/dev/null
+
+huawei_walk="$tmp_dir/huawei-walk.txt"
+cat > "$huawei_walk" <<'WALK'
+.1.3.6.1.2.1.1.1.0 = STRING: "Huawei S5735-L8P4X-A1"
+.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.2011.2.23.849
+.1.3.6.1.2.1.1.5.0 = STRING: "huawei-test"
+.1.3.6.1.2.1.31.1.1.1.1.6 = STRING: "GigabitEthernet0/0/1"
+.1.3.6.1.2.1.31.1.1.1.1.14 = STRING: "XGigabitEthernet0/0/1"
+.1.3.6.1.2.1.31.1.1.1.1.15 = STRING: "XGigabitEthernet0/0/2"
+.1.3.6.1.2.1.31.1.1.1.1.16 = STRING: "XGigabitEthernet0/0/3"
+.1.3.6.1.2.1.31.1.1.1.1.17 = STRING: "XGigabitEthernet0/0/4"
+WALK
+cv_detect_vendor_identity "$huawei_walk"
+[ "$CV_ID_VENDOR" = "huawei" ]
+cv_write_capabilities_json "$huawei_walk" "$tmp_dir/huawei-capabilities.json" ""
+jq -e '(.device.vendor == "huawei") and (.summary.physical_count == 5) and (.summary.rj45_count == 1) and (.summary.sfp_plus_count == 4)' "$tmp_dir/huawei-capabilities.json" >/dev/null
+
+s5720_walk="$tmp_dir/s5720-walk.txt"
+cat > "$s5720_walk" <<'WALK'
+.1.3.6.1.2.1.1.1.0 = STRING: "Huawei S5720-12TP-LI-AC "
+.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.2011.2.23.394
+.1.3.6.1.2.1.1.5.0 = STRING: "huawei-s5720-test"
+.1.3.6.1.2.1.2.2.1.2.1 = STRING: "InLoopBack0"
+.1.3.6.1.2.1.2.2.1.2.2 = STRING: "NULL0"
+.1.3.6.1.2.1.2.2.1.2.5 = STRING: "GigabitEthernet0/0/1"
+.1.3.6.1.2.1.2.2.1.2.6 = STRING: "GigabitEthernet0/0/2"
+.1.3.6.1.2.1.2.2.1.2.7 = STRING: "GigabitEthernet0/0/3"
+.1.3.6.1.2.1.2.2.1.2.8 = STRING: "GigabitEthernet0/0/4"
+.1.3.6.1.2.1.2.2.1.2.9 = STRING: "GigabitEthernet0/0/5"
+.1.3.6.1.2.1.2.2.1.2.10 = STRING: "GigabitEthernet0/0/6"
+.1.3.6.1.2.1.2.2.1.2.11 = STRING: "GigabitEthernet0/0/7"
+.1.3.6.1.2.1.2.2.1.2.12 = STRING: "GigabitEthernet0/0/8"
+.1.3.6.1.2.1.2.2.1.2.13 = STRING: "GigabitEthernet0/0/9"
+.1.3.6.1.2.1.2.2.1.2.14 = STRING: "GigabitEthernet0/0/10"
+.1.3.6.1.2.1.2.2.1.2.15 = STRING: "GigabitEthernet0/0/11"
+.1.3.6.1.2.1.2.2.1.2.16 = STRING: "GigabitEthernet0/0/12"
+WALK
+cv_detect_vendor_identity "$s5720_walk"
+[ "$CV_ID_VENDOR" = "huawei" ]
+cv_write_capabilities_json "$s5720_walk" "$tmp_dir/s5720-capabilities.json" ""
+jq -e '
+  (.device.model_text == "S5720-12TP-LI-AC")
+  and (.summary.physical_count == 12)
+  and (.summary.rj45_count == 8)
+  and (.summary.sfp_count == 4)
+  and (.summary.sfp_plus_count == 0)
+  and (.summary.uplink_count == 4)
+  and ([.interfaces[] | select(.physical) | .name] | length == 12)
+' "$tmp_dir/s5720-capabilities.json" >/dev/null
+
+
+zyxel_walk="$tmp_dir/zyxel-walk.txt"
+cat > "$zyxel_walk" <<'WALK'
+.1.3.6.1.2.1.1.1.0 = STRING: "XS1930-10"
+.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.890.1.15
+.1.3.6.1.2.1.1.5.0 = STRING: "zyxel-test"
+.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "swp00"
+.1.3.6.1.2.1.31.1.1.1.1.2 = STRING: "swp01"
+.1.3.6.1.2.1.31.1.1.1.1.3 = STRING: "swp02"
+.1.3.6.1.2.1.31.1.1.1.1.4 = STRING: "swp03"
+.1.3.6.1.2.1.31.1.1.1.1.5 = STRING: "swp04"
+.1.3.6.1.2.1.31.1.1.1.1.6 = STRING: "swp05"
+.1.3.6.1.2.1.31.1.1.1.1.7 = STRING: "swp06"
+.1.3.6.1.2.1.31.1.1.1.1.8 = STRING: "swp07"
+.1.3.6.1.2.1.31.1.1.1.1.9 = STRING: "swp08"
+.1.3.6.1.2.1.31.1.1.1.1.10 = STRING: "swp09"
+.1.3.6.1.4.1.890.1.15.3.2.4.0 = INTEGER: 12
+.1.3.6.1.4.1.890.1.15.3.2.5.0 = INTEGER: 34
+.1.3.6.1.4.1.890.1.15.3.2.7.0 = INTEGER: 13
+.1.3.6.1.4.1.890.1.15.3.2.8.0 = INTEGER: 11
+.1.3.6.1.4.1.890.1.15.3.2.9.0 = INTEGER: 9
+WALK
+# Put more than the vendor review cap of generic enterprise numerics before the
+# late fan/temperature rows. Curated OIDs must still be retained by the scanner.
+i=1
+while [ "$i" -le 130 ]; do
+  printf '.1.3.6.1.4.1.890.1.15.99.1.%s = INTEGER: %s\n' "$i" "$i" >> "$zyxel_walk"
+  i=$((i + 1))
+done
+cat >> "$zyxel_walk" <<'WALK'
+.1.3.6.1.4.1.890.1.15.3.26.1.1.1.3.1 = INTEGER: 3500
+.1.3.6.1.4.1.890.1.15.3.26.1.1.1.7.1 = STRING: "Normal"
+.1.3.6.1.4.1.890.1.15.3.26.1.2.1.3.2 = INTEGER: 51
+.1.3.6.1.4.1.890.1.15.3.26.1.2.1.7.2 = STRING: "NORMAL"
+WALK
+cv_detect_vendor_identity "$zyxel_walk"
+[ "$CV_ID_VENDOR" = "zyxel" ]
+[ "$CV_ID_FAMILY" = "XS1930" ]
+[ "$CV_ID_MODEL_HINT" = "XS1930-10" ]
+[ "$CV_ID_SUPPORT_STATUS" = "experimental" ]
+cv_write_capabilities_json "$zyxel_walk" "$tmp_dir/zyxel-capabilities.json" ""
+python3 "$BASE_DIR/vendor_sensor_scan.py" --walk "$zyxel_walk" --database "$CV_MIB_DATABASE_DIR" --enrich "$tmp_dir/zyxel-capabilities.json"
+jq -e '
+  (.device.vendor == "zyxel")
+  and (.device.model_text == "XS1930-10")
+  and (.summary.physical_count == 10)
+  and (.summary.rj45_count == 8)
+  and (.summary.sfp_plus_count == 2)
+  and (.vendor_sensor_discovery.pack_loaded == true)
+  and (.vendor_sensor_discovery.counts_by_category.cpu == 4)
+  and (.vendor_sensor_discovery.counts_by_category.memory == 1)
+  and (.vendor_sensor_discovery.counts_by_category.fan == 2)
+  and (.vendor_sensor_discovery.counts_by_category.temperature == 2)
+  and ([.vendor_sensor_discovery.candidates[] | select(.source == "curated-known-oid")] | length == 9)
+  and ([.vendor_sensor_discovery.candidates[] | select(.oid == "1.3.6.1.4.1.890.1.15.3.26.1.1.1.3.1")] | length == 1)
+  and ([.vendor_sensor_discovery.candidates[] | select(.oid == "1.3.6.1.4.1.890.1.15.3.26.1.2.1.3.2")] | length == 1)
+' "$tmp_dir/zyxel-capabilities.json" >/dev/null
+python3 "$BASE_DIR/registry_lookup.py" --registry "$RUNTIME_REGISTRY" --model "Unknown Zyxel XS1930-10" --report > "$tmp_dir/zyxel-registry-report.txt"
+grep -q -- '- Registry match: yes' "$tmp_dir/zyxel-registry-report.txt"
+grep -q -- '- Registry status: experimental' "$tmp_dir/zyxel-registry-report.txt"
+grep -q -- '- Mapping profile: zyxel-xs1930-10' "$tmp_dir/zyxel-registry-report.txt"
+
+sg500_walk="$tmp_dir/sg500-walk.txt"
+cat > "$sg500_walk" <<'WALK'
+.1.3.6.1.2.1.1.1.0 = STRING: "SG500X-24 24-Port Gigabit with 4-Port 10-Gigabit Stackable Managed Switch"
+.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.9.6.1.85.24.1
+.1.3.6.1.2.1.1.5.0 = STRING: "sg500-test"
+.1.3.6.1.2.1.31.1.1.1.1.49 = STRING: "gi1/1"
+.1.3.6.1.2.1.31.1.1.1.1.72 = STRING: "gi1/24"
+.1.3.6.1.2.1.31.1.1.1.1.107 = STRING: "te1/1"
+.1.3.6.1.2.1.31.1.1.1.1.110 = STRING: "te1/4"
+WALK
+cv_detect_vendor_identity "$sg500_walk"
+[ "$CV_ID_VENDOR" = "cisco" ]
+cv_write_capabilities_json "$sg500_walk" "$tmp_dir/sg500-capabilities.json" ""
+jq -e '(.device.model_text == "SG500X-24") and (.summary.physical_count == 4) and (.summary.rj45_count == 2) and (.summary.sfp_plus_count == 2)' "$tmp_dir/sg500-capabilities.json" >/dev/null
+
+registry_report="$tmp_dir/registry-report.txt"
+python3 "$BASE_DIR/registry_lookup.py" --registry "$RUNTIME_REGISTRY" --model "WS-C3650-48PD-E" --report > "$registry_report"
+grep -q -- '- Registry match: yes' "$registry_report"
+grep -q -- '- Registry status: confirmed' "$registry_report"
+grep -q -- '- Mapping profile: cisco-3650-48p-2x10g' "$registry_report"
+
+unifi_snapshot="$tmp_dir/unifi-devices.json"
+unifi_registry="$tmp_dir/unifi-registry.json"
+python3 - "$unifi_snapshot" "$unifi_registry" <<'PYTEST'
+import json, sys
+snapshot, registry = sys.argv[1:3]
+pro_ports = [{"idx": i, "state": "UP", "connector": "RJ45", "speed_mbps": 1000} for i in range(1, 25)]
+pro_ports += [{"idx": 25, "state": "UP", "connector": "SFPPLUS", "speed_mbps": 10000}, {"idx": 26, "state": "UP", "connector": "SFPPLUS", "speed_mbps": 10000}]
+lite_ports = [{"idx": i, "state": "UP", "connector": "RJ45", "speed_mbps": 1000} for i in range(1, 17)]
+us48_ports = [{"idx": i, "state": "UP", "connector": "RJ45", "speed_mbps": 1000} for i in range(1, 49)]
+us48_ports += [
+    {"idx": 49, "state": "UP", "connector": "SFP", "speed_mbps": 1000},
+    {"idx": 50, "state": "UP", "connector": "SFP", "speed_mbps": 1000},
+    {"idx": 51, "state": "UP", "connector": "SFPPLUS", "speed_mbps": 10000},
+    {"idx": 52, "state": "UP", "connector": "SFPPLUS", "speed_mbps": 10000},
+]
+json.dump({"schema_version": 1, "devices": [
+    {"id": "api-pro24", "name": "Core", "model": "USW Pro 24 PoE", "ports": pro_ports},
+    {"id": "api-lite16", "name": "Garage", "model": "USW Lite 16 PoE", "ports": lite_ports},
+    {
+        "id": "api-us48",
+        "name": "Legacy 48",
+        "model": "US 48 PoE 500W",
+        "ports": us48_ports,
+        "api_capabilities": {
+            "port_detail": True,
+            "per_port_traffic": False,
+        },
+    },
+    {
+        "id": "api-ups",
+        "name": "Managed UPS",
+        "model": "UPS 2U",
+        "ports": [
+            {
+                "idx": 1,
+                "state": "UP",
+                "connector": "RJ45",
+                "speed_mbps": 100,
+            }
+        ],
+    },
+]}, open(snapshot, "w"))
+json.dump({"devices": [
+    {"model": "USW-Pro-24-PoE", "status": "experimental", "calibration_profile": "cisco_2960x_24p", "default_faceplate": "faceplates/24rj45-2sfp.png"},
+    {"model": "USW Lite 16 PoE", "status": "experimental", "calibration_profile": "cisco_2960x_24p", "default_faceplate": "faceplates/24rj45-4sfp.png"},
+    {"model": "US 48 PoE 500W", "status": "experimental", "calibration_profile": "default_cisco_48_port", "default_faceplate": "faceplates/48rj45-4sfp.png"},
+]}, open(registry, "w"))
+PYTEST
+python3 "$BASE_DIR/unifi_dashboard_cards.py" --snapshot "$unifi_snapshot" --registry "$unifi_registry" --indent 0 > "$tmp_dir/unifi-cards.yaml"
+grep -q 'data_source: unifi_api' "$tmp_dir/unifi-cards.yaml"
+grep -q 'switch_model: USW Pro 24 PoE' "$tmp_dir/unifi-cards.yaml"
+grep -q 'switch_model: USW Lite 16 PoE' "$tmp_dir/unifi-cards.yaml"
+grep -q 'faceplate_file: 48rj45-4sfp.png' "$tmp_dir/unifi-cards.yaml"
+grep -q 'port_count: 16' "$tmp_dir/unifi-cards.yaml"
+grep -q 'switch_model: US 48 PoE 500W' "$tmp_dir/unifi-cards.yaml"
+grep -q 'port_count: 48' "$tmp_dir/unifi-cards.yaml"
+grep -q 'sfp_port_count: 4' "$tmp_dir/unifi-cards.yaml"
+grep -q 'unifi_port_detail: true' "$tmp_dir/unifi-cards.yaml"
+grep -q 'unifi_per_port_traffic: false' "$tmp_dir/unifi-cards.yaml"
+! grep -q 'switch_model: UPS 2U' "$tmp_dir/unifi-cards.yaml"
+! grep -q 'waiting for a matching generic faceplate/calibration profile' "$tmp_dir/unifi-cards.yaml"
+
+contrib_snapshot="$tmp_dir/unifi-contrib-000003.json"
+
+python3 - "$contrib_snapshot" <<'PYTEST'
+import json
+import sys
+
+path = sys.argv[1]
+
+def rj45(count, speed=1000):
+    return [
+        {
+            "idx": i,
+            "state": "UP",
+            "connector": "RJ45",
+            "max_speed_mbps": speed,
+            "speed_mbps": speed,
+            "poe": {
+                "available": False
+            },
+        }
+        for i in range(1, count + 1)
+    ]
+
+usw24 = rj45(24)
+usw24 += [
+    {
+        "idx": 25,
+        "state": "DOWN",
+        "connector": "SFP",
+        "max_speed_mbps": 1000,
+        "speed_mbps": None,
+    },
+    {
+        "idx": 26,
+        "state": "DOWN",
+        "connector": "SFP",
+        "max_speed_mbps": 1000,
+        "speed_mbps": None,
+    },
+]
+
+usw16 = rj45(16)
+usw16 += [
+    {
+        "idx": 17,
+        "state": "DOWN",
+        "connector": "SFP",
+        "max_speed_mbps": 1000,
+        "speed_mbps": None,
+    },
+    {
+        "idx": 18,
+        "state": "DOWN",
+        "connector": "SFP",
+        "max_speed_mbps": 1000,
+        "speed_mbps": None,
+    },
+]
+
+lite8 = rj45(8)
+
+flex25 = rj45(8, 2500)
+flex25 += [
+    {
+        "idx": 9,
+        "state": "DOWN",
+        "connector": "RJ45",
+        "max_speed_mbps": 10000,
+        "speed_mbps": None,
+    },
+    {
+        "idx": 10,
+        "state": "DOWN",
+        "connector": "SFPPLUS",
+        "max_speed_mbps": 10000,
+        "speed_mbps": None,
+    },
+]
+
+flex = rj45(5)
+
+devices = [
+    {
+        "id": "contrib-usw24",
+        "name": "USW24",
+        "model": "USW-24-PoE",
+        "ports": usw24,
+        "api_capabilities": {
+            "port_detail": True,
+            "per_port_traffic": False,
+        },
+    },
+    {
+        "id": "contrib-usw16",
+        "name": "USW16",
+        "model": "USW-16-PoE",
+        "ports": usw16,
+        "api_capabilities": {
+            "port_detail": True,
+            "per_port_traffic": False,
+        },
+    },
+    {
+        "id": "contrib-lite8",
+        "name": "Lite8",
+        "model": "USW-Lite-8-PoE",
+        "ports": lite8,
+        "api_capabilities": {
+            "port_detail": True,
+            "per_port_traffic": False,
+        },
+    },
+    {
+        "id": "contrib-flex25",
+        "name": "Flex25",
+        "model": "USW Flex 2.5G 8 PoE",
+        "ports": flex25,
+        "api_capabilities": {
+            "port_detail": True,
+            "per_port_traffic": False,
+        },
+    },
+    {
+        "id": "contrib-flex",
+        "name": "Flex",
+        "model": "USW Flex",
+        "ports": flex,
+        "api_capabilities": {
+            "port_detail": True,
+            "per_port_traffic": False,
+        },
+    },
+]
+
+json.dump(
+    {
+        "schema_version": 1,
+        "devices": devices,
+    },
+    open(path, "w"),
+)
+PYTEST
+
+python3 \
+  "$BASE_DIR/unifi_dashboard_cards.py" \
+  --snapshot "$contrib_snapshot" \
+  --registry "$RUNTIME_REGISTRY" \
+  --indent 0 \
+  > "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'switch_model: USW-24-PoE' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'switch_model: USW-16-PoE' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'switch_model: USW-Lite-8-PoE' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'switch_model: USW Flex 2.5G 8 PoE' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'switch_model: USW Flex' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'port_count: 24' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'port_count: 16' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'port_count: 8' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'port_count: 9' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'port_count: 5' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'sfp_port_count: 2' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'sfp_port_count: 1' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+grep -q \
+  'unifi_per_port_traffic: false' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+! grep -q \
+  'no exact Switch Vision registry entry' \
+  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+
+echo \
+  "Switch Vision UniFi contribution SV-2026-000003 regression: PASS"
+
+privacy_root="$tmp_dir/privacy"
+mkdir -p "$privacy_root/unifi"
+cat > "$privacy_root/unifi/devices.json" <<'JSON'
+{"devices":[{"id":"device-uuid-123","name":"Private Core","model":"USW Pro 24 PoE","ports":[]}]}
+JSON
+cat > "$privacy_root/unifi/diagnostics.json" <<'JSON'
+{
+  "schema_version": 1,
+  "product": "Switch Vision UniFi2MQTT",
+  "version": "2.0.43",
+  "status": "success",
+  "stage": "complete",
+  "adopted_devices": 3,
+  "switching_devices": 2,
+  "rejected_devices": 1,
+  "empty_switch_polls": 0,
+  "device_classification": [
+    {
+      "model": "USW 24 Pro",
+      "features": ["switching"],
+      "accepted": true,
+      "reason": "unifi_switch_model"
+    }
+  ],
+  "api_key": "DO_NOT_KEEP_API_KEY",
+  "device_name": "Private Diagnostic Switch",
+  "controller_url": "https://192.168.50.1"
+}
+JSON
+cat > "$privacy_root/generated-dashboard-card.yaml" <<'YAML'
+views:
+  - title: Switch Vision
+    cards:
+      - type: custom:switch-vision-3650
+        title: Private Core
+        member: unifi_deviceuuid123
+        selected_switch: unifi_deviceuuid123
+        switch_model: USW Pro 24 PoE
+        data_source: unifi_api
+        unifi_device_id: device-uuid-123
+      # UniFi "Private Garage" (USW Lite 16 PoE) detected; waiting for visuals.
+YAML
+python3 "$BASE_DIR/sanitize_support_bundle.py" "$privacy_root" "$privacy_root/report.json" --mask-hostnames true >/dev/null
+jq -e '(.devices[0].id | startswith("masked-device-")) and (.devices[0].name == "masked-switch") and (.devices[0].model == "USW Pro 24 PoE")' "$privacy_root/unifi/devices.json" >/dev/null
+jq -e '
+  (.version == "2.0.43")
+  and (.status == "success")
+  and (.stage == "complete")
+  and (.adopted_devices == 3)
+  and (.switching_devices == 2)
+  and (.rejected_devices == 1)
+  and (.device_classification[0].model == "USW 24 Pro")
+  and (.device_classification[0].accepted == true)
+  and (has("api_key") | not)
+  and (has("device_name") | not)
+  and (has("controller_url") | not)
+' "$privacy_root/unifi/diagnostics.json" >/dev/null
+! grep -q 'DO_NOT_KEEP_API_KEY\|Private Diagnostic Switch\|192.168.50.1' "$privacy_root/unifi/diagnostics.json"
+grep -q '^        title: masked-switch$' "$privacy_root/generated-dashboard-card.yaml"
+grep -q '^        unifi_device_id: masked-device-' "$privacy_root/generated-dashboard-card.yaml"
+grep -q '^        member: unifi_masked_' "$privacy_root/generated-dashboard-card.yaml"
+grep -q '^        selected_switch: unifi_masked_' "$privacy_root/generated-dashboard-card.yaml"
+grep -q '# UniFi "masked-switch" (USW Lite 16 PoE)' "$privacy_root/generated-dashboard-card.yaml"
+! grep -q 'Private Core\|Private Garage\|device-uuid-123\|unifi_deviceuuid123' "$privacy_root/generated-dashboard-card.yaml"
+jq -e '(.sanitization_version >= 12) and (.residual_audit.unifi_device_ids_remaining == 0) and (.residual_audit.unifi_device_names_remaining == 0) and (.residual_audit.unifi_dashboard_ids_remaining == 0) and (.residual_audit.unifi_dashboard_names_remaining == 0) and (.enabled_category_leaks_found == false)' "$privacy_root/report.json" >/dev/null
+
+privacy_hard_root="$tmp_dir/privacy-hardening"
+mkdir -p "$privacy_hard_root"
+cat > "$privacy_hard_root/leaks.txt" <<'TEXT'
+snmp_community: privateCommunity
+mqtt_password=superSecret
+endpoint: mqtt://user:pass@example.invalid
+command: snmpwalk -On -v2c -c walkSecret 192.0.2.10 1.3.6.1.2.1.1
+Authorization: Bearer bearerSecret
+serial: FOC1234ABCD
+.1.3.6.1.2.1.47.1.1.1.1.11.1001 = STRING: "JN1234567890"
+.1.3.6.1.2.1.47.1.2.1.1.4.1 = STRING: "entityCommunity"
+.1.3.6.1.2.1.47.1.2.1.1.4.2 = STRING: "entityCommunity@10"
+ENTITY-MIB::entLogicalCommunity.3 = STRING: "symbolicCommunity@30"
+loose_mac: 0:1:2:3:4:5
+local_mac: 02:11:22:33:44:55
+cisco_mac: aabb.ccdd.eeff
+TEXT
+cat > "$privacy_hard_root/discovery-targets.csv" <<'CSV'
+switch name,switch host,sensor prefix,switch snmp community,output_dir,display name
+SW1,192.0.2.10,sw1,csvPrivate,/share/switch_vision/snmpwalks/SW1,Private Switch
+CSV
+python3 "$BASE_DIR/sanitize_support_bundle.py" "$privacy_hard_root" "$privacy_hard_root/report.json" >/dev/null
+! grep -q 'privateCommunity\|superSecret\|user:pass\|walkSecret\|bearerSecret\|FOC1234ABCD\|JN1234567890\|entityCommunity\|symbolicCommunity\|0:1:2:3:4:5\|02:11:22:33:44:55\|aabb.ccdd.eeff\|csvPrivate' "$privacy_hard_root/leaks.txt" "$privacy_hard_root/discovery-targets.csv"
+grep -q 'masked-serial-' "$privacy_hard_root/leaks.txt"
+grep -q 'masked-mac-' "$privacy_hard_root/leaks.txt"
+python3 - "$privacy_hard_root/discovery-targets.csv" "$privacy_hard_root/report.json" <<'PYTEST'
+import csv
+import json
+import sys
+
+with open(sys.argv[1], newline="", encoding="utf-8") as handle:
+    rows = list(csv.reader(handle))
+assert rows[1][3] == "<REDACTED>", rows
+
+with open(sys.argv[2], encoding="utf-8") as handle:
+    report = json.load(handle)
+assert report["sanitization_version"] >= 13, report
+assert report["serial_numbers_always_masked"] is True, report
+assert report["audit_categories"]["credentials"] == {"enforced": True, "remaining": 0}, report
+assert report["audit_categories"]["serial_numbers"] == {"enforced": True, "remaining": 0}, report
+assert report["audit_categories"]["mac_addresses"]["remaining"] == 0, report
+assert report["enabled_category_leaks_found"] is False, report
+assert report["counts"]["csv_community_values_removed"] >= 1, report
+assert report["counts"]["entity_logical_communities_removed"] >= 3, report
+assert report["counts"]["serial_numbers_masked"] >= 2, report
+assert report["counts"]["mac_addresses_masked"] >= 3, report
+PYTEST
+
+printf '%s\n' "Switch Vision privacy hardening regression: PASS"
+
+python3 - "$BASE_DIR" <<'PYTEST'
+import sys, tempfile
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import support_web
+
+with tempfile.TemporaryDirectory() as tmp:
+    generated = Path(tmp) / "generated-snmp2mqtt.yaml"
+    generated.write_text("""targets:\n- host: 192.0.2.10\n  name: SW1\n  sensors:\n  - oid: 1.3.6.1.2.1.1.3.0\n    name: SW1 Uptime\n  - oid: 1.3.6.1.2.1.2.2.1.8.1\n    name: SW1 Port 1 Status\n    binary_sensor: true\n  - oid: 1.3.6.1.2.1.2.2.1.10.1\n    name: ignored-name\n    object_id: sw1_port_1_rx_bytes\n""", encoding="utf-8")
+    topics = support_web._snmp2mqtt_discovery_topics(generated, "homeassistant")
+    assert topics == [
+        "homeassistant/binary_sensor/snmp2mqtt/sw1_port_1_status/config",
+        "homeassistant/sensor/snmp2mqtt/sw1_port_1_rx_bytes/config",
+        "homeassistant/sensor/snmp2mqtt/sw1_uptime/config",
+    ], topics
+    assert support_web._snmp2mqtt_slug("SW1 SFP 10G 1 RX Bytes") == "sw1_sfp_10g_1_rx_bytes"
+
+print("Switch Vision SNMP2MQTT retirement topic self-test: PASS")
+PYTEST
+
+
+python3 - "$BASE_DIR" <<'PYTEST'
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import support_web
+
+def validate(text):
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "generated-snmp2mqtt.yaml"
+        path.write_text(text, encoding="utf-8")
+        return support_web._validate_snmp2mqtt_yaml(path)
+
+valid_juniper = """targets:
+- host: 192.0.2.10
+  sensors:
+  - name: SW10 Port 0 VLAN Mode
+    source: juniper_ex_vlan
+    interface: ge-0/0/0
+    attribute: mode
+"""
+assert validate(valid_juniper)["valid"] is True
+
+valid_juniper_candidates = """targets:
+- host: 192.0.2.10
+  sensors:
+  - name: SW10 SFP 10G 1 VLAN Mode
+    source: juniper_ex_vlan
+    interfaces:
+      - xe-0/1/0
+      - ge-0/1/0
+    attribute: mode
+"""
+assert validate(valid_juniper_candidates)["valid"] is True
+
+valid_live_interface = """targets:
+- host: 192.0.2.10
+  sensors:
+  - name: SW10 SFP 10G 1 Status
+    source: interface
+    interfaces:
+      - xe-0/1/0
+      - ge-0/1/0
+    attribute: oper_status
+"""
+assert validate(valid_live_interface)["valid"] is True
+
+for attribute in ("oper_status", "admin_status", "speed_mbps", "rx_bytes", "tx_bytes", "alias"):
+    result = validate(f"""targets:
+- host: 192.0.2.10
+  sensors:
+  - name: SW10 live interface helper
+    source: interface
+    interfaces:
+      - xe-0/1/0
+      - ge-0/1/0
+    attribute: {attribute}
+""")
+    assert result["valid"] is True, (attribute, result)
+
+for attribute in ("mode", "native_vlan", "vlans", "tagged_vlans", "untagged_vlans", "summary"):
+    result = validate(f"""targets:
+- host: 192.0.2.10
+  sensors:
+  - name: SW10 VLAN helper
+    source: juniper_ex_vlan
+    interface: ge-0/0/0
+    attribute: {attribute}
+""")
+    assert result["valid"] is True, (attribute, result)
+
+normal_missing_oid = """targets:
+- host: 192.0.2.10
+  sensors:
+  - name: Broken normal sensor
+"""
+result = validate(normal_missing_oid)
+assert result["valid"] is False and "has no OID" in result["error"], result
+
+missing_interface = """targets:
+- host: 192.0.2.10
+  sensors:
+  - name: Broken Juniper helper
+    source: juniper_ex_vlan
+    attribute: mode
+"""
+result = validate(missing_interface)
+assert result["valid"] is False and "has no interface" in result["error"], result
+
+missing_attribute = """targets:
+- host: 192.0.2.10
+  sensors:
+  - name: Broken Juniper helper
+    source: juniper_ex_vlan
+    interface: ge-0/0/0
+"""
+result = validate(missing_attribute)
+assert result["valid"] is False and "has no attribute" in result["error"], result
+
+unsupported_attribute = """targets:
+- host: 192.0.2.10
+  sensors:
+  - name: Broken Juniper helper
+    source: juniper_ex_vlan
+    interface: ge-0/0/0
+    attribute: definitely_not_supported
+"""
+result = validate(unsupported_attribute)
+assert result["valid"] is False and "unsupported attribute" in result["error"], result
+
+unknown_source = """targets:
+- host: 192.0.2.10
+  sensors:
+  - name: Broken derived sensor
+    source: mystery_source
+    interface: ge-0/0/0
+    attribute: mode
+"""
+result = validate(unknown_source)
+assert result["valid"] is False and "unsupported OID-less source" in result["error"], result
+
+print("Switch Vision source-aware generated-YAML validation self-test: PASS")
+PYTEST
+
+printf '%s\n' "Switch Vision vendor/interface/privacy self-test: PASS"
+
+# Hub UniFi visibility/status UX regression checks.
+grep -q 'id="openUnifi2mqttSettingsButton"' "$BASE_DIR/support_web.py"
+grep -q 'unifi-unavailable' "$BASE_DIR/support_web.py"
+grep -q 'UniFi2MQTT is not installed. Install it from Switch Vision Installer first.' "$BASE_DIR/support_web.py"
+grep -q 'UniFi2MQTT is installed but not configured. Open settings to complete setup.' "$BASE_DIR/support_web.py"
+grep -q 'show_unifi_integration' "$BASE_DIR/support_web.py"
+grep -q "openResolvedApp('discovery')" "$BASE_DIR/support_web.py"
+! grep -q '/config/app/local_switch_vision_discovery/config' "$BASE_DIR/support_web.py"
+! grep -q 'Install/copy the bundled local app' "$BASE_DIR/support_web.py"
+grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
+
+
+# Blank/default switch-row regression.
+# A fresh Home Assistant install contains one visual placeholder row, but that
+# row must not count as a configured SNMP target. Empty fields must also remain
+# in their original positions when switch rows are decoded.
+sh -n "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.21"' "$BASE_DIR/discovery_job.sh"
+
+blank_switch_cfg="$tmp_dir/blank-switch-row.json"
+real_switch_cfg="$tmp_dir/real-switch-row.json"
+
+printf "%s\n" \
+'{"switches":[{"switch_name":"","switch_host":"","sensor_prefix":"","snmp_community":"readonly","walk_mode":"targeted","switch_model":"auto"}]}' \
+> "$blank_switch_cfg"
+
+printf "%s\n" \
+'{"switches":[{"switch_name":"SW10","switch_host":"192.168.1.108","sensor_prefix":"sw10","snmp_community":"readonly","walk_mode":"targeted","switch_model":"EX3300-48P"}]}' \
+> "$real_switch_cfg"
+
+if jq -e '
+  (.switches // .multi_switch_walks // []) as $rows |
+  ($rows | type == "array") and
+  any($rows[]?;
+    ((.switch_name // .switch // .selected_switch // .name // "")
+     | tostring | length) > 0
+  )
+' "$blank_switch_cfg" >/dev/null; then
+  echo "ERROR: blank starter switch row counted as configured" >&2
+  exit 1
+fi
+
+jq -e '
+  (.switches // .multi_switch_walks // []) as $rows |
+  ($rows | type == "array") and
+  any($rows[]?;
+    ((.switch_name // .switch // .selected_switch // .name // "")
+     | tostring | length) > 0
+  )
+' "$real_switch_cfg" >/dev/null
+
+sv_row_separator="$(printf "\\034")"
+
+blank_parsed=$(
+  jq -r '
+    (.switches // .multi_switch_walks // [])[]? | [
+      (.switch_name // .switch // .selected_switch // .name // ""),
+      (.switch_host // .host // .manual_switch_host // ""),
+      (.switch_name // .switch // .selected_switch // .name // ""),
+      (.sensor_prefix // .entity_prefix // .prefix // ""),
+      (.snmp_community // .community // ""),
+      (.walk_mode // .mode // "targeted"),
+      (.output_dir // ""),
+      (.display_name // .card_title // ""),
+      (.switch_model // .model_override // "auto")
+    ] | map(tostring) | join("\u001c")
+  ' "$blank_switch_cfg" |
+  while IFS="$sv_row_separator" read -r sw host label prefix community mode out display model; do
+    printf "%s|%s|%s|%s|%s|%s" \
+      "$sw" "$host" "$prefix" "$community" "$mode" "$model"
+  done
+)
+
+[ "$blank_parsed" = "|||readonly|targeted|auto" ]
+
+real_parsed=$(
+  jq -r '
+    (.switches // .multi_switch_walks // [])[]? | [
+      (.switch_name // .switch // .selected_switch // .name // ""),
+      (.switch_host // .host // .manual_switch_host // ""),
+      (.switch_name // .switch // .selected_switch // .name // ""),
+      (.sensor_prefix // .entity_prefix // .prefix // ""),
+      (.snmp_community // .community // ""),
+      (.walk_mode // .mode // "targeted"),
+      (.output_dir // ""),
+      (.display_name // .card_title // ""),
+      (.switch_model // .model_override // "auto")
+    ] | map(tostring) | join("\u001c")
+  ' "$real_switch_cfg" |
+  while IFS="$sv_row_separator" read -r sw host label prefix community mode out display model; do
+    printf "%s|%s|%s|%s|%s|%s" \
+      "$sw" "$host" "$prefix" "$community" "$mode" "$model"
+  done
+)
+
+[ "$real_parsed" = "SW10|192.168.1.108|sw10|readonly|targeted|EX3300-48P" ]
+
+printf "%s\n" "Switch Vision blank switch-row regression: PASS"
+
+
+# Persistent switch enable/disable regression.
+# Missing enabled defaults to true; explicit false rows must be excluded from
+# walking/generation and from historical parse_all_walks source selection.
+enabled_switch_cfg="$tmp_dir/enabled-switch-row.json"
+disabled_switch_cfg="$tmp_dir/disabled-switch-row.json"
+legacy_switch_cfg="$tmp_dir/legacy-switch-row.json"
+
+printf "%s\n" \
+'{"switches":[{"switch_name":"SW10","switch_host":"192.168.1.108","sensor_prefix":"sw10","snmp_community":"readonly","enabled":"enabled","walk_mode":"targeted","switch_model":"EX3300-48P"}]}' \
+> "$enabled_switch_cfg"
+printf "%s\n" \
+'{"switches":[{"switch_name":"SW10","switch_host":"192.168.1.108","sensor_prefix":"sw10","snmp_community":"readonly","enabled":"disabled","walk_mode":"targeted","switch_model":"EX3300-48P"}]}' \
+> "$disabled_switch_cfg"
+printf "%s\n" \
+'{"switches":[{"switch_name":"SW10","switch_host":"192.168.1.108","sensor_prefix":"sw10","snmp_community":"readonly","walk_mode":"targeted","switch_model":"EX3300-48P"}]}' \
+> "$legacy_switch_cfg"
+
+enabled_jq='def enabled($sw): (($sw.enabled // "enabled") as $value | if ($value | type) == "boolean" then $value elif ($value | type) == "string" then (($value | ascii_downcase) as $state | ($state != "false" and $state != "disabled" and $state != "disable" and $state != "off" and $state != "no" and $state != "0")) else true end); (.switches // .multi_switch_walks // [])[]? | select(enabled(.)) | (.switch_name // "")'
+[ "$(jq -r "$enabled_jq" "$enabled_switch_cfg")" = "SW10" ]
+[ -z "$(jq -r "$enabled_jq" "$disabled_switch_cfg")" ]
+[ "$(jq -r "$enabled_jq" "$legacy_switch_cfg")" = "SW10" ]
+grep -q 'row\["enabled"\] = _switch_enabled_state(row.get("enabled", "enabled")' "$BASE_DIR/support_web.py"
+grep -q 'select(enabled(.))' "$BASE_DIR/discovery_job.sh"
+grep -q 'json_has_configured_switch_rows()' "$BASE_DIR/discovery_job.sh"
+grep -q 'json_has_enabled_switch_rows()' "$BASE_DIR/discovery_job.sh"
+grep -q 'legacy_single_walk_allowed()' "$BASE_DIR/discovery_job.sh"
+grep -q 'scanning enabled switch folders only' "$BASE_DIR/discovery_job.sh"
+grep -q 'json_has_configured_switch_rows &&' "$BASE_DIR/discovery_job.sh"
+grep -q 'python3 /migrate_options.py' "$BASE_DIR/run.sh"
+grep -q '/addons/self/options' "$BASE_DIR/migrate_options.py"
+! grep -q 'options.before-import' "$BASE_DIR/support_web.py"
+
+# Configuration export v2 is intentionally not accepted by v2.1.7, preventing
+# a downgrade from silently ignoring disabled rows. v2.1.8 still imports v1.
+python3 - "$BASE_DIR/support_web.py" "$tmp_dir" <<'PY_CONFIG_FORMAT'
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+module_path = Path(sys.argv[1])
+tmp = Path(sys.argv[2])
+sys.path.insert(0, str(module_path.parent))
+spec = importlib.util.spec_from_file_location("sv_support_web_test", module_path)
+module = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(module)
+
+options = tmp / "export-options.json"
+options.write_text(json.dumps({
+    "switches": [{
+        "switch_name": "SW10",
+        "switch_host": "192.0.2.10",
+        "sensor_prefix": "sw10",
+        "snmp_community": "readonly",
+        "walk_mode": "targeted",
+        "switch_model": "auto",
+    }]
+}), encoding="utf-8")
+module._self_addon_options = lambda: json.loads(options.read_text(encoding="utf-8"))
+exported = module._discovery_export(options, "2.1.14")
+assert exported["format"] == "switch-vision-discovery-config-v2", exported
+assert exported["configuration"]["switches"][0]["enabled"] == "enabled", exported
+
+v1 = {
+    "format": "switch-vision-discovery-config-v1",
+    "configuration": exported["configuration"],
+}
+v1["configuration"]["switches"][0].pop("enabled", None)
+validated_v1 = module._validate_discovery_import(v1)
+assert validated_v1["switches"][0]["enabled"] == "enabled", validated_v1
+
+v2 = {
+    "format": "switch-vision-discovery-config-v2",
+    "configuration": validated_v1,
+}
+v2["configuration"]["switches"][0]["enabled"] = "disabled"
+validated_v2 = module._validate_discovery_import(v2)
+assert validated_v2["switches"][0]["enabled"] == "disabled", validated_v2
+
+try:
+    module._validate_discovery_import({"format": "switch-vision-discovery-config-v3", "configuration": {}})
+except ValueError:
+    pass
+else:
+    raise AssertionError("unknown future export format must be rejected")
+PY_CONFIG_FORMAT
+
+printf "%s\n" "Switch Vision persistent switch enable/disable regression: PASS"
+
+
+# Hub quick enable/disable controls must use Supervisor as the authoritative
+# configuration source, preserve unrelated settings/secrets, and never expose
+# the SNMP community to the browser-safe device snapshot.
+python3 - "$BASE_DIR/support_web.py" "$tmp_dir" <<'PY_HUB_DEVICE_TOGGLE'
+import copy
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+module_path = Path(sys.argv[1])
+tmp = Path(sys.argv[2])
+sys.path.insert(0, str(module_path.parent))
+spec = importlib.util.spec_from_file_location("sv_support_web_hub_toggle_test", module_path)
+module = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(module)
+
+stored = {
+    "enable_switch_list": "true",
+    "support_mask_management_ips": "true",
+    "switches": [
+        {
+            "switch_name": "SW10",
+            "display_name": "Juniper EX3300 48P",
+            "switch_host": "192.0.2.10",
+            "sensor_prefix": "sw10",
+            "snmp_community": "do-not-expose",
+            "enabled": "enabled",
+            "walk_mode": "targeted",
+            "switch_model": "EX3300-48P",
+        },
+        {
+            "switch_name": "",
+            "switch_host": "",
+            "sensor_prefix": "",
+            "snmp_community": "readonly",
+            "enabled": "enabled",
+            "walk_mode": "targeted",
+            "switch_model": "auto",
+        },
+    ],
+}
+posts = []
+
+def fake_supervisor(path, *, method="GET", timeout=12.0, payload=None):
+    if path == "/addons/self/info" and method == "GET":
+        return {"data": {"options": copy.deepcopy(stored)}}
+    if path == "/addons/self/options" and method == "POST":
+        assert isinstance(payload, dict) and isinstance(payload.get("options"), dict), payload
+        posts.append(copy.deepcopy(payload))
+        stored.clear()
+        stored.update(copy.deepcopy(payload["options"]))
+        return {"result": "ok", "data": {}}
+    raise AssertionError((path, method, payload))
+
+module._supervisor_json = fake_supervisor
+fallback = tmp / "hub-toggle-options.json"
+fallback.write_text("{}", encoding="utf-8")
+
+snapshot = module._configured_devices_snapshot(fallback)
+assert snapshot["writable"] is True, snapshot
+assert snapshot["count"] == 1, snapshot
+assert snapshot["devices"][0]["enabled"] == "enabled", snapshot
+assert snapshot["devices"][0]["display_name"] == "Juniper EX3300 48P", snapshot
+assert "snmp_community" not in snapshot["devices"][0], snapshot
+
+updated = module._set_configured_device_state(fallback, {
+    "index": 0,
+    "switch_name": "SW10",
+    "enabled": "disabled",
+})
+assert posts, "Supervisor options endpoint was not called"
+assert stored["switches"][0]["enabled"] == "disabled", stored
+assert stored["switches"][0]["snmp_community"] == "do-not-expose", stored
+assert stored["support_mask_management_ips"] == "true", stored
+assert updated["devices"][0]["enabled"] == "disabled", updated
+
+try:
+    module._set_configured_device_state(fallback, {"index": 0, "switch_name": "WRONG", "enabled": "enabled"})
+except ValueError:
+    pass
+else:
+    raise AssertionError("stale/mismatched switch identity must be rejected")
+PY_HUB_DEVICE_TOGGLE
+
+grep -q 'Enable / Disable Devices' "$BASE_DIR/support_web.py"
+grep -q '/addons/self/options' "$BASE_DIR/support_web.py"
+grep -q '/api/configured-devices/state' "$BASE_DIR/support_web.py"
+printf "%s\n" "Switch Vision Hub device-state controls regression: PASS"
+
+# A Discovery run must not trust a stale /data/options.json after a Hub/native
+# state change. Capture the authoritative Supervisor options immediately before
+# starting the child process and pass that exact snapshot to discovery_job.sh.
+python3 - "$BASE_DIR/support_web.py" "$tmp_dir" <<'PY_AUTHORITATIVE_RUN_OPTIONS'
+import importlib.util
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+
+module_path = Path(sys.argv[1])
+tmp = Path(sys.argv[2])
+sys.path.insert(0, str(module_path.parent))
+spec = importlib.util.spec_from_file_location("sv_support_web_authoritative_options_test", module_path)
+module = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(module)
+
+authoritative = {
+    "enable_switch_list": "true",
+    "switches": [
+        {
+            "switch_name": "SW_DISABLED",
+            "switch_host": "192.0.2.20",
+            "sensor_prefix": "sw_disabled",
+            "snmp_community": "secret-disabled",
+            "enabled": "disabled",
+            "walk_mode": "full",
+            "switch_model": "auto",
+        },
+        {
+            "switch_name": "SW_ENABLED",
+            "switch_host": "192.0.2.21",
+            "sensor_prefix": "sw_enabled",
+            "snmp_community": "secret-enabled",
+            "enabled": "enabled",
+            "walk_mode": "targeted",
+            "switch_model": "auto",
+        },
+    ],
+}
+module._self_addon_options = lambda: authoritative
+snapshot = tmp / "authoritative-run-options.json"
+result = module._write_authoritative_discovery_options_snapshot(snapshot)
+assert result == snapshot
+loaded = json.loads(snapshot.read_text(encoding="utf-8"))
+assert loaded == authoritative
+assert stat.S_IMODE(snapshot.stat().st_mode) == 0o600, oct(stat.S_IMODE(snapshot.stat().st_mode))
+assert loaded["switches"][0]["enabled"] == "disabled"
+assert loaded["switches"][1]["enabled"] == "enabled"
+assert loaded["switches"][0]["snmp_community"] == "secret-disabled"
+PY_AUTHORITATIVE_RUN_OPTIONS
+
+grep -Fq 'CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"' "$BASE_DIR/discovery_job.sh"
+grep -q '_write_authoritative_discovery_options_snapshot()' "$BASE_DIR/support_web.py"
+grep -q 'discovery_env\["SWITCH_VISION_OPTIONS_FILE"\]' "$BASE_DIR/support_web.py"
+grep -q 'Discovery configuration: authoritative Supervisor snapshot' "$BASE_DIR/support_web.py"
+printf "%s\n" "Switch Vision authoritative run-options regression: PASS"
+
+# Generated dashboard rows must obey the same enabled-state predicate as the
+# walk/parser/generator path. Exercise the exact jq program embedded in the
+# production dashboard-card writer so a disabled saved switch cannot render a
+# stale/offline card, while legacy rows without explicit state remain enabled.
+card_rows_jq="$tmp_dir/generated-card-rows.jq"
+awk '
+  /SWITCH_VISION_GENERATED_CARD_ROWS_JQ_BEGIN/ { capture=1; next }
+  /SWITCH_VISION_GENERATED_CARD_ROWS_JQ_END/ { capture=0; next }
+  capture { print }
+' "$BASE_DIR/discovery_job.sh" > "$card_rows_jq"
+[ -s "$card_rows_jq" ] || { echo "ERROR: generated-card jq program was not found" >&2; exit 1; }
+
+card_fixture="$tmp_dir/generated-card-enabled-filter.json"
+cat > "$card_fixture" <<'JSON_CARD_ENABLED_FILTER'
+{
+  "switches": [
+    {
+      "switch_name": "STACK_ENABLED",
+      "switch_host": "192.0.2.31",
+      "sensor_prefix": "sw1",
+      "display_name": "Enabled Stack",
+      "enabled": "enabled"
+    },
+    {
+      "switch_name": "SW_DISABLED",
+      "switch_host": "192.0.2.32",
+      "sensor_prefix": "sw_disabled",
+      "display_name": "Disabled Switch",
+      "enabled": "disabled"
+    },
+    {
+      "switch_name": "SW_LEGACY",
+      "switch_host": "192.0.2.33",
+      "sensor_prefix": "sw_legacy",
+      "display_name": "Legacy Enabled"
+    }
+  ],
+  "stack_member_prefixes": [
+    {"switch_name": "STACK_ENABLED", "member": "1", "sensor_prefix": "sw1", "display_name": "STACK 1"},
+    {"switch_name": "STACK_ENABLED", "member": "2", "sensor_prefix": "sw2", "display_name": "STACK 2"},
+    {"switch_name": "SW_DISABLED", "member": "1", "sensor_prefix": "sw_disabled", "display_name": "SHOULD NOT RENDER"}
+  ]
+}
+JSON_CARD_ENABLED_FILTER
+
+card_rows="$tmp_dir/generated-card-enabled-filter.rows"
+jq -r -f "$card_rows_jq" "$card_fixture" > "$card_rows"
+[ "$(wc -l < "$card_rows" | tr -d ' ')" = "3" ] || {
+  echo "ERROR: expected two enabled stack cards plus one legacy card" >&2
+  cat "$card_rows" >&2
+  exit 1
+}
+grep -q 'STACK_ENABLED' "$card_rows"
+grep -q 'SW_LEGACY' "$card_rows"
+! grep -q 'SW_DISABLED' "$card_rows"
+! grep -q 'SHOULD NOT RENDER' "$card_rows"
+printf "%s\n" "Switch Vision generated-card enabled-state regression: PASS"
+
+# Zyxel XS1930-10 contribution / registry / generator reconciliation regression.
+grep -q 'if (model == "XS1930-10") return "experimental"' "$BASE_DIR/discovery_job.sh"
+grep -q 'profile = "zyxel-xs1930-10"' "$BASE_DIR/discovery_job.sh"
+grep -q 'model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2' "$BASE_DIR/discovery_job.sh"
+grep -q 'RJ45 swp00-swp07 ports' "$BASE_DIR/discovery_job.sh"
+grep -q '10G SFP+ swp08-swp09 uplinks' "$BASE_DIR/discovery_job.sh"
+grep -q '1.3.6.1.4.1.890.1.15.3.2.4.0' "$BASE_DIR/discovery_job.sh"
+grep -q '1.3.6.1.4.1.890.1.15.3.2.5.0' "$BASE_DIR/discovery_job.sh"
+grep -q 'Q-BRIDGE-MIB PVID' "$BASE_DIR/discovery_job.sh"
+
+awk '
+  /^  zyxel-xs1930-10:/ { in_zyxel=1; next }
+  in_zyxel && /^  [A-Za-z0-9_-]+:/ { exit }
+  in_zyxel && /^    status: experimental$/ { found=1 }
+  END { exit(found ? 0 : 1) }
+' "$BASE_DIR/profiles/switch-vision-profiles.yaml"
+
+printf '%s\n' "Switch Vision Zyxel XS1930-10 contribution regression self-test: PASS"
+
+# Full-walk correctness / authoritative-status regression.
+grep -q 'Running split Juniper full SNMP walk' "$BASE_DIR/discovery_job.sh"
+grep -q '1.3.6.1.4.1.2636' "$BASE_DIR/discovery_job.sh"
+grep -q '# Switch Vision SNMP walk result: warning' "$BASE_DIR/discovery_job.sh"
+grep -q 'registry_status == "confirmed"' "$BASE_DIR/discovery_job.sh"
+grep -q '.device.support_status=(.registry.status' "$BASE_DIR/discovery_job.sh"
+printf '%s\n' "Switch Vision full-walk/status reconciliation regression: PASS"
+
+# Juniper EX3300 legacy-parser / registry reconciliation regression.
+grep -q 'if (model == "Juniper EX3300-48P") return "supported"' "$BASE_DIR/discovery_job.sh"
+grep -q 'profile = "juniper-ex3300-48p"' "$BASE_DIR/discovery_job.sh"
+grep -q 'model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48' "$BASE_DIR/discovery_job.sh"
+grep -q 'RJ45 ge-0/0/0-47 ports' "$BASE_DIR/discovery_job.sh"
+grep -q 'SFP/SFP+ uplink cage' "$BASE_DIR/discovery_job.sh"
+grep -q 'Virtual Chassis support: not validated' "$BASE_DIR/discovery_job.sh"
+
+awk '
+  /^  juniper-ex3300-48p:/ { in_ex=1; next }
+  in_ex && /^  [A-Za-z0-9_-]+:/ { exit }
+  in_ex && /^    status: supported$/ { found=1 }
+  END { exit(found ? 0 : 1) }
+' "$BASE_DIR/profiles/switch-vision-profiles.yaml"
+
+awk '
+  /CV_ID_FAMILY="EX3300"/ { in_ex=1 }
+  in_ex && /CV_ID_SUPPORT_STATUS="supported"/ { found=1 }
+  in_ex && /^[[:space:]]*;;[[:space:]]*$/ { exit }
+  END { exit(found ? 0 : 1) }
+' "$CV_VENDOR_DIR/known_vendor.sh"
+
+printf '%s\n' "Switch Vision Juniper legacy-parser/registry reconciliation self-test: PASS"
+
+# EX3300 live SFP/SFP+ generation regression.
+grep -q 'function yaml_interface_sensor' "$BASE_DIR/discovery_job.sh"
+grep -q 'function yaml_juniper_vlan_candidates_sensor' "$BASE_DIR/discovery_job.sh"
+grep -q 'primary="xe-0/1/" cage' "$BASE_DIR/discovery_job.sh"
+grep -q 'secondary="ge-0/1/" cage' "$BASE_DIR/discovery_job.sh"
+grep -q 'label " Status", "oper_status"' "$BASE_DIR/discovery_job.sh"
+grep -q 'label " RX Bytes", "rx_bytes"' "$BASE_DIR/discovery_job.sh"
+grep -q 'label " TX Bytes", "tx_bytes"' "$BASE_DIR/discovery_job.sh"
+grep -q 'label " Admin Status", "admin_status"' "$BASE_DIR/discovery_job.sh"
+grep -q 'label " Speed Mbps", "speed_mbps"' "$BASE_DIR/discovery_job.sh"
+grep -q 'label " Alias", "alias"' "$BASE_DIR/discovery_job.sh"
+grep -q 'sensor_source in {"juniper_ex_vlan", "interface"}' "$BASE_DIR/support_web.py"
+printf '%s\n' "Switch Vision EX3300 live-interface generation regression: PASS"
+
+# v2.1.18 placeholder and UniFi diagnostics regressions.
+python3 - "$BASE_DIR" <<'PYTEST_V217'
+import importlib.util
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+base = Path(sys.argv[1])
+sys.path.insert(0, str(base))
+
+spec = importlib.util.spec_from_file_location(
+    "switch_vision_support_web_v217",
+    base / "support_web.py",
+)
+assert spec and spec.loader
+web = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(web)
+
+placeholder = {
+    "switch_name": "",
+    "switch_host": "",
+    "sensor_prefix": "stale_placeholder",
+    "snmp_community": "readonly",
+    "enabled": "enabled",
+    "walk_mode": "targeted",
+    "switch_model": "auto",
+}
+
+validated = web._validate_switch_row(
+    placeholder,
+    1,
+)
+
+assert validated["switch_name"] == ""
+assert validated["switch_host"] == ""
+assert validated["sensor_prefix"] == ""
+
+web._validate_inventory_identities(
+    {
+        "switches": [
+            placeholder,
+        ],
+        "stack_member_prefixes": [],
+    }
+)
+
+assert web._configured_switch_count(
+    [placeholder]
+) == 0
+
+bad = dict(placeholder)
+bad["switch_host"] = "192.0.2.55"
+
+try:
+    web._validate_inventory_identities(
+        {
+            "switches": [bad],
+            "stack_member_prefixes": [],
+        }
+    )
+except ValueError:
+    pass
+else:
+    raise AssertionError(
+        "real incomplete switch row was accepted"
+    )
+
+with tempfile.TemporaryDirectory() as td:
+    path = Path(td) / "diagnostics.json"
+
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "product":
+                    "Switch Vision UniFi2MQTT",
+                "version": "2.0.43",
+                "status": "error",
+                "stage": "list_devices",
+                "adopted_devices": 0,
+                "switching_devices": 0,
+                "rejected_devices": 0,
+                "empty_switch_polls": 0,
+                "error_type": "RuntimeError",
+                "device_classification": [],
+                "api_key": "must-not-surface",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    old_path = web.DEFAULT_UNIFI_DIAGNOSTICS
+
+    try:
+        web.DEFAULT_UNIFI_DIAGNOSTICS = path
+
+        status = (
+            web._unifi2mqtt_diagnostics_status()
+        )
+
+        assert status["found"] is True
+        assert status["valid"] is True
+        assert status["version"] == "2.0.43"
+        assert status["status"] == "error"
+        assert status["stage"] == "list_devices"
+        assert (
+            status["error_type"]
+            == "RuntimeError"
+        )
+        assert "api_key" not in status
+    finally:
+        web.DEFAULT_UNIFI_DIAGNOSTICS = (
+            old_path
+        )
+
+print(
+    "Switch Vision Discovery v2.1.20 "
+    "UniFi diagnostics regressions: PASS"
+)
+PYTEST_V217
+
+# v2.1.14 configuration/operation hardening regressions.
+PYTHONPATH="$BASE_DIR" python3 - "$tmp_dir" <<'PYTEST'
+import json
+import sys
+from pathlib import Path
+import support_web as web
+
+tmp = Path(sys.argv[1])
+
+def switch(name, host, prefix, enabled="enabled"):
+    return {
+        "switch_name": name,
+        "switch_host": host,
+        "sensor_prefix": prefix,
+        "snmp_community": "private-test-community",
+        "enabled": enabled,
+        "walk_mode": "targeted",
+        "switch_model": "auto",
+    }
+
+def exported(rows, stack=None):
+    return {
+        "format": web.DISCOVERY_EXPORT_FORMAT,
+        "configuration": {
+            "switches": rows,
+            "stack_member_prefixes": stack or [],
+        },
+    }
+
+# Disabled rows still reserve identities and cannot collide on switch_name.
+try:
+    web._validate_discovery_import(exported([
+        switch("SW1", "192.0.2.1", "sw1"),
+        switch("sw1", "192.0.2.2", "sw2", "disabled"),
+    ]))
+except ValueError:
+    pass
+else:
+    raise SystemExit("duplicate switch_name was accepted")
+
+# HA-equivalent hyphen/underscore prefixes collide even across disabled rows.
+try:
+    web._validate_discovery_import(exported([
+        switch("A", "192.0.2.1", "rack_1"),
+        switch("B", "192.0.2.2", "rack-1", "disabled"),
+    ]))
+except ValueError:
+    pass
+else:
+    raise SystemExit("duplicate sensor_prefix identity was accepted")
+
+# Stack-member prefixes share the same global entity namespace.
+try:
+    web._validate_discovery_import(exported(
+        [switch("STACK", "192.0.2.3", "stack_1")],
+        [{"switch_name": "STACK", "member": "2", "sensor_prefix": "stack-1"}],
+    ))
+except ValueError:
+    pass
+else:
+    raise SystemExit("duplicate stack-member sensor_prefix was accepted")
+
+# Member 1 may intentionally reuse its own management-target/base prefix.
+web._validate_discovery_import(exported(
+    [switch("STACK", "192.0.2.3", "sw1")],
+    [{"switch_name": "STACK", "member": "1", "sensor_prefix": "SW1"}],
+))
+
+# The operation coordinator must fail closed on overlapping operations.
+web._claim_operation("Discovery")
+try:
+    try:
+        web._claim_operation("Support My Switch")
+    except web.OperationConflict:
+        pass
+    else:
+        raise SystemExit("overlapping operation was accepted")
+finally:
+    web._release_operation("Discovery")
+web._claim_operation("Support My Switch")
+web._release_operation("Support My Switch")
+
+# Import writes the full merged authoritative option set through Supervisor,
+# preserves unrelated secrets, and confirms the saved result.
+store = {
+    "switches": [switch("SW1", "192.0.2.1", "sw1")],
+    "stack_member_prefixes": [],
+    "run_snmp_walks": "true",
+    "unrelated_secret": "keep-me",
+}
+posts = []
+def get_options():
+    return dict(store)
+def supervisor(path, *, method="GET", timeout=12.0, payload=None):
+    if path == "/addons/self/options" and method == "POST":
+        store.clear()
+        store.update(payload["options"])
+        posts.append(dict(store))
+        return {"result": "ok"}
+    raise AssertionError((path, method))
+web._self_addon_options = get_options
+web._supervisor_json = supervisor
+web._import_discovery_options({
+    "switches": [switch("SW1", "192.0.2.1", "sw1")],
+    "stack_member_prefixes": [],
+    "run_snmp_walks": "false",
+})
+assert posts and store["unrelated_secret"] == "keep-me" and store["run_snmp_walks"] == "false"
+
+# Export must read Supervisor, not a stale /data-style local copy.
+stale = tmp / "options.json"
+stale.write_text(json.dumps({"run_snmp_walks": "stale"}), encoding="utf-8")
+payload = web._discovery_export(stale, "2.1.14")
+assert payload["configuration"]["run_snmp_walks"] == "false"
+
+# A run snapshot validates identities before any configuration is written.
+web._self_addon_options = lambda: {
+    "switches": [
+        switch("A", "192.0.2.1", "dup"),
+        switch("B", "192.0.2.2", "DUP", "disabled"),
+    ],
+    "stack_member_prefixes": [],
+}
+snapshot = tmp / "authoritative-options.json"
+try:
+    web._write_authoritative_discovery_options_snapshot(snapshot)
+except ValueError:
+    pass
+else:
+    raise SystemExit("duplicate identities reached Discovery snapshot")
+assert not snapshot.exists()
+
+print("Switch Vision Discovery v2.1.14 configuration hardening: PASS")
+PYTEST
+
+# Startup option migration must preserve unrelated options/secrets and write
+# only through the authoritative Supervisor API.
+PYTHONPATH="$BASE_DIR" python3 - <<'PY_MIGRATION'
+import copy
+import tempfile
+from pathlib import Path
+import migrate_options as migration
+
+legacy_dir = tempfile.TemporaryDirectory()
+migration.LEGACY_IMPORT_BACKUP = Path(legacy_dir.name) / "options.before-import.json"
+migration.LEGACY_IMPORT_BACKUP.write_text('{"snmp_community":"legacy-secret"}\n', encoding="utf-8")
+
+store = {
+    "show_card_header": True,
+    "switches": [{
+        "switch_name": "SW1",
+        "switch_host": "192.0.2.1",
+        "sensor_prefix": "sw1",
+        "snmp_community": "keep-secret",
+    }],
+    "unrelated_secret": "also-keep-secret",
+}
+posts = []
+
+def options():
+    return copy.deepcopy(store)
+
+def request(path, *, method="GET", payload=None):
+    assert path == "/addons/self/options" and method == "POST", (path, method)
+    assert isinstance(payload, dict) and isinstance(payload.get("options"), dict)
+    store.clear()
+    store.update(copy.deepcopy(payload["options"]))
+    posts.append(copy.deepcopy(store))
+    return {"result": "ok"}
+
+migration._options = options
+migration._request = request
+assert migration.main() == 0
+assert posts, "migration did not use Supervisor options POST"
+assert not migration.LEGACY_IMPORT_BACKUP.exists(), "legacy secret-bearing backup was not removed"
+assert "show_card_header" not in store
+assert store["switches"][0]["enabled"] == "enabled"
+assert store["switches"][0]["snmp_community"] == "keep-secret"
+assert store["unrelated_secret"] == "also-keep-secret"
+
+posts.clear()
+assert migration.main() == 0
+assert not posts, "no-op migration unexpectedly rewrote Supervisor options"
+print("Switch Vision Discovery v2.1.14 Supervisor migration: PASS")
+PY_MIGRATION
+
+# v2.1.19 SV-2026-000057 UniFi profile regression.
+sv57_snapshot="$tmp_dir/unifi-contrib-000057.json"
+python3 - "$sv57_snapshot" <<'PYTEST_V219_SV57'
+import json, sys
+path = sys.argv[1]
+
+def port(idx, connector="RJ45", max_speed=1000, poe=False, standard=None):
+    return {
+        "idx": idx,
+        "state": "UP",
+        "connector": connector,
+        "speed_mbps": max_speed,
+        "max_speed_mbps": max_speed,
+        "poe": {
+            "available": bool(poe),
+            "enabled": bool(poe),
+            "state": "UP" if poe else "DOWN",
+            "standard": standard,
+        },
+    }
+
+mini = [port(i) for i in range(1, 6)]
+pro24 = [port(i) for i in range(1, 25)] + [
+    port(25, "SFPPLUS", 10000), port(26, "SFPPLUS", 10000)
+]
+us8 = [
+    port(i, poe=(5 <= i <= 8), standard="802.3af" if 5 <= i <= 8 else None)
+    for i in range(1, 9)
+]
+us8[6]["poe"]["state"] = "DOWN"
+udm = [port(i, poe=True, standard="802.3at") for i in range(1, 9)]
+udm += [port(9, "RJ45", 2500), port(10, "SFPPLUS", 10000), port(11, "SFPPLUS", 10000)]
+usw24 = [
+    port(i, poe=(i <= 16), standard="802.3at" if i <= 16 else None)
+    for i in range(1, 25)
+] + [port(25, "SFP", 1000), port(26, "SFP", 1000)]
+
+devices = []
+for n in range(1, 4):
+    devices.append({
+        "id": f"sv57-mini-{n}",
+        "name": f"Flex Mini {n}",
+        "model": "USW Flex Mini",
+        "ports": mini,
+        "api_capabilities": {"port_detail": True, "per_port_traffic": False},
+    })
+devices += [
+    {"id":"sv57-pro24","name":"Pro24","model":"USW Pro 24","ports":pro24,
+     "api_capabilities":{"port_detail":True,"per_port_traffic":False}},
+    {"id":"sv57-us8","name":"US8","model":"US 8 60W","ports":us8,
+     "api_capabilities":{"port_detail":True,"per_port_traffic":False}},
+    {"id":"sv57-udm","name":"UDM SE","model":"UniFi Dream Machine PRO SE","ports":udm,
+     "api_capabilities":{"port_detail":True,"per_port_traffic":False}},
+    {"id":"sv57-usw24","name":"USW24","model":"USW-24-PoE","ports":usw24,
+     "api_capabilities":{"port_detail":True,"per_port_traffic":False}},
+]
+json.dump({"schema_version":1,"devices":devices}, open(path,"w"))
+PYTEST_V219_SV57
+
+python3 "$BASE_DIR/unifi_dashboard_cards.py" \
+  --snapshot "$sv57_snapshot" \
+  --registry "$RUNTIME_REGISTRY" \
+  --indent 0 \
+  > "$tmp_dir/unifi-contrib-000057-cards.yaml"
+
+for model in "USW Flex Mini" "USW Pro 24" "US 8 60W" "UniFi Dream Machine PRO SE" "USW-24-PoE"; do
+  grep -q "switch_model: $model" "$tmp_dir/unifi-contrib-000057-cards.yaml"
+done
+
+[ "$(grep -c 'switch_model: USW Flex Mini' "$tmp_dir/unifi-contrib-000057-cards.yaml")" -eq 3 ]
+
+python3 - "$RUNTIME_REGISTRY" "$BASE_DIR/profiles/switch-vision-profiles.yaml" <<'PYTEST_V219_REGISTRY'
+import json, sys
+from pathlib import Path
+import yaml
+reg=json.loads(Path(sys.argv[1]).read_text())
+prof=yaml.safe_load(Path(sys.argv[2]).read_text())
+profiles=prof.get("profiles", prof)
+devices={d["model"]:d for d in reg["devices"]}
+
+assert devices["USW-24-PoE"]["ports"]["gigabit_sfp"] == 2
+assert devices["USW-24-PoE"]["ports"]["ten_gigabit_sfp_plus"] == 0
+assert devices["USW Pro 24"]["ports"]["gigabit_sfp"] == 0
+assert devices["USW Pro 24"]["ports"]["ten_gigabit_sfp_plus"] == 2
+assert devices["US 8 60W"]["validation"]["poe"] == "live_api_confirmed_ports_5_8_802_3af"
+assert devices["UniFi Dream Machine PRO SE"]["validation"]["poe"] == "live_api_confirmed_ports_1_8"
+assert devices["USW Flex Mini"]["validation"]["exact_model_detection"] == "live_api_confirmed_three_devices"
+assert profiles["ubiquiti-usw-pro-24-api"]["layout"]["sfp_10g_ports"] == 2
+assert profiles["ubiquiti-usw-24-poe-api"]["layout"]["sfp_1g_ports"] == 2
+print("Switch Vision Discovery v2.1.19 SV-2026-000057 profile regression: PASS")
+PYTEST_V219_REGISTRY
+
+# v2.1.20 Dell EMC Networking N2128PX-ON contribution regression.
+dell_walk="$tmp_dir/dell-n2128px-on.txt"
+cat > "$dell_walk" <<'EOF_DELL_N2128PX'
+.1.3.6.1.2.1.1.1.0 = STRING: Dell EMC Networking N2128PX-ON, 6.7.1.27, Linux 4.14.174, v1.0.9
+.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.674.10895.3077
+.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: Gi1/0/1
+.1.3.6.1.2.1.31.1.1.1.1.28 = STRING: Gi1/0/28
+.1.3.6.1.2.1.31.1.1.1.1.29 = STRING: Te1/0/1
+.1.3.6.1.2.1.31.1.1.1.1.30 = STRING: Te1/0/2
+.1.3.6.1.2.1.31.1.1.1.1.54 = STRING: Gi2/0/1
+.1.3.6.1.2.1.31.1.1.1.1.81 = STRING: Gi2/0/28
+.1.3.6.1.2.1.31.1.1.1.1.82 = STRING: Te2/0/1
+.1.3.6.1.2.1.31.1.1.1.1.83 = STRING: Te2/0/2
+EOF_DELL_N2128PX
+
+(
+  . "$BASE_DIR/opt/switch-vision/vendors/interface.sh"
+  cv_cap_set_front_panel_profile "$dell_walk"
+  [ "$CV_CAP_MODEL_TEXT" = "N2128PX-ON" ]
+  [ "$CV_CAP_PLATFORM" = "dell_n2128px_on" ]
+  [ "$CV_CAP_RJ45_LIMIT" = "28" ]
+  [ "$(cv_interface_class_for_name Gi1/0/1)" = "rj45" ]
+  [ "$(cv_interface_class_for_name Gi2/0/28)" = "rj45" ]
+  [ "$(cv_interface_class_for_name Te1/0/1)" = "sfp_plus" ]
+  [ "$(cv_interface_class_for_name Te2/0/2)" = "sfp_plus" ]
+  [ "$(cv_interface_class_for_name Gi1/0/29)" = "other" ]
+  [ "$(cv_interface_class_for_name Te1/0/3)" = "other" ]
+)
+
+python3 "$BASE_DIR/registry_lookup.py" --registry "$RUNTIME_REGISTRY" --model "N2128PX-ON" --report > "$tmp_dir/dell-registry-report.txt"
+grep -q -- '- Registry match: yes' "$tmp_dir/dell-registry-report.txt"
+grep -q -- '- Registry status: experimental' "$tmp_dir/dell-registry-report.txt"
+
+python3 - "$RUNTIME_REGISTRY" "$BASE_DIR/profiles/switch-vision-profiles.yaml" <<'PYTEST_V2120_DELL'
+import json, sys
+from pathlib import Path
+import yaml
+reg = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+prof = yaml.safe_load(Path(sys.argv[2]).read_text(encoding="utf-8"))
+profiles = prof.get("profiles", prof)
+devices = {d["model"]: d for d in reg["devices"]}
+d = devices["N2128PX-ON"]
+assert d["status"] == "experimental"
+assert d["ports"]["rj45"] == 28
+assert d["ports"]["uplinks"] == 2
+assert d["ports"]["ten_gigabit_sfp_plus"] == 2
+assert d["stack_support"] is True
+assert d["tested_firmware"] == ["6.7.1.27", "6.6.0.7"]
+assert d["mapping_profile"] == "dell-n2128px-on"
+p = profiles["dell-n2128px-on"]
+assert p["sys_object_ids"] == ["1.3.6.1.4.1.674.10895.3077"]
+assert p["layout"]["rj45_ports"] == 28
+assert p["layout"]["sfp_10g_ports"] == 2
+assert "Gi{member}/0/{port}" in p["interface_patterns"]["rj45"]
+assert "Te{member}/0/1" in p["interface_patterns"]["sfp_10g"]
+job = (Path(sys.argv[2]).parents[1] / "discovery_job.sh").read_text(encoding="utf-8")
+for required in ('model == "N2128PX-ON"', 'profile = "dell-n2128px-on"', '10G SFP+ uplink', 'manufacturer = "Dell"'):
+    assert required in job, required
+print("Switch Vision Discovery v2.1.20 Dell N2128PX-ON regression: PASS")
+PYTEST_V2120_DELL
+
+
+# v2.1.21 Support My Switch privacy-default contract.
+# The Home Assistant app config lives outside runtime.tar.gz, so this regression
+# protects the runtime-side expectation that both controls remain supported and
+# are read as normal boolean contribution options.
+grep -q 'support_mask_vlan_names' "$BASE_DIR/discovery_job.sh"
+grep -q 'support_mask_interface_descriptions' "$BASE_DIR/discovery_job.sh"
+echo "Switch Vision Discovery v2.1.21 privacy-default contract regression: PASS"
