@@ -36,6 +36,12 @@ jobs:
           python-version: '3.12'
       - name: Install runtime test dependency
         run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Validate runtime source/archive parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/check_runtime_parity.py
+
       - name: Validate runtime archive hygiene
         shell: bash
         run: |

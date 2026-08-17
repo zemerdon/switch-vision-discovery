@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "vendor": "zyxel",
+  "enterprise_oids": [
+    "1.3.6.1.4.1.890"
+  ],
+  "known_oids": [
+    {
+      "oid": "1.3.6.1.4.1.890.1.15.3.2.4.0",
+      "category": "cpu",
+      "label": "CPU",
+      "unit": "percent"
+    },
+    {
+      "oid": "1.3.6.1.4.1.890.1.15.3.2.7.0",
+      "category": "cpu",
+      "label": "CPU 5sec",
+      "unit": "percent"
+    },
+    {
+      "oid": "1.3.6.1.4.1.890.1.15.3.2.8.0",
+      "category": "cpu",
+      "label": "CPU 1min",
+      "unit": "percent"
+    },
+    {
+      "oid": "1.3.6.1.4.1.890.1.15.3.2.9.0",
+      "category": "cpu",
+      "label": "CPU 5min",
+      "unit": "percent"
+    },
+    {
+      "oid": "1.3.6.1.4.1.890.1.15.3.2.5.0",
+      "category": "memory",
+      "label": "Memory Utilization",
+      "unit": "percent"
+    },
+    {
+      "oid_prefix": "1.3.6.1.4.1.890.1.15.3.26.1.1.1.3",
+      "category": "fan",
+      "label": "Fan RPM",
+      "unit": "rpm"
+    },
+    {
+      "oid_prefix": "1.3.6.1.4.1.890.1.15.3.26.1.1.1.7",
+      "category": "fan",
+      "label": "Fan Status",
+      "unit": "state"
+    },
+    {
+      "oid_prefix": "1.3.6.1.4.1.890.1.15.3.26.1.2.1.3",
+      "category": "temperature",
+      "label": "Temperature",
+      "unit": "celsius"
+    },
+    {
+      "oid_prefix": "1.3.6.1.4.1.890.1.15.3.26.1.2.1.7",
+      "category": "temperature",
+      "label": "Temperature Status",
+      "unit": "state"
+    }
+  ],
+  "symbolic_name_patterns": {
+    "temperature": [
+      "temp(?:erature)?",
+      "thermal"
+    ],
+    "fan": [
+      "fan",
+      "rpm"
+    ],
+    "cpu": [
+      "cpu",
+      "processor"
+    ],
+    "memory": [
+      "memory",
+      "memUtil",
+      "ram"
+    ],
+    "environment": [
+      "environment",
+      "sensor",
+      "health"
+    ]
+  },
+  "numeric_candidate_policy": {
+    "enabled": true,
+    "accepted_types": [
+      "INTEGER",
+      "INTEGER32",
+      "GAUGE32",
+      "UNSIGNED32"
+    ],
+    "exclude_types": [
+      "COUNTER",
+      "COUNTER32",
+      "COUNTER64",
+      "TIMETICKS",
+      "OCTET STRING",
+      "STRING",
+      "OID",
+      "IPADDRESS"
+    ],
+    "maximum_candidates": 120,
+    "notes": "Curated XS1930-10 health OIDs are high-confidence; remaining enterprise numeric values stay review-only."
+  },
+  "standards_first": [
+    "IF-MIB",
+    "Q-BRIDGE-MIB",
+    "ENTITY-SENSOR-MIB",
+    "HOST-RESOURCES-MIB"
+  ],
+  "category_units": {
+    "temperature": "celsius",
+    "fan": "rpm",
+    "cpu": "percent",
+    "memory": "percent",
+    "environment": "vendor-defined"
+  }
+}

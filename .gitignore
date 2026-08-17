@@ -5,3 +5,7 @@ __pycache__/
 
 # Local Switch Vision patch backups
 .v*-backup-*/
+# Discovery tracked runtime source - generated Python caches
+runtime_src/**/__pycache__/
+runtime_src/**/*.pyc
+runtime_src/**/*.pyo

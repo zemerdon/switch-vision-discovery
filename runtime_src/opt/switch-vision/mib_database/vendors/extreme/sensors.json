@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "vendor": "extreme",
+  "enterprise_oids": [
+    "1.3.6.1.4.1.1916"
+  ],
+  "symbolic_name_patterns": {
+    "temperature": [
+      "temp(?:erature)?",
+      "thermal",
+      "heat"
+    ],
+    "fan": [
+      "fan",
+      "blower",
+      "rpm"
+    ],
+    "power": [
+      "power",
+      "psu",
+      "powerSupply",
+      "watt",
+      "voltage",
+      "current"
+    ],
+    "poe": [
+      "poe",
+      "pse",
+      "powerEthernet"
+    ],
+    "cpu": [
+      "cpu",
+      "processor",
+      "cpuUtil",
+      "cpuLoad"
+    ],
+    "memory": [
+      "memory",
+      "memUtil",
+      "ram",
+      "buffer"
+    ],
+    "environment": [
+      "environment",
+      "sensor",
+      "chassisHealth"
+    ]
+  },
+  "numeric_candidate_policy": {
+    "enabled": true,
+    "accepted_types": [
+      "INTEGER",
+      "INTEGER32",
+      "GAUGE32",
+      "UNSIGNED32"
+    ],
+    "exclude_types": [
+      "COUNTER",
+      "COUNTER32",
+      "COUNTER64",
+      "TIMETICKS",
+      "OCTET STRING",
+      "STRING",
+      "OID",
+      "IPADDRESS"
+    ],
+    "maximum_candidates": 120,
+    "notes": "Numeric-only enterprise OIDs are review candidates unless a symbolic MIB name identifies the category."
+  },
+  "standards_first": [
+    "ENTITY-SENSOR-MIB",
+    "POWER-ETHERNET-MIB",
+    "HOST-RESOURCES-MIB"
+  ],
+  "category_units": {
+    "temperature": "celsius",
+    "fan": "rpm",
+    "power": "vendor-defined",
+    "poe": "vendor-defined",
+    "cpu": "percent",
+    "memory": "percent",
+    "environment": "vendor-defined"
+  }
+}

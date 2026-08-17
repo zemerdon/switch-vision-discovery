@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "description": "Switch Vision curated OID knowledge database schema",
+  "required_vendor_fields": ["id", "name", "enterprise_oid"],
+  "required_product_fields": ["sys_object_id", "vendor", "family", "support_status"]
+}

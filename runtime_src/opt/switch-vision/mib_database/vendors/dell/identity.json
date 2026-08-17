@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "vendor": "dell",
+  "detection": {
+    "sys_object_id_prefixes": [
+      "1.3.6.1.4.1.674."
+    ],
+    "sys_descr_patterns": [
+      "Dell",
+      "PowerConnect",
+      "Force10",
+      "OS10"
+    ]
+  },
+  "capabilities": [
+    "identity",
+    "vendor_sensor_candidates"
+  ]
+}

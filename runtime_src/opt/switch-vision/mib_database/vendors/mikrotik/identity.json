@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "vendor": "mikrotik",
+  "detection": {
+    "sys_object_id_prefixes": [
+      "1.3.6.1.4.1.14988."
+    ],
+    "sys_descr_patterns": [
+      "MikroTik",
+      "RouterOS"
+    ]
+  },
+  "capabilities": [
+    "identity",
+    "vendor_sensor_candidates"
+  ]
+}

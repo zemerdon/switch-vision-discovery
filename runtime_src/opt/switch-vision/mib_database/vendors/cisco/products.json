@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "products": [
+    {
+      "sys_object_id": "1.3.6.1.4.1.9.1.2066",
+      "vendor": "cisco",
+      "family": "Catalyst 3650",
+      "model_hint": "WS-C3650-48PD-E / WS-C3650-48PD-L",
+      "support_status": "verified",
+      "tested_models": [
+        "WS-C3650-48PD-E",
+        "WS-C3650-48PD-L"
+      ]
+    },
+    {
+      "sys_object_id": "1.3.6.1.4.1.9.1.1208",
+      "vendor": "cisco",
+      "family": "Catalyst 2960X",
+      "model_hint": "WS-C2960X",
+      "support_status": "experimental",
+      "tested_models": [
+        "WS-C2960X-48FPD-L",
+        "WS-C2960X-24PS-L",
+        "WS-C2960X-24TS-L"
+      ]
+    },
+    {
+      "sys_object_id": "1.3.6.1.4.1.9.1.1208",
+      "vendor": "cisco",
+      "family": "Catalyst 2960S",
+      "model_hint": "WS-C2960S-48FPD-L",
+      "support_status": "experimental",
+      "tested_models": [
+        "WS-C2960S-48FPD-L"
+      ]
+    },
+    {
+      "sys_object_id": "1.3.6.1.4.1.9.1.1317",
+      "vendor": "cisco",
+      "family": "Catalyst 3560-C",
+      "model_hint": "WS-C3560CG-8PC-S",
+      "support_status": "experimental",
+      "tested_models": [
+        "WS-C3560CG-8PC-S"
+      ]
+    }
+  ]
+}
