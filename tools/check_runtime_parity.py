@@ -11,10 +11,9 @@ import tarfile
 
 
 @dataclass(frozen=True)
-class Entry:
-    kind: str
-    mode: int
-    digest: str | None
+class FileEntry:
+    digest: str
+    executable: bool
 
 
 def normalize_name(name: str) -> str:
@@ -27,8 +26,8 @@ def digest_bytes(data: bytes) -> str:
     return sha256(data).hexdigest()
 
 
-def source_entries(root: Path) -> dict[str, Entry]:
-    entries: dict[str, Entry] = {}
+def source_files(root: Path) -> dict[str, FileEntry]:
+    entries: dict[str, FileEntry] = {}
 
     for path in sorted(root.rglob("*")):
         rel = path.relative_to(root).as_posix()
@@ -48,37 +47,34 @@ def source_entries(root: Path) -> dict[str, Entry]:
                 f"Symlink not permitted in runtime source: {rel}"
             )
 
-        st = path.stat()
-        mode = stat.S_IMODE(st.st_mode)
-
+        # Git does not preserve empty directories or arbitrary directory
+        # permission bits, so directories are intentionally not part of
+        # source/archive parity. Their existence is implied by tracked files.
         if path.is_dir():
-            entries[rel] = Entry(
-                kind="dir",
-                mode=mode,
-                digest=None,
-            )
-        elif path.is_file():
-            entries[rel] = Entry(
-                kind="file",
-                mode=mode,
-                digest=digest_bytes(path.read_bytes()),
-            )
-        else:
+            continue
+
+        if not path.is_file():
             raise RuntimeError(
                 f"Unsupported filesystem entry in source: {rel}"
             )
 
+        mode = stat.S_IMODE(path.stat().st_mode)
+
+        entries[rel] = FileEntry(
+            digest=digest_bytes(path.read_bytes()),
+            executable=bool(mode & 0o111),
+        )
+
     return entries
 
 
-def archive_entries(path: Path) -> dict[str, Entry]:
-    entries: dict[str, Entry] = {}
+def archive_files(path: Path) -> dict[str, FileEntry]:
+    entries: dict[str, FileEntry] = {}
 
     with tarfile.open(path, "r:gz") as archive:
         for member in archive.getmembers():
             name = normalize_name(member.name)
 
-            # A tar may contain an explicit "." root entry.
             if not name or name == ".":
                 continue
 
@@ -109,14 +105,10 @@ def archive_entries(path: Path) -> dict[str, Entry]:
                     f"Special entry not permitted in runtime archive: {member.name}"
                 )
 
-            mode = member.mode & 0o7777
-
+            # Git cannot represent an empty directory as a tracked object and
+            # does not preserve arbitrary directory modes. Directory metadata
+            # is therefore outside the parity contract.
             if member.isdir():
-                entries[name] = Entry(
-                    kind="dir",
-                    mode=mode,
-                    digest=None,
-                )
                 continue
 
             if not member.isfile():
@@ -131,10 +123,9 @@ def archive_entries(path: Path) -> dict[str, Entry]:
                     f"Unable to read archive file: {member.name}"
                 )
 
-            entries[name] = Entry(
-                kind="file",
-                mode=mode,
+            entries[name] = FileEntry(
                 digest=digest_bytes(extracted.read()),
+                executable=bool(member.mode & 0o111),
             )
 
     return entries
@@ -143,8 +134,8 @@ def archive_entries(path: Path) -> dict[str, Entry]:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Verify that runtime_src and runtime.tar.gz contain "
-            "the same runtime tree."
+            "Verify that Git-tracked Discovery runtime source and the "
+            "packaged runtime archive contain identical runtime files."
         )
     )
 
@@ -173,23 +164,20 @@ def main() -> int:
             f"ERROR: runtime archive not found: {archive}"
         )
 
-    src = source_entries(source)
-    arc = archive_entries(archive)
+    src = source_files(source)
+    arc = archive_files(archive)
 
     src_names = set(src)
     arc_names = set(arc)
 
     errors: list[str] = []
 
-    only_source = sorted(src_names - arc_names)
-    only_archive = sorted(arc_names - src_names)
-
-    for name in only_source:
+    for name in sorted(src_names - arc_names):
         errors.append(
             f"Only in runtime source: {name}"
         )
 
-    for name in only_archive:
+    for name in sorted(arc_names - src_names):
         errors.append(
             f"Only in runtime archive: {name}"
         )
@@ -198,23 +186,16 @@ def main() -> int:
         left = src[name]
         right = arc[name]
 
-        if left.kind != right.kind:
-            errors.append(
-                f"Type mismatch for {name}: "
-                f"source={left.kind}, archive={right.kind}"
-            )
-            continue
-
-        if left.mode != right.mode:
-            errors.append(
-                f"Mode mismatch for {name}: "
-                f"source={left.mode:04o}, archive={right.mode:04o}"
-            )
-
         if left.digest != right.digest:
             errors.append(
                 f"Content mismatch for {name}: "
                 f"source={left.digest}, archive={right.digest}"
+            )
+
+        if left.executable != right.executable:
+            errors.append(
+                f"Executable-bit mismatch for {name}: "
+                f"source={left.executable}, archive={right.executable}"
             )
 
     if errors:
@@ -225,19 +206,9 @@ def main() -> int:
 
         return 1
 
-    file_count = sum(
-        1 for entry in src.values()
-        if entry.kind == "file"
-    )
-
-    dir_count = sum(
-        1 for entry in src.values()
-        if entry.kind == "dir"
-    )
-
     print(
         "Discovery runtime source/archive parity: PASS "
-        f"({file_count} files, {dir_count} directories)"
+        f"({len(src)} files; SHA-256 content + executable-bit semantics)"
     )
 
     return 0

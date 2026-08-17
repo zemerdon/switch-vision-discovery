@@ -3,7 +3,7 @@
 ## v2.1.23 — Reviewable Discovery runtime source
 
 - Add the complete packaged Discovery runtime as normal Git-tracked source under `runtime_src/` for line-by-line review, history, blame, and external auditing.
-- Add a strict source/archive parity checker covering runtime paths, file types, executable/file modes, and SHA-256 file contents.
+- Add a strict source/archive parity checker covering runtime file paths, SHA-256 file contents, and executable-bit semantics.
 - Add CI enforcement so `runtime_src/` and the shipped `runtime.tar.gz` cannot diverge unnoticed.
 - Reject links, special files, Python bytecode, and `__pycache__` material from the tracked runtime-source contract.
 - Keep the existing `runtime.tar.gz` byte-for-byte unchanged from v2.1.22; this release changes source transparency and packaging assurance only.
