@@ -24,6 +24,7 @@ import shutil
 import unicodedata
 
 import yaml
+from websockets.sync.client import connect as websocket_connect
 from email.message import EmailMessage
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -1069,6 +1070,156 @@ def _home_assistant_service(domain: str, service: str, payload: dict[str, Any]) 
         raise RuntimeError(f"Home Assistant API returned HTTP {exc.code}: {detail[:240]}") from exc
     except (URLError, TimeoutError, OSError) as exc:
         raise RuntimeError(f"Home Assistant API request failed: {exc}") from exc
+
+
+def _home_assistant_ws(command: dict[str, Any]) -> Any:
+    """Call a Switch Vision WebSocket command through Supervisor."""
+    command_type = str(
+        command.get("type") or ""
+    ).strip()
+
+    if not command_type.startswith(
+        "switch_vision/"
+    ):
+        raise ValueError(
+            "Unsupported Home Assistant WebSocket command."
+        )
+
+    token = _read_supervisor_token()
+
+    if not token:
+        raise RuntimeError(
+            "Home Assistant API token is unavailable."
+        )
+
+    try:
+        with websocket_connect(
+            "ws://supervisor/core/websocket",
+            open_timeout=12,
+            close_timeout=5,
+            max_size=4 * 1024 * 1024,
+        ) as connection:
+
+            required = json.loads(
+                connection.recv(timeout=12)
+            )
+
+            if (
+                required.get("type")
+                != "auth_required"
+            ):
+                raise RuntimeError(
+                    "Home Assistant WebSocket did not "
+                    "request authentication."
+                )
+
+            connection.send(
+                json.dumps(
+                    {
+                        "type": "auth",
+                        "access_token": token,
+                    }
+                )
+            )
+
+            authenticated = json.loads(
+                connection.recv(timeout=12)
+            )
+
+            if (
+                authenticated.get("type")
+                != "auth_ok"
+            ):
+                raise RuntimeError(
+                    str(
+                        authenticated.get(
+                            "message"
+                        )
+                        or
+                        "Home Assistant WebSocket "
+                        "authentication failed."
+                    )
+                )
+
+            payload = dict(command)
+            payload["id"] = 1
+
+            connection.send(
+                json.dumps(payload)
+            )
+
+            while True:
+                response = json.loads(
+                    connection.recv(
+                        timeout=12
+                    )
+                )
+
+                if response.get("id") != 1:
+                    continue
+
+                if (
+                    response.get("type")
+                    != "result"
+                    or
+                    response.get("success")
+                    is not True
+                ):
+                    error = response.get(
+                        "error"
+                    )
+
+                    if isinstance(
+                        error,
+                        dict,
+                    ):
+                        detail = (
+                            error.get("message")
+                            or
+                            error.get("code")
+                        )
+                    else:
+                        detail = error
+
+                    raise RuntimeError(
+                        str(
+                            detail
+                            or
+                            "Home Assistant WebSocket "
+                            "command failed."
+                        )
+                    )
+
+                return response.get(
+                    "result"
+                )
+
+    except RuntimeError:
+        raise
+
+    except Exception as exc:
+        raise RuntimeError(
+            "Home Assistant WebSocket "
+            f"request failed: {exc}"
+        ) from exc
+
+
+def _calibration_profile_name(
+    value: Any,
+) -> str:
+    profile = _plain_text(
+        value,
+        "Calibration profile",
+        max_length=128,
+        allow_empty=False,
+    ).strip()
+
+    if not profile:
+        raise ValueError(
+            "Calibration profile cannot be empty."
+        )
+
+    return profile
 
 
 def _set_discovery_ui_density(value: Any) -> dict[str, str]:
@@ -2587,6 +2738,7 @@ body.density-dense .step{padding:7px 9px}
 <div class="nav-grid">
 <button id="openDiscoveryButton" class="nav-card" type="button"><b>Discovery</b><span class="nav-points"><span>SNMP Walk</span><span>Generate Native Dashboard YAML</span><span>Generate SNMP2MQTT YAML</span></span></button>
 <button id="openDevicesButton" class="nav-card" type="button"><b>Devices</b><span class="nav-points"><span>Show detected devices &amp; status</span><span>Enable / Disable Devices</span></span></button>
+<button id="openCalibrationProfilesButton" class="nav-card" type="button"><b>Calibration Profiles</b><span class="nav-points"><span>Manage faceplate calibrations</span><span>Copy / Import / Export profiles</span><span>Clean stale profiles</span></span></button>
 <button id="openSupportButton" class="nav-card" type="button"><b>Support My Switch</b><span class="nav-points"><span>Create contribution package to add/increase support for your switch</span></span></button>
 <button id="openDiagnosticsButton" class="nav-card" type="button"><b>Detected Device Information</b><span class="nav-points"><span>Detailed device(s) information</span></span></button>
 <button id="openConfigurationButton" class="nav-card" type="button"><b>Import / Export Configuration</b><span class="nav-points"><span>Import / export Discovery configuration</span></span></button>
@@ -2597,6 +2749,13 @@ body.density-dense .step{padding:7px 9px}
 <button id="openSnmp2mqttSettingsButton" class="nav-card" type="button"><b>SNMP2MQTT Settings</b><span class="nav-points"><span>MQTT configuration</span><span>SNMP2MQTT paths</span><span>Logging level</span></span></button>
 <button id="openUnifi2mqttSettingsButton" class="nav-card unifi-unavailable" type="button" aria-disabled="true" title="UniFi2MQTT status is being checked."><b>UniFi2MQTT Settings</b><span class="nav-points"><span>UniFi controller API</span><span>MQTT connection</span><span>App &amp; snapshot status</span></span><span id="unifiHomeCardState" class="unifi-card-state">Checking…</span></button>
 </div>
+</section>
+
+
+<section id="calibrationProfilesCard" class="card hidden">
+<h2>Calibration Profiles</h2>
+<p class="lead">Manage saved Switch Vision faceplate calibration profiles.</p>
+<div id="calibrationProfilesRoot"></div>
 </section>
 
 <section id="unifi2mqttCard" class="card hidden">
@@ -2752,7 +2911,7 @@ function mailto(latest){const subject=`Switch Vision Contribution - ${latest.con
 function statusLabel(value){return String(value||'unknown').replaceAll('_',' ')}
 function validationItem(label,value){const item=document.createElement('div');item.className='validation-item';const name=document.createElement('span');name.textContent=label;const state=document.createElement('span');const normalized=String(value||'unknown').toLowerCase();state.className=`state-${normalized}`;state.textContent=statusLabel(normalized);item.append(name,state);return item}
 function deviceCard(d){const card=document.createElement('div');card.className='device-card';const head=document.createElement('div');head.className='device-head';const title=document.createElement('div');const strong=document.createElement('strong');strong.textContent=d.model||'Unknown model';title.appendChild(strong);const detail=document.createElement('div');detail.className='muted';detail.textContent=`${d.vendor_name||d.vendor||'Unknown vendor'}${d.family&&d.family!=='unknown'?` · ${d.family}`:''}`;title.appendChild(detail);const status=String(d.registry_status||'detected').toLowerCase();const badge=document.createElement('span');badge.className=`badge badge-${status}`;badge.textContent=statusLabel(status);head.append(title,badge);card.appendChild(head);const meta=document.createElement('div');meta.className='meta';meta.style.marginTop='10px';const fields=[['Registry match',d.registry_match?'Yes':'No'],['Last validated',d.registry_last_validated_version?`v${d.registry_last_validated_version}`:'Not recorded'],['Physical interfaces',d.physical_count??0],['RJ45 interfaces',d.rj45_count??0]];for(const [label,value] of fields){const dt=document.createElement('dt');dt.textContent=label;const dd=document.createElement('dd');dd.textContent=String(value);meta.append(dt,dd)}card.appendChild(meta);const validation=d.registry_validation||{};const grid=document.createElement('div');grid.className='validation-grid';for(const [label,key] of [['Exact model','exact_model_detection'],['RJ45 mapping','rj45_mapping'],['PoE','poe'],['System sensors','system_sensors'],['Uplinks','uplinks'],['Stack','stack']])grid.appendChild(validationItem(label,validation[key]));card.appendChild(grid);return card}
-function setView(view){currentView=view;const isHome=view==='home';$('backButton').textContent=isHome?'← Back to Home Assistant':'← Back';const titles={home:['Switch Vision Hub',''],discovery:['Discovery','Run a guided discovery job and review its progress.'],devices:['Devices','Latest detected hardware and generated configuration status.'],support:['Support My Switch','Prepare a privacy-processed contribution bundle. Nothing is sent automatically.'],diagnostics:['Detected Device Information','Detailed device(s) information.'],configuration:['Import / Export Configuration','Export or import the saved Discovery switch list and Discovery settings.'],unifi2mqtt:['UniFi2MQTT Settings','Configure the UniFi controller API and MQTT support path.'],progress:['Support My Switch','Preparing your contribution bundle.'],ready:['Support My Switch','Your contribution bundle is ready to review.']};const title=titles[view]||titles.home;$('pageHeading').textContent=title[0];$('pageLead').textContent=title[1];$('pageLead').classList.toggle('hidden',!title[1]);$('homeCard').classList.toggle('hidden',view!=='home');$('discoveryCard').classList.toggle('hidden',view!=='discovery');$('devicesCard').classList.toggle('hidden',view!=='devices');$('createCard').classList.toggle('hidden',view!=='support');$('importantCard').classList.toggle('hidden',view!=='support');$('diagnosticsCard').classList.toggle('hidden',view!=='diagnostics');$('configurationCard').classList.toggle('hidden',view!=='configuration');$('unifi2mqttCard').classList.toggle('hidden',view!=='unifi2mqtt');$('progressCard').classList.toggle('hidden',view!=='progress');$('readyCard').classList.toggle('hidden',view!=='ready');window.scrollTo({top:0,behavior:'smooth'})}
+function setView(view){currentView=view;const isHome=view==='home';$('backButton').textContent=isHome?'← Back to Home Assistant':'← Back';const titles={home:['Switch Vision Hub',''],discovery:['Discovery','Run a guided discovery job and review its progress.'],devices:['Devices','Latest detected hardware and generated configuration status.'],support:['Support My Switch','Prepare a privacy-processed contribution bundle. Nothing is sent automatically.'],diagnostics:['Detected Device Information','Detailed device(s) information.'],configuration:['Import / Export Configuration','Export or import the saved Discovery switch list and Discovery settings.'],profiles:['Calibration Profiles','Manage saved faceplate calibration profiles.'],unifi2mqtt:['UniFi2MQTT Settings','Configure the UniFi controller API and MQTT support path.'],progress:['Support My Switch','Preparing your contribution bundle.'],ready:['Support My Switch','Your contribution bundle is ready to review.']};const title=titles[view]||titles.home;$('pageHeading').textContent=title[0];$('pageLead').textContent=title[1];$('pageLead').classList.toggle('hidden',!title[1]);$('homeCard').classList.toggle('hidden',view!=='home');$('discoveryCard').classList.toggle('hidden',view!=='discovery');$('devicesCard').classList.toggle('hidden',view!=='devices');$('createCard').classList.toggle('hidden',view!=='support');$('importantCard').classList.toggle('hidden',view!=='support');$('diagnosticsCard').classList.toggle('hidden',view!=='diagnostics');$('configurationCard').classList.toggle('hidden',view!=='configuration');$('calibrationProfilesCard').classList.toggle('hidden',view!=='profiles');$('unifi2mqttCard').classList.toggle('hidden',view!=='unifi2mqtt');$('progressCard').classList.toggle('hidden',view!=='progress');$('readyCard').classList.toggle('hidden',view!=='ready');window.scrollTo({top:0,behavior:'smooth'})}
 function goBack(){if(!$('homeCard').classList.contains('hidden')){try{if(history.length>1){history.back();return}}catch(_e){}try{window.top.location.href='/';return}catch(_e){}location.href='/';return}setView('home')}
 function openHomeAssistantPath(path){try{window.top.location.href=path;return}catch(_e){}window.location.href=path}
 let appLinksCache=null;
@@ -2877,8 +3036,10 @@ function schedulePoll(running=lastRunning){if(polling){clearTimeout(polling);pol
 async function refresh(){if(refreshInFlight)return;refreshInFlight=true;try{const r=await fetch(endpoint('api/status'),{cache:'no-store'});const d=await r.json();if(d.ui_preferences?.density)syncDensityUi(d.ui_preferences.density);setUnifiHomeCardVisibility(d.ui_preferences?.show_unifi_integration!==false);if(d.ui_preferences?.show_unifi_integration!==false)await refreshUnifiHomeCard();if(!defaultsLoaded)setForm(d.defaults);showDiscovery(d.discovery);const contributionRunning=!!d.job.running;const discoveryRunning=!!d.discovery?.running;lastRunning=contributionRunning||discoveryRunning;$('createButton').disabled=contributionRunning;if(contributionRunning&&currentView!=='discovery')setView('progress');$('progressMessage').textContent=d.job.message||'Working…';$('logTail').textContent=(d.job.log_tail||[]).join('\n');if(!contributionRunning&&d.job.success===false&&currentView==='progress'){$('progressMessage').textContent=`Failed: ${d.job.message}`}if(!contributionRunning){showLatest(d.latest);if(d.job.success===true&&d.latest&&currentView==='progress')setView('ready')}if(currentView==='devices')await refreshDevicesData(false);else if(currentView==='diagnostics')await refreshDiagnosticsData(false);else if(currentView==='discovery')await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])}catch(e){if(currentView==='progress')$('progressMessage').textContent=`Could not contact Support My Switch: ${e}`;else $('homeStatus').textContent=`Connection problem: ${e}`}finally{refreshInFlight=false;schedulePoll(lastRunning)}}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(polling){clearTimeout(polling);polling=null}}else{updateElapsedClock();refresh()}});window.addEventListener('focus',()=>{if(!document.hidden){updateElapsedClock();refresh()}});
 async function create(){const btn=$('createButton');btn.disabled=true;setView('progress');$('progressMessage').textContent='Starting…';try{const r=await fetch(endpoint('api/create'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start contribution');await refresh()}catch(e){$('progressMessage').textContent=`Could not start: ${e}`;btn.disabled=false}}
-$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedCardYamlButton').addEventListener('click',previewGeneratedCardYaml);$('copyGeneratedCardYamlButton').addEventListener('click',copyGeneratedCardYaml);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('openDiagnosticsButton').addEventListener('click',loadDiagnostics);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json')});$('openIntegrationSettingsButton').addEventListener('click',()=>openHomeAssistantPath('/config/integrations/integration/switch_vision'));$('openDiscoverySettingsButton').addEventListener('click',()=>openResolvedApp('discovery'));$('openSnmp2mqttSettingsButton').addEventListener('click',()=>openResolvedApp('snmp2mqtt'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('refreshDiagnosticsButton').addEventListener('click',loadDiagnostics);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('diagnosticsRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});setView('home');startElapsedTicker();refresh();
-</script></body></html>"""
+$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openCalibrationProfilesButton').addEventListener('click',()=>{setView('profiles');window.SwitchVisionCalibrationProfiles?.load()});$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedCardYamlButton').addEventListener('click',previewGeneratedCardYaml);$('copyGeneratedCardYamlButton').addEventListener('click',copyGeneratedCardYaml);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('openDiagnosticsButton').addEventListener('click',loadDiagnostics);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json')});$('openIntegrationSettingsButton').addEventListener('click',()=>openHomeAssistantPath('/config/integrations/integration/switch_vision'));$('openDiscoverySettingsButton').addEventListener('click',()=>openResolvedApp('discovery'));$('openSnmp2mqttSettingsButton').addEventListener('click',()=>openResolvedApp('snmp2mqtt'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('refreshDiagnosticsButton').addEventListener('click',loadDiagnostics);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('diagnosticsRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});setView('home');startElapsedTicker();refresh();
+</script>
+<script src="calibration_profiles.js"></script>
+</body></html>"""
 
 
 class SupportHandler(BaseHTTPRequestHandler):
@@ -2971,6 +3132,61 @@ class SupportHandler(BaseHTTPRequestHandler):
             self._json({"status": "ok", "version": self.app.version})
         elif path == "/api/app-links":
             self._json(_installed_switch_vision_app_links())
+        elif path == "/calibration_profiles.js":
+            script_path = Path("/calibration_profiles.js")
+
+            if not script_path.is_file():
+                self.send_error(
+                    HTTPStatus.NOT_FOUND
+                )
+            else:
+                body = script_path.read_bytes()
+
+                self.send_response(
+                    HTTPStatus.OK
+                )
+
+                self.send_header(
+                    "Content-Type",
+                    "application/javascript; charset=utf-8",
+                )
+
+                self.send_header(
+                    "Content-Length",
+                    str(len(body)),
+                )
+
+                self.send_header(
+                    "Cache-Control",
+                    "no-store",
+                )
+
+                self.end_headers()
+                self.wfile.write(body)
+
+        elif path == "/api/calibration-profiles":
+            try:
+                result = _home_assistant_ws(
+                    {
+                        "type":
+                        "switch_vision/list_calibrations"
+                    }
+                )
+
+                self._json(
+                    result
+                    if isinstance(result, dict)
+                    else {}
+                )
+
+            except (
+                ValueError,
+                RuntimeError,
+            ) as exc:
+                self._json(
+                    {"error": str(exc)},
+                    HTTPStatus.BAD_GATEWAY,
+                )
         elif path == "/api/unifi2mqtt/settings":
             try:
                 self._json(_unifi2mqtt_settings_status())
@@ -3031,6 +3247,156 @@ class SupportHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/")
+
+        if path in {
+            "/api/calibration-profiles/get",
+            "/api/calibration-profiles/save",
+            "/api/calibration-profiles/delete",
+        }:
+            try:
+                length = int(
+                    self.headers.get(
+                        "Content-Length",
+                        "0",
+                    )
+                )
+
+                maximum = (
+                    3 * 1024 * 1024
+                    if path ==
+                    "/api/calibration-profiles/save"
+                    else 8192
+                )
+
+                if (
+                    length <= 0
+                    or
+                    length > maximum
+                ):
+                    raise ValueError(
+                        "Invalid Calibration Profile "
+                        "request size."
+                    )
+
+                data = json.loads(
+                    self.rfile.read(
+                        length
+                    ).decode("utf-8")
+                )
+
+                if not isinstance(
+                    data,
+                    dict,
+                ):
+                    raise ValueError(
+                        "Calibration Profile request "
+                        "must contain a JSON object."
+                    )
+
+                profile = (
+                    _calibration_profile_name(
+                        data.get("profile")
+                    )
+                )
+
+                if (
+                    path ==
+                    "/api/calibration-profiles/get"
+                ):
+                    result = (
+                        _home_assistant_ws(
+                            {
+                                "type":
+                                "switch_vision/get_calibration",
+                                "profile":
+                                profile,
+                            }
+                        )
+                    )
+
+                    self._json(
+                        result
+                        if isinstance(
+                            result,
+                            dict,
+                        )
+                        else {}
+                    )
+
+                    return
+
+                if (
+                    path ==
+                    "/api/calibration-profiles/delete"
+                ):
+                    _home_assistant_service(
+                        "switch_vision",
+                        "delete_calibration",
+                        {
+                            "profile":
+                            profile
+                        },
+                    )
+
+                    self._json(
+                        {
+                            "ok": True,
+                            "profile":
+                            profile,
+                        }
+                    )
+
+                    return
+
+                calibration = data.get(
+                    "calibration"
+                )
+
+                if not isinstance(
+                    calibration,
+                    dict,
+                ):
+                    raise ValueError(
+                        "Calibration data must "
+                        "contain one JSON object."
+                    )
+
+                _home_assistant_service(
+                    "switch_vision",
+                    "save_calibration",
+                    {
+                        "profile":
+                        profile,
+                        "calibration":
+                        calibration,
+                        "mirror_to_base":
+                        False,
+                    },
+                )
+
+                self._json(
+                    {
+                        "ok": True,
+                        "profile":
+                        profile,
+                    }
+                )
+
+                return
+
+            except (
+                ValueError,
+                RuntimeError,
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+            ) as exc:
+                self._json(
+                    {"error": str(exc)},
+                    HTTPStatus.BAD_REQUEST,
+                )
+
+                return
+
         if path == "/api/ui-density":
             try:
                 length = int(self.headers.get("Content-Length", "0"))

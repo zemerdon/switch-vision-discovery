@@ -20,6 +20,18 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
     "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
 
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+# Calibration Profile Manager relocation checks
+grep -Fq 'id="openCalibrationProfilesButton"'     "$BASE_DIR/support_web.py"
+
+grep -Fq 'id="calibrationProfilesCard"'     "$BASE_DIR/support_web.py"
+
+grep -Fq 'switch_vision/list_calibrations'     "$BASE_DIR/support_web.py"
+
+grep -Fq 'switch_vision/get_calibration'     "$BASE_DIR/support_web.py"
+
+grep -Fq 'SwitchVisionCalibrationProfiles'     "$BASE_DIR/calibration_profiles.js"
+
 if [ -d "$BASE_DIR/mib_database" ]; then
   RUNTIME_DATA_DIR="$BASE_DIR"
 elif [ -d "$BASE_DIR/opt/switch-vision/mib_database" ]; then
