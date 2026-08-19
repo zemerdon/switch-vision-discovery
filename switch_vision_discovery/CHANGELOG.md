@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.1.25 — Calibration Profile Manager in Discovery Hub
+
+- Moves Calibration Profile management into the Switch Vision Discovery Hub.
+- Uses the existing Switch Vision Core calibration WebSocket and service backend.
+- Adds profile listing, stale and duplicate indicators, protected deletion, copy, import, export, and bulk stale cleanup.
+- Does not directly read or modify Home Assistant calibration storage files.
+
 ## v2.1.24 — Cisco trunk-status diagnostic correctness
 
 - Update Discovery runtime and Home Assistant app version identifiers to v2.1.24.

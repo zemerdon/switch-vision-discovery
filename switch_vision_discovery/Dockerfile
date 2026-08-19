@@ -3,7 +3,7 @@ FROM ghcr.io/home-assistant/base:3.22@sha256:8f937e0b89e108f432d3cb140900f06e568
 ARG BUILD_VERSION
 ARG BUILD_ARCH
 
-RUN apk add --no-cache net-snmp-tools jq zip python3 py3-yaml
+RUN apk add --no-cache net-snmp-tools jq zip python3 py3-yaml py3-websockets
 
 ADD runtime.tar.gz /
 
