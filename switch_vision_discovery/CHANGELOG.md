@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.24 — Cisco trunk-status diagnostic correctness
+
+- Update Discovery runtime and Home Assistant app version identifiers to v2.1.24.
+- Tighten the early Cisco trunk-status diagnostic so it only reports a match for the same indexed `INTEGER` rows accepted by the Discovery parser.
+- Prevent stray base-OID text, unindexed rows, or rows with the wrong SNMP value type from being reported as valid Cisco trunk-status evidence.
+- Add regression coverage for numeric and `iso.` SNMP walk forms.
+- Preserve existing device mappings, VLAN/PVID handling, generated telemetry behavior, and Juniper EX3300 behavior.
+
 ## v2.1.23 — Reviewable Discovery runtime source
 
 - Add the complete packaged Discovery runtime as normal Git-tracked source under `runtime_src/` for line-by-line review, history, blame, and external auditing.
