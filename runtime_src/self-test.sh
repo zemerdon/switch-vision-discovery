@@ -800,7 +800,37 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.21"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.24"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.24"' "$BASE_DIR/run.sh"
+
+# v2.1.24 Cisco trunk-status diagnostic contract.
+# The early diagnostic must match the parser: only an indexed Cisco
+# vlanTrunkPortDynamicStatus row with an INTEGER value counts as present.
+grep -Fq '14\.[0-9]+ = INTEGER:' "$BASE_DIR/discovery_job.sh"
+
+trunk_bad_unindexed="$tmp_dir/trunk-bad-unindexed.txt"
+trunk_bad_type="$tmp_dir/trunk-bad-type.txt"
+trunk_good_numeric="$tmp_dir/trunk-good-numeric.txt"
+trunk_good_iso="$tmp_dir/trunk-good-iso.txt"
+
+printf '%s\n'   '1.3.6.1.4.1.9.9.46.1.6.1.1.14 = INTEGER: 1'   > "$trunk_bad_unindexed"
+
+printf '%s\n'   '1.3.6.1.4.1.9.9.46.1.6.1.1.14.101 = STRING: "1"'   > "$trunk_bad_type"
+
+printf '%s\n'   '1.3.6.1.4.1.9.9.46.1.6.1.1.14.101 = INTEGER: 1'   > "$trunk_good_numeric"
+
+printf '%s\n'   'iso.3.6.1.4.1.9.9.46.1.6.1.1.14.102 = INTEGER: 2'   > "$trunk_good_iso"
+
+trunk_status_present() {
+  awk '/\.3\.6\.1\.4\.1\.9\.9\.46\.1\.6\.1\.1\.14\.[0-9]+ = INTEGER:/ { found=1 } END { exit(found ? 0 : 1) }' "$1"
+}
+
+! trunk_status_present "$trunk_bad_unindexed"
+! trunk_status_present "$trunk_bad_type"
+trunk_status_present "$trunk_good_numeric"
+trunk_status_present "$trunk_good_iso"
+
+echo "Switch Vision Discovery v2.1.24 Cisco trunk-status diagnostic regression: PASS"
 
 blank_switch_cfg="$tmp_dir/blank-switch-row.json"
 real_switch_cfg="$tmp_dir/real-switch-row.json"

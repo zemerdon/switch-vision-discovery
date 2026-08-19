@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.1.21"
+SWITCH_VISION_DISCOVERY_VERSION="2.1.24"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1631,7 +1631,7 @@ write_walk_section() {
     else
       echo "- Interface status OIDs: not found yet"
     fi
-    if grep -q "1.3.6.1.4.1.9.9.46.1.6.1.1.14" "$walk_file" || grep -q "iso.3.6.1.4.1.9.9.46.1.6.1.1.14" "$walk_file"; then
+    if awk '/\.3\.6\.1\.4\.1\.9\.9\.46\.1\.6\.1\.1\.14\.[0-9]+ = INTEGER:/ { found=1 } END { exit(found ? 0 : 1) }' "$walk_file"; then
       echo "- Cisco trunk status OIDs: found"
     else
       echo "- Cisco trunk status OIDs: not found yet"
