@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.1.27"
+SWITCH_VISION_DISCOVERY_VERSION="2.1.28"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -3562,7 +3562,12 @@ write_generated_dashboard_card() {
 
 write_generated_yaml() {
   tmp_walks="$1"
-  echo "Generating SNMP2MQTT YAML: $GENERATED_YAML_PATH" >> "$LIVE_LOG_PATH" 2>/dev/null || true
+  GENERATED_YAML_PUBLISHED="false"
+  candidate_path="${GENERATED_YAML_PATH}.candidate.$$"
+  guard="/generated_yaml_guard.py"
+  [ -f "$guard" ] || guard="$(dirname "$0")/generated_yaml_guard.py"
+  echo "Generating SNMP2MQTT YAML candidate: $candidate_path" >> "$LIVE_LOG_PATH" 2>/dev/null || true
+  rm -f "$candidate_path"
   {
     echo "# Switch Vision generated SNMP2MQTT YAML"
     echo "# Source: Switch Vision Discovery v$SWITCH_VISION_DISCOVERY_VERSION"
@@ -3586,7 +3591,22 @@ write_generated_yaml() {
       member_map=$(target_member_map_for_walk "$walk_file")
       write_generated_yaml_for_walk "$walk_file" "$target_ip" "$prefix" "$community" "$member_map"
     done < "$tmp_walks"
-  } > "$GENERATED_YAML_PATH"
+  } > "$candidate_path"
+
+  if [ ! -f "$guard" ]; then
+    rm -f "$candidate_path"
+    echo "Generated YAML candidate refused: semantic guard is missing: $guard" >> "$LIVE_LOG_PATH" 2>/dev/null || true
+    return 0
+  fi
+
+  if python3 "$guard" --publish "$candidate_path" "$GENERATED_YAML_PATH"; then
+    GENERATED_YAML_PUBLISHED="true"
+    echo "Generated YAML published atomically: $GENERATED_YAML_PATH" >> "$LIVE_LOG_PATH" 2>/dev/null || true
+  else
+    guard_status=$?
+    rm -f "$candidate_path"
+    echo "Generated YAML candidate refused (guard status $guard_status); previous live generated YAML was preserved." >> "$LIVE_LOG_PATH" 2>/dev/null || true
+  fi
 }
 
 write_report() {
@@ -3702,7 +3722,13 @@ write_report() {
           sv_status "Generating SNMP2MQTT YAML" "Selected switch" "${LIVE_SWITCH_IP:-not set}" "write_generated_yaml" "Creating generated-snmp2mqtt.yaml"
           sv_debug "STAGE: Generating SNMP2MQTT YAML"
           write_generated_yaml "$tmp_walks"
-          echo "- Generated file: $GENERATED_YAML_PATH"
+          if [ "${GENERATED_YAML_PUBLISHED:-false}" = "true" ]; then
+            echo "- Generated file: $GENERATED_YAML_PATH"
+            echo "- Validation: PASS (non-empty target list); published atomically."
+          else
+            echo "- FAIL: generated YAML candidate did not contain a valid non-empty target list."
+            echo "- Previous generated YAML preserved unchanged."
+          fi
           echo "- Review-only output; it has not been installed."
           echo "- Polling groups: chunked status 30s, chunked traffic 10s, walk-aware VLAN/trunk 30s, slow system/interface 300s"
           if grep -q "CHANGE_ME" "$GENERATED_YAML_PATH" 2>/dev/null; then
@@ -3739,7 +3765,13 @@ write_report() {
           echo "- Generated file: not written"
         else
           write_generated_yaml "$tmp_walks"
-          echo "- Generated file: $GENERATED_YAML_PATH"
+          if [ "${GENERATED_YAML_PUBLISHED:-false}" = "true" ]; then
+            echo "- Generated file: $GENERATED_YAML_PATH"
+            echo "- Validation: PASS (non-empty target list); published atomically."
+          else
+            echo "- FAIL: generated YAML candidate did not contain a valid non-empty target list."
+            echo "- Previous generated YAML preserved unchanged."
+          fi
           echo "- Review-only output; it has not been installed."
         fi
         echo ""

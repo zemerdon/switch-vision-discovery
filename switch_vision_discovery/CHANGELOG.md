@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.28 — Atomic generated-YAML handoff
+
+- Write SNMP2MQTT output to a candidate file and publish it atomically only after the candidate passes the Switch Vision header and non-empty target-list contract.
+- Preserve the previous live `generated-snmp2mqtt.yaml` unchanged when a generation attempt produces an empty, target-less, malformed, or otherwise invalid candidate.
+- Add a standalone generated-YAML semantic guard plus a permanent regression proving an invalid candidate cannot clobber a known-good live handoff.
+- Keep the Huawei S5720-12TP-LI-AC 8 RJ45 + 4 physical 1G SFP mapping and 1000 Mbps physical-cage speed cap from v2.1.27 unchanged.
+- Update Discovery UI guidance to reflect automatic SNMP2MQTT application of valid changed YAML.
+
 ## v2.1.27 — Hardware validation safeguards
 
 - Promote WS-C2960X-24TS-L, WS-C3560CG-8PC-S, SG500X-24, Huawei S5735-L8P4X-A1, and Huawei S5720-12TP-LI-AC to Community Validated from existing real-hardware evidence.
