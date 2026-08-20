@@ -1,0 +1,42 @@
+name: Build Discovery v2.1.26 audit fix
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: ${{ github.event.pull_request.head.ref == 'fix/discovery-2.1.26-audit-contracts' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install contract-check dependency
+        run: python3 -m pip install --disable-pip-version-check PyYAML
+      - name: Apply, validate and push v2.1.26 audit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f tools/_sv_discovery_2126_audit_fix.py ]; then
+            echo 'Discovery v2.1.26 audit fix already built; nothing to do.'
+            exit 0
+          fi
+          python3 tools/_sv_discovery_2126_audit_fix.py
+          git config user.name 'Switch Vision CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && { echo 'ERROR: audit fix produced no commit'; exit 1; }
+          git commit -m 'Discovery v2.1.26: align component contracts'
+          git push origin HEAD:fix/discovery-2.1.26-audit-contracts
