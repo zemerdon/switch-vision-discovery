@@ -1,0 +1,77 @@
+name: Audit Discovery cross-component contracts
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: ${{ github.event.pull_request.head.ref == 'audit/discovery-cross-component-check' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Discovery
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Compare Core and Discovery registries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import urllib.request
+          from pathlib import Path
+
+          discovery = json.loads(Path('runtime_src/opt/switch-vision/devices/supported_devices.json').read_text())
+          req = urllib.request.Request(
+              'https://raw.githubusercontent.com/zemerdon/switch-vision-releases/main/src/devices/supported_devices.json',
+              headers={'User-Agent': 'Switch-Vision-Audit/1'},
+          )
+          with urllib.request.urlopen(req, timeout=30) as response:
+              core = json.load(response)
+
+          def by_model(payload):
+              return {str(item.get('model') or '').strip(): item for item in payload.get('devices', []) if str(item.get('model') or '').strip()}
+
+          c = by_model(core)
+          d = by_model(discovery)
+          print(f'Core models: {len(c)}')
+          print(f'Discovery models: {len(d)}')
+          print('Only in Core:')
+          for model in sorted(c.keys() - d.keys()):
+              print('  +', model)
+          print('Only in Discovery:')
+          for model in sorted(d.keys() - c.keys()):
+              print('  +', model)
+
+          fields = ('mapping_profile', 'calibration_profile', 'default_faceplate', 'ports', 'stack_support', 'discovery_support', 'dashboard_support')
+          print('Shared-model field drift:')
+          drift = 0
+          for model in sorted(c.keys() & d.keys()):
+              changed = [field for field in fields if c[model].get(field) != d[model].get(field)]
+              if changed:
+                  drift += 1
+                  print(f'  {model}: {", ".join(changed)}')
+                  for field in changed:
+                      print(f'    {field}: Core={c[model].get(field)!r} Discovery={d[model].get(field)!r}')
+          print(f'Shared models with functional drift: {drift}')
+          PY
+
+      - name: Compare Discovery version identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          cfg = Path('switch_vision_discovery/config.yaml').read_text()
+          runtime = Path('runtime_src/discovery_job.sh').read_text()
+          app = re.search(r'(?m)^version:\s*["\']?([^"\'\s#]+)', cfg).group(1)
+          internal = re.search(r'(?m)^SWITCH_VISION_DISCOVERY_VERSION="([^"]+)"', runtime).group(1)
+          print(f'App version: {app}')
+          print(f'Runtime version: {internal}')
+          print('MATCH' if app == internal else 'MISMATCH')
+          PY
