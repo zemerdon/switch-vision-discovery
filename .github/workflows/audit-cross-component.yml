@@ -45,7 +45,14 @@ jobs:
               print('  +', model)
           print('Only in Discovery:')
           for model in sorted(d.keys() - c.keys()):
-              print('  +', model)
+              item = d[model]
+              ports = item.get('ports') or {}
+              print(
+                  f"  + {model}: vendor={item.get('vendor')!r} "
+                  f"rj45={ports.get('rj45')!r} uplinks={ports.get('uplinks')!r} "
+                  f"profile={item.get('calibration_profile')!r} "
+                  f"faceplate={item.get('default_faceplate')!r}"
+              )
 
           fields = ('mapping_profile', 'calibration_profile', 'default_faceplate', 'ports', 'stack_support', 'discovery_support', 'dashboard_support')
           print('Shared-model field drift:')
@@ -58,6 +65,17 @@ jobs:
                   for field in changed:
                       print(f'    {field}: Core={c[model].get(field)!r} Discovery={d[model].get(field)!r}')
           print(f'Shared models with functional drift: {drift}')
+
+          print('Discovery Ubiquiti geometry and visuals:')
+          for model, item in sorted(d.items()):
+              if str(item.get('vendor') or '').strip() != 'Ubiquiti':
+                  continue
+              ports = item.get('ports') or {}
+              print(
+                  f"  {model}: rj45={ports.get('rj45')!r} uplinks={ports.get('uplinks')!r} "
+                  f"profile={item.get('calibration_profile')!r} "
+                  f"faceplate={item.get('default_faceplate')!r}"
+              )
           PY
 
       - name: Compare Discovery version identifiers
