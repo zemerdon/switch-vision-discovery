@@ -1,0 +1,27 @@
+name: Verify Discovery 2.1.27 GHCR
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: ${{ github.event.pull_request.head.ref == 'audit/verify-ghcr-2.1.27' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify public multi-arch image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='ghcr.io/zemerdon/switch-vision-discovery:2.1.27'
+          raw="$(docker buildx imagetools inspect --raw "$image")"
+          printf '%s\n' "$raw" | jq -e '.manifests | type == "array" and length >= 2' >/dev/null
+          platforms="$(printf '%s\n' "$raw" | jq -r '.manifests[]?.platform | select(.os != null and .architecture != null) | "\(.os)/\(.architecture)"' | sort -u)"
+          printf '%s\n' "$platforms"
+          grep -qx 'linux/amd64' <<<"$platforms"
+          grep -qx 'linux/arm64' <<<"$platforms"
+          echo 'Discovery 2.1.27 GHCR multi-arch publication: PASS'
