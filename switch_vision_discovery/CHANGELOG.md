@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.26 — Cross-component contract audit fixes
+
+- Correct the packaged Discovery runtime version identifier so runtime status, logs, and support metadata report v2.1.26 consistently with the Home Assistant app version.
+- Synchronize the five Ubiquiti models shared with Switch Vision Core v2.4.0 to the dedicated `unifi-24p-rj45-2sfp.png` faceplate and `unifi_24p_rj45_2sfp` calibration profile.
+- Preserve Discovery's additional exact-model hardware knowledge, including Dell N2128PX-ON and newer UniFi models that are not yet present in the Core supported-device index.
+- Add a cross-component CI contract check covering Discovery app/runtime version parity, Core-model presence, shared hardware mappings, shared Ubiquiti visual defaults, and the Discovery → SNMP2MQTT generated-YAML path.
+- Keep existing SNMP walks, device mappings, UniFi API port geometry, Support My Switch behavior, calibration profile management, and generated entity contracts unchanged.
+
 ## v2.1.25 — Calibration Profile Manager in Discovery Hub
 
 - Moves Calibration Profile management into the Switch Vision Discovery Hub.
