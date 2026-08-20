@@ -29,6 +29,7 @@ jobs:
       - name: Prepare Discovery 2.1.27 source
         run: |
           python3 tools/fix_prepare_v2127.py
+          python3 tools/fix_unifi_prepare_v2127.py
           python3 tools/prepare_v2127.py
       - name: Validate runtime source
         shell: bash
@@ -66,13 +67,16 @@ jobs:
           targets={'WS-C2960X-24TS-L','WS-C3560CG-8PC-S','SG500X-24','S5735-L8P4X-A1','S5720-12TP-LI-AC'}
           assert all(models[m]['status']=='community_validated' for m in targets)
           assert len(models)==28
-          print('Discovery 2.1.27 status/version safeguards: PASS')
+          for model, device in models.items():
+            if device.get('vendor') == 'Ubiquiti':
+              assert not str(device.get('calibration_profile') or '').lower().startswith('cisco_'), model
+          print('Discovery 2.1.27 status/version/UniFi safeguards: PASS')
           PY
       - name: Remove temporary build machinery
         shell: bash
         run: |
           set -euo pipefail
-          rm -f .github/workflows/build-v2127-hardware-safeguards.yml tools/prepare_v2127.py tools/fix_prepare_v2127.py
+          rm -f .github/workflows/build-v2127-hardware-safeguards.yml tools/prepare_v2127.py tools/fix_prepare_v2127.py tools/fix_unifi_prepare_v2127.py
           find . -type d -name '__pycache__' -prune -exec rm -rf {} +
           find . -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
           git diff --check
