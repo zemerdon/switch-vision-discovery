@@ -812,8 +812,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.27"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.27"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.28"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.28"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
@@ -1849,3 +1849,54 @@ jq -e '
 ' "$tmp_dir/dell-v2127-capabilities.json" >/dev/null
 
 echo "Switch Vision Discovery v2.1.27 Dell physical/speed safeguard regression: PASS"
+
+
+# v2.1.28 generated SNMP2MQTT YAML publication regression. An invalid/empty
+# target candidate must never replace an already-valid live handoff file.
+yaml_guard="$BASE_DIR/generated_yaml_guard.py"
+[ -f "$yaml_guard" ]
+valid_yaml="$tmp_dir/generated-valid.yaml"
+invalid_yaml="$tmp_dir/generated-invalid.yaml"
+live_yaml="$tmp_dir/generated-live.yaml"
+cat > "$valid_yaml" <<'YAML_VALID_V2128'
+# Switch Vision generated SNMP2MQTT YAML
+# Source: Switch Vision Discovery v2.1.28
+targets:
+  - host: 192.0.2.128
+    name: Switch Vision Regression
+    version: 2c
+    community: public
+    sensors:
+      - oid: 1.3.6.1.2.1.1.3.0
+        name: Regression Uptime
+YAML_VALID_V2128
+cat > "$invalid_yaml" <<'YAML_INVALID_V2128'
+# Switch Vision generated SNMP2MQTT YAML
+# Source: Switch Vision Discovery v2.1.28
+targets:
+YAML_INVALID_V2128
+cp "$valid_yaml" "$live_yaml"
+valid_sha_before=$(sha256sum "$live_yaml" | awk '{print $1}')
+if python3 "$yaml_guard" --publish "$invalid_yaml" "$live_yaml"; then
+  echo "ERROR: target-less generated YAML candidate was accepted" >&2
+  exit 1
+fi
+valid_sha_after=$(sha256sum "$live_yaml" | awk '{print $1}')
+[ "$valid_sha_before" = "$valid_sha_after" ] || {
+  echo "ERROR: invalid generated YAML replaced the live handoff" >&2
+  exit 1
+}
+cp "$valid_yaml" "$tmp_dir/generated-valid-candidate.yaml"
+python3 "$yaml_guard" --publish "$tmp_dir/generated-valid-candidate.yaml" "$live_yaml"
+grep -Eq '^[[:space:]]*-[[:space:]]+host:[[:space:]]+192\.0\.2\.128$' "$live_yaml"
+[ ! -e "$tmp_dir/generated-valid-candidate.yaml" ]
+grep -Fq 'candidate_path="${GENERATED_YAML_PATH}.candidate.$$"' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'python3 "$guard" --publish "$candidate_path" "$GENERATED_YAML_PATH"' "$BASE_DIR/discovery_job.sh"
+! grep -Fq '} > "$GENERATED_YAML_PATH"' "$BASE_DIR/discovery_job.sh"
+printf '%s\n' "Switch Vision Discovery v2.1.28 atomic generated-YAML publication: PASS"
+
+# S5720 generator contract: its fallback ifDescr names must still create target
+# output and its four physical 1G SFP cages retain the v2.1.27 speed cap.
+grep -Fq 'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'if (!(idx in ifname)) { ifname[idx]=val; ifname_source[idx]="ifDescr" }' "$BASE_DIR/discovery_job.sh"
+printf '%s\n' "Switch Vision Discovery v2.1.28 S5720 generated-target prerequisites: PASS"

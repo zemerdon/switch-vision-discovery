@@ -2245,7 +2245,7 @@ def _generated_yaml_status() -> dict[str, Any]:
     return {
         "generated": _file_info(DEFAULT_GENERATED_SNMP2MQTT),
         "validation": {key: value for key, value in validation.items() if key != "text"},
-        "import_note": "Enable generated-YAML import in the Switch Vision SNMP2MQTT app and restart that app after regeneration.",
+        "import_note": "A valid changed generated YAML is applied to Switch Vision SNMP2MQTT automatically when that app is available; invalid candidates are never published.",
     }
 
 
