@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.27 — Hardware validation safeguards
+
+- Promote WS-C2960X-24TS-L, WS-C3560CG-8PC-S, SG500X-24, Huawei S5735-L8P4X-A1, and Huawei S5720-12TP-LI-AC to Community Validated from existing real-hardware evidence.
+- Preserve WS-C3560CG-8PC-S Gi0/9 and Gi0/10 dual-purpose combo-uplink semantics.
+- Keep Huawei S5720-12TP-LI-AC at 8 RJ45 + 4 physical 1G SFP positions and cap generated speed telemetry for those cages at 1000 Mbps when IF-MIB reports an implausible higher value.
+- Strengthen Dell N2128PX-ON regressions for physical 10G uplinks 29/30, exclusion of non-present 31/32, and ifHighSpeed preference over legacy ifSpeed.
+- Add a permanent UniFi registry regression requiring explicit model faceplate/profile assignments and rejecting Cisco-specific visual fallbacks.
+- Preserve existing MQTT topics, saved calibrations, Support My Switch privacy behavior, and unrelated device mappings.
+
 ## v2.1.26 — Cross-component contract audit fixes
 
 - Correct the packaged Discovery runtime version identifier so runtime status, logs, and support metadata report v2.1.26 consistently with the Home Assistant app version.
