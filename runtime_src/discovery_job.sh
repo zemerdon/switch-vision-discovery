@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.1.26"
+SWITCH_VISION_DISCOVERY_VERSION="2.1.27"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -796,12 +796,13 @@ parser_report() {
       if (registry_status == "experimental") return "experimental"
       if (model ~ /^WS-C3650-48/) return "supported"
       if (model ~ /^WS-C3650/) return "untested"
+      if (model ~ /^WS-C2960X-24TS/) return "community_validated"
       if (is_2960(model)) return "experimental"
       if (model ~ /^WS-C3750X/) return "experimental"
-      if (model ~ /^WS-C3560CG-8PC/) return "experimental"
-      if (model == "SG500X-24") return "experimental"
-      if (model == "S5735-L8P4X-A1") return "experimental"
-      if (model == "S5720-12TP-LI-AC") return "experimental"
+      if (model ~ /^WS-C3560CG-8PC/) return "community_validated"
+      if (model == "SG500X-24") return "community_validated"
+      if (model == "S5735-L8P4X-A1") return "community_validated"
+      if (model == "S5720-12TP-LI-AC") return "community_validated"
       if (model == "XS1930-10") return "experimental"
       if (model == "N2128PX-ON") return "experimental"
       if (model == "Juniper EX3300-48P") return "supported"
@@ -821,6 +822,7 @@ parser_report() {
     }
     function sfp_note(status, model) {
       if (status == "supported") return "validated"
+      if (status == "community_validated") return "real-hardware validated"
       if (is_2960(model)) return "generated from SNMP layout; physical SFP validation pending"
       if (model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC" || model == "XS1930-10" || model == "N2128PX-ON") return "generated from contribution-backed interface names; contributor/live validation pending"
       return "review required"
@@ -1397,10 +1399,10 @@ parser_report() {
       else if (is_2960x(model)) print "- WARN: Catalyst 2960X model detected; experimental validation remains"
       else if (is_2960s(model)) print "- WARN: Catalyst 2960S model detected; experimental validation remains"
       else if (model ~ /^WS-C3750X/) print "- WARN: Catalyst 3750X model detected; possible/experimental only, not supported"
-      else if (model ~ /^WS-C3560CG/) print "- INFO: Catalyst 3560-CG Experimental mapping loaded; contributor validation remains pending"
-      else if (model == "SG500X-24") print "- INFO: Cisco SG500X-24 Experimental mapping loaded from contribution evidence"
-      else if (model == "S5735-L8P4X-A1") print "- INFO: Huawei S5735-L8P4X-A1 Experimental mapping loaded from repeated contribution evidence"
-      else if (model == "S5720-12TP-LI-AC") print "- INFO: Huawei S5720-12TP-LI-AC Experimental mapping loaded with ifDescr fallback"
+      else if (model ~ /^WS-C3560CG/) print "- INFO: Catalyst 3560-CG Community Validated mapping loaded; Gi0/9 and Gi0/10 retain dual-purpose combo semantics"
+      else if (model == "SG500X-24") print "- INFO: Cisco SG500X-24 Community Validated mapping loaded from real-hardware contribution evidence"
+      else if (model == "S5735-L8P4X-A1") print "- INFO: Huawei S5735-L8P4X-A1 Community Validated mapping loaded from repeated real-hardware evidence"
+      else if (model == "S5720-12TP-LI-AC") print "- INFO: Huawei S5720-12TP-LI-AC Community Validated physical mapping loaded with 1G SFP speed safeguards"
       else if (model == "XS1930-10") print "- INFO: Zyxel XS1930-10 Experimental mapping loaded from Support My Switch contribution SV-2026-000004"
       else if (model == "N2128PX-ON") print "- INFO: Dell EMC N2128PX-ON Experimental mapping loaded from contribution evidence dated 2026-08-16"
       else print "- WARN: known Switch Vision model not confirmed"
@@ -1415,6 +1417,7 @@ parser_report() {
       ready = (((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48))
       print "- Ready for SNMP2MQTT generation: " (ready ? "yes, review-only" : "no")
       if (profile_status == "supported") print "- Generator confidence: supported profile; review generated YAML before installing"
+      else if (profile_status == "community_validated") print "- Generator confidence: community-validated profile; physical layout verified on real hardware"
       else if (profile_status == "experimental") print "- Generator confidence: experimental profile; review mapping/YAML before use"
       else if (profile_status == "untested") print "- Generator confidence: untested profile; use for lab review only"
       else print "- Generator confidence: unsupported; generator output should not be used"
@@ -2521,6 +2524,20 @@ write_generated_yaml_for_walk() {
       print "  - oid: " oid
       print "    name: " name
     }
+    function physical_speed_cap_mbps(model, label) {
+      if (model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /) return 1000
+      return 0
+    }
+    function yaml_speed_sensor(model, idx, label, has_highspeed, has_ifspeed, cap_mbps) {
+      cap_mbps = physical_speed_cap_mbps(model, label)
+      if (has_highspeed) {
+        yaml_sensor("1.3.6.1.2.1.31.1.1.1.15." idx, label " Speed Mbps")
+        if (cap_mbps > 0) print "    template: '{{ [value | int, " cap_mbps "] | min }}'"
+      } else if (has_ifspeed) {
+        yaml_sensor("1.3.6.1.2.1.2.2.1.5." idx, label " Speed Bps")
+        if (cap_mbps > 0) print "    template: '{{ [value | int, " (cap_mbps * 1000000) "] | min }}'"
+      }
+    }
     function yaml_interface_sensor(primary, secondary, name, attribute, icon) {
       print "  - name: " name
       print "    source: interface"
@@ -3123,8 +3140,7 @@ write_generated_yaml_for_walk() {
           idx=phys_idx[i]
           label=phys_label[i]
           yaml_sensor("1.3.6.1.2.1.2.2.1.7." idx, label " Admin Status")
-          if (idx in highspeed_idx) yaml_sensor("1.3.6.1.2.1.31.1.1.1.15." idx, label " Speed Mbps")
-          else if (idx in ifspeed_idx) yaml_sensor("1.3.6.1.2.1.2.2.1.5." idx, label " Speed Bps")
+          yaml_speed_sensor(model, idx, label, (idx in highspeed_idx), (idx in ifspeed_idx))
         }
       }
 

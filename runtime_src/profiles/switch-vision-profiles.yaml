@@ -132,7 +132,7 @@ profiles:
     - Logical unit interfaces ending in .0, me0, and vlan are excluded from the front
       panel.
   cisco-3560cg-8pc-8p-2dual:
-    status: experimental
+    status: community_validated
     vendor: Cisco
     family: Catalyst 3560-C
     model_patterns:
@@ -159,7 +159,7 @@ profiles:
     - Gi0/9 and Gi0/10 are mapped as dual-purpose uplinks.
     - Temporary 24 RJ45 / 2 SFP visual profile; only eight copper overlays are active.
   cisco-2960x-24ts-24p-4sfp:
-    status: experimental
+    status: community_validated
     vendor: Cisco
     family: Catalyst 2960X
     model_patterns:
@@ -178,7 +178,7 @@ profiles:
       - GigabitEthernet{member}/0/{port}
       sfp_10g: []
   cisco-sg500x-24-24p-4x10g:
-    status: experimental
+    status: community_validated
     vendor: Cisco
     family: Small Business SG500X
     model_patterns:
@@ -263,7 +263,7 @@ profiles:
       - api-port-9
       - api-port-10
   huawei-s5735-l8p4x-a1:
-    status: experimental
+    status: community_validated
     vendor: Huawei
     family: S5735-L
     model_patterns:
@@ -322,7 +322,6 @@ profiles:
       - api-port-25
       - api-port-26
       sfp_10g: []
-
   ubiquiti-usw-16-poe-api:
     status: experimental
     vendor: Ubiquiti
@@ -341,7 +340,6 @@ profiles:
       - api-port-17
       - api-port-18
       sfp_10g: []
-
   ubiquiti-usw-lite-8-poe-api:
     status: experimental
     vendor: Ubiquiti
@@ -358,7 +356,6 @@ profiles:
       - api-port-{port}
       sfp_1g: []
       sfp_10g: []
-
   ubiquiti-usw-flex-2p5g-8-poe-api:
     status: experimental
     vendor: Ubiquiti
@@ -380,7 +377,6 @@ profiles:
     - API ports 1-8 are 2.5G-capable PoE RJ45.
     - API port 9 is 10G-capable RJ45.
     - API port 10 is 10G SFP+.
-
   ubiquiti-usw-flex-api:
     status: experimental
     vendor: Ubiquiti
@@ -397,9 +393,8 @@ profiles:
       - api-port-{port}
       sfp_1g: []
       sfp_10g: []
-
   huawei-s5720-12tp-li-ac:
-    status: experimental
+    status: community_validated
     vendor: Huawei
     family: S5720
     model_patterns:
@@ -428,6 +423,10 @@ profiles:
       model.
     - Dashboard uses the generic 48 RJ45 + 4 SFP fallback visual until a smaller generic
       faceplate is supplied.
+    - Physical 1G SFP cages 9-12 are capped at 1000 Mbps for generated speed telemetry
+      even if IF-MIB reports a higher capability value.
+    physical_speed_caps_mbps:
+      sfp_1g: 1000
   zyxel-xs1930-10:
     status: experimental
     vendor: Zyxel
@@ -454,9 +453,10 @@ profiles:
     - Profile derived from Support My Switch contribution SV-2026-000004.
     - ifIndex 1-10 maps directly to swp00-swp09.
     - swp00-swp07 map to faceplate ports 1-8; swp08-swp09 map to SFP+ uplinks 1-2.
-    - Q-BRIDGE PVID is generated only when the current walk contains the direct bridge-port join.
-    - Trunk/access mode and transceiver DDMI remain intentionally unclassified in v2.1.7.
-
+    - Q-BRIDGE PVID is generated only when the current walk contains the direct bridge-port
+      join.
+    - Trunk/access mode and transceiver DDMI remain intentionally unclassified in
+      v2.1.7.
   ubiquiti-usw-flex-mini-api:
     status: experimental
     vendor: Ubiquiti
@@ -475,9 +475,9 @@ profiles:
       sfp_1g: []
       sfp_10g: []
     notes:
-    - SV-2026-000057 contains three independent live devices with the same five-port layout.
+    - SV-2026-000057 contains three independent live devices with the same five-port
+      layout.
     - No PoE-output port mask is exposed for this exact model.
-
   ubiquiti-usw-pro-24-api:
     status: experimental
     vendor: Ubiquiti
@@ -499,8 +499,8 @@ profiles:
       - api-port-26
     notes:
     - SV-2026-000057 confirms ports 25-26 as 10G SFP+.
-    - This profile intentionally differs from USW-24-PoE, whose two uplinks are 1G SFP.
-
+    - This profile intentionally differs from USW-24-PoE, whose two uplinks are 1G
+      SFP.
   ubiquiti-us-8-60w-api:
     status: experimental
     vendor: Ubiquiti
@@ -521,7 +521,6 @@ profiles:
     notes:
     - SV-2026-000057 confirms PoE output capability on ports 5-8 only.
     - PoE-active state is independent from Ethernet link state.
-
   ubiquiti-udm-pro-se-api:
     status: experimental
     vendor: Ubiquiti
@@ -543,18 +542,18 @@ profiles:
       - api-port-10
       - api-port-11
     notes:
-    - SV-2026-000057 confirms ports 1-8 as 1G PoE RJ45, port 9 as 2.5G RJ45, and ports 10-11 as 10G SFP+.
+    - SV-2026-000057 confirms ports 1-8 as 1G PoE RJ45, port 9 as 2.5G RJ45, and ports
+      10-11 as 10G SFP+.
     - Ports 9-11 remain role-neutral pending WAN/LAN role validation.
-
   dell-n2128px-on:
     status: experimental
     vendor: Dell
     family: Dell EMC Networking N2000
     model_patterns:
-      - N2128PX-ON
-      - Dell EMC Networking N2128PX-ON
+    - N2128PX-ON
+    - Dell EMC Networking N2128PX-ON
     sys_object_ids:
-      - 1.3.6.1.4.1.674.10895.3077
+    - 1.3.6.1.4.1.674.10895.3077
     layout:
       members: 1
       rj45_ports: 28
@@ -562,18 +561,18 @@ profiles:
       sfp_10g_ports: 2
     interface_patterns:
       rj45:
-        - Gi{member}/0/{port}
-        - GigabitEthernet{member}/0/{port}
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
       sfp_1g: []
       sfp_10g:
-        - Te{member}/0/1
-        - Te{member}/0/2
-        - TenGigabitEthernet{member}/0/1
-        - TenGigabitEthernet{member}/0/2
+      - Te{member}/0/1
+      - Te{member}/0/2
+      - TenGigabitEthernet{member}/0/1
+      - TenGigabitEthernet{member}/0/2
     notes:
-      - Profile derived from the Support My Switch Dell bundle received 2026-08-16.
-      - The same sysObjectID and topology are present on firmware 6.7.1.27 and 6.6.0.7.
-      - Gi<member>/0/1-28 map to 28 RJ45 ports per stack member.
-      - Te<member>/0/1-2 map to two 10G SFP+ uplinks per stack member.
-      - Standalone and two-member stack captures are both present in the contribution.
-      - Generic 48 RJ45 + 4 SFP visual is temporary pending a Dell-specific faceplate.
+    - Profile derived from the Support My Switch Dell bundle received 2026-08-16.
+    - The same sysObjectID and topology are present on firmware 6.7.1.27 and 6.6.0.7.
+    - Gi<member>/0/1-28 map to 28 RJ45 ports per stack member.
+    - Te<member>/0/1-2 map to two 10G SFP+ uplinks per stack member.
+    - Standalone and two-member stack captures are both present in the contribution.
+    - Generic 48 RJ45 + 4 SFP visual is temporary pending a Dell-specific faceplate.
