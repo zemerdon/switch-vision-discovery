@@ -26,10 +26,26 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install --disable-pip-version-check pyyaml websockets
 
-      - name: Prepare Discovery v2.1.34
-        run: python tools/prepare_discovery_v2134.py
+      - name: Prepare or verify Discovery v2.1.34
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f tools/prepare_discovery_v2134.py ]; then
+            python tools/prepare_discovery_v2134.py
+            echo 'needs_generation=true' >> "$GITHUB_OUTPUT"
+          else
+            grep -Fq 'version: "2.1.34"' switch_vision_discovery/config.yaml
+            grep -Fq '## 2.1.34' switch_vision_discovery/CHANGELOG.md
+            grep -Fq 'SWITCH_VISION_DISCOVERY_VERSION="2.1.34"' runtime_src/discovery_job.sh
+            grep -Fq 'SWITCH_VISION_DISCOVERY_VERSION="2.1.34"' runtime_src/run.sh
+            test "$(grep -Fc 'SWITCH_VISION_DISCOVERY_VERSION="2.1.34"' runtime_src/self-test.sh)" -ge 2
+            echo 'needs_generation=false' >> "$GITHUB_OUTPUT"
+            echo 'Discovery v2.1.34 product source is already prepared.'
+          fi
 
       - name: Rebuild packaged runtime
+        if: steps.prepare.outputs.needs_generation == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -79,6 +95,7 @@ jobs:
           git diff --check
 
       - name: Commit tested product source to feature branch
+        if: steps.prepare.outputs.needs_generation == 'true'
         shell: bash
         run: |
           set -euo pipefail
