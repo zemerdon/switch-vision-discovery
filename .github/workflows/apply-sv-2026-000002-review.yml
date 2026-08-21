@@ -47,10 +47,24 @@ jobs:
           self_test_status=$?
           set -e
           if [ "$self_test_status" -ne 0 ]; then
+            failure_lines="$(grep -nE 'AssertionError|Traceback|FAILED|Error:|grep -q|assert ' /tmp/sv-self-test.log | tail -n 10 || true)"
+            tail_lines="$(tail -n 20 /tmp/sv-self-test.log)"
             echo "=== SELF TEST FAILURE MATCHES ==="
-            grep -nE 'AssertionError|Traceback|FAILED|Error:|grep -q|assert ' /tmp/sv-self-test.log | tail -n 80 || true
+            printf '%s\n' "$failure_lines"
             echo "=== SELF TEST FAILURE TAIL ==="
-            tail -n 80 /tmp/sv-self-test.log
+            printf '%s\n' "$tail_lines"
+            {
+              echo "### Discovery self-test failure"
+              echo '```text'
+              printf '%s\n' "$failure_lines"
+              printf '%s\n' "$tail_lines"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            short="$(printf '%s' "$failure_lines" | tail -n 3 | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
+            if [ -z "$short" ]; then
+              short="$(printf '%s' "$tail_lines" | tail -n 3 | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
+            fi
+            echo "::error title=Discovery packaged self-test failed::$short"
             exit "$self_test_status"
           fi
           cat /tmp/sv-self-test.log
