@@ -14,9 +14,9 @@ Repository URL:
 
 ## Current app
 
-- Switch Vision Discovery v2.1.18
+- Authoritative app version: `switch_vision_discovery/config.yaml`
 - Architectures: amd64, aarch64
 - Container image: `ghcr.io/zemerdon/switch-vision-discovery`
-- Zyxel XS1930-10 frontend visual dependency: Switch Vision main/core v2.1.5+
+- Current Switch Vision Core compatibility floor: v2.3.10+ for the Calibration Profile management/storage API used by Discovery
 
-The main Switch Vision product source is maintained separately and is not published in this repository.
+Switch Vision components are independently versioned. The main Switch Vision Core product source is maintained separately and is not published in this repository.
