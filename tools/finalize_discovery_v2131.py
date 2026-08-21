@@ -82,13 +82,24 @@ cat > "$v2131_e2e/options.json" <<JSON_V2131
 JSON_V2131
 
 rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
-PATH="$v2131_e2e/bin:$PATH" \
-SWITCH_VISION_OPTIONS_FILE="$v2131_e2e/options.json" \
-CV_MIB_DATABASE_DIR="$RUNTIME_DATA_DIR/mib_database" \
-CV_VENDOR_DIR="$RUNTIME_DATA_DIR/vendors" \
-sh "$BASE_DIR/discovery_job.sh" > "$v2131_e2e/run-output.txt" 2>&1
+if ! PATH="$v2131_e2e/bin:$PATH" \
+  SWITCH_VISION_OPTIONS_FILE="$v2131_e2e/options.json" \
+  CV_MIB_DATABASE_DIR="$RUNTIME_DATA_DIR/mib_database" \
+  CV_VENDOR_DIR="$RUNTIME_DATA_DIR/vendors" \
+  sh "$BASE_DIR/discovery_job.sh" > "$v2131_e2e/run-output.txt" 2>&1; then
+  echo "ERROR: v2.1.31 end-to-end Discovery process failed" >&2
+  cat "$v2131_e2e/run-output.txt" >&2 || true
+  cat "$v2131_e2e/snmpwalk.log" >&2 || true
+  exit 1
+fi
 
-python3 "$BASE_DIR/generated_yaml_guard.py" --validate "$v2131_e2e/generated-snmp2mqtt.yaml"
+if ! python3 "$BASE_DIR/generated_yaml_guard.py" --validate "$v2131_e2e/generated-snmp2mqtt.yaml"; then
+  echo "ERROR: v2.1.31 end-to-end generated YAML validation failed" >&2
+  cat "$v2131_e2e/run-output.txt" >&2 || true
+  cat "$v2131_e2e/snmpwalk.log" >&2 || true
+  cat "$v2131_e2e/generated-snmp2mqtt.yaml" >&2 || true
+  exit 1
+fi
 grep -Eq '^- host: 192\.0\.2\.31$' "$v2131_e2e/generated-snmp2mqtt.yaml"
 grep -Fq 'DELL-REGRESSION/live-targeted-snmpwalk.txt' /tmp/switch_vision_current_run_targets.txt
 grep -Fq '192.0.2.31' /tmp/switch_vision_current_run_targets.txt
