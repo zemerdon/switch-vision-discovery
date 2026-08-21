@@ -36,24 +36,8 @@ jobs:
           rm -f switch_vision_discovery/runtime.tar.gz
           tar -C runtime_src -czf switch_vision_discovery/runtime.tar.gz .
 
-      - name: Show XS1930-10 visual drift evidence
-        run: |
-          python - <<'PY'
-          import json, urllib.request
-          model = 'XS1930-10'
-          discovery = json.load(open('runtime_src/opt/switch-vision/devices/supported_devices.json'))
-          with urllib.request.urlopen('https://raw.githubusercontent.com/zemerdon/switch-vision-releases/main/src/devices/supported_devices.json', timeout=30) as r:
-              core = json.load(r)
-          for label, payload in [('CORE', core), ('DISCOVERY', discovery)]:
-              row = next(x for x in payload['devices'] if x.get('model') == model)
-              print(label, json.dumps({
-                  'model': row.get('model'),
-                  'calibration_profile': row.get('calibration_profile'),
-                  'default_faceplate': row.get('default_faceplate'),
-                  'visuals': row.get('visuals'),
-                  'notes': row.get('notes'),
-              }, indent=2))
-          PY
+      - name: Validate runtime source/archive parity before imports
+        run: python tools/check_runtime_parity.py
 
       - name: Validate strict visual contracts and runtime
         shell: bash
@@ -64,7 +48,6 @@ jobs:
           python tools/check_speed_contracts.py
           python tools/check_hub_identity.py
           python tools/test_regenerate_yaml_contract.py
-          python tools/check_runtime_parity.py
           sh runtime_src/self-test.sh
           python -m py_compile \
             runtime_src/support_web.py \
@@ -73,6 +56,11 @@ jobs:
             runtime_src/unifi_dashboard_cards.py \
             tools/check_component_contracts.py \
             tools/test_visual_contract_policy.py
+
+          # Regression/import and py_compile steps may create transient cache
+          # material. Remove only those test artifacts before clean-tree checks.
+          find runtime_src tools -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find runtime_src tools -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
           git diff --check
 
       - name: Commit tested product source to feature branch
