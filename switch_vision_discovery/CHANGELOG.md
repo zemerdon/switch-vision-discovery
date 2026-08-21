@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.33
+
+- Add **Regenerate SNMP2MQTT YAML** beside Run Discovery in Switch Vision Hub.
+- Regeneration performs no new SNMP walks; it reuses the authoritative saved switch inventory and existing saved walk files.
+- Enabled switch folders remain authoritative, so disabled saved devices are not silently resurrected.
+- Reuse the normal v2.1.31 parser/generator, candidate validation and atomic publication path instead of introducing a second YAML generator.
+- Redirect regeneration-only report, capability and dashboard-card outputs to temporary files; only the configured SNMP2MQTT YAML may publish.
+- Apply/restart Switch Vision SNMP2MQTT only when a valid changed YAML is successfully published, preserving the previous known-good YAML on failure.
+
 ## 2.1.32
 
 - Rename the Home Assistant ingress/sidebar panel from **Support My Switch** to **Switch Vision Hub**.
