@@ -45,7 +45,7 @@ for old_line, new_line, label in (
         raise SystemExit(f"ERROR: {label} anchor not found")
     job = job.replace(old_line, new_line, 1)
 
-# The generated physical label is prefixed (for example `SW1 SFP 1G 1`), so
+# Generated physical labels are prefixed (for example `SW1 SFP 1G 1`), so
 # the old /^SFP 1G / expression could never activate the cap.
 old_cap_match = '      if (model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /) return 1000'
 new_cap_match = '      if (model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /) return 1000'
@@ -56,11 +56,19 @@ job_path.write_text(job, encoding="utf-8", newline="\n")
 
 self_test_path = ROOT / "runtime_src/self-test.sh"
 self_test = self_test_path.read_text(encoding="utf-8")
-self_test = self_test.replace(
-    'grep -Fq \'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /\' "$BASE_DIR/discovery_job.sh"',
-    'grep -Fq \'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /\' "$BASE_DIR/discovery_job.sh"',
-    1,
-)
+# Update both historical regressions that intentionally pin this source-level
+# contract so they now assert the corrected prefixed-label matcher.
+old_assert = 'assert \'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /\' in job'
+new_assert = 'assert \'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /\' in job'
+if old_assert not in self_test:
+    raise SystemExit("ERROR: v2.1.27 S5720 matcher assertion not found")
+self_test = self_test.replace(old_assert, new_assert, 1)
+old_grep = 'grep -Fq \'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /\' "$BASE_DIR/discovery_job.sh"'
+new_grep = 'grep -Fq \'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /\' "$BASE_DIR/discovery_job.sh"'
+if old_grep not in self_test:
+    raise SystemExit("ERROR: v2.1.28 S5720 matcher grep not found")
+self_test = self_test.replace(old_grep, new_grep, 1)
+
 regression = r'''
 
 # v2.1.31 end-to-end current-run handoff regression. Run the real Discovery
