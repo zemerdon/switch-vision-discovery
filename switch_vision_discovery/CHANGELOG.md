@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.35
+
+- Synchronize the reviewed Core exact-model registry for Support My Switch contribution `SV-2026-000002` and preserve the validated Zyxel XS1930-10 contributor evidence.
+- Add UniFi API profiles for `US 48`, optical-first `US XG 16`, and 32-port optical `USW Pro Aggregation`.
+- Keep `US 48` on the existing legacy sequential 48-RJ45 + four-optical dashboard path as backward-compatibility coverage.
+- Recognize `US XG 16` and `USW Pro Aggregation` without generating fake dashboard cards while their exact faceplates remain unverified; generated output records that they are waiting for visuals.
+- Recognize SFP28 as an optical connector class and preserve 25G maximum capability separately from current negotiated link speed.
+- Forward explicit `unifi_api_port_map` metadata into generated cards when a future exact model is dashboard-enabled, while retaining `unifi_sfp_port_offset` compatibility.
+- Add packaged runtime regressions for the contribution registry, API profiles, pending-visual behavior, and generated-card contracts.
+
 ## 2.1.34
 
 - Make Core/Discovery visual defaults a hard contract for every shared exact model, regardless of vendor.
