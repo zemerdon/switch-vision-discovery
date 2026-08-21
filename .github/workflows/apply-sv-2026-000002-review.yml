@@ -33,6 +33,7 @@ jobs:
         run: |
           python3 tools/apply_sv_2026_000002_review.py
           python3 tools/apply_sv_2026_000002_fixture_review.py
+          python3 tools/apply_sv_2026_000002_policy_review.py
 
       - name: Rebuild runtime archive
         shell: bash
