@@ -33,6 +33,19 @@ for rel in ("runtime_src/run.sh", "runtime_src/discovery_job.sh"):
         raise SystemExit(f"ERROR: {rel}: expected 2.1.28 runtime version not found")
     path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
 
+# Keep the runtime self-test's current-version assertions aligned with the app
+# version. Historical v2.1.28 atomic-YAML fixtures later in this file remain
+# unchanged so their regression semantics are preserved.
+self_test_path = ROOT / "runtime_src/self-test.sh"
+self_test = self_test_path.read_text(encoding="utf-8")
+for rel in ("discovery_job.sh", "run.sh"):
+    old = f'grep -q \'SWITCH_VISION_DISCOVERY_VERSION="2.1.28"\' "$BASE_DIR/{rel}"'
+    new = f'grep -q \'SWITCH_VISION_DISCOVERY_VERSION="2.1.29"\' "$BASE_DIR/{rel}"'
+    if self_test.count(old) != 1:
+        raise SystemExit(f"ERROR: expected one 2.1.28 current-version assertion for {rel}")
+    self_test = self_test.replace(old, new, 1)
+self_test_path.write_text(self_test, encoding="utf-8", newline="\n")
+
 config_path = ROOT / "switch_vision_discovery/config.yaml"
 config = config_path.read_text(encoding="utf-8")
 config, count = re.subn(r'(?m)^version:\s*"2\.1\.28"\s*$', 'version: "2.1.29"', config, count=1)
