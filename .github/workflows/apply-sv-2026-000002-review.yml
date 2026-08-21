@@ -1,0 +1,57 @@
+name: Apply SV-2026-000002 Discovery Review Patch
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-review-patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out review branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: review/sv-2026-000002-registry-sync
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML websockets
+
+      - name: Apply exact-tree contribution patch
+        run: python3 tools/apply_sv_2026_000002_review.py
+
+      - name: Rebuild runtime archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f switch_vision_discovery/runtime.tar.gz
+          tar -czf switch_vision_discovery/runtime.tar.gz -C runtime_src .
+          python3 tools/check_runtime_parity.py
+          sh runtime_src/self-test.sh
+          git diff --check
+
+      - name: Commit verified review result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "switch-vision-review-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No review changes to commit."
+            exit 0
+          fi
+          git commit -m "Implement SV-2026-000002 Discovery UniFi contracts"
+          git push origin HEAD:review/sv-2026-000002-registry-sync
