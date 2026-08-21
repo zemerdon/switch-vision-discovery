@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+APP = ROOT / "switch_vision_discovery"
+RUNTIME = ROOT / "runtime_src"
+VERSION = "2.1.34"
+
+
+def read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text.replace("\r\n", "\n").replace("\r", "\n"), encoding="utf-8", newline="\n")
+
+
+# Version metadata.
+config_path = APP / "config.yaml"
+config = read(config_path)
+if 'version: "2.1.33"' not in config:
+    raise SystemExit("Discovery config version marker missing")
+write(config_path, config.replace('version: "2.1.33"', f'version: "{VERSION}"', 1))
+
+job_path = RUNTIME / "discovery_job.sh"
+job = read(job_path)
+if 'SWITCH_VISION_DISCOVERY_VERSION="2.1.33"' not in job:
+    raise SystemExit("Discovery runtime version marker missing")
+write(job_path, job.replace('SWITCH_VISION_DISCOVERY_VERSION="2.1.33"', f'SWITCH_VISION_DISCOVERY_VERSION="{VERSION}"', 1))
+
+# Harden cross-component visual contracts. Shared exact-model visuals are strict
+# by default. Intentional divergence requires an explicit model -> reason entry.
+contract_path = ROOT / "tools" / "check_component_contracts.py"
+contract = read(contract_path)
+url_marker = '''DEFAULT_SNMP_ADDON_CONFIG_URL = (
+    "https://raw.githubusercontent.com/zemerdon/"
+    "switch-vision-snmp2mqtt-addon/main/switch-vision-snmp2mqtt/config.yaml"
+)
+'''
+policy_block = '''DEFAULT_SNMP_ADDON_CONFIG_URL = (
+    "https://raw.githubusercontent.com/zemerdon/"
+    "switch-vision-snmp2mqtt-addon/main/switch-vision-snmp2mqtt/config.yaml"
+)
+
+# Shared exact-model visual defaults are a hard Core/Discovery contract.
+# Any intentional divergence must be listed here with a non-empty reason.
+VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {}
+
+
+def classify_visual_contract_drift(model: str) -> tuple[str, str | None]:
+    """Return strict/error by default; only documented exceptions may warn."""
+    if model not in VISUAL_CONTRACT_EXCEPTIONS:
+        return "error", None
+    reason = str(VISUAL_CONTRACT_EXCEPTIONS.get(model) or "").strip()
+    if not reason:
+        return "invalid", None
+    return "warning", reason
+'''
+if url_marker not in contract:
+    raise SystemExit("component-contract URL marker missing")
+contract = contract.replace(url_marker, policy_block, 1)
+
+old_visual = '''        if changed_visuals:
+            strict_visual_models = {"S5720-12TP-LI-AC", "S5735-L8P4X-A1"}
+            if str(core.get("vendor") or "").strip() == "Ubiquiti" or model in strict_visual_models:
+                errors.append(
+                    f"{model}: shared visual contract drift in "
+                    + ", ".join(changed_visuals)
+                )
+            else:
+                warnings.append(
+                    f"{model}: visual recommendation differs between Core and Discovery "
+                    f"({', '.join(changed_visuals)})"
+                )
+'''
+new_visual = '''        if changed_visuals:
+            policy, reason = classify_visual_contract_drift(model)
+            if policy == "warning":
+                warnings.append(
+                    f"{model}: explicitly allowed shared visual contract drift in "
+                    + ", ".join(changed_visuals)
+                    + f"; reason: {reason}"
+                )
+            else:
+                errors.append(
+                    f"{model}: shared visual contract drift in "
+                    + ", ".join(changed_visuals)
+                )
+'''
+if old_visual not in contract:
+    raise SystemExit("old selective visual-contract block missing")
+contract = contract.replace(old_visual, new_visual, 1)
+
+shared_marker = '''    missing_in_discovery = sorted(core_models.keys() - discovery_models.keys())
+    if missing_in_discovery:
+        errors.append(
+            "Core exact models missing from Discovery: " + ", ".join(missing_in_discovery)
+        )
+
+    hardware_fields = (
+'''
+shared_replacement = '''    missing_in_discovery = sorted(core_models.keys() - discovery_models.keys())
+    if missing_in_discovery:
+        errors.append(
+            "Core exact models missing from Discovery: " + ", ".join(missing_in_discovery)
+        )
+
+    shared_models = core_models.keys() & discovery_models.keys()
+    for model, raw_reason in sorted(VISUAL_CONTRACT_EXCEPTIONS.items()):
+        reason = str(raw_reason or "").strip()
+        if model not in shared_models:
+            errors.append(
+                f"Visual contract exception {model!r} is stale or not a shared exact model"
+            )
+        if not reason:
+            errors.append(
+                f"Visual contract exception {model!r} must include a non-empty reason"
+            )
+
+    hardware_fields = (
+'''
+if shared_marker not in contract:
+    raise SystemExit("shared-model contract marker missing")
+contract = contract.replace(shared_marker, shared_replacement, 1)
+
+old_pass = '''        "Discovery cross-component contracts: PASS "
+        f"(version={app_version}; Core subset present; hardware mappings aligned; "
+        "shared Ubiquiti visuals aligned; SNMP2MQTT YAML path aligned)"
+'''
+new_pass = '''        "Discovery cross-component contracts: PASS "
+        f"(version={app_version}; Core subset present; hardware mappings aligned; "
+        "all shared exact-model visuals aligned or explicitly excepted; "
+        "SNMP2MQTT YAML path aligned)"
+'''
+if old_pass not in contract:
+    raise SystemExit("component-contract PASS marker missing")
+contract = contract.replace(old_pass, new_pass, 1)
+write(contract_path, contract)
+
+# Permanent synthetic policy regression: every vendor is strict by default and
+# only a documented exception can downgrade drift to a warning.
+test_path = ROOT / "tools" / "test_visual_contract_policy.py"
+write(test_path, '''#!/usr/bin/env python3
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+MODULE_PATH = ROOT / "tools" / "check_component_contracts.py"
+spec = importlib.util.spec_from_file_location("sv_discovery_contracts", MODULE_PATH)
+assert spec and spec.loader
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+# No vendor gets implicit warning-only treatment anymore.
+for model in (
+    "WS-C3650-48PD",
+    "EX3300-48P",
+    "N2128PX-ON",
+    "S5720-12TP-LI-AC",
+    "S5735-L8P4X-A1",
+    "USW-Pro-24-PoE",
+):
+    policy, reason = module.classify_visual_contract_drift(model)
+    assert policy == "error", (model, policy, reason)
+    assert reason is None
+
+assert module.VISUAL_CONTRACT_EXCEPTIONS == {}, module.VISUAL_CONTRACT_EXCEPTIONS
+
+module.VISUAL_CONTRACT_EXCEPTIONS["INTENTIONAL-MODEL"] = "documented test divergence"
+policy, reason = module.classify_visual_contract_drift("INTENTIONAL-MODEL")
+assert policy == "warning"
+assert reason == "documented test divergence"
+
+module.VISUAL_CONTRACT_EXCEPTIONS["EMPTY-REASON"] = "   "
+policy, reason = module.classify_visual_contract_drift("EMPTY-REASON")
+assert policy == "invalid"
+assert reason is None
+
+source = MODULE_PATH.read_text(encoding="utf-8")
+assert "strict_visual_models" not in source
+assert "all shared exact-model visuals aligned or explicitly excepted" in source
+print("Discovery strict visual-contract policy: PASS")
+''')
+
+# Changelog.
+changelog_path = APP / "CHANGELOG.md"
+changelog = read(changelog_path)
+entry = '''# Changelog\n\n## 2.1.34\n\n- Make Core/Discovery visual defaults a hard contract for every shared exact model, regardless of vendor.\n- Remove the previous warning-only path for non-Ubiquiti/non-Huawei shared visual drift.\n- Add an explicit model-to-reason exception table for rare intentional visual divergence; empty, unknown, or stale exceptions are rejected.\n- Add a permanent synthetic regression proving Cisco, Juniper, Dell, Huawei and Ubiquiti models are all strict by default.\n- Preserve hardware contracts, Huawei exact-model safeguards, SNMP2MQTT path checks, saved-walk YAML regeneration, and runtime behavior unchanged.\n\n'''
+if not changelog.startswith("# Changelog\n\n"):
+    raise SystemExit("Discovery changelog header missing")
+if "## 2.1.34" not in changelog:
+    changelog = entry + changelog[len("# Changelog\n\n"):]
+write(changelog_path, changelog)
+
+print("Prepared Switch Vision Discovery v2.1.34 strict visual contracts")
