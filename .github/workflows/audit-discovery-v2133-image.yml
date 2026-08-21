@@ -1,0 +1,30 @@
+name: Audit Discovery v2.1.33 public image
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify public multi-arch manifest
+        run: |
+          set -euo pipefail
+          image='ghcr.io/zemerdon/switch-vision-discovery:2.1.33'
+          manifest=''
+          for attempt in $(seq 1 18); do
+            if manifest="$(docker buildx imagetools inspect "$image" 2>&1)"; then
+              break
+            fi
+            echo "Image not ready yet (attempt $attempt/18)"
+            sleep 10
+          done
+          printf '%s\n' "$manifest"
+          grep -Fq 'Platform:    linux/amd64' <<<"$manifest"
+          grep -Fq 'Platform:    linux/arm64' <<<"$manifest"
+          echo 'Discovery v2.1.33 public multi-arch image: PASS'
