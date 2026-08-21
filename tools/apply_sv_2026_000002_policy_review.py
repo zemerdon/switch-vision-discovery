@@ -41,5 +41,6 @@ if new not in text:
     count = text.count(old)
     if count != 1:
         raise SystemExit(f"UniFi visual-policy test target count={count}")
-    path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+    updated = text.replace(old, new, 1).rstrip("\n") + "\n"
+    path.write_text(updated, encoding="utf-8", newline="\n")
 print("Discovery UniFi visual-policy regression updated for detected-only models")
