@@ -11,7 +11,7 @@ if start < 0:
     raise SystemExit("ERROR: current-run queue start not found")
 end = text.index('\n  fi', needle_pos) + len('\n  fi')
 expected = '''  if [ -n "${CURRENT_RUN_WALKS:-}" ]; then
-    printf '%s\\n' "$LIVE_OUTPUT_PATH" >> "$CURRENT_RUN_WALKS"
+    printf '%s\n' "$LIVE_OUTPUT_PATH" >> "$CURRENT_RUN_WALKS"
     echo "Queued for current-run parse: $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"
   fi'''
 text = text[:start] + expected + text[end:]
