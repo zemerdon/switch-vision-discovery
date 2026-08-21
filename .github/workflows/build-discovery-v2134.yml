@@ -48,7 +48,7 @@ jobs:
           python tools/check_speed_contracts.py
           python tools/check_hub_identity.py
           python tools/test_regenerate_yaml_contract.py
-          sh runtime_src/self-test.sh
+          sh -x runtime_src/self-test.sh
           python -m py_compile \
             runtime_src/support_web.py \
             runtime_src/registry_lookup.py \
@@ -57,8 +57,6 @@ jobs:
             tools/check_component_contracts.py \
             tools/test_visual_contract_policy.py
 
-          # Regression/import and py_compile steps may create transient cache
-          # material. Remove only those test artifacts before clean-tree checks.
           find runtime_src tools -type d -name '__pycache__' -prune -exec rm -rf {} +
           find runtime_src tools -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
           git diff --check
