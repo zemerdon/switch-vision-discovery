@@ -1,0 +1,56 @@
+name: Build Discovery v2.1.30 progress hotfix
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Install runtime test dependencies
+        run: python3 -m pip install --disable-pip-version-check pyyaml websockets
+      - name: Prepare Discovery v2.1.30
+        run: python3 tools/prepare_discovery_v2130.py
+      - name: Validate source runtime
+        run: |
+          set -euo pipefail
+          bash -n runtime_src/run.sh
+          bash -n runtime_src/discovery_job.sh
+          bash runtime_src/self-test.sh
+      - name: Rebuild packaged runtime
+        run: |
+          set -euo pipefail
+          rm -f switch_vision_discovery/runtime.tar.gz
+          tar -czf switch_vision_discovery/runtime.tar.gz -C runtime_src .
+          python3 tools/check_runtime_parity.py
+      - name: Validate metadata and hygiene
+        run: |
+          set -euo pipefail
+          grep -q 'version: "2.1.30"' switch_vision_discovery/config.yaml
+          grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.30"' runtime_src/run.sh
+          grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.30"' runtime_src/discovery_job.sh
+          grep -q "generating snmp2mqtt yaml'))return 3" runtime_src/support_web.py
+          git diff --check
+      - name: Commit final source back to PR branch
+        run: |
+          set -euo pipefail
+          git config user.name 'switch-vision-release-bot'
+          git config user.email 'switch-vision@users.noreply.github.com'
+          rm -f .github/workflows/build-discovery-v2130.yml tools/prepare_discovery_v2130.py
+          git add -A
+          git commit -m 'Release Switch Vision Discovery v2.1.30'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
