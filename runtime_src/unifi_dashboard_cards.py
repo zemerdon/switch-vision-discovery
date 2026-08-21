@@ -80,12 +80,17 @@ def render(snapshot: dict[str, Any], registry: dict[str, Any], indent: int = 6) 
         status = str((reg or {}).get("status") or "detected")
         ports = device.get("ports") if isinstance(device.get("ports"), list) else []
         rj45 = [p for p in ports if isinstance(p, dict) and str(p.get("connector") or "").upper() == "RJ45"]
-        sfp = [p for p in ports if isinstance(p, dict) and str(p.get("connector") or "").upper() in {"SFP", "SFPPLUS", "SFP+"}]
+        sfp = [p for p in ports if isinstance(p, dict) and str(p.get("connector") or "").upper() in {"SFP", "SFPPLUS", "SFP+", "SFP28"}]
 
         if not reg:
             lines.append(f"{pad}# UniFi {json.dumps(model)} detected, but no exact Switch Vision registry entry exists yet.")
             skipped += 1
             continue
+        if reg.get("dashboard_support") is not True:
+            lines.append(f"{pad}# UniFi {json.dumps(model)} detected; dashboard support is pending verified visuals.")
+            skipped += 1
+            continue
+        api_port_map = reg.get("unifi_api_port_map") if isinstance(reg.get("unifi_api_port_map"), dict) else None
         visual_fallback = False
         if not profile or not faceplate or not visual_geometry_matches(faceplate, len(rj45), len(sfp)):
             # The 48 RJ45 + 4 SFP artwork is the project-wide temporary visual
@@ -123,6 +128,8 @@ def render(snapshot: dict[str, Any], registry: dict[str, Any], indent: int = 6) 
             "unifi_refresh_seconds": 30,
             "support_status": status,
         }
+        if api_port_map is not None:
+            card["unifi_api_port_map"] = api_port_map
         if visual_fallback:
             lines.append(f"{pad}# Generic 48 RJ45 + 4 SFP temporary visual fallback for {json.dumps(model)}.")
         dumped = yaml.safe_dump([card], sort_keys=False, allow_unicode=True, default_flow_style=False).rstrip().splitlines()
