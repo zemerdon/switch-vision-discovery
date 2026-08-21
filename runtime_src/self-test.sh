@@ -1794,7 +1794,7 @@ assert s5720["layout"]["sfp_1g_ports"] == 4
 assert s5720["layout"]["sfp_10g_ports"] == 0
 assert s5720["physical_speed_caps_mbps"]["sfp_1g"] == 1000
 assert 'physical_speed_cap_mbps(model, label)' in job
-assert 'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /' in job
+assert 'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /' in job
 # Source ordering is the contract: ifHighSpeed must win whenever available.
 helper = job[job.index('function yaml_speed_sensor'):job.index('function yaml_interface_sensor')]
 assert helper.index('if (has_highspeed)') < helper.index('else if (has_ifspeed)')
@@ -1897,7 +1897,7 @@ printf '%s\n' "Switch Vision Discovery v2.1.28 atomic generated-YAML publication
 
 # S5720 generator contract: its fallback ifDescr names must still create target
 # output and its four physical 1G SFP cages retain the v2.1.27 speed cap.
-grep -Fq 'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /' "$BASE_DIR/discovery_job.sh"
 grep -Fq 'if (!(idx in ifname)) { ifname[idx]=val; ifname_source[idx]="ifDescr" }' "$BASE_DIR/discovery_job.sh"
 printf '%s\n' "Switch Vision Discovery v2.1.28 S5720 generated-target prerequisites: PASS"
 
@@ -1949,3 +1949,137 @@ assert 'mv "$GENERATED_YAML_PATH" "$quarantine_path"' in text
 assert 'Previous invalid generated YAML was quarantined; no broken live handoff remains.' in text
 print("Switch Vision Discovery v2.1.31 generated-YAML handoff regression: PASS")
 PYTEST_V2131_HANDOFF
+
+
+# v2.1.31 end-to-end current-run handoff regression. Run the real Discovery
+# engine against deterministic fake Dell N2128PX-ON and Huawei S5720 agents.
+# This exercises switch-list walking, current-run metadata capture, the actual
+# AWK generator, S5720 ifDescr fallback + 1G speed cap, semantic validation,
+# and atomic publication as one flow.
+v2131_e2e="$tmp_dir/v2131-e2e"
+mkdir -p "$v2131_e2e/bin" "$v2131_e2e/snmpwalks" "$v2131_e2e/capabilities" "$v2131_e2e/share"
+cat > "$v2131_e2e/bin/snmpwalk" <<'FAKE_SNMPWALK_V2131'
+#!/usr/bin/env sh
+case " $* " in
+  *" 192.0.2.32 "*)
+    cat <<'HUAWEI_WALK_V2131'
+.1.3.6.1.2.1.1.1.0 = STRING: Huawei S5720-12TP-LI-AC V200R022C00SPC500
+.1.3.6.1.2.1.1.3.0 = Timeticks: (654321) 1:49:03.21
+.1.3.6.1.2.1.2.2.1.2.5 = STRING: GigabitEthernet0/0/1
+.1.3.6.1.2.1.2.2.1.2.13 = STRING: GigabitEthernet0/0/9
+.1.3.6.1.2.1.2.2.1.2.14 = STRING: GigabitEthernet0/0/10
+.1.3.6.1.2.1.2.2.1.2.15 = STRING: GigabitEthernet0/0/11
+.1.3.6.1.2.1.2.2.1.2.16 = STRING: GigabitEthernet0/0/12
+.1.3.6.1.2.1.2.2.1.8.5 = INTEGER: 1
+.1.3.6.1.2.1.2.2.1.8.13 = INTEGER: 1
+.1.3.6.1.2.1.2.2.1.8.14 = INTEGER: 2
+.1.3.6.1.2.1.2.2.1.8.15 = INTEGER: 1
+.1.3.6.1.2.1.2.2.1.8.16 = INTEGER: 2
+.1.3.6.1.2.1.31.1.1.1.15.5 = Gauge32: 1000
+.1.3.6.1.2.1.31.1.1.1.15.13 = Gauge32: 10000
+.1.3.6.1.2.1.31.1.1.1.15.14 = Gauge32: 10000
+.1.3.6.1.2.1.31.1.1.1.15.15 = Gauge32: 10000
+.1.3.6.1.2.1.31.1.1.1.15.16 = Gauge32: 10000
+HUAWEI_WALK_V2131
+    ;;
+  *)
+    cat <<'DELL_WALK_V2131'
+.1.3.6.1.2.1.1.1.0 = STRING: Dell EMC Networking N2128PX-ON, 6.7.1.27, Linux 4.14.174, v1.0.9
+.1.3.6.1.2.1.1.3.0 = Timeticks: (123456) 0:20:34.56
+.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: Gi1/0/1
+.1.3.6.1.2.1.31.1.1.1.1.28 = STRING: Gi1/0/28
+.1.3.6.1.2.1.31.1.1.1.1.29 = STRING: Te1/0/1
+.1.3.6.1.2.1.31.1.1.1.1.30 = STRING: Te1/0/2
+.1.3.6.1.2.1.2.2.1.8.1 = INTEGER: 1
+.1.3.6.1.2.1.2.2.1.8.28 = INTEGER: 2
+.1.3.6.1.2.1.2.2.1.8.29 = INTEGER: 1
+.1.3.6.1.2.1.2.2.1.8.30 = INTEGER: 2
+.1.3.6.1.2.1.31.1.1.1.15.1 = Gauge32: 1000
+.1.3.6.1.2.1.31.1.1.1.15.28 = Gauge32: 2500
+.1.3.6.1.2.1.31.1.1.1.15.29 = Gauge32: 10000
+.1.3.6.1.2.1.31.1.1.1.15.30 = Gauge32: 10000
+DELL_WALK_V2131
+    ;;
+esac
+FAKE_SNMPWALK_V2131
+chmod +x "$v2131_e2e/bin/snmpwalk"
+
+cat > "$v2131_e2e/options.json" <<JSON_V2131
+{
+  "input_path": "$v2131_e2e/legacy-unused.txt",
+  "snmpwalks_dir": "$v2131_e2e/snmpwalks",
+  "report_path": "$v2131_e2e/discovery-report.txt",
+  "run_snmp_walks": "true",
+  "enable_switch_list": "true",
+  "switches": [
+    {
+      "switch_name": "DELL-REGRESSION",
+      "display_name": "Dell Regression",
+      "switch_host": "192.0.2.31",
+      "sensor_prefix": "dellreg",
+      "snmp_community": "public",
+      "enabled": "enabled",
+      "walk_mode": "targeted",
+      "switch_model": "N2128PX-ON"
+    },
+    {
+      "switch_name": "S5720-REGRESSION",
+      "display_name": "S5720 Regression",
+      "switch_host": "192.0.2.32",
+      "sensor_prefix": "huaweireg",
+      "snmp_community": "public",
+      "enabled": "enabled",
+      "walk_mode": "targeted",
+      "switch_model": "S5720-12TP-LI-AC"
+    }
+  ],
+  "stack_member_prefixes": [],
+  "parse_all_walks": "false",
+  "generate_snmp2mqtt": "true",
+  "clean_output_before_walk": "false",
+  "targets_csv": "$v2131_e2e/no-import.csv",
+  "last_run_summary_path": "$v2131_e2e/last-run.txt",
+  "generated_yaml_path": "$v2131_e2e/generated-snmp2mqtt.yaml",
+  "generated_card_path": "$v2131_e2e/generated-dashboard-card.yaml",
+  "snmp_timeout": "1",
+  "snmp_retries": "0",
+  "snmp_log_path": "$v2131_e2e/snmpwalk.log",
+  "minimum_valid_walk_lines": "1"
+}
+JSON_V2131
+
+rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
+if ! PATH="$v2131_e2e/bin:$PATH" \
+  SWITCH_VISION_OPTIONS_FILE="$v2131_e2e/options.json" \
+  SWITCH_VISION_SHARE_DIR="$v2131_e2e/share" \
+  SWITCH_VISION_CAPABILITIES_DIR="$v2131_e2e/capabilities" \
+  CV_MIB_DATABASE_DIR="$RUNTIME_DATA_DIR/mib_database" \
+  CV_VENDOR_DIR="$RUNTIME_DATA_DIR/vendors" \
+  sh "$BASE_DIR/discovery_job.sh" > "$v2131_e2e/run-output.txt" 2>&1; then
+  echo "ERROR: v2.1.31 end-to-end Discovery process failed" >&2
+  cat "$v2131_e2e/run-output.txt" >&2 || true
+  cat "$v2131_e2e/snmpwalk.log" >&2 || true
+  exit 1
+fi
+
+if ! python3 "$BASE_DIR/generated_yaml_guard.py" --validate "$v2131_e2e/generated-snmp2mqtt.yaml"; then
+  echo "ERROR: v2.1.31 end-to-end generated YAML validation failed" >&2
+  cat "$v2131_e2e/run-output.txt" >&2 || true
+  cat "$v2131_e2e/snmpwalk.log" >&2 || true
+  cat "$v2131_e2e/generated-snmp2mqtt.yaml" >&2 || true
+  exit 1
+fi
+grep -Eq '^- host: 192\.0\.2\.31$' "$v2131_e2e/generated-snmp2mqtt.yaml"
+grep -Eq '^- host: 192\.0\.2\.32$' "$v2131_e2e/generated-snmp2mqtt.yaml"
+grep -Fq 'template: "{{ [value | int, 1000] | min }}"' "$v2131_e2e/generated-snmp2mqtt.yaml"
+grep -Fq 'DELL-REGRESSION/live-targeted-snmpwalk.txt' /tmp/switch_vision_current_run_targets.txt
+grep -Fq 'S5720-REGRESSION/live-targeted-snmpwalk.txt' /tmp/switch_vision_current_run_targets.txt
+grep -Fq '192.0.2.31' /tmp/switch_vision_current_run_targets.txt
+grep -Fq '192.0.2.32' /tmp/switch_vision_current_run_targets.txt
+grep -Fq 'dellreg' /tmp/switch_vision_current_run_targets.txt
+grep -Fq 'huaweireg' /tmp/switch_vision_current_run_targets.txt
+grep -Fq 'Generated YAML published atomically:' "$v2131_e2e/snmpwalk.log"
+! grep -Fq 'Generated YAML source parser failed' "$v2131_e2e/snmpwalk.log"
+! grep -Fq 'no target host entries' "$v2131_e2e/run-output.txt"
+rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
+printf '%s\n' "Switch Vision Discovery v2.1.31 end-to-end Dell + S5720 current-run handoff: PASS"

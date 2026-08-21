@@ -35,7 +35,7 @@ DISCOVERY_STARTED_ISO=$(date -Iseconds)
 DISCOVERY_STARTED_EPOCH=$(date +%s)
 CURRENT_RUN_WALKS="/tmp/switch_vision_current_run_walks.txt"
 CURRENT_RUN_TARGETS="/tmp/switch_vision_current_run_targets.txt"
-CAPABILITIES_DIR="/share/switch_vision/capabilities"
+CAPABILITIES_DIR="${SWITCH_VISION_CAPABILITIES_DIR:-/share/switch_vision/capabilities}"
 POST_WALK_ALREADY_DONE="false"
 GENERATED_CARD_SNMP_ENABLED="false"
 
@@ -315,7 +315,7 @@ if [ -z "${LIVE_OUTPUT_PATH:-}" ]; then
 fi
 LIVE_OUTPUT_PATH=$(printf '%s' "$LIVE_OUTPUT_PATH" | sed 's#//*#/#g')
 REPORT_DIR=$(dirname "$REPORT_PATH")
-mkdir -p "$REPORT_DIR" /share/switch_vision "$CAPABILITIES_DIR" "$SNMPWALKS_DIR" "$(dirname "$GENERATED_YAML_PATH")" "$(dirname "$GENERATED_CARD_PATH")" "$(dirname "$LIVE_LOG_PATH")"
+mkdir -p "$REPORT_DIR" "${SWITCH_VISION_SHARE_DIR:-/share/switch_vision}" "$CAPABILITIES_DIR" "$SNMPWALKS_DIR" "$(dirname "$GENERATED_YAML_PATH")" "$(dirname "$GENERATED_CARD_PATH")" "$(dirname "$LIVE_LOG_PATH")"
 if ! json_has_configured_switch_rows; then
   mkdir -p "$LIVE_OUTPUT_DIR" "$(dirname "$LIVE_OUTPUT_PATH")"
 fi
@@ -2105,7 +2105,13 @@ run_live_snmpwalk_current() {
       echo "Queued for current-run parse: $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"
     fi
     if [ -n "${CURRENT_RUN_TARGETS:-}" ]; then
-      record_current_run_target         "$LIVE_OUTPUT_PATH"         "${SELECTED_SWITCH:-${LIVE_SWITCH_LABEL:-}}"         "$LIVE_SWITCH_IP"         "${DEFAULT_PREFIX:-${LIVE_SWITCH_LABEL:-SW}}"         "$LIVE_SNMP_COMMUNITY" ||         echo "WARNING: current-run target metadata could not be recorded for $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"
+      record_current_run_target \
+        "$LIVE_OUTPUT_PATH" \
+        "${SELECTED_SWITCH:-${LIVE_SWITCH_LABEL:-}}" \
+        "$LIVE_SWITCH_IP" \
+        "${DEFAULT_PREFIX:-${LIVE_SWITCH_LABEL:-SW}}" \
+        "$LIVE_SNMP_COMMUNITY" || \
+        echo "WARNING: current-run target metadata could not be recorded for $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"
     fi
   else
     echo "Current-run parse skipped for failed walk: $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"
@@ -2607,17 +2613,17 @@ write_generated_yaml_for_walk() {
       print "    name: " name
     }
     function physical_speed_cap_mbps(model, label) {
-      if (model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /) return 1000
+      if (model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /) return 1000
       return 0
     }
     function yaml_speed_sensor(model, idx, label, has_highspeed, has_ifspeed, cap_mbps) {
       cap_mbps = physical_speed_cap_mbps(model, label)
       if (has_highspeed) {
         yaml_sensor("1.3.6.1.2.1.31.1.1.1.15." idx, label " Speed Mbps")
-        if (cap_mbps > 0) print "    template: '{{ [value | int, " cap_mbps "] | min }}'"
+        if (cap_mbps > 0) print "    template: \"{{ [value | int, " cap_mbps "] | min }}\""
       } else if (has_ifspeed) {
         yaml_sensor("1.3.6.1.2.1.2.2.1.5." idx, label " Speed Bps")
-        if (cap_mbps > 0) print "    template: '{{ [value | int, " (cap_mbps * 1000000) "] | min }}'"
+        if (cap_mbps > 0) print "    template: \"{{ [value | int, " (cap_mbps * 1000000) "] | min }}\""
       }
     }
     function yaml_interface_sensor(primary, secondary, name, attribute, icon) {
