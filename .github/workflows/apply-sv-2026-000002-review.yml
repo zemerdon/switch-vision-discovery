@@ -39,7 +39,16 @@ jobs:
           rm -f switch_vision_discovery/runtime.tar.gz
           tar -czf switch_vision_discovery/runtime.tar.gz -C runtime_src .
           python3 tools/check_runtime_parity.py
-          sh -x runtime_src/self-test.sh
+          set +e
+          sh -x runtime_src/self-test.sh > /tmp/sv-self-test.log 2>&1
+          self_test_status=$?
+          set -e
+          if [ "$self_test_status" -ne 0 ]; then
+            echo "=== SELF TEST FAILURE TAIL ==="
+            tail -n 160 /tmp/sv-self-test.log
+            exit "$self_test_status"
+          fi
+          cat /tmp/sv-self-test.log
           git diff --check
 
       - name: Commit verified review result
