@@ -1,5 +1,7 @@
 name: Prepare Discovery v2.1.35 review release
 
+# One-shot review-branch release preparation. This workflow deletes itself
+# before committing the tested 2.1.35 product state.
 on:
   push:
     branches:
@@ -63,12 +65,9 @@ jobs:
           changelog.write_text('# Changelog\n\n' + entry + old[len('# Changelog\n\n'):], encoding='utf-8', newline='\n')
           PY
 
-          # Rebuild the tracked runtime archive deterministically from the
-          # reviewable runtime_src tree.
           tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
             -cf - -C runtime_src . | gzip -n > switch_vision_discovery/runtime.tar.gz
 
-          # Never retain this one-shot workflow in the product branch.
           rm -f .github/workflows/prepare-discovery-v2135-review.yml
 
       - name: Validate Discovery 2.1.35
