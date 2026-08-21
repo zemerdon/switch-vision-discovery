@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'version: "2.1.31"' switch_vision_discovery/config.yaml
-          grep -q 'Switch Vision Discovery v2.1.31 end-to-end current-run handoff: PASS' runtime_src/self-test.sh
+          grep -q 'Switch Vision Discovery v2.1.31 end-to-end Dell + S5720 current-run handoff: PASS' runtime_src/self-test.sh
           grep -q 'record_current_run_target \\' runtime_src/discovery_job.sh
           git diff --check
       - name: Commit finalized source back to PR branch
