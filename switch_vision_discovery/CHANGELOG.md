@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.32
+
+- Rename the Home Assistant ingress/sidebar panel from **Support My Switch** to **Switch Vision Hub**.
+- Keep the app itself named **Switch Vision Discovery** in Settings → Apps.
+- Keep Support My Switch as a feature inside the Hub rather than the identity of the entire management interface.
+- Preserve v2.1.31 authoritative generated-YAML handoff hardening, v2.1.30 structured progress highlighting, v2.1.29 Huawei defaults, mappings, telemetry and generated-card behavior.
+
 ## 2.1.31
 
 - Fix the v2.1.27 S5720 speed-template shell/AWK quoting regression that could abort every SNMP2MQTT generator run, leaving a target-less YAML file; the generator now emits shell-safe quoted templates and surfaces parser-stage failures explicitly.
