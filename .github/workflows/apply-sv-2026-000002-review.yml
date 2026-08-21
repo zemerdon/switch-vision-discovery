@@ -47,8 +47,10 @@ jobs:
           self_test_status=$?
           set -e
           if [ "$self_test_status" -ne 0 ]; then
+            echo "=== SELF TEST FAILURE MATCHES ==="
+            grep -nE 'AssertionError|Traceback|FAILED|Error:|grep -q|assert ' /tmp/sv-self-test.log | tail -n 80 || true
             echo "=== SELF TEST FAILURE TAIL ==="
-            tail -n 160 /tmp/sv-self-test.log
+            tail -n 80 /tmp/sv-self-test.log
             exit "$self_test_status"
           fi
           cat /tmp/sv-self-test.log
