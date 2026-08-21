@@ -133,9 +133,10 @@ def main() -> int:
             changed_visuals.append("visuals.calibration_profile")
 
         if changed_visuals:
-            if str(core.get("vendor") or "").strip() == "Ubiquiti":
+            strict_visual_models = {"S5720-12TP-LI-AC", "S5735-L8P4X-A1"}
+            if str(core.get("vendor") or "").strip() == "Ubiquiti" or model in strict_visual_models:
                 errors.append(
-                    f"{model}: shared Ubiquiti visual contract drift in "
+                    f"{model}: shared visual contract drift in "
                     + ", ".join(changed_visuals)
                 )
             else:
@@ -143,6 +144,20 @@ def main() -> int:
                     f"{model}: visual recommendation differs between Core and Discovery "
                     f"({', '.join(changed_visuals)})"
                 )
+
+    expected_huawei_profile = "stock_24rj45_4sfp"
+    expected_huawei_faceplate = "faceplates/24rj45-4sfp.png"
+    for model in ("S5720-12TP-LI-AC", "S5735-L8P4X-A1"):
+        discovery = discovery_models.get(model) or {}
+        visuals = discovery.get("visuals") if isinstance(discovery.get("visuals"), dict) else {}
+        if discovery.get("calibration_profile") != expected_huawei_profile:
+            errors.append(f"{model}: expected calibration_profile={expected_huawei_profile}")
+        if discovery.get("default_faceplate") != expected_huawei_faceplate:
+            errors.append(f"{model}: expected default_faceplate={expected_huawei_faceplate}")
+        if visuals.get("calibration_profile") != expected_huawei_profile:
+            errors.append(f"{model}: expected visuals.calibration_profile={expected_huawei_profile}")
+        if visuals.get("recommended_faceplate") != expected_huawei_faceplate:
+            errors.append(f"{model}: expected visuals.recommended_faceplate={expected_huawei_faceplate}")
 
     discovery_yaml_path = str(
         ((discovery_config or {}).get("options") or {}).get("generated_yaml_path") or ""
