@@ -303,9 +303,9 @@ json.dump({"schema_version": 1, "devices": [
     },
 ]}, open(snapshot, "w"))
 json.dump({"devices": [
-    {"model": "USW-Pro-24-PoE", "status": "experimental", "calibration_profile": "cisco_2960x_24p", "default_faceplate": "faceplates/24rj45-2sfp.png"},
-    {"model": "USW Lite 16 PoE", "status": "experimental", "calibration_profile": "cisco_2960x_24p", "default_faceplate": "faceplates/24rj45-4sfp.png"},
-    {"model": "US 48 PoE 500W", "status": "experimental", "calibration_profile": "default_cisco_48_port", "default_faceplate": "faceplates/48rj45-4sfp.png"},
+    {"model": "USW-Pro-24-PoE", "status": "experimental", "dashboard_support": True, "calibration_profile": "cisco_2960x_24p", "default_faceplate": "faceplates/24rj45-2sfp.png"},
+    {"model": "USW Lite 16 PoE", "status": "experimental", "dashboard_support": True, "calibration_profile": "cisco_2960x_24p", "default_faceplate": "faceplates/24rj45-4sfp.png"},
+    {"model": "US 48 PoE 500W", "status": "experimental", "dashboard_support": True, "calibration_profile": "default_cisco_48_port", "default_faceplate": "faceplates/48rj45-4sfp.png"},
 ]}, open(registry, "w"))
 PYTEST
 python3 "$BASE_DIR/unifi_dashboard_cards.py" --snapshot "$unifi_snapshot" --registry "$unifi_registry" --indent 0 > "$tmp_dir/unifi-cards.yaml"
@@ -1801,19 +1801,24 @@ assert helper.index('if (has_highspeed)') < helper.index('else if (has_ifspeed)'
 assert '1.3.6.1.2.1.31.1.1.1.15.' in helper
 assert '1.3.6.1.2.1.2.2.1.5.' in helper
 
-# Every known UniFi model must carry an explicit visual/profile assignment and
-# must never fall through to Cisco-specific artwork/profile names.
+# UniFi models that claim dashboard support must carry an explicit visual/profile
+# assignment. Detected hardware may intentionally remain visual-pending, but
+# profile/faceplate state must stay paired and must never fall through to Cisco
+# artwork/profile names.
 for model, device in models.items():
     if device.get("vendor") != "Ubiquiti":
         continue
     faceplate = str(device.get("default_faceplate") or "")
     profile = str(device.get("calibration_profile") or "")
     visuals = device.get("visuals") if isinstance(device.get("visuals"), dict) else {}
-    assert faceplate and profile, model
-    assert visuals.get("recommended_faceplate") == faceplate, model
-    assert visuals.get("calibration_profile") == profile, model
-    assert "cisco" not in faceplate.lower(), (model, faceplate)
-    assert not profile.lower().startswith("cisco_"), (model, profile)
+    if device.get("dashboard_support") is True:
+        assert faceplate and profile, model
+    assert bool(faceplate) == bool(profile), model
+    assert str(visuals.get("recommended_faceplate") or "") == faceplate, model
+    assert str(visuals.get("calibration_profile") or "") == profile, model
+    if faceplate:
+        assert "cisco" not in faceplate.lower(), (model, faceplate)
+        assert not profile.lower().startswith("cisco_"), (model, profile)
 print("Switch Vision Discovery v2.1.27 hardware/status/UniFi contract regression: PASS")
 PYTEST_V2127_HARDWARE
 
@@ -2083,3 +2088,99 @@ grep -Fq 'Generated YAML published atomically:' "$v2131_e2e/snmpwalk.log"
 ! grep -Fq 'no target host entries' "$v2131_e2e/run-output.txt"
 rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
 printf '%s\n' "Switch Vision Discovery v2.1.31 end-to-end Dell + S5720 current-run handoff: PASS"
+
+# SV-2026-000002 UniFi exact-model/API mapping regression.
+python3 - "$RUNTIME_REGISTRY" "$BASE_DIR/profiles/switch-vision-profiles.yaml" <<'PYTEST_SV_2026_000002'
+import json
+import sys
+from pathlib import Path
+import yaml
+
+registry = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+profiles_doc = yaml.safe_load(Path(sys.argv[2]).read_text(encoding="utf-8")) or {}
+profiles = profiles_doc.get("profiles", profiles_doc)
+models = {d["model"]: d for d in registry["devices"] if isinstance(d, dict)}
+
+us48 = models["US 48"]
+assert us48["status"] == "experimental"
+assert us48["ports"]["rj45"] == 48
+assert us48["ports"]["gigabit_sfp"] == 2
+assert us48["ports"]["ten_gigabit_sfp_plus"] == 2
+assert "unifi_api_port_map" not in us48
+
+xg16 = models["US XG 16"]
+assert xg16["status"] == "detected"
+assert xg16["dashboard_support"] is False
+assert xg16["unifi_api_port_map"]["sfp"] == list(range(1, 13))
+assert xg16["unifi_api_port_map"]["rj45"] == [13, 14, 15, 16]
+
+agg = models["USW Pro Aggregation"]
+assert agg["status"] == "detected"
+assert agg["dashboard_support"] is False
+assert agg["ports"]["rj45"] == 0
+assert agg["ports"]["ten_gigabit_sfp_plus"] == 28
+assert agg["ports"]["twenty_five_gigabit_sfp28"] == 4
+assert agg["unifi_api_port_map"]["sfp"] == list(range(1, 33))
+
+p48 = profiles["ubiquiti-us-48-api"]
+assert p48["layout"] == {"members": 1, "rj45_ports": 48, "sfp_1g_ports": 2, "sfp_10g_ports": 2}
+assert p48["interface_patterns"]["sfp_10g"] == ["api-port-49", "api-port-50"]
+assert p48["interface_patterns"]["sfp_1g"] == ["api-port-51", "api-port-52"]
+pxg = profiles["ubiquiti-us-xg-16-api"]
+assert pxg["interface_patterns"]["rj45"] == ["api-port-13", "api-port-14", "api-port-15", "api-port-16"]
+assert pxg["interface_patterns"]["sfp_10g"] == [f"api-port-{n}" for n in range(1, 13)]
+pagg = profiles["ubiquiti-usw-pro-aggregation-api"]
+assert pagg["layout"]["rj45_ports"] == 0
+assert pagg["layout"]["sfp_10g_ports"] == 28
+assert pagg["layout"]["sfp_25g_ports"] == 4
+assert pagg["interface_patterns"]["sfp_25g"] == [f"api-port-{n}" for n in range(29, 33)]
+print("Switch Vision Discovery SV-2026-000002 UniFi contract regression: PASS")
+PYTEST_SV_2026_000002
+
+python3 - "$tmp_dir/sv-2026-000002-unifi.json" <<'PYTEST_SV_2026_000002_SNAPSHOT'
+import json
+import sys
+from pathlib import Path
+
+def ports(items):
+    return [{"idx": idx, "connector": connector} for idx, connector in items]
+
+snapshot = {
+    "devices": [
+        {
+            "id": "us48-test",
+            "name": "US 48 test",
+            "model": "US 48",
+            "api_capabilities": {"port_detail": True, "per_port_traffic": False},
+            "ports": ports([(n, "RJ45") for n in range(1, 49)] + [(49, "SFPPLUS"), (50, "SFPPLUS"), (51, "SFP"), (52, "SFP")]),
+        },
+        {
+            "id": "xg16-test",
+            "name": "US XG 16 test",
+            "model": "US XG 16",
+            "api_capabilities": {"port_detail": True, "per_port_traffic": False},
+            "ports": ports([(n, "SFPPLUS") for n in range(1, 13)] + [(n, "RJ45") for n in range(13, 17)]),
+        },
+        {
+            "id": "aggregation-test",
+            "name": "Pro Aggregation test",
+            "model": "USW Pro Aggregation",
+            "api_capabilities": {"port_detail": True, "per_port_traffic": False},
+            "ports": ports([(n, "SFPPLUS") for n in range(1, 29)] + [(n, "SFP28") for n in range(29, 33)]),
+        },
+    ]
+}
+Path(sys.argv[1]).write_text(json.dumps(snapshot), encoding="utf-8")
+PYTEST_SV_2026_000002_SNAPSHOT
+python3 "$BASE_DIR/unifi_dashboard_cards.py" \
+    --snapshot "$tmp_dir/sv-2026-000002-unifi.json" \
+    --registry "$RUNTIME_REGISTRY" \
+    --summary > "$tmp_dir/sv-2026-000002-cards.yaml"
+grep -q 'switch_model: US 48' "$tmp_dir/sv-2026-000002-cards.yaml"
+grep -q 'unifi_sfp_port_offset: 48' "$tmp_dir/sv-2026-000002-cards.yaml"
+! grep -q 'switch_model: US XG 16' "$tmp_dir/sv-2026-000002-cards.yaml"
+! grep -q 'switch_model: USW Pro Aggregation' "$tmp_dir/sv-2026-000002-cards.yaml"
+grep -q 'US XG 16.*dashboard support is pending verified visuals' "$tmp_dir/sv-2026-000002-cards.yaml"
+grep -q 'USW Pro Aggregation.*dashboard support is pending verified visuals' "$tmp_dir/sv-2026-000002-cards.yaml"
+grep -q 'UniFi cards emitted: 1; waiting for visuals/registry: 2' "$tmp_dir/sv-2026-000002-cards.yaml"
+echo "Switch Vision Discovery SV-2026-000002 generated-card regression: PASS"

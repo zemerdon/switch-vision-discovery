@@ -576,3 +576,111 @@ profiles:
     - Te<member>/0/1-2 map to two 10G SFP+ uplinks per stack member.
     - Standalone and two-member stack captures are both present in the contribution.
     - Generic 48 RJ45 + 4 SFP visual is temporary pending a Dell-specific faceplate.
+  ubiquiti-us-48-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch
+    model_patterns:
+    - US 48
+    layout:
+      members: 1
+      rj45_ports: 48
+      sfp_1g_ports: 2
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g:
+      - api-port-51
+      - api-port-52
+      sfp_10g:
+      - api-port-49
+      - api-port-50
+    notes:
+    - SV-2026-000002 confirms the legacy sequential API path: RJ45 1-48, 10G SFP+ 49-50, 1G SFP 51-52.
+  ubiquiti-us-xg-16-api:
+    status: detected
+    vendor: Ubiquiti
+    family: UniFi Switch XG
+    model_patterns:
+    - US XG 16
+    layout:
+      members: 1
+      rj45_ports: 4
+      sfp_1g_ports: 0
+      sfp_10g_ports: 12
+    interface_patterns:
+      rj45:
+      - api-port-13
+      - api-port-14
+      - api-port-15
+      - api-port-16
+      sfp_1g: []
+      sfp_10g:
+      - api-port-1
+      - api-port-2
+      - api-port-3
+      - api-port-4
+      - api-port-5
+      - api-port-6
+      - api-port-7
+      - api-port-8
+      - api-port-9
+      - api-port-10
+      - api-port-11
+      - api-port-12
+    notes:
+    - SV-2026-000002 confirms optical-first API numbering; do not replace this with a copper-first offset.
+    - Dashboard output remains disabled until verified 12-SFP+ + 4-RJ45 visual coordinates exist.
+  ubiquiti-usw-pro-aggregation-api:
+    status: detected
+    vendor: Ubiquiti
+    family: UniFi Switch Pro Aggregation
+    model_patterns:
+    - USW Pro Aggregation
+    layout:
+      members: 1
+      rj45_ports: 0
+      sfp_1g_ports: 0
+      sfp_10g_ports: 28
+      sfp_25g_ports: 4
+    interface_patterns:
+      rj45: []
+      sfp_1g: []
+      sfp_10g:
+      - api-port-1
+      - api-port-2
+      - api-port-3
+      - api-port-4
+      - api-port-5
+      - api-port-6
+      - api-port-7
+      - api-port-8
+      - api-port-9
+      - api-port-10
+      - api-port-11
+      - api-port-12
+      - api-port-13
+      - api-port-14
+      - api-port-15
+      - api-port-16
+      - api-port-17
+      - api-port-18
+      - api-port-19
+      - api-port-20
+      - api-port-21
+      - api-port-22
+      - api-port-23
+      - api-port-24
+      - api-port-25
+      - api-port-26
+      - api-port-27
+      - api-port-28
+      sfp_25g:
+      - api-port-29
+      - api-port-30
+      - api-port-31
+      - api-port-32
+    notes:
+    - SV-2026-000002 confirms 28x 10G SFP+ plus 4x 25G SFP28 and no RJ45 ports.
+    - The sfp_25g fields preserve observed hardware truth for this detected-only profile; dashboard output remains disabled until verified 32-port optical geometry exists.
