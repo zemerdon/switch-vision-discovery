@@ -20,6 +20,20 @@ DEFAULT_SNMP_ADDON_CONFIG_URL = (
     "switch-vision-snmp2mqtt-addon/main/switch-vision-snmp2mqtt/config.yaml"
 )
 
+# Shared exact-model visual defaults are a hard Core/Discovery contract.
+# Any intentional divergence must be listed here with a non-empty reason.
+VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {}
+
+
+def classify_visual_contract_drift(model: str) -> tuple[str, str | None]:
+    """Return strict/error by default; only documented exceptions may warn."""
+    if model not in VISUAL_CONTRACT_EXCEPTIONS:
+        return "error", None
+    reason = str(VISUAL_CONTRACT_EXCEPTIONS.get(model) or "").strip()
+    if not reason:
+        return "invalid", None
+    return "warning", reason
+
 
 def fetch_text(url: str) -> str:
     request = urllib.request.Request(
@@ -88,6 +102,18 @@ def main() -> int:
             "Core exact models missing from Discovery: " + ", ".join(missing_in_discovery)
         )
 
+    shared_models = core_models.keys() & discovery_models.keys()
+    for model, raw_reason in sorted(VISUAL_CONTRACT_EXCEPTIONS.items()):
+        reason = str(raw_reason or "").strip()
+        if model not in shared_models:
+            errors.append(
+                f"Visual contract exception {model!r} is stale or not a shared exact model"
+            )
+        if not reason:
+            errors.append(
+                f"Visual contract exception {model!r} must include a non-empty reason"
+            )
+
     hardware_fields = (
         "vendor",
         "mapping_profile",
@@ -133,16 +159,17 @@ def main() -> int:
             changed_visuals.append("visuals.calibration_profile")
 
         if changed_visuals:
-            strict_visual_models = {"S5720-12TP-LI-AC", "S5735-L8P4X-A1"}
-            if str(core.get("vendor") or "").strip() == "Ubiquiti" or model in strict_visual_models:
+            policy, reason = classify_visual_contract_drift(model)
+            if policy == "warning":
+                warnings.append(
+                    f"{model}: explicitly allowed shared visual contract drift in "
+                    + ", ".join(changed_visuals)
+                    + f"; reason: {reason}"
+                )
+            else:
                 errors.append(
                     f"{model}: shared visual contract drift in "
                     + ", ".join(changed_visuals)
-                )
-            else:
-                warnings.append(
-                    f"{model}: visual recommendation differs between Core and Discovery "
-                    f"({', '.join(changed_visuals)})"
                 )
 
     expected_huawei_profile = "stock_24rj45_4sfp"
@@ -196,7 +223,8 @@ def main() -> int:
     print(
         "Discovery cross-component contracts: PASS "
         f"(version={app_version}; Core subset present; hardware mappings aligned; "
-        "shared Ubiquiti visuals aligned; SNMP2MQTT YAML path aligned)"
+        "all shared exact-model visuals aligned or explicitly excepted; "
+        "SNMP2MQTT YAML path aligned)"
     )
     return 0
 
