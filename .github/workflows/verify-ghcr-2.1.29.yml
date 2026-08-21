@@ -1,0 +1,33 @@
+name: Verify Discovery GHCR 2.1.29
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Verify public multi-arch image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='ghcr.io/zemerdon/switch-vision-discovery:2.1.29'
+          output=''
+          for attempt in $(seq 1 20); do
+            if output="$(docker buildx imagetools inspect "$image" 2>&1)"; then
+              break
+            fi
+            echo "Waiting for public image publication (attempt $attempt/20)..."
+            sleep 15
+          done
+          printf '%s\n' "$output"
+          grep -Fq 'linux/amd64' <<<"$output"
+          grep -Fq 'linux/arm64' <<<"$output"
+          echo 'Discovery 2.1.29 public GHCR multi-arch verification: PASS'
