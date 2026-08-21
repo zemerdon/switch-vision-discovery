@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.34
+
+- Make Core/Discovery visual defaults a hard contract for every shared exact model, regardless of vendor.
+- Remove the previous warning-only path for non-Ubiquiti/non-Huawei shared visual drift.
+- Add an explicit model-to-reason exception table for rare intentional visual divergence; empty, unknown, or stale exceptions are rejected.
+- Add a permanent synthetic regression proving Cisco, Juniper, Dell, Huawei and Ubiquiti models are all strict by default.
+- Preserve hardware contracts, Huawei exact-model safeguards, SNMP2MQTT path checks, saved-walk YAML regeneration, and runtime behavior unchanged.
+
 ## 2.1.33
 
 - Add **Regenerate SNMP2MQTT YAML** beside Run Discovery in Switch Vision Hub.
