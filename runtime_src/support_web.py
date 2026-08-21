@@ -731,35 +731,52 @@ def _request_discovery_stop() -> bool:
     return True
 
 
-def _run_discovery(discovery_script: Path) -> None:
+def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
     global _DISCOVERY_PROCESS
     log_path = DEFAULT_DISCOVERY_LOG
     lines: list[str] = []
     generated_yaml_previous_mtime = DEFAULT_GENERATED_SNMP2MQTT.stat().st_mtime if DEFAULT_GENERATED_SNMP2MQTT.is_file() else None
     generated_yaml_previous_topics = _remember_current_snmp2mqtt_topics() if generated_yaml_previous_mtime is not None else _load_snmp2mqtt_retirement_topics()
+    regenerate_only = mode == "regenerate_yaml"
+    operation_name = "SNMP2MQTT YAML regeneration" if regenerate_only else "Discovery"
+    preparing_message = "Preparing SNMP2MQTT YAML regeneration" if regenerate_only else "Preparing Discovery"
+    preparing_activity = "Loading saved Discovery data and SNMP walks" if regenerate_only else "Validating configured switches"
+    waiting_message = "Waiting for YAML regeneration to complete" if regenerate_only else "Waiting for Discovery to complete"
     _set_discovery_state(
         running=True,
         started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         finished_at=None,
         success=None,
-        message="Preparing Discovery",
+        message=preparing_message,
         log_tail=[],
-        stage="Preparing Discovery",
+        stage=preparing_message,
+        mode=mode,
         switch="",
         target="",
         command="",
-        activity="Validating configured switches",
+        activity=preparing_activity,
         phase="preparing",
-        snmp2mqtt={"status": "Waiting", "action": "none", "slug": None, "state": None, "message": "Waiting for Discovery to complete"},
+        snmp2mqtt={"status": "Waiting", "action": "none", "slug": None, "state": None, "message": waiting_message},
     )
     try:
         _ensure_runtime_paths()
-        options_snapshot = _write_authoritative_discovery_options_snapshot()
+        options_snapshot = (
+            _write_snmp2mqtt_regeneration_options_snapshot()
+            if regenerate_only
+            else _write_authoritative_discovery_options_snapshot()
+        )
         discovery_env = os.environ.copy()
         discovery_env["SWITCH_VISION_OPTIONS_FILE"] = str(options_snapshot)
+        if regenerate_only:
+            discovery_env["SWITCH_VISION_CAPABILITIES_DIR"] = "/tmp/switch_vision_regenerate_capabilities"
         with log_path.open("a", encoding="utf-8") as log_file:
-            log_file.write(f"\n=== Discovery started {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
-            log_file.write("Discovery configuration: authoritative Supervisor snapshot\n")
+            action_label = "SNMP2MQTT YAML regeneration" if regenerate_only else "Discovery"
+            log_file.write(f"\n=== {action_label} started {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+            log_file.write(
+                "Discovery configuration: stored-walk regeneration snapshot\n"
+                if regenerate_only
+                else "Discovery configuration: authoritative Supervisor snapshot\n"
+            )
             process = subprocess.Popen(
                 [str(discovery_script)],
                 stdout=subprocess.PIPE,
@@ -809,12 +826,13 @@ def _run_discovery(discovery_script: Path) -> None:
                 _set_discovery_state(log_tail=lines)
             return_code = process.wait()
         if _DISCOVERY_STOP_REQUESTED.is_set():
-            lines.append("Discovery stopped by user request.")
+            stopped_label = "YAML regeneration" if regenerate_only else "Discovery"
+            lines.append(f"{stopped_label} stopped by user request.")
             _set_discovery_state(
                 success=None,
-                message="Discovery stopped",
+                message=f"{stopped_label} stopped",
                 stage="Stopped",
-                activity="Discovery stopped by user",
+                activity=f"{stopped_label} stopped by user",
                 command="",
                 phase="stopped",
                 log_tail=lines[-300:],
@@ -822,10 +840,10 @@ def _run_discovery(discovery_script: Path) -> None:
             )
             return
         if return_code != 0:
-            raise RuntimeError(f"Discovery exited with code {return_code}.")
+            raise RuntimeError(f"{operation_name} exited with code {return_code}.")
         _set_discovery_state(stage="Starting SNMP2MQTT", activity="Validating generated SNMP2MQTT YAML", command="Supervisor app action", phase="running")
         snmp2mqtt_result = _ensure_snmp2mqtt_running(lines, generated_yaml_previous_mtime, generated_yaml_previous_topics)
-        auto_message = "Discovery complete"
+        auto_message = "SNMP2MQTT YAML regeneration complete" if regenerate_only else "Discovery complete"
         _set_discovery_state(
             success=True,
             message=auto_message,
@@ -849,7 +867,7 @@ def _run_discovery(discovery_script: Path) -> None:
             _DISCOVERY_PROCESS = None
         _DISCOVERY_STOP_REQUESTED.clear()
         _set_discovery_state(running=False, finished_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"))
-        _release_operation("Discovery")
+        _release_operation(operation_name)
 
 
 
@@ -938,6 +956,45 @@ def _write_authoritative_discovery_options_snapshot(
         except OSError:
             pass
         raise RuntimeError(f"Could not prepare the authoritative Discovery configuration snapshot: {exc}") from exc
+    return destination
+
+
+def _write_snmp2mqtt_regeneration_options_snapshot(
+    destination: Path = Path("/tmp/switch_vision_regenerate_options.json"),
+) -> Path:
+    """Prepare a safe stored-walk-only snapshot for SNMP2MQTT YAML regeneration."""
+    options = _self_addon_options()
+    _validate_inventory_identities(options)
+    regenerated = dict(options)
+    rows = regenerated.get("switches")
+    has_inventory = isinstance(rows, list) and any(
+        isinstance(row, dict)
+        and (str(row.get("switch_name") or "").strip() or str(row.get("switch_host") or "").strip())
+        for row in rows
+    )
+    if has_inventory:
+        regenerated["enable_switch_list"] = True
+    regenerated["run_snmp_walks"] = False
+    regenerated["run_live_snmpwalk"] = False
+    regenerated["clean_output_before_walk"] = False
+    regenerated["parse_all_walks"] = True
+    regenerated["generate_snmp2mqtt"] = True
+    regenerated["report_path"] = "/tmp/switch_vision_regenerate_report.txt"
+    regenerated["last_run_summary_path"] = "/tmp/switch_vision_regenerate_summary.txt"
+    regenerated["generated_card_path"] = "/tmp/switch_vision_regenerate_dashboard.yaml"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(json.dumps(regenerated, indent=2) + "\n", encoding="utf-8")
+        os.chmod(temporary, 0o600)
+        temporary.replace(destination)
+        os.chmod(destination, 0o600)
+    except OSError as exc:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise RuntimeError(f"Could not prepare SNMP2MQTT regeneration configuration: {exc}") from exc
     return destination
 
 
@@ -2819,7 +2876,9 @@ body.density-dense .step{padding:7px 9px}
 <dt>SNMP2MQTT</dt><dd id="liveSnmp2mqtt">Waiting for Discovery</dd>
 <dt>Elapsed</dt><dd id="liveElapsed" class="elapsed">00:00</dd>
 </dl>
-<div class="actions"><button class="primary" id="runDiscoveryButton" type="button">Run Discovery</button><button id="stopDiscoveryButton" type="button" disabled>Stop Discovery</button><button id="viewResultsButton" type="button">View Results</button><button id="toggleDebugButton" type="button">Show Debug</button></div>
+<div class="actions"><button class="primary" id="runDiscoveryButton" type="button">Run Discovery</button><button id="regenerateYamlButton" type="button">Regenerate SNMP2MQTT YAML</button><button id="stopDiscoveryButton" type="button" disabled>Stop Discovery</button><button id="viewResultsButton" type="button">View Results</button><button id="toggleDebugButton" type="button">Show Debug</button></div>
+<p class="muted">Regenerate SNMP2MQTT YAML uses the existing saved Discovery data and SNMP walks. No new SNMP walks are performed.</p>
+<p id="regenerateYamlStatus" class="muted"></p>
 <details class="advanced"><summary>SNMP cleanup</summary><p class="muted">Use this when retiring SNMP switches or moving to a UniFi API-only setup. It stops Switch Vision SNMP2MQTT, removes retained Home Assistant MQTT Discovery entries that can be identified from the current generated YAML, clears saved SNMP walks/capability caches/generated SNMP files, and clears the generated card so the next Discovery rebuilds it. UniFi API data and UniFi2MQTT settings are not touched.</p><div class="actions"><button id="resetSnmpDiscoveryButton" class="danger" type="button">Reset SNMP Discovery Data</button></div><p id="resetSnmpDiscoveryStatus" class="muted"></p></details>
 <details class="yaml-manager generated-card-manager" open>
 <summary><strong>Generated Card YAML</strong></summary>
@@ -3019,7 +3078,7 @@ let debugVisible=false;
 function elapsedText(started,finished=null){if(!started)return '00:00';const start=Date.parse(started);const end=finished?Date.parse(finished):Date.now();if(!Number.isFinite(start)||!Number.isFinite(end))return '00:00';const total=Math.max(0,Math.floor((end-start)/1000));const h=Math.floor(total/3600);const m=Math.floor((total%3600)/60);const s=total%60;return h?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
 function updateElapsedClock(){const state=lastDiscoveryState||{};if(!$('liveElapsed'))return;$('liveElapsed').textContent=state.running?elapsedText(state.started_at):((state.started_at&&state.finished_at)?elapsedText(state.started_at,state.finished_at):'00:00')}
 function startElapsedTicker(){if(elapsedTicker)return;elapsedTicker=setInterval(()=>{if(!document.hidden&&lastDiscoveryState?.running)updateElapsedClock()},250)}
-function showDiscovery(d){const state=d||{};lastDiscoveryState=state;const running=!!state.running;const phase=state.phase||(running?'running':(state.success===true?'complete':(state.success===false?'failed':'idle')));const preparing=running&&phase==='preparing';const stopping=running&&phase==='stopping';const active=running&&!preparing&&!stopping;const btn=$('runDiscoveryButton');const stopBtn=$('stopDiscoveryButton');btn.disabled=running;btn.textContent=preparing?'Preparing…':(stopping?'Stopping…':(active?'Discovery Running…':'Run Discovery'));stopBtn.disabled=!running||stopping;stopBtn.textContent=stopping?'Stopping…':'Stop Discovery';let label='Idle / Ready';if(preparing)label='Preparing Discovery';else if(stopping)label='Stopping Discovery';else if(active)label='Discovery running';else if(phase==='stopped')label='Discovery stopped';else if(state.success===true)label='Discovery complete';else if(state.success===false)label=`Discovery failed: ${state.message||'Unknown error'}`;$('discoveryStatus').textContent=label;$('homeStatus').textContent=preparing?'Preparing Discovery':(stopping?'Stopping Discovery':(active?'Discovery running':(phase==='stopped'?'Discovery stopped':(state.success===true?'Last discovery complete':(state.success===false?'Discovery needs attention':'Ready')))));$('homeStatusDot').className=`status-dot${running?' running':(state.success===false?' failed':'')}`;$('liveStage').textContent=preparing?'Preparing Discovery':(state.stage||label);$('liveSwitch').textContent=preparing?'Waiting':(state.switch||(!running&&state.success===true?'All configured switches':'Not running'));$('liveTarget').textContent=preparing?'Waiting':(state.target||'Not running');$('liveActivity').textContent=preparing?'Validating configured switches':(state.activity||label);$('liveCommand').textContent=preparing?'Not started':(state.command||'No command running');$('liveRunStatus').textContent=preparing?'Preparing':(stopping?'Stopping':(active?'Running':(phase==='stopped'?'Stopped':(state.success===true?'Complete':(state.success===false?'Failed':'Idle / Ready')))));const snmp=state.snmp2mqtt||{};$('liveSnmp2mqtt').textContent=snmp.message||snmp.status||'Waiting for Discovery';updateElapsedClock();const lines=state.log_tail||[];$('discoveryLog').textContent=lines.length?lines.join('\n'):'No debug details are available yet.';updateSteps(state);syncConfiguredDeviceToggleAvailability()}
+function showDiscovery(d){const state=d||{};lastDiscoveryState=state;const running=!!state.running;const regen=state.mode==='regenerate_yaml';const phase=state.phase||(running?'running':(state.success===true?'complete':(state.success===false?'failed':'idle')));const preparing=running&&phase==='preparing';const stopping=running&&phase==='stopping';const active=running&&!preparing&&!stopping;const btn=$('runDiscoveryButton');const regenBtn=$('regenerateYamlButton');const stopBtn=$('stopDiscoveryButton');btn.disabled=running;regenBtn.disabled=running;btn.textContent=preparing&&!regen?'Preparing…':(stopping?'Stopping…':(active&&!regen?'Discovery Running…':'Run Discovery'));regenBtn.textContent=regen&&preparing?'Preparing…':(regen&&active?'Regenerating…':'Regenerate SNMP2MQTT YAML');stopBtn.disabled=!running||stopping;stopBtn.textContent=stopping?'Stopping…':'Stop Discovery';let label='Idle / Ready';if(preparing)label=regen?'Preparing SNMP2MQTT YAML regeneration':'Preparing Discovery';else if(stopping)label=regen?'Stopping YAML regeneration':'Stopping Discovery';else if(active)label=regen?'Regenerating SNMP2MQTT YAML':'Discovery running';else if(phase==='stopped')label=regen?'YAML regeneration stopped':'Discovery stopped';else if(state.success===true)label=regen?'SNMP2MQTT YAML regeneration complete':'Discovery complete';else if(state.success===false)label=`${regen?'YAML regeneration':'Discovery'} failed: ${state.message||'Unknown error'}`;$('discoveryStatus').textContent=label;$('homeStatus').textContent=preparing?'Preparing Discovery':(stopping?'Stopping Discovery':(active?'Discovery running':(phase==='stopped'?'Discovery stopped':(state.success===true?'Last discovery complete':(state.success===false?'Discovery needs attention':'Ready')))));$('homeStatusDot').className=`status-dot${running?' running':(state.success===false?' failed':'')}`;$('liveStage').textContent=preparing?'Preparing Discovery':(state.stage||label);$('liveSwitch').textContent=preparing?'Waiting':(state.switch||(!running&&state.success===true?'All configured switches':'Not running'));$('liveTarget').textContent=preparing?'Waiting':(state.target||'Not running');$('liveActivity').textContent=preparing?'Validating configured switches':(state.activity||label);$('liveCommand').textContent=preparing?'Not started':(state.command||'No command running');$('liveRunStatus').textContent=preparing?'Preparing':(stopping?'Stopping':(active?'Running':(phase==='stopped'?'Stopped':(state.success===true?'Complete':(state.success===false?'Failed':'Idle / Ready')))));const snmp=state.snmp2mqtt||{};$('liveSnmp2mqtt').textContent=snmp.message||snmp.status||'Waiting for Discovery';updateElapsedClock();const lines=state.log_tail||[];$('discoveryLog').textContent=lines.length?lines.join('\n'):'No debug details are available yet.';updateSteps(state);syncConfiguredDeviceToggleAvailability()}
 async function loadGeneratedCardYamlStatus(){const status=$('generatedCardYamlActionStatus');const preview=$('generatedCardYamlPreview');try{const r=await fetch(endpoint('api/generated-card-yaml/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not read generated Card YAML status');const found=!!d.generated?.found;const valid=!!d.validation?.valid;const modified=d.generated?.modified||null;$('generatedCardYamlState').textContent=found?`${d.generated.path||'generated-dashboard-card.yaml'} · ${d.generated.size||0} bytes`:'Not generated';$('generatedCardYamlValidation').textContent=valid?`Valid · ${d.validation?.documents||1} YAML document${(d.validation?.documents||1)===1?'':'s'}`:`Invalid · ${d.validation?.error||'validation failed'}`;$('generatedCardYamlUpdated').textContent=modified||'Not available';$('downloadGeneratedCardYamlButton').href=endpoint('download/generated-dashboard-card.yaml');if(!found||!valid){preview.textContent='';preview.classList.add('hidden');status.textContent=!found?'Run Discovery to generate the Card YAML preview.':`Generated Card YAML is not available for preview: ${d.validation?.error||'validation failed'}`}else{if(generatedCardYamlModified&&modified!==generatedCardYamlModified&&!preview.classList.contains('hidden')){preview.textContent=await fetchGeneratedCardYaml();status.textContent='Generated Card YAML preview refreshed.'}else if(status.textContent.startsWith('Could not load')||status.textContent.startsWith('Generated Card YAML is not available'))status.textContent=''}generatedCardYamlModified=modified}catch(e){preview.textContent='';preview.classList.add('hidden');status.textContent=`Could not load generated Card YAML status: ${e}`}}
 async function fetchGeneratedCardYaml(){const r=await fetch(endpoint('api/generated-card-yaml/preview'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Card YAML preview failed');return d.text||''}
 async function previewGeneratedCardYaml(){const status=$('generatedCardYamlActionStatus');try{const text=await fetchGeneratedCardYaml();$('generatedCardYamlPreview').textContent=text;$('generatedCardYamlPreview').classList.remove('hidden');status.textContent='Generated Card YAML preview loaded.'}catch(e){status.textContent=`Could not preview generated Card YAML: ${e}`}}
@@ -3027,6 +3086,7 @@ async function copyGeneratedCardYaml(){const status=$('generatedCardYamlActionSt
 async function loadGeneratedYamlStatus(){try{const r=await fetch(endpoint('api/generated-yaml/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not read generated YAML status');const found=!!d.generated?.found;$('generatedYamlState').textContent=found?`${d.generated.path||'generated-snmp2mqtt.yaml'} · ${d.generated.size||0} bytes`:'Not generated';$('generatedYamlValidation').textContent=d.validation?.valid?'Valid':`Invalid · ${d.validation?.error||'validation failed'}`;$('generatedYamlUpdated').textContent=d.generated?.modified||'Not available';$('downloadGeneratedYamlButton').href=endpoint('download/generated-snmp2mqtt.yaml')}catch(e){$('generatedYamlActionStatus').textContent=`Could not load generated YAML status: ${e}`}}
 async function previewGeneratedYaml(){const status=$('generatedYamlActionStatus');try{const r=await fetch(endpoint('api/generated-yaml/preview'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Preview failed');$('generatedYamlPreview').textContent=d.text||'';$('generatedYamlPreview').classList.remove('hidden');status.textContent='Generated YAML preview loaded.'}catch(e){status.textContent=`Could not preview generated YAML: ${e}`}}
 function toggleDebug(){debugVisible=!debugVisible;$('debugWrap').classList.toggle('hidden',!debugVisible);$('toggleDebugButton').textContent=debugVisible?'Hide Debug':'Show Debug'}
+async function regenerateSnmp2mqttYaml(){const btn=$('regenerateYamlButton');const status=$('regenerateYamlStatus');btn.disabled=true;status.textContent='Preparing stored-walk YAML regeneration…';try{const r=await fetch(endpoint('api/discovery/regenerate-yaml'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start YAML regeneration');status.textContent='Regeneration started. Existing saved walks are being reprocessed; no SNMP walks will run.';await refresh()}catch(e){status.textContent=`Could not regenerate SNMP2MQTT YAML: ${e.message||e}`;btn.disabled=false}}
 async function runDiscovery(){const btn=$('runDiscoveryButton');btn.disabled=true;$('discoveryStatus').textContent='Preparing Discovery';try{const r=await fetch(endpoint('api/discovery/start'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start Discovery');await refresh()}catch(e){$('discoveryStatus').textContent=`Could not start Discovery: ${e}`;btn.disabled=false}}
 async function stopDiscovery(){const btn=$('stopDiscoveryButton');btn.disabled=true;$('discoveryStatus').textContent='Stopping Discovery';try{const r=await fetch(endpoint('api/discovery/stop'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not stop Discovery');await refresh()}catch(e){$('discoveryStatus').textContent=`Could not stop Discovery: ${e}`;btn.disabled=false}}
 async function resetSnmpDiscoveryData(){const btn=$('resetSnmpDiscoveryButton');const status=$('resetSnmpDiscoveryStatus');if(lastDiscoveryState?.running){status.textContent='Stop Discovery before resetting SNMP data.';return}if(!confirm('Reset SNMP Discovery data? This stops Switch Vision SNMP2MQTT, removes identifiable retained SNMP2MQTT Home Assistant discovery entities, deletes saved SNMP walk/capability/generated SNMP data, and clears the generated card for a clean rebuild. UniFi data and settings are preserved.'))return;btn.disabled=true;status.textContent='Resetting SNMP Discovery data…';try{const r=await fetch(endpoint('api/discovery/reset-snmp'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'SNMP reset failed');const warning=(d.warnings||[]).length?` Warnings: ${(d.warnings||[]).join(' | ')}`:'';status.textContent=`SNMP reset complete. MQTT entities retired: ${d.mqtt_topics_cleared||0}/${d.mqtt_topics_found||0}. Saved walk entries removed: ${d.walk_entries_removed||0}. Capability entries removed: ${d.capability_entries_removed||0}.${warning} Run Discovery to rebuild from the currently enabled sources.`;await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus(),refreshDevicesData(false)])}catch(e){status.textContent=`Could not reset SNMP Discovery data: ${e.message||e}`}finally{btn.disabled=false}}
@@ -3036,7 +3096,7 @@ function schedulePoll(running=lastRunning){if(polling){clearTimeout(polling);pol
 async function refresh(){if(refreshInFlight)return;refreshInFlight=true;try{const r=await fetch(endpoint('api/status'),{cache:'no-store'});const d=await r.json();if(d.ui_preferences?.density)syncDensityUi(d.ui_preferences.density);setUnifiHomeCardVisibility(d.ui_preferences?.show_unifi_integration!==false);if(d.ui_preferences?.show_unifi_integration!==false)await refreshUnifiHomeCard();if(!defaultsLoaded)setForm(d.defaults);showDiscovery(d.discovery);const contributionRunning=!!d.job.running;const discoveryRunning=!!d.discovery?.running;lastRunning=contributionRunning||discoveryRunning;$('createButton').disabled=contributionRunning;if(contributionRunning&&currentView!=='discovery')setView('progress');$('progressMessage').textContent=d.job.message||'Working…';$('logTail').textContent=(d.job.log_tail||[]).join('\n');if(!contributionRunning&&d.job.success===false&&currentView==='progress'){$('progressMessage').textContent=`Failed: ${d.job.message}`}if(!contributionRunning){showLatest(d.latest);if(d.job.success===true&&d.latest&&currentView==='progress')setView('ready')}if(currentView==='devices')await refreshDevicesData(false);else if(currentView==='diagnostics')await refreshDiagnosticsData(false);else if(currentView==='discovery')await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])}catch(e){if(currentView==='progress')$('progressMessage').textContent=`Could not contact Support My Switch: ${e}`;else $('homeStatus').textContent=`Connection problem: ${e}`}finally{refreshInFlight=false;schedulePoll(lastRunning)}}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(polling){clearTimeout(polling);polling=null}}else{updateElapsedClock();refresh()}});window.addEventListener('focus',()=>{if(!document.hidden){updateElapsedClock();refresh()}});
 async function create(){const btn=$('createButton');btn.disabled=true;setView('progress');$('progressMessage').textContent='Starting…';try{const r=await fetch(endpoint('api/create'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start contribution');await refresh()}catch(e){$('progressMessage').textContent=`Could not start: ${e}`;btn.disabled=false}}
-$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openCalibrationProfilesButton').addEventListener('click',()=>{setView('profiles');window.SwitchVisionCalibrationProfiles?.load()});$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedCardYamlButton').addEventListener('click',previewGeneratedCardYaml);$('copyGeneratedCardYamlButton').addEventListener('click',copyGeneratedCardYaml);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('openDiagnosticsButton').addEventListener('click',loadDiagnostics);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json')});$('openIntegrationSettingsButton').addEventListener('click',()=>openHomeAssistantPath('/config/integrations/integration/switch_vision'));$('openDiscoverySettingsButton').addEventListener('click',()=>openResolvedApp('discovery'));$('openSnmp2mqttSettingsButton').addEventListener('click',()=>openResolvedApp('snmp2mqtt'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('refreshDiagnosticsButton').addEventListener('click',loadDiagnostics);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('diagnosticsRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});setView('home');startElapsedTicker();refresh();
+$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openCalibrationProfilesButton').addEventListener('click',()=>{setView('profiles');window.SwitchVisionCalibrationProfiles?.load()});$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedCardYamlButton').addEventListener('click',previewGeneratedCardYaml);$('copyGeneratedCardYamlButton').addEventListener('click',copyGeneratedCardYaml);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('openDiagnosticsButton').addEventListener('click',loadDiagnostics);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json')});$('openIntegrationSettingsButton').addEventListener('click',()=>openHomeAssistantPath('/config/integrations/integration/switch_vision'));$('openDiscoverySettingsButton').addEventListener('click',()=>openResolvedApp('discovery'));$('openSnmp2mqttSettingsButton').addEventListener('click',()=>openResolvedApp('snmp2mqtt'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('refreshDiagnosticsButton').addEventListener('click',loadDiagnostics);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('diagnosticsRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});setView('home');startElapsedTicker();refresh();
 </script>
 <script src="calibration_profiles.js"></script>
 </body></html>"""
@@ -3470,6 +3530,42 @@ class SupportHandler(BaseHTTPRequestHandler):
             except RuntimeError as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
+        if path == "/api/discovery/regenerate-yaml":
+            operation_name = "SNMP2MQTT YAML regeneration"
+            try:
+                _claim_operation(operation_name)
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+                return
+            _DISCOVERY_STOP_REQUESTED.clear()
+            _set_discovery_state(
+                running=True,
+                started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                finished_at=None,
+                success=None,
+                message="Preparing SNMP2MQTT YAML regeneration",
+                log_tail=[],
+                stage="Preparing SNMP2MQTT YAML regeneration",
+                switch="",
+                target="",
+                command="",
+                activity="Loading saved Discovery data and SNMP walks",
+                phase="preparing",
+                mode="regenerate_yaml",
+                snmp2mqtt={"status": "Waiting", "action": "none", "slug": None, "state": None, "message": "Waiting for YAML regeneration to complete"},
+            )
+            thread = threading.Thread(
+                target=_run_discovery,
+                args=(self.app.discovery_script, "regenerate_yaml"),
+                daemon=True,
+            )
+            try:
+                thread.start()
+            except Exception:
+                _release_operation(operation_name)
+                raise
+            self._json({"started": True, "mode": "regenerate_yaml"}, HTTPStatus.ACCEPTED)
+            return
         if path == "/api/discovery/start":
             try:
                 _claim_operation("Discovery")
@@ -3485,6 +3581,7 @@ class SupportHandler(BaseHTTPRequestHandler):
                 message="Preparing Discovery",
                 log_tail=[],
                 stage="Preparing Discovery",
+                mode="discovery",
                 switch="",
                 target="",
                 command="",
