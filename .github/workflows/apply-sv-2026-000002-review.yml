@@ -39,7 +39,7 @@ jobs:
           rm -f switch_vision_discovery/runtime.tar.gz
           tar -czf switch_vision_discovery/runtime.tar.gz -C runtime_src .
           python3 tools/check_runtime_parity.py
-          sh runtime_src/self-test.sh
+          sh -x runtime_src/self-test.sh
           git diff --check
 
       - name: Commit verified review result
