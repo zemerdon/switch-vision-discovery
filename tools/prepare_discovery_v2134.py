@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
+import urllib.request
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "switch_vision_discovery"
 RUNTIME = ROOT / "runtime_src"
 VERSION = "2.1.34"
+CORE_REGISTRY_URL = (
+    "https://raw.githubusercontent.com/zemerdon/"
+    "switch-vision-releases/main/src/devices/supported_devices.json"
+)
 
 
 def read(path: Path) -> str:
@@ -16,6 +23,94 @@ def read(path: Path) -> str:
 def write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text.replace("\r\n", "\n").replace("\r", "\n"), encoding="utf-8", newline="\n")
+
+
+def fetch_json(url: str) -> dict[str, Any]:
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Switch-Vision-Discovery-Prepare/1"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise SystemExit("Core registry payload is not an object")
+    return payload
+
+
+def devices_by_model(payload: dict[str, Any], label: str) -> dict[str, dict[str, Any]]:
+    devices = payload.get("devices")
+    if not isinstance(devices, list):
+        raise SystemExit(f"{label} registry devices field is not a list")
+    result: dict[str, dict[str, Any]] = {}
+    for item in devices:
+        if not isinstance(item, dict):
+            continue
+        model = str(item.get("model") or "").strip()
+        if model:
+            result[model] = item
+    return result
+
+
+def sync_shared_visual_contracts() -> None:
+    """Copy Core's enforced visual defaults onto shared exact-model entries."""
+    registry_path = RUNTIME / "opt" / "switch-vision" / "devices" / "supported_devices.json"
+    discovery_registry = json.loads(read(registry_path))
+    if not isinstance(discovery_registry, dict):
+        raise SystemExit("Discovery registry payload is not an object")
+
+    core_registry = fetch_json(CORE_REGISTRY_URL)
+    discovery_models = devices_by_model(discovery_registry, "Discovery")
+    core_models = devices_by_model(core_registry, "Core")
+
+    changed_models = 0
+    changed_fields = 0
+    top_level_fields = ("calibration_profile", "default_faceplate")
+    nested_fields = ("recommended_faceplate", "calibration_profile")
+
+    for model in sorted(core_models.keys() & discovery_models.keys()):
+        core = core_models[model]
+        discovery = discovery_models[model]
+        model_changed = False
+
+        for field in top_level_fields:
+            if core.get(field) == discovery.get(field):
+                continue
+            if field in core:
+                discovery[field] = core[field]
+            else:
+                discovery.pop(field, None)
+            changed_fields += 1
+            model_changed = True
+
+        core_visuals = core.get("visuals") if isinstance(core.get("visuals"), dict) else {}
+        discovery_visuals = (
+            discovery.get("visuals")
+            if isinstance(discovery.get("visuals"), dict)
+            else {}
+        )
+        for field in nested_fields:
+            if core_visuals.get(field) == discovery_visuals.get(field):
+                continue
+            if not isinstance(discovery.get("visuals"), dict):
+                discovery["visuals"] = discovery_visuals
+            if field in core_visuals:
+                discovery_visuals[field] = core_visuals[field]
+            else:
+                discovery_visuals.pop(field, None)
+            changed_fields += 1
+            model_changed = True
+
+        if model_changed:
+            changed_models += 1
+
+    write(
+        registry_path,
+        json.dumps(discovery_registry, indent=2, ensure_ascii=False) + "\n",
+    )
+    print(
+        "Synchronized Core visual contracts into Discovery: "
+        f"{changed_models} model(s), {changed_fields} field(s)"
+    )
 
 
 # Version metadata.
@@ -30,6 +125,11 @@ job = read(job_path)
 if 'SWITCH_VISION_DISCOVERY_VERSION="2.1.33"' not in job:
     raise SystemExit("Discovery runtime version marker missing")
 write(job_path, job.replace('SWITCH_VISION_DISCOVERY_VERSION="2.1.33"', f'SWITCH_VISION_DISCOVERY_VERSION="{VERSION}"', 1))
+
+# Align the product source with Core before making shared visual drift fatal.
+# Discovery-only exact models remain untouched, and no hardware contract fields
+# are copied here.
+sync_shared_visual_contracts()
 
 # Harden cross-component visual contracts. Shared exact-model visuals are strict
 # by default. Intentional divergence requires an explicit model -> reason entry.
