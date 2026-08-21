@@ -44,16 +44,29 @@ jobs:
       - name: Validate runtime source/archive parity before imports
         run: python tools/check_runtime_parity.py
 
-      - name: Validate strict visual contracts and runtime
+      - name: Validate strict visual-contract policy
+        run: python tools/test_visual_contract_policy.py
+
+      - name: Validate cross-component contracts
+        run: python tools/check_component_contracts.py
+
+      - name: Validate speed contracts
+        run: python tools/check_speed_contracts.py
+
+      - name: Validate hub identity
+        run: python tools/check_hub_identity.py
+
+      - name: Validate generated YAML contract
+        run: python tools/test_regenerate_yaml_contract.py
+
+      - name: Validate runtime self-test
         shell: bash
         run: |
           set -euo pipefail
-          python tools/test_visual_contract_policy.py
-          python tools/check_component_contracts.py
-          python tools/check_speed_contracts.py
-          python tools/check_hub_identity.py
-          python tools/test_regenerate_yaml_contract.py
           sh -x runtime_src/self-test.sh
+
+      - name: Validate Python syntax
+        run: |
           python -m py_compile \
             runtime_src/support_web.py \
             runtime_src/registry_lookup.py \
@@ -62,6 +75,10 @@ jobs:
             tools/check_component_contracts.py \
             tools/test_visual_contract_policy.py
 
+      - name: Validate clean generated source
+        shell: bash
+        run: |
+          set -euo pipefail
           find runtime_src tools -type d -name '__pycache__' -prune -exec rm -rf {} +
           find runtime_src tools -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
           git diff --check
