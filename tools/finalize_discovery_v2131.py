@@ -20,6 +20,11 @@ new_cap = 'CAPABILITIES_DIR="${SWITCH_VISION_CAPABILITIES_DIR:-/share/switch_vis
 if old_cap not in job:
     raise SystemExit("ERROR: capabilities directory anchor not found")
 job = job.replace(old_cap, new_cap, 1)
+old_mkdir = 'mkdir -p "$REPORT_DIR" /share/switch_vision "$CAPABILITIES_DIR" "$SNMPWALKS_DIR" "$(dirname "$GENERATED_YAML_PATH")" "$(dirname "$GENERATED_CARD_PATH")" "$(dirname "$LIVE_LOG_PATH")"'
+new_mkdir = 'mkdir -p "$REPORT_DIR" "${SWITCH_VISION_SHARE_DIR:-/share/switch_vision}" "$CAPABILITIES_DIR" "$SNMPWALKS_DIR" "$(dirname "$GENERATED_YAML_PATH")" "$(dirname "$GENERATED_CARD_PATH")" "$(dirname "$LIVE_LOG_PATH")"'
+if old_mkdir not in job:
+    raise SystemExit("ERROR: Switch Vision share mkdir anchor not found")
+job = job.replace(old_mkdir, new_mkdir, 1)
 job_path.write_text(job, encoding="utf-8", newline="\n")
 
 self_test_path = ROOT / "runtime_src/self-test.sh"
@@ -31,7 +36,7 @@ regression = r'''
 # exercise switch-list walking, current-run metadata capture, the real YAML
 # generator, semantic validation, and atomic publication as one flow.
 v2131_e2e="$tmp_dir/v2131-e2e"
-mkdir -p "$v2131_e2e/bin" "$v2131_e2e/snmpwalks" "$v2131_e2e/capabilities"
+mkdir -p "$v2131_e2e/bin" "$v2131_e2e/snmpwalks" "$v2131_e2e/capabilities" "$v2131_e2e/share"
 cat > "$v2131_e2e/bin/snmpwalk" <<'FAKE_SNMPWALK_V2131'
 #!/usr/bin/env sh
 cat <<'WALK_V2131'
@@ -90,6 +95,7 @@ JSON_V2131
 rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
 if ! PATH="$v2131_e2e/bin:$PATH" \
   SWITCH_VISION_OPTIONS_FILE="$v2131_e2e/options.json" \
+  SWITCH_VISION_SHARE_DIR="$v2131_e2e/share" \
   SWITCH_VISION_CAPABILITIES_DIR="$v2131_e2e/capabilities" \
   CV_MIB_DATABASE_DIR="$RUNTIME_DATA_DIR/mib_database" \
   CV_VENDOR_DIR="$RUNTIME_DATA_DIR/vendors" \
