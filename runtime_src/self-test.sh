@@ -812,8 +812,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.30"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.30"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.31"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.31"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
@@ -1920,3 +1920,32 @@ assert fn.index("generating snmp2mqtt yaml") < fn.index("dashboard card')||text.
 assert ".slice(-3).join(' ')" in fn
 print("Switch Vision Discovery v2.1.30 structured progress-stage regression: PASS")
 PYTEST_V2130_PROGRESS
+
+
+# v2.1.31 generated-YAML handoff regression. Current-run metadata captured at
+# collection time must be authoritative, failed walks must not enter generation,
+# parser/formatter failures must not be hidden by a shell pipeline, and an
+# already-invalid live handoff must not survive another failed generation.
+python3 - "$BASE_DIR/discovery_job.sh" <<'PYTEST_V2131_HANDOFF'
+from pathlib import Path
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+assert 'CURRENT_RUN_TARGETS="/tmp/switch_vision_current_run_targets.txt"' in text
+assert 'record_current_run_target' in text
+assert 'current_run_target_field_for_walk "$walk_file" host' in text
+assert 'current_run_target_field_for_walk "$walk_file" prefix' in text
+assert 'current_run_target_field_for_walk "$walk_file" community' in text
+assert text.index('current_run_target_field_for_walk "$walk_file" host') < text.index('if [ -f "$TARGETS_CSV" ]')
+assert 'if [ "$result" = "PASS" ] || [ "$result" = "WARN" ]; then' in text
+assert 'Current-run parse skipped for failed walk' in text
+assert 'generator_raw_tmp="/tmp/switch_vision_generator_raw_$$.yaml"' in text
+assert '"$walk_file" | awk' not in text
+assert 'Generated YAML source parser failed for:' in text
+assert 'Generated YAML formatter failed for:' in text
+assert 'quarantine_invalid_generated_live_yaml()' in text
+assert 'python3 "$guard" --validate "$GENERATED_YAML_PATH"' in text
+assert 'mv "$GENERATED_YAML_PATH" "$quarantine_path"' in text
+assert 'Previous invalid generated YAML was quarantined; no broken live handoff remains.' in text
+print("Switch Vision Discovery v2.1.31 generated-YAML handoff regression: PASS")
+PYTEST_V2131_HANDOFF

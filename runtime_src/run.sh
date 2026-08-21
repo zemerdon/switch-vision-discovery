@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.1.30"
+SWITCH_VISION_DISCOVERY_VERSION="2.1.31"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 # Persistent app options are owned by Home Assistant Supervisor. Never edit
