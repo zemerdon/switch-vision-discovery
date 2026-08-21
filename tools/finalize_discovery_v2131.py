@@ -14,7 +14,13 @@ new = '''      record_current_run_target \\
         echo "WARNING: current-run target metadata could not be recorded for $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"'''
 if old not in job:
     raise SystemExit("ERROR: collapsed current-run metadata call not found")
-job_path.write_text(job.replace(old, new, 1), encoding="utf-8", newline="\n")
+job = job.replace(old, new, 1)
+old_cap = 'CAPABILITIES_DIR="/share/switch_vision/capabilities"'
+new_cap = 'CAPABILITIES_DIR="${SWITCH_VISION_CAPABILITIES_DIR:-/share/switch_vision/capabilities}"'
+if old_cap not in job:
+    raise SystemExit("ERROR: capabilities directory anchor not found")
+job = job.replace(old_cap, new_cap, 1)
+job_path.write_text(job, encoding="utf-8", newline="\n")
 
 self_test_path = ROOT / "runtime_src/self-test.sh"
 self_test = self_test_path.read_text(encoding="utf-8")
@@ -25,7 +31,7 @@ regression = r'''
 # exercise switch-list walking, current-run metadata capture, the real YAML
 # generator, semantic validation, and atomic publication as one flow.
 v2131_e2e="$tmp_dir/v2131-e2e"
-mkdir -p "$v2131_e2e/bin" "$v2131_e2e/snmpwalks"
+mkdir -p "$v2131_e2e/bin" "$v2131_e2e/snmpwalks" "$v2131_e2e/capabilities"
 cat > "$v2131_e2e/bin/snmpwalk" <<'FAKE_SNMPWALK_V2131'
 #!/usr/bin/env sh
 cat <<'WALK_V2131'
@@ -84,6 +90,7 @@ JSON_V2131
 rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
 if ! PATH="$v2131_e2e/bin:$PATH" \
   SWITCH_VISION_OPTIONS_FILE="$v2131_e2e/options.json" \
+  SWITCH_VISION_CAPABILITIES_DIR="$v2131_e2e/capabilities" \
   CV_MIB_DATABASE_DIR="$RUNTIME_DATA_DIR/mib_database" \
   CV_VENDOR_DIR="$RUNTIME_DATA_DIR/vendors" \
   sh "$BASE_DIR/discovery_job.sh" > "$v2131_e2e/run-output.txt" 2>&1; then
