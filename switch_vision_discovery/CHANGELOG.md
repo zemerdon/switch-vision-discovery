@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.31
+
+- Fix the v2.1.27 S5720 speed-template shell/AWK quoting regression that could abort every SNMP2MQTT generator run, leaving a target-less YAML file; the generator now emits shell-safe quoted templates and surfaces parser-stage failures explicitly.
+- Correct the S5720 physical 1G SFP speed-cap matcher for prefixed labels (for example `SW1 SFP 1G 1`), so implausible IF-MIB speeds are actually capped at 1000 Mbps.
+- Make current-run walk metadata authoritative for SNMP2MQTT generation: each successful/warning walk is paired with its exact switch name, management host, prefix, and community at collection time instead of rediscovering those values later from filenames or directories.
+- Add the embedded `# Switch IP:` walk header as a diagnostic host fallback while keeping current-run metadata and explicit mappings preferred.
+- Exclude failed live walks from the current-run parser/generator set.
+- Split the YAML generator parser/formatter pipeline into explicit checked stages so an internal AWK failure can no longer collapse silently into a `targets:`-only candidate.
+- Quarantine an already-invalid live `generated-snmp2mqtt.yaml` when a new candidate also fails, while continuing to preserve a previously valid live handoff.
+- Add permanent regressions for authoritative current-run metadata, failed-walk exclusion, generator-stage failure visibility, and invalid-live quarantine.
+
 ## 2.1.30
 
 - Keep the active blue Discovery progress highlight on `Generating SNMP2MQTT YAML` until the structured current stage actually advances to dashboard-card generation.

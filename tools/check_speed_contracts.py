@@ -24,11 +24,18 @@ def main() -> int:
         "else if (has_ifspeed)",
         '1.3.6.1.2.1.31.1.1.1.15.',
         '1.3.6.1.2.1.2.2.1.5.',
-        'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /',
+        'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /',
+        'template: \\"{{ [value | int, ',
     ]
     missing = [token for token in required_discovery if token not in job]
     if missing:
         raise SystemExit("Discovery speed contract missing: " + ", ".join(missing))
+
+    # The historical matcher /^SFP 1G / is invalid because generated labels
+    # include the switch prefix (for example `SW1 SFP 1G 1`). Keep this as a
+    # permanent negative contract so the ineffective matcher cannot return.
+    if 'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /' in job:
+        raise SystemExit("Discovery speed contract regressed to unprefixed S5720 label matching")
 
     helper = job[job.index("function yaml_speed_sensor"):job.index("function yaml_interface_sensor")]
     if helper.index("if (has_highspeed)") > helper.index("else if (has_ifspeed)"):
@@ -44,7 +51,7 @@ def main() -> int:
     if missing_snmp:
         raise SystemExit("SNMP2MQTT speed contract no longer uses ifHighSpeed for speed_mbps")
 
-    print("Switch Vision interface speed contracts: PASS (ifHighSpeed preferred; S5720 physical 1G cap present)")
+    print("Switch Vision interface speed contracts: PASS (ifHighSpeed preferred; S5720 prefixed physical 1G cap present)")
     return 0
 
 

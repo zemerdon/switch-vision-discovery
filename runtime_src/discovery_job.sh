@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.1.30"
+SWITCH_VISION_DISCOVERY_VERSION="2.1.31"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -34,7 +34,8 @@ MULTI_SWITCH_WALKS_ENABLED="false"
 DISCOVERY_STARTED_ISO=$(date -Iseconds)
 DISCOVERY_STARTED_EPOCH=$(date +%s)
 CURRENT_RUN_WALKS="/tmp/switch_vision_current_run_walks.txt"
-CAPABILITIES_DIR="/share/switch_vision/capabilities"
+CURRENT_RUN_TARGETS="/tmp/switch_vision_current_run_targets.txt"
+CAPABILITIES_DIR="${SWITCH_VISION_CAPABILITIES_DIR:-/share/switch_vision/capabilities}"
 POST_WALK_ALREADY_DONE="false"
 GENERATED_CARD_SNMP_ENABLED="false"
 
@@ -314,7 +315,7 @@ if [ -z "${LIVE_OUTPUT_PATH:-}" ]; then
 fi
 LIVE_OUTPUT_PATH=$(printf '%s' "$LIVE_OUTPUT_PATH" | sed 's#//*#/#g')
 REPORT_DIR=$(dirname "$REPORT_PATH")
-mkdir -p "$REPORT_DIR" /share/switch_vision "$CAPABILITIES_DIR" "$SNMPWALKS_DIR" "$(dirname "$GENERATED_YAML_PATH")" "$(dirname "$GENERATED_CARD_PATH")" "$(dirname "$LIVE_LOG_PATH")"
+mkdir -p "$REPORT_DIR" "${SWITCH_VISION_SHARE_DIR:-/share/switch_vision}" "$CAPABILITIES_DIR" "$SNMPWALKS_DIR" "$(dirname "$GENERATED_YAML_PATH")" "$(dirname "$GENERATED_CARD_PATH")" "$(dirname "$LIVE_LOG_PATH")"
 if ! json_has_configured_switch_rows; then
   mkdir -p "$LIVE_OUTPUT_DIR" "$(dirname "$LIVE_OUTPUT_PATH")"
 fi
@@ -523,8 +524,62 @@ strip_walk_ext() {
   printf '%s' "$name"
 }
 
+current_run_target_field_for_walk() {
+  manifest_walk="$1"
+  manifest_field="$2"
+  [ -f "${CURRENT_RUN_TARGETS:-}" ] || return 1
+  manifest_sep="$(printf '\034')"
+  while IFS="$manifest_sep" read -r mf_walk mf_switch mf_host mf_prefix mf_community || [ -n "$mf_walk$mf_switch$mf_host$mf_prefix$mf_community" ]; do
+    [ "$mf_walk" = "$manifest_walk" ] || continue
+    case "$manifest_field" in
+      switch) printf '%s' "$mf_switch" ;;
+      host) printf '%s' "$mf_host" ;;
+      prefix) printf '%s' "$mf_prefix" ;;
+      community) printf '%s' "$mf_community" ;;
+      *) return 1 ;;
+    esac
+    return 0
+  done < "$CURRENT_RUN_TARGETS"
+  return 1
+}
+
+record_current_run_target() {
+  manifest_walk="$1"
+  manifest_switch="$2"
+  manifest_host="$3"
+  manifest_prefix="$4"
+  manifest_community="$5"
+  [ -n "$manifest_walk" ] || return 1
+  [ -n "$manifest_host" ] || return 1
+  manifest_sep="$(printf '\034')"
+  printf '%s%s%s%s%s%s%s%s%s\n' \
+    "$manifest_walk" "$manifest_sep" \
+    "$manifest_switch" "$manifest_sep" \
+    "$manifest_host" "$manifest_sep" \
+    "$manifest_prefix" "$manifest_sep" \
+    "$manifest_community" >> "$CURRENT_RUN_TARGETS"
+}
+
+walk_header_target_for_walk() {
+  walk_file="$1"
+  [ -f "$walk_file" ] || return 1
+  header_target=$(awk -F': ' '/^# Switch IP: / { print $2; exit }' "$walk_file" 2>/dev/null || true)
+  case "$header_target" in
+    ''|'not set'|'unknown') return 1 ;;
+  esac
+  printf '%s' "$header_target"
+}
+
 target_for_walk() {
   walk_file="$1"
+
+  # Current-run metadata is authoritative. The walk and its connection
+  # details are recorded together at collection time, so generation never
+  # has to rediscover a host from a filename or directory.
+  if current_host=$(current_run_target_field_for_walk "$walk_file" host 2>/dev/null) && [ -n "$current_host" ]; then
+    printf '%s' "$current_host"
+    return 0
+  fi
 
   # Prefer explicit per-file mappings over default_host. This allows multi-walk
   # reports to map each file to a different switch IP.
@@ -544,6 +599,14 @@ target_for_walk() {
         return 0
       fi
     done < "$TARGETS_CSV"
+  fi
+
+  # A Switch Vision live walk also records its target in the walk header.
+  # This is a diagnostic recovery fallback only; current-run metadata and
+  # explicit mappings remain preferred.
+  if header_host=$(walk_header_target_for_walk "$walk_file" 2>/dev/null) && [ -n "$header_host" ]; then
+    printf '%s' "$header_host"
+    return 0
   fi
 
   if [ -n "${DEFAULT_HOST:-}" ]; then
@@ -616,6 +679,10 @@ derive_prefix_from_walk() {
 
 target_prefix_for_walk() {
   walk_file="$1"
+  if current_prefix=$(current_run_target_field_for_walk "$walk_file" prefix 2>/dev/null) && [ -n "$current_prefix" ]; then
+    printf '%s' "$current_prefix"
+    return 0
+  fi
   if [ -f "$TARGETS_CSV" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
       name=$(csv_field "$line" 1)
@@ -641,6 +708,10 @@ target_prefix_for_walk() {
 
 target_community_for_walk() {
   walk_file="$1"
+  if current_community=$(current_run_target_field_for_walk "$walk_file" community 2>/dev/null) && [ -n "$current_community" ]; then
+    printf '%s' "$current_community"
+    return 0
+  fi
   if [ -f "$TARGETS_CSV" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
       name=$(csv_field "$line" 1)
@@ -2027,9 +2098,23 @@ run_live_snmpwalk_current() {
   echo "Result: $result" >> "$LIVE_LOG_PATH"
   write_live_summary "$result" "$reason" "$total" "$failures" "$line_count" "$walk_duration" "$walk_completed_iso"
 
-  if [ -n "${CURRENT_RUN_WALKS:-}" ]; then
-    printf '%s\n' "$LIVE_OUTPUT_PATH" >> "$CURRENT_RUN_WALKS"
-    echo "Queued for current-run parse: $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"
+  if [ "$result" = "PASS" ] || [ "$result" = "WARN" ]; then
+    if [ -n "${CURRENT_RUN_WALKS:-}" ]; then
+      printf '%s
+' "$LIVE_OUTPUT_PATH" >> "$CURRENT_RUN_WALKS"
+      echo "Queued for current-run parse: $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"
+    fi
+    if [ -n "${CURRENT_RUN_TARGETS:-}" ]; then
+      record_current_run_target \
+        "$LIVE_OUTPUT_PATH" \
+        "${SELECTED_SWITCH:-${LIVE_SWITCH_LABEL:-}}" \
+        "$LIVE_SWITCH_IP" \
+        "${DEFAULT_PREFIX:-${LIVE_SWITCH_LABEL:-SW}}" \
+        "$LIVE_SNMP_COMMUNITY" || \
+        echo "WARNING: current-run target metadata could not be recorded for $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"
+    fi
+  else
+    echo "Current-run parse skipped for failed walk: $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"
   fi
 
   # The parser consumes the exact current-run paths recorded above. Do not
@@ -2290,8 +2375,9 @@ run_multi_switch_walks_if_enabled() {
 }
 
 run_live_snmpwalk_if_enabled() {
-  rm -f /tmp/switch_vision_live_walk_summary.txt /tmp/switch_vision_live_walk_summary_all.txt "$CURRENT_RUN_WALKS"
+  rm -f /tmp/switch_vision_live_walk_summary.txt /tmp/switch_vision_live_walk_summary_all.txt "$CURRENT_RUN_WALKS" "$CURRENT_RUN_TARGETS"
   : > "$CURRENT_RUN_WALKS"
+  : > "$CURRENT_RUN_TARGETS"
   if ! truthy "$RUN_LIVE_SNMPWALK"; then
     return 0
   fi
@@ -2391,6 +2477,8 @@ write_generated_yaml_for_walk() {
   community="$4"
   member_map="${5:-}"
   source_name=$(basename "$walk_file")
+  generator_raw_tmp="/tmp/switch_vision_generator_raw_$$.yaml"
+  rm -f "$generator_raw_tmp"
   if [ "$target_ip" = "unknown" ] || [ -z "$target_ip" ]; then
     echo "# ERROR: Missing management target for $source_name; generated YAML refused."
     return 1
@@ -2525,17 +2613,17 @@ write_generated_yaml_for_walk() {
       print "    name: " name
     }
     function physical_speed_cap_mbps(model, label) {
-      if (model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /) return 1000
+      if (model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /) return 1000
       return 0
     }
     function yaml_speed_sensor(model, idx, label, has_highspeed, has_ifspeed, cap_mbps) {
       cap_mbps = physical_speed_cap_mbps(model, label)
       if (has_highspeed) {
         yaml_sensor("1.3.6.1.2.1.31.1.1.1.15." idx, label " Speed Mbps")
-        if (cap_mbps > 0) print "    template: '{{ [value | int, " cap_mbps "] | min }}'"
+        if (cap_mbps > 0) print "    template: \"{{ [value | int, " cap_mbps "] | min }}\""
       } else if (has_ifspeed) {
         yaml_sensor("1.3.6.1.2.1.2.2.1.5." idx, label " Speed Bps")
-        if (cap_mbps > 0) print "    template: '{{ [value | int, " (cap_mbps * 1000000) "] | min }}'"
+        if (cap_mbps > 0) print "    template: \"{{ [value | int, " (cap_mbps * 1000000) "] | min }}\""
       }
     }
     function yaml_interface_sensor(primary, secondary, name, attribute, icon) {
@@ -3156,7 +3244,12 @@ write_generated_yaml_for_walk() {
         }
       }
     }
-  ' "$walk_file" | awk '
+  ' "$walk_file" > "$generator_raw_tmp" || {
+    rm -f "$generator_raw_tmp"
+    echo "Generated YAML source parser failed for: $walk_file" >> "$LIVE_LOG_PATH" 2>/dev/null || true
+    return 1
+  }
+  if ! awk '
     # YAML parses a bare `sensors:` key as null. Some model/polling chunks are
     # intentionally empty, so make those blocks explicit empty lists while
     # leaving populated sensor sequences untouched.
@@ -3190,7 +3283,12 @@ write_generated_yaml_for_walk() {
       print
     }
     END { flush_pending_empty() }
-  '
+  ' "$generator_raw_tmp"; then
+    rm -f "$generator_raw_tmp"
+    echo "Generated YAML formatter failed for: $walk_file" >> "$LIVE_LOG_PATH" 2>/dev/null || true
+    return 1
+  fi
+  rm -f "$generator_raw_tmp"
 }
 
 generator_has_unknown_targets() {
@@ -3560,9 +3658,39 @@ write_generated_dashboard_card() {
   } > "$GENERATED_CARD_PATH"
 }
 
+quarantine_invalid_generated_live_yaml() {
+  guard="$1"
+  GENERATED_YAML_PREVIOUS_STATE="missing"
+  [ -f "$GENERATED_YAML_PATH" ] || return 0
+  if python3 "$guard" --validate "$GENERATED_YAML_PATH" >/dev/null 2>&1; then
+    GENERATED_YAML_PREVIOUS_STATE="valid"
+    return 0
+  fi
+  quarantine_path="${GENERATED_YAML_PATH}.invalid.$(date +%Y%m%dT%H%M%S)"
+  if mv "$GENERATED_YAML_PATH" "$quarantine_path"; then
+    GENERATED_YAML_PREVIOUS_STATE="quarantined_invalid"
+    echo "Invalid previous generated YAML quarantined: $quarantine_path" >> "$LIVE_LOG_PATH" 2>/dev/null || true
+  else
+    GENERATED_YAML_PREVIOUS_STATE="invalid_quarantine_failed"
+    echo "WARNING: invalid previous generated YAML could not be quarantined: $GENERATED_YAML_PATH" >> "$LIVE_LOG_PATH" 2>/dev/null || true
+  fi
+}
+
+report_generated_yaml_failure_state() {
+  case "${GENERATED_YAML_PREVIOUS_STATE:-unknown}" in
+    valid) echo "- Previous valid generated YAML preserved unchanged." ;;
+    quarantined_invalid) echo "- Previous invalid generated YAML was quarantined; no broken live handoff remains." ;;
+    missing) echo "- No live generated YAML is available until a valid generation succeeds." ;;
+    invalid_quarantine_failed) echo "- WARNING: previous invalid generated YAML could not be quarantined; review the Discovery log." ;;
+    *) echo "- Previous generated YAML state could not be determined; review the Discovery log." ;;
+  esac
+}
+
 write_generated_yaml() {
   tmp_walks="$1"
   GENERATED_YAML_PUBLISHED="false"
+  GENERATED_YAML_GENERATOR_FAILED="false"
+  GENERATED_YAML_PREVIOUS_STATE="unknown"
   candidate_path="${GENERATED_YAML_PATH}.candidate.$$"
   guard="/generated_yaml_guard.py"
   [ -f "$guard" ] || guard="$(dirname "$0")/generated_yaml_guard.py"
@@ -3589,9 +3717,21 @@ write_generated_yaml() {
       prefix=$(target_prefix_for_walk "$walk_file")
       community=$(target_community_for_walk "$walk_file")
       member_map=$(target_member_map_for_walk "$walk_file")
-      write_generated_yaml_for_walk "$walk_file" "$target_ip" "$prefix" "$community" "$member_map"
+      if ! write_generated_yaml_for_walk "$walk_file" "$target_ip" "$prefix" "$community" "$member_map"; then
+        GENERATED_YAML_GENERATOR_FAILED="true"
+        echo "Generated YAML target generation failed for: $walk_file" >> "$LIVE_LOG_PATH" 2>/dev/null || true
+      fi
     done < "$tmp_walks"
   } > "$candidate_path"
+
+  if [ "$GENERATED_YAML_GENERATOR_FAILED" = "true" ]; then
+    rm -f "$candidate_path"
+    if [ -f "$guard" ]; then
+      quarantine_invalid_generated_live_yaml "$guard"
+    fi
+    echo "Generated YAML candidate refused because one or more target generators failed." >> "$LIVE_LOG_PATH" 2>/dev/null || true
+    return 0
+  fi
 
   if [ ! -f "$guard" ]; then
     rm -f "$candidate_path"
@@ -3605,7 +3745,8 @@ write_generated_yaml() {
   else
     guard_status=$?
     rm -f "$candidate_path"
-    echo "Generated YAML candidate refused (guard status $guard_status); previous live generated YAML was preserved." >> "$LIVE_LOG_PATH" 2>/dev/null || true
+    quarantine_invalid_generated_live_yaml "$guard"
+    echo "Generated YAML candidate refused (guard status $guard_status); previous live state: $GENERATED_YAML_PREVIOUS_STATE." >> "$LIVE_LOG_PATH" 2>/dev/null || true
   fi
 }
 
@@ -3727,7 +3868,7 @@ write_report() {
             echo "- Validation: PASS (non-empty target list); published atomically."
           else
             echo "- FAIL: generated YAML candidate did not contain a valid non-empty target list."
-            echo "- Previous generated YAML preserved unchanged."
+            report_generated_yaml_failure_state
           fi
           echo "- Review-only output; it has not been installed."
           echo "- Polling groups: chunked status 30s, chunked traffic 10s, walk-aware VLAN/trunk 30s, slow system/interface 300s"
@@ -3770,7 +3911,7 @@ write_report() {
             echo "- Validation: PASS (non-empty target list); published atomically."
           else
             echo "- FAIL: generated YAML candidate did not contain a valid non-empty target list."
-            echo "- Previous generated YAML preserved unchanged."
+            report_generated_yaml_failure_state
           fi
           echo "- Review-only output; it has not been installed."
         fi
