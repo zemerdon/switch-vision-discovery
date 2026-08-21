@@ -1,14 +1,16 @@
-# Switch Vision Discovery v2.1.18
+# Switch Vision Discovery
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
+
+The authoritative app version is defined in `config.yaml`. Switch Vision components are independently versioned rather than sharing one release number.
 
 ## Requirements
 
 - Home Assistant OS or Supervised with `/share` access
-- SNMP v2c read-only access to each target
-- UDP/161 reachability from Home Assistant
-- Switch Vision custom integration and assets from the same release
-- Separate Switch Vision SNMP2MQTT app for live entities
+- Switch Vision Core v2.3.10 or later for the Calibration Profile management/storage API used by current Discovery releases
+- SNMP v2c read-only access to each SNMP-managed target
+- UDP/161 reachability from Home Assistant to each SNMP-managed target
+- Separate Switch Vision SNMP2MQTT app when live SNMP entities are required
 
 ## Recommended operation
 
