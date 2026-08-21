@@ -1,0 +1,180 @@
+name: Build Discovery v2.1.29 Huawei visual hotfix
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'hotfix/discovery-2.1.29-huawei-visual-defaults' }}
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - switch-vision
+      - sv-dev
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Install test dependencies
+        run: python3 -m pip install --disable-pip-version-check PyYAML websockets
+
+      - name: Prepare Discovery 2.1.29 Huawei visuals
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          root = Path('.')
+          registry_path = root / 'runtime_src/opt/switch-vision/devices/supported_devices.json'
+          doc = json.loads(registry_path.read_text(encoding='utf-8'))
+          targets = {'S5720-12TP-LI-AC', 'S5735-L8P4X-A1'}
+          found = set()
+          for device in doc.get('devices', []):
+              if not isinstance(device, dict) or device.get('model') not in targets:
+                  continue
+              model = device['model']
+              found.add(model)
+              device['calibration_profile'] = 'stock_24rj45_4sfp'
+              device['default_faceplate'] = 'faceplates/24rj45-4sfp.png'
+              visuals = device.setdefault('visuals', {})
+              visuals['recommended_faceplate'] = 'faceplates/24rj45-4sfp.png'
+              visuals['calibration_profile'] = 'stock_24rj45_4sfp'
+          if found != targets:
+              raise SystemExit(f'ERROR: Huawei models missing from Discovery registry: {sorted(targets-found)}')
+          registry_path.write_text(json.dumps(doc, indent=2) + '\n', encoding='utf-8', newline='\n')
+
+          for rel in ('runtime_src/run.sh', 'runtime_src/discovery_job.sh'):
+              path = root / rel
+              text = path.read_text(encoding='utf-8')
+              old = 'SWITCH_VISION_DISCOVERY_VERSION="2.1.28"'
+              new = 'SWITCH_VISION_DISCOVERY_VERSION="2.1.29"'
+              if old not in text:
+                  raise SystemExit(f'ERROR: {rel}: expected 2.1.28 runtime version not found')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+
+          config_path = root / 'switch_vision_discovery/config.yaml'
+          config = config_path.read_text(encoding='utf-8')
+          config, count = re.subn(r'(?m)^version:\s*"2\.1\.28"\s*$', 'version: "2.1.29"', config, count=1)
+          if count != 1:
+              raise SystemExit('ERROR: Discovery config version 2.1.28 not found exactly once')
+          config_path.write_text(config, encoding='utf-8', newline='\n')
+
+          changelog_path = root / 'switch_vision_discovery/CHANGELOG.md'
+          changelog = changelog_path.read_text(encoding='utf-8')
+          entry = '''## 2.1.29\n\n- Restore `S5720-12TP-LI-AC` and `S5735-L8P4X-A1` to the neutral `stock_24rj45_4sfp` calibration profile and `faceplates/24rj45-4sfp.png` visual recommendation.\n- Keep Discovery-generated cards aligned with Core factory/reset defaults for both Huawei 8 RJ45 + 4 SFP models.\n- Upgrade Huawei visual drift from a warning to a permanent cross-component contract failure.\n- Preserve S5720 physical 1G SFP speed capping, interface-name fallback, generated-YAML atomic publication, device mappings, and telemetry behavior unchanged.\n\n'''
+          if changelog.startswith('# Changelog\n\n'):
+              changelog = '# Changelog\n\n' + entry + changelog[len('# Changelog\n\n'):]
+          else:
+              raise SystemExit('ERROR: unexpected Discovery changelog header')
+          changelog_path.write_text(changelog, encoding='utf-8', newline='\n')
+
+          contracts_path = root / 'tools/check_component_contracts.py'
+          contracts = contracts_path.read_text(encoding='utf-8')
+          old = '''        if changed_visuals:\n            if str(core.get("vendor") or "").strip() == "Ubiquiti":\n                errors.append(\n                    f"{model}: shared Ubiquiti visual contract drift in "\n                    + ", ".join(changed_visuals)\n                )\n            else:\n                warnings.append(\n                    f"{model}: visual recommendation differs between Core and Discovery "\n                    f"({', '.join(changed_visuals)})"\n                )\n'''
+          new = '''        if changed_visuals:\n            strict_visual_models = {"S5720-12TP-LI-AC", "S5735-L8P4X-A1"}\n            if (\n                str(core.get("vendor") or "").strip() == "Ubiquiti"\n                or model in strict_visual_models\n            ):\n                errors.append(\n                    f"{model}: shared visual contract drift in "\n                    + ", ".join(changed_visuals)\n                )\n            else:\n                warnings.append(\n                    f"{model}: visual recommendation differs between Core and Discovery "\n                    f"({', '.join(changed_visuals)})"\n                )\n'''
+          if old not in contracts:
+              raise SystemExit('ERROR: expected visual drift block not found in component contract checker')
+          contracts = contracts.replace(old, new, 1)
+          marker = '    discovery_yaml_path = str(\n'
+          explicit = '''    expected_huawei_profile = "stock_24rj45_4sfp"\n    expected_huawei_faceplate = "faceplates/24rj45-4sfp.png"\n    for model in ("S5720-12TP-LI-AC", "S5735-L8P4X-A1"):\n        discovery = discovery_models.get(model) or {}\n        visuals = discovery.get("visuals") if isinstance(discovery.get("visuals"), dict) else {}\n        if discovery.get("calibration_profile") != expected_huawei_profile:\n            errors.append(f"{model}: expected calibration_profile={expected_huawei_profile}")\n        if discovery.get("default_faceplate") != expected_huawei_faceplate:\n            errors.append(f"{model}: expected default_faceplate={expected_huawei_faceplate}")\n        if visuals.get("calibration_profile") != expected_huawei_profile:\n            errors.append(f"{model}: expected visuals.calibration_profile={expected_huawei_profile}")\n        if visuals.get("recommended_faceplate") != expected_huawei_faceplate:\n            errors.append(f"{model}: expected visuals.recommended_faceplate={expected_huawei_faceplate}")\n\n'''
+          if marker not in contracts:
+              raise SystemExit('ERROR: component contract insertion marker not found')
+          contracts = contracts.replace(marker, explicit + marker, 1)
+          contracts_path.write_text(contracts, encoding='utf-8', newline='\n')
+          PY
+
+      - name: Rebuild packaged runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import gzip
+          import tarfile
+
+          src = Path('runtime_src')
+          out = Path('switch_vision_discovery/runtime.tar.gz')
+          with out.open('wb') as raw:
+              with gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0) as gz:
+                  with tarfile.open(fileobj=gz, mode='w', format=tarfile.PAX_FORMAT) as tf:
+                      for path in sorted(src.rglob('*'), key=lambda p: p.as_posix()):
+                          arc = path.relative_to(src).as_posix()
+                          info = tf.gettarinfo(str(path), arcname=arc)
+                          info.mtime = 0
+                          info.uid = 0
+                          info.gid = 0
+                          info.uname = ''
+                          info.gname = ''
+                          if path.is_file():
+                              with path.open('rb') as fh:
+                                  tf.addfile(info, fh)
+                          else:
+                              tf.addfile(info)
+          PY
+
+      - name: Validate Discovery 2.1.29
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n runtime_src/run.sh
+          sh -n runtime_src/discovery_job.sh
+          sh runtime_src/self-test.sh
+          python3 tools/check_runtime_parity.py
+          python3 tools/check_speed_contracts.py
+          python3 -m py_compile runtime_src/support_web.py runtime_src/generated_yaml_guard.py tools/check_component_contracts.py
+          git diff --check
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          doc = json.loads(Path('runtime_src/opt/switch-vision/devices/supported_devices.json').read_text())
+          models = {str(x.get('model')): x for x in doc.get('devices', []) if isinstance(x, dict)}
+          for model in ('S5720-12TP-LI-AC', 'S5735-L8P4X-A1'):
+              d = models[model]
+              assert d['calibration_profile'] == 'stock_24rj45_4sfp', model
+              assert d['default_faceplate'] == 'faceplates/24rj45-4sfp.png', model
+              assert d['visuals']['calibration_profile'] == 'stock_24rj45_4sfp', model
+              assert d['visuals']['recommended_faceplate'] == 'faceplates/24rj45-4sfp.png', model
+          assert 'version: "2.1.29"' in Path('switch_vision_discovery/config.yaml').read_text()
+          assert 'SWITCH_VISION_DISCOVERY_VERSION="2.1.29"' in Path('runtime_src/run.sh').read_text()
+          assert 'SWITCH_VISION_DISCOVERY_VERSION="2.1.29"' in Path('runtime_src/discovery_job.sh').read_text()
+          print('Discovery 2.1.29 Huawei visual contract: PASS')
+          PY
+
+      - name: Remove temporary builder and generated caches
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/build-discovery-v2129-huawei-visual-hotfix.yml
+          find . -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find . -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+          git diff --check
+
+      - name: Commit Discovery 2.1.29 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'ERROR: Discovery 2.1.29 builder produced no changes.'
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Discovery v2.1.29: restore Huawei visual defaults'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
