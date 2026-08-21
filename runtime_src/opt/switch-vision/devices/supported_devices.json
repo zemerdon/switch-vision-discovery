@@ -533,8 +533,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "huawei-s5720-12tp-li-ac",
-      "calibration_profile": "default_cisco_48_port",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
+      "calibration_profile": "stock_24rj45_4sfp",
+      "default_faceplate": "faceplates/24rj45-4sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -563,9 +563,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
+        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "default_cisco_48_port",
+        "calibration_profile": "stock_24rj45_4sfp",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -895,8 +895,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "huawei-s5735-l8p4x-a1",
-      "calibration_profile": "default_cisco_48_port",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
+      "calibration_profile": "stock_24rj45_4sfp",
+      "default_faceplate": "faceplates/24rj45-4sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -923,9 +923,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
+        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "default_cisco_48_port",
+        "calibration_profile": "stock_24rj45_4sfp",
         "canvas": {
           "width": 2048,
           "height": 448

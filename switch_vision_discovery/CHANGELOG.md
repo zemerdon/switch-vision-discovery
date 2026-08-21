@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.29
+
+- Restore `S5720-12TP-LI-AC` and `S5735-L8P4X-A1` to the neutral `stock_24rj45_4sfp` calibration profile and `faceplates/24rj45-4sfp.png` visual recommendation.
+- Keep Discovery-generated cards aligned with Core factory/reset defaults for both Huawei 8 RJ45 + 4 SFP models.
+- Upgrade Huawei visual drift from a warning to a permanent cross-component contract failure.
+- Preserve S5720 physical 1G SFP speed capping, interface-name fallback, generated-YAML atomic publication, device mappings, and telemetry behavior unchanged.
+
 ## v2.1.28 — Atomic generated-YAML handoff
 
 - Write SNMP2MQTT output to a candidate file and publish it atomically only after the candidate passes the Switch Vision header and non-empty target-list contract.
