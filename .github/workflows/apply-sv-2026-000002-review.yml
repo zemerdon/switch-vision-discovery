@@ -30,7 +30,9 @@ jobs:
         run: python -m pip install --disable-pip-version-check PyYAML websockets
 
       - name: Apply exact-tree contribution patch
-        run: python3 tools/apply_sv_2026_000002_review.py
+        run: |
+          python3 tools/apply_sv_2026_000002_review.py
+          python3 tools/apply_sv_2026_000002_fixture_review.py
 
       - name: Rebuild runtime archive
         shell: bash
