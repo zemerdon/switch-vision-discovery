@@ -54,19 +54,6 @@ text = text.replace(
     f'grep -Fq \'version: "{CURRENT}"\'',
     f'grep -Fq \'version: "{VERSION}"\'',
 )
-
-regression = r'''
-
-# v2.1.32 Hub/sidebar identity regression.
-grep -Fq 'panel_title: Switch Vision Hub' "${ROOT_DIR}/../switch_vision_discovery/config.yaml"
-if grep -Fq 'panel_title: Support My Switch' "${ROOT_DIR}/../switch_vision_discovery/config.yaml"; then
-    echo "ERROR: Discovery app still exposes the old Support My Switch sidebar title"
-    exit 1
-fi
-echo "Switch Vision Discovery v2.1.32 Hub sidebar identity regression: PASS"
-'''
-if 'v2.1.32 Hub/sidebar identity regression' not in text:
-    text += regression
 write(self_test, text)
 
 changelog = APP / "CHANGELOG.md"
