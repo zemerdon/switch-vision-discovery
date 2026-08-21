@@ -27,6 +27,7 @@ jobs:
         run: |
           python3 tools/normalize_v2131_queue_anchor.py
           python3 tools/prepare_discovery_v2131.py
+          python3 tools/fix_v2131_regression_assertions.py
       - name: Validate source runtime
         run: |
           set -euo pipefail
@@ -57,7 +58,7 @@ jobs:
           set -euo pipefail
           git config user.name 'switch-vision-release-bot'
           git config user.email 'switch-vision@users.noreply.github.com'
-          rm -f .github/workflows/build-discovery-v2131.yml tools/prepare_discovery_v2131.py tools/normalize_v2131_queue_anchor.py
+          rm -f .github/workflows/build-discovery-v2131.yml tools/prepare_discovery_v2131.py tools/normalize_v2131_queue_anchor.py tools/fix_v2131_regression_assertions.py
           git add -A
           git commit -m 'Release Switch Vision Discovery v2.1.31'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
