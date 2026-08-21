@@ -34,6 +34,8 @@ jobs:
       - name: Rebuild packaged runtime
         run: |
           set -euo pipefail
+          find runtime_src -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find runtime_src -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
           rm -f switch_vision_discovery/runtime.tar.gz
           tar -czf switch_vision_discovery/runtime.tar.gz -C runtime_src .
           python3 tools/check_runtime_parity.py
@@ -44,6 +46,8 @@ jobs:
           grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.30"' runtime_src/run.sh
           grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.30"' runtime_src/discovery_job.sh
           grep -q "generating snmp2mqtt yaml'))return 3" runtime_src/support_web.py
+          ! find runtime_src -type d -name '__pycache__' -print -quit | grep -q .
+          ! find runtime_src -type f \( -name '*.pyc' -o -name '*.pyo' \) -print -quit | grep -q .
           git diff --check
       - name: Commit final source back to PR branch
         run: |
