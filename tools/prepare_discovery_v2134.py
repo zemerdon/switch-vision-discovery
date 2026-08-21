@@ -113,18 +113,33 @@ def sync_shared_visual_contracts() -> None:
     )
 
 
-# Version metadata.
+# Version metadata and runtime/self-test expectations.
 config_path = APP / "config.yaml"
 config = read(config_path)
 if 'version: "2.1.33"' not in config:
     raise SystemExit("Discovery config version marker missing")
 write(config_path, config.replace('version: "2.1.33"', f'version: "{VERSION}"', 1))
 
+runtime_version_old = 'SWITCH_VISION_DISCOVERY_VERSION="2.1.33"'
+runtime_version_new = f'SWITCH_VISION_DISCOVERY_VERSION="{VERSION}"'
+
 job_path = RUNTIME / "discovery_job.sh"
 job = read(job_path)
-if 'SWITCH_VISION_DISCOVERY_VERSION="2.1.33"' not in job:
-    raise SystemExit("Discovery runtime version marker missing")
-write(job_path, job.replace('SWITCH_VISION_DISCOVERY_VERSION="2.1.33"', f'SWITCH_VISION_DISCOVERY_VERSION="{VERSION}"', 1))
+if runtime_version_old not in job:
+    raise SystemExit("Discovery job runtime version marker missing")
+write(job_path, job.replace(runtime_version_old, runtime_version_new, 1))
+
+run_path = RUNTIME / "run.sh"
+run = read(run_path)
+if runtime_version_old not in run:
+    raise SystemExit("Discovery run runtime version marker missing")
+write(run_path, run.replace(runtime_version_old, runtime_version_new, 1))
+
+self_test_path = RUNTIME / "self-test.sh"
+self_test = read(self_test_path)
+if self_test.count(runtime_version_old) < 2:
+    raise SystemExit("Discovery self-test version expectations missing")
+write(self_test_path, self_test.replace(runtime_version_old, runtime_version_new))
 
 # Align the product source with Core before making shared visual drift fatal.
 # Discovery-only exact models remain untouched, and no hardware contract fields
