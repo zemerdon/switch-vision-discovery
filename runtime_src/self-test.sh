@@ -812,8 +812,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.29"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.29"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.30"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.30"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
@@ -1900,3 +1900,23 @@ printf '%s\n' "Switch Vision Discovery v2.1.28 atomic generated-YAML publication
 grep -Fq 'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /' "$BASE_DIR/discovery_job.sh"
 grep -Fq 'if (!(idx in ifname)) { ifname[idx]=val; ifname_source[idx]="ifDescr" }' "$BASE_DIR/discovery_job.sh"
 printf '%s\n' "Switch Vision Discovery v2.1.28 S5720 generated-target prerequisites: PASS"
+
+# v2.1.30 Discovery progress-stage regression. Structured current stage must
+# beat stale/historical log-tail text so the blue highlight stays on the task
+# that is actually running.
+python3 - "$BASE_DIR/support_web.py" <<'PYTEST_V2130_PROGRESS'
+from pathlib import Path
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+start = text.index("function discoveryStage(state)")
+end = text.index("function updateSteps(state)", start)
+fn = text[start:end]
+assert "const stage=String(state.stage||'').toLowerCase()" in fn
+assert "if(stage.includes('generating snmp2mqtt yaml'))return 3" in fn
+assert "if(stage.includes('generating dashboard card yaml'))return 4" in fn
+assert fn.index("const stage=") < fn.index("const text=")
+assert fn.index("generating snmp2mqtt yaml") < fn.index("dashboard card')||text.includes")
+assert ".slice(-3).join(' ')" in fn
+print("Switch Vision Discovery v2.1.30 structured progress-stage regression: PASS")
+PYTEST_V2130_PROGRESS

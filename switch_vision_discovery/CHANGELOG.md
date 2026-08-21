@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.30
+
+- Keep the active blue Discovery progress highlight on `Generating SNMP2MQTT YAML` until the structured current stage actually advances to dashboard-card generation.
+- Prioritize the live structured `stage` value over stale historical log-tail text when selecting the progress step.
+- Limit log-tail fallback matching to the most recent lines and preserve all Discovery generation, Huawei visual defaults, atomic YAML publication, mappings, and telemetry unchanged.
+
 ## 2.1.29
 
 - Restore `S5720-12TP-LI-AC` and `S5735-L8P4X-A1` to the neutral `stock_24rj45_4sfp` calibration profile and `faceplates/24rj45-4sfp.png` visual recommendation.
