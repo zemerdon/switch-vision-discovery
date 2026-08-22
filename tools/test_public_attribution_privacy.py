@@ -6,21 +6,40 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 OWNER = "zemerdon"
 ALLOWED = {"", OWNER.casefold(), "community contributor", "anonymous"}
-SUBMISSION_ID = re.compile(r"(?i)SV-[0-9]{4}-[0-9]+")
+SUBMISSION_ID = re.compile(r"(?i)SV[-_]20\d{2}[-_]\d+")
 PACKAGE_NAME = re.compile(r"(?i)Switch[_ -]Vision[_ -]Contribution")
 
 
+def check_structured(value: object, path: Path) -> None:
+    if isinstance(value, dict):
+        if "display_name" in value and "public_credit" in value:
+            name = str(value.get("display_name") or "").strip()
+            if name.casefold() not in ALLOWED:
+                raise SystemExit(f"Non-approved public attribution remains in {path}: {name!r}")
+            if name.casefold() != OWNER.casefold() and value.get("public_credit") is True:
+                raise SystemExit(f"Non-owner public credit remains enabled in {path}")
+        for child in value.values():
+            check_structured(child, path)
+    elif isinstance(value, list):
+        for child in value:
+            check_structured(child, path)
+    elif isinstance(value, str):
+        if SUBMISSION_ID.search(value):
+            raise SystemExit(f"Submission identifier remains in structured public metadata: {path}")
+        if PACKAGE_NAME.search(value):
+            raise SystemExit(f"Contribution package reference remains in structured public metadata: {path}")
+
+
 def main() -> None:
-    registry = json.loads((ROOT / "runtime_src/opt/switch-vision/devices/supported_devices.json").read_text(encoding="utf-8"))
-    for item in registry.get("devices", []):
-        contributor = item.get("contributor") if isinstance(item, dict) else None
-        if not isinstance(contributor, dict):
-            continue
-        name = str(contributor.get("display_name") or "").strip()
-        if name.casefold() not in ALLOWED:
-            raise SystemExit(f"Non-approved public contributor attribution remains for {item.get('model')}: {name!r}")
-        if name.casefold() != OWNER.casefold() and contributor.get("public_credit") is True:
-            raise SystemExit(f"Non-owner public credit remains enabled for {item.get('model')}")
+    registries = [
+        path
+        for path in ROOT.rglob("supported_devices.json")
+        if path.is_file() and "devices" in path.parts
+    ]
+    if not registries:
+        raise SystemExit("No public supported-device registry found")
+    for path in registries:
+        check_structured(json.loads(path.read_text(encoding="utf-8")), path)
 
     paths = [ROOT / "switch_vision_discovery/CHANGELOG.md"]
     paths += list((ROOT / "switch_vision_discovery/release-fragments").glob("*.md"))
