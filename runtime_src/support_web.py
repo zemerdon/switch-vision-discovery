@@ -2297,14 +2297,109 @@ def _validate_snmp2mqtt_yaml(path: Path) -> dict[str, Any]:
     return {"valid": True, "error": None, "size": len(text.encode("utf-8")), "sha256": digest, "text": text}
 
 
+def _snmp2mqtt_applicability() -> dict[str, Any]:
+    """Return whether generated SNMP2MQTT YAML is relevant to this installation."""
+    try:
+        options = _self_addon_options()
+    except RuntimeError:
+        options = _load_options(DEFAULT_OPTIONS_FILE)
+
+    generate_value = options.get("generate_snmp2mqtt", "true")
+    if isinstance(generate_value, bool):
+        generator_enabled = generate_value
+    else:
+        generator_enabled = str(generate_value).strip().lower() not in {
+            "false", "0", "no", "off", "disabled", "disable",
+        }
+    if not generator_enabled:
+        return {
+            "applicable": False,
+            "reason": "SNMP2MQTT YAML generation is disabled in Discovery options.",
+        }
+
+    rows = options.get("switches")
+    if not isinstance(rows, list):
+        rows = options.get("multi_switch_walks")
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            enabled_value = row.get("enabled", "enabled")
+            if isinstance(enabled_value, bool):
+                enabled = enabled_value
+            else:
+                state = str(enabled_value).strip().lower()
+                enabled = state not in {
+                    "false", "disabled", "disable", "off", "no", "0",
+                }
+            if not enabled:
+                continue
+            switch_name = str(
+                row.get("switch_name")
+                or row.get("switch")
+                or row.get("selected_switch")
+                or row.get("name")
+                or ""
+            ).strip()
+            switch_host = str(
+                row.get("switch_host")
+                or row.get("host")
+                or row.get("manual_switch_host")
+                or ""
+            ).strip()
+            if switch_name and switch_host:
+                return {
+                    "applicable": True,
+                    "reason": "At least one enabled SNMP switch target is configured.",
+                }
+
+    parse_value = options.get("parse_all_walks", "false")
+    if isinstance(parse_value, bool):
+        parse_all = parse_value
+    else:
+        parse_all = str(parse_value).strip().lower() in {
+            "true", "1", "yes", "on", "enabled", "enable",
+        }
+    input_path = Path(
+        str(options.get("input_path") or (DEFAULT_SHARE_DIR / "snmpwalk.txt"))
+    )
+    if parse_all and input_path.is_file():
+        return {
+            "applicable": True,
+            "reason": "Legacy SNMP walk parsing is enabled with an available input walk.",
+        }
+
+    return {
+        "applicable": False,
+        "reason": (
+            "No enabled SNMP targets are configured. "
+            "UniFi2MQTT-only installations do not require generated SNMP2MQTT YAML."
+        ),
+    }
+
+
 def _generated_yaml_status() -> dict[str, Any]:
+    applicability = _snmp2mqtt_applicability()
+    generated = _file_info(DEFAULT_GENERATED_SNMP2MQTT)
+    if not applicability["applicable"]:
+        return {
+            "applicable": False,
+            "reason": applicability["reason"],
+            "generated": generated,
+            "validation": {"valid": None, "error": None},
+            "import_note": (
+                "SNMP2MQTT YAML is not required while no enabled SNMP targets are configured. "
+                "UniFi API devices continue through UniFi2MQTT independently."
+            ),
+        }
     validation = _validate_snmp2mqtt_yaml(DEFAULT_GENERATED_SNMP2MQTT)
     return {
-        "generated": _file_info(DEFAULT_GENERATED_SNMP2MQTT),
+        "applicable": True,
+        "reason": applicability["reason"],
+        "generated": generated,
         "validation": {key: value for key, value in validation.items() if key != "text"},
         "import_note": "A valid changed generated YAML is applied to Switch Vision SNMP2MQTT automatically when that app is available; invalid candidates are never published.",
     }
-
 
 def _validate_generated_card_yaml(path: Path) -> dict[str, Any]:
     """Validate and return the Discovery-generated dashboard YAML preview."""
@@ -2474,7 +2569,8 @@ def _diagnostics_snapshot(version: str) -> dict[str, Any]:
     generated_card = _file_info(share / "generated-dashboard-card.yaml")
     if not report["found"]:
         warnings.append("No discovery report has been generated yet.")
-    if not generated_yaml["found"]:
+    snmp2mqtt_applicability = _snmp2mqtt_applicability()
+    if not generated_yaml["found"] and snmp2mqtt_applicability["applicable"]:
         warnings.append("Generated SNMP2MQTT YAML was not found.")
     if not generated_card["found"]:
         warnings.append("Generated dashboard YAML was not found.")
@@ -2486,7 +2582,10 @@ def _diagnostics_snapshot(version: str) -> dict[str, Any]:
         # stale when it predates the report by more than two minutes, which
         # indicates it came from an earlier run rather than the same pipeline.
         stale_tolerance_seconds = 120
-        for label, path in [("SNMP2MQTT YAML", share / "generated-snmp2mqtt.yaml"), ("dashboard YAML", share / "generated-dashboard-card.yaml")]:
+        stale_candidates = [("dashboard YAML", share / "generated-dashboard-card.yaml")]
+        if snmp2mqtt_applicability["applicable"]:
+            stale_candidates.insert(0, ("SNMP2MQTT YAML", share / "generated-snmp2mqtt.yaml"))
+        for label, path in stale_candidates:
             if not path.is_file():
                 continue
             generated_mtime = path.stat().st_mtime
@@ -2504,6 +2603,7 @@ def _diagnostics_snapshot(version: str) -> dict[str, Any]:
         "discovery": _discovery_state_snapshot(),
         "registry": {"loaded": registry_loaded, "entries": len(registry_devices), "path": str(DEFAULT_REGISTRY_FILE)},
         "files": {"report": report, "generated_yaml": generated_yaml, "generated_card": generated_card},
+        "snmp2mqtt_applicability": snmp2mqtt_applicability,
         "contribution_workflow": {"ready": DEFAULT_SUPPORT_SCRIPT.is_file(), "directory": str(DEFAULT_CONTRIBUTIONS_DIR)},
         "devices": devices,
         "unifi2mqtt_diagnostics": unifi_diagnostics,
@@ -2513,6 +2613,15 @@ def _diagnostics_snapshot(version: str) -> dict[str, Any]:
 
 
 def _diagnostics_text(data: dict[str, Any]) -> str:
+    snmp_applicability = data.get("snmp2mqtt_applicability") or {}
+    if snmp_applicability.get("applicable", True):
+        snmp_yaml_status = (
+            "Found"
+            if ((data.get("files") or {}).get("generated_yaml") or {}).get("found")
+            else "Missing"
+        )
+    else:
+        snmp_yaml_status = "Not applicable"
     lines = [
         "Switch Vision Diagnostics",
         "=========================",
@@ -2522,7 +2631,7 @@ def _diagnostics_text(data: dict[str, Any]) -> str:
         f"Discovery status: {(data.get('discovery') or {}).get('message', 'Unknown')}",
         f"Device registry: {'Loaded' if (data.get('registry') or {}).get('loaded') else 'Unavailable'}",
         f"Registry entries: {(data.get('registry') or {}).get('entries', 0)}",
-        f"Generated SNMP2MQTT YAML: {'Found' if ((data.get('files') or {}).get('generated_yaml') or {}).get('found') else 'Missing'}",
+        f"Generated SNMP2MQTT YAML: {snmp_yaml_status}",
         f"Generated dashboard YAML: {'Found' if ((data.get('files') or {}).get('generated_card') or {}).get('found') else 'Missing'}",
         f"Contribution workflow: {'Ready' if (data.get('contribution_workflow') or {}).get('ready') else 'Unavailable'}",
         (
@@ -2877,7 +2986,7 @@ body.density-dense .step{padding:7px 9px}
 <dt>Elapsed</dt><dd id="liveElapsed" class="elapsed">00:00</dd>
 </dl>
 <div class="actions"><button class="primary" id="runDiscoveryButton" type="button">Run Discovery</button><button id="regenerateYamlButton" type="button">Regenerate SNMP2MQTT YAML</button><button id="stopDiscoveryButton" type="button" disabled>Stop Discovery</button><button id="viewResultsButton" type="button">View Results</button><button id="toggleDebugButton" type="button">Show Debug</button></div>
-<p class="muted">Regenerate SNMP2MQTT YAML uses the existing saved Discovery data and SNMP walks. No new SNMP walks are performed.</p>
+<p id="regenerateYamlHelp" class="muted">Regenerate SNMP2MQTT YAML uses the existing saved Discovery data and SNMP walks. No new SNMP walks are performed.</p>
 <p id="regenerateYamlStatus" class="muted"></p>
 <details class="advanced"><summary>SNMP cleanup</summary><p class="muted">Use this when retiring SNMP switches or moving to a UniFi API-only setup. It stops Switch Vision SNMP2MQTT, removes retained Home Assistant MQTT Discovery entries that can be identified from the current generated YAML, clears saved SNMP walks/capability caches/generated SNMP files, and clears the generated card so the next Discovery rebuilds it. UniFi API data and UniFi2MQTT settings are not touched.</p><div class="actions"><button id="resetSnmpDiscoveryButton" class="danger" type="button">Reset SNMP Discovery Data</button></div><p id="resetSnmpDiscoveryStatus" class="muted"></p></details>
 <details class="yaml-manager generated-card-manager" open>
@@ -2889,9 +2998,9 @@ body.density-dense .step{padding:7px 9px}
 </details>
 <details class="yaml-manager" open>
 <summary><strong>Generated SNMP2MQTT YAML</strong></summary>
-<p>Discovery writes the file used by the existing SNMP2MQTT generated-YAML import option. Keep that import option enabled. After a successful Discovery run, Switch Vision validates the YAML and automatically starts or restarts the SNMP2MQTT app.</p>
+<p id="generatedYamlDescription">SNMP2MQTT YAML is only required for switches using the SNMP data path. UniFi API devices use UniFi2MQTT and do not require this file.</p>
 <dl class="yaml-state"><dt>Generated file</dt><dd id="generatedYamlState">Checking…</dd><dt>Validation</dt><dd id="generatedYamlValidation">Checking…</dd><dt>Last updated</dt><dd id="generatedYamlUpdated">Checking…</dd></dl>
-<div class="actions"><button id="previewGeneratedYamlButton" type="button">Preview generated YAML</button><a id="downloadGeneratedYamlButton" class="button" href="#">Download YAML</a></div>
+<div id="generatedYamlActions" class="actions"><button id="previewGeneratedYamlButton" type="button">Preview generated YAML</button><a id="downloadGeneratedYamlButton" class="button" href="#">Download YAML</a></div>
 <p id="generatedYamlActionStatus" class="muted"></p><pre id="generatedYamlPreview" class="code-preview hidden"></pre>
 </details>
 <div id="debugWrap" class="hidden"><div class="debug-head"><strong>Discovery debug output</strong><small>Commands and detailed activity; credentials remain masked.</small></div><div id="discoveryLog" class="status debug-panel"></div><div class="actions"><button id="copyDebugButton" type="button">Copy Debug Info</button></div><p id="copyDebugStatus" class="muted"></p></div>
@@ -3083,7 +3192,7 @@ async function loadGeneratedCardYamlStatus(){const status=$('generatedCardYamlAc
 async function fetchGeneratedCardYaml(){const r=await fetch(endpoint('api/generated-card-yaml/preview'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Card YAML preview failed');return d.text||''}
 async function previewGeneratedCardYaml(){const status=$('generatedCardYamlActionStatus');try{const text=await fetchGeneratedCardYaml();$('generatedCardYamlPreview').textContent=text;$('generatedCardYamlPreview').classList.remove('hidden');status.textContent='Generated Card YAML preview loaded.'}catch(e){status.textContent=`Could not preview generated Card YAML: ${e}`}}
 async function copyGeneratedCardYaml(){const status=$('generatedCardYamlActionStatus');status.textContent='Copying generated Card YAML…';try{const text=await fetchGeneratedCardYaml();const copied=await copyTextWithFallback(text);if(!copied)throw new Error('Clipboard access is unavailable in this browser context');$('generatedCardYamlPreview').textContent=text;$('generatedCardYamlPreview').classList.remove('hidden');status.textContent='Generated Card YAML copied to clipboard.'}catch(e){status.textContent=`Could not copy generated Card YAML: ${e}`}}
-async function loadGeneratedYamlStatus(){try{const r=await fetch(endpoint('api/generated-yaml/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not read generated YAML status');const found=!!d.generated?.found;$('generatedYamlState').textContent=found?`${d.generated.path||'generated-snmp2mqtt.yaml'} · ${d.generated.size||0} bytes`:'Not generated';$('generatedYamlValidation').textContent=d.validation?.valid?'Valid':`Invalid · ${d.validation?.error||'validation failed'}`;$('generatedYamlUpdated').textContent=d.generated?.modified||'Not available';$('downloadGeneratedYamlButton').href=endpoint('download/generated-snmp2mqtt.yaml')}catch(e){$('generatedYamlActionStatus').textContent=`Could not load generated YAML status: ${e}`}}
+async function loadGeneratedYamlStatus(){try{const r=await fetch(endpoint('api/generated-yaml/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not read generated YAML status');const applicable=d.applicable!==false;const found=!!d.generated?.found;const description=$('generatedYamlDescription');const actions=$('generatedYamlActions');const regen=$('regenerateYamlButton');const regenHelp=$('regenerateYamlHelp');const preview=$('generatedYamlPreview');const actionStatus=$('generatedYamlActionStatus');if(!applicable){$('generatedYamlState').textContent='Not in use';$('generatedYamlValidation').textContent=`Not applicable · ${d.reason||'No enabled SNMP targets are configured.'}`;$('generatedYamlUpdated').textContent='Not applicable';if(description)description.textContent='SNMP2MQTT YAML is only required for switches using the SNMP data path. UniFi API devices use UniFi2MQTT and do not require this file.';if(actions)actions.hidden=true;if(regen)regen.hidden=true;if(regenHelp)regenHelp.hidden=true;preview.textContent='';preview.classList.add('hidden');actionStatus.textContent='No SNMP2MQTT YAML action is required for this installation.';$('liveSnmp2mqtt').textContent='Not in use · no enabled SNMP targets';return}if(description)description.textContent='Discovery writes the file used by the SNMP2MQTT generated-YAML import option. After a successful SNMP Discovery run, Switch Vision validates the YAML and automatically starts or restarts the SNMP2MQTT app.';if(actions)actions.hidden=false;if(regen)regen.hidden=false;if(regenHelp)regenHelp.hidden=false;actionStatus.textContent='';$('generatedYamlState').textContent=found?`${d.generated.path||'generated-snmp2mqtt.yaml'} · ${d.generated.size||0} bytes`:'Not generated';$('generatedYamlValidation').textContent=d.validation?.valid?'Valid':`Invalid · ${d.validation?.error||'validation failed'}`;$('generatedYamlUpdated').textContent=d.generated?.modified||'Not available';$('downloadGeneratedYamlButton').href=endpoint('download/generated-snmp2mqtt.yaml')}catch(e){$('generatedYamlActionStatus').textContent=`Could not load generated YAML status: ${e}`}}
 async function previewGeneratedYaml(){const status=$('generatedYamlActionStatus');try{const r=await fetch(endpoint('api/generated-yaml/preview'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Preview failed');$('generatedYamlPreview').textContent=d.text||'';$('generatedYamlPreview').classList.remove('hidden');status.textContent='Generated YAML preview loaded.'}catch(e){status.textContent=`Could not preview generated YAML: ${e}`}}
 function toggleDebug(){debugVisible=!debugVisible;$('debugWrap').classList.toggle('hidden',!debugVisible);$('toggleDebugButton').textContent=debugVisible?'Hide Debug':'Show Debug'}
 async function regenerateSnmp2mqttYaml(){const btn=$('regenerateYamlButton');const status=$('regenerateYamlStatus');btn.disabled=true;status.textContent='Preparing stored-walk YAML regeneration…';try{const r=await fetch(endpoint('api/discovery/regenerate-yaml'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start YAML regeneration');status.textContent='Regeneration started. Existing saved walks are being reprocessed; no SNMP walks will run.';await refresh()}catch(e){status.textContent=`Could not regenerate SNMP2MQTT YAML: ${e.message||e}`;btn.disabled=false}}

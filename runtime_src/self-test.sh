@@ -812,8 +812,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.35"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.35"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.36"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.36"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
@@ -2184,3 +2184,62 @@ grep -q 'US XG 16.*dashboard support is pending verified visuals' "$tmp_dir/sv-2
 grep -q 'USW Pro Aggregation.*dashboard support is pending verified visuals' "$tmp_dir/sv-2026-000002-cards.yaml"
 grep -q 'UniFi cards emitted: 1; waiting for visuals/registry: 2' "$tmp_dir/sv-2026-000002-cards.yaml"
 echo "Switch Vision Discovery SV-2026-000002 generated-card regression: PASS"
+# v2.1.36 UniFi-only SNMP2MQTT status regression.
+PYTHONPATH="$BASE_DIR" python3 - <<'PYTEST_V2136_UNIFI_ONLY'
+import tempfile
+from pathlib import Path
+import support_web as web
+
+tmp = tempfile.TemporaryDirectory()
+web.DEFAULT_GENERATED_SNMP2MQTT = Path(tmp.name) / "generated-snmp2mqtt.yaml"
+
+web._self_addon_options = lambda: {
+    "generate_snmp2mqtt": "true",
+    "parse_all_walks": "false",
+    "switches": [],
+}
+status = web._generated_yaml_status()
+assert status["applicable"] is False
+assert status["validation"]["valid"] is None
+assert "UniFi2MQTT-only" in status["reason"]
+
+source = Path(web.__file__).read_text(encoding="utf-8")
+assert 'if not generated_yaml["found"] and snmp2mqtt_applicability["applicable"]:' in source
+assert '"snmp2mqtt_applicability": snmp2mqtt_applicability' in source
+assert 'if snmp2mqtt_applicability["applicable"]:' in source
+assert 'stale_candidates.insert(0, ("SNMP2MQTT YAML"' in source
+assert 'id="generatedYamlDescription"' in web._PAGE
+assert 'id="generatedYamlActions"' in web._PAGE
+assert 'id="regenerateYamlHelp"' in web._PAGE
+assert "d.applicable!==false" in web._PAGE
+assert "regen.hidden=true" in web._PAGE
+assert "Not in use · no enabled SNMP targets" in web._PAGE
+
+web._self_addon_options = lambda: {
+    "generate_snmp2mqtt": "true",
+    "parse_all_walks": "false",
+    "switches": [{
+        "switch_name": "SW1",
+        "switch_host": "192.0.2.10",
+        "enabled": "enabled",
+    }],
+}
+status = web._generated_yaml_status()
+assert status["applicable"] is True
+assert status["validation"]["valid"] is False
+assert "not found" in status["validation"]["error"].lower()
+
+web._self_addon_options = lambda: {
+    "generate_snmp2mqtt": "false",
+    "parse_all_walks": "false",
+    "switches": [{
+        "switch_name": "SW1",
+        "switch_host": "192.0.2.10",
+        "enabled": "enabled",
+    }],
+}
+status = web._generated_yaml_status()
+assert status["applicable"] is False
+assert "disabled" in status["reason"].lower()
+print("Switch Vision Discovery v2.1.36 UniFi-only SNMP2MQTT status regression: PASS")
+PYTEST_V2136_UNIFI_ONLY
