@@ -2,22 +2,26 @@ from pathlib import Path
 
 path = Path("tools/test_c3750_48p_live_mapping.py")
 text = path.read_text(encoding="utf-8")
-old = '''            "run_snmp_walks": False,
+if '"live_output_dir": str(work / "live")' not in text:
+    old = '''            "run_snmp_walks": False,
             "enable_switch_list": False,
 '''
-new = '''            "run_snmp_walks": False,
+    new = '''            "run_snmp_walks": False,
             "enable_switch_list": False,
             "live_output_dir": str(work / "live"),
             "live_output_path": str(work / "live" / "live-targeted-snmpwalk.txt"),
             "live_log_path": str(work / "live-snmpwalk.log"),
 '''
-if old in text:
+    if old not in text:
+        raise SystemExit("missing options anchor for live path isolation")
     text = text.replace(old, new, 1)
-old = '''        "SWITCH_VISION_CAPABILITIES_DIR": str(caps),
+if '"SWITCH_VISION_SHARE_DIR": str(work / "share")' not in text:
+    old = '''        "SWITCH_VISION_CAPABILITIES_DIR": str(caps),
 '''
-new = '''        "SWITCH_VISION_CAPABILITIES_DIR": str(caps),
+    new = '''        "SWITCH_VISION_CAPABILITIES_DIR": str(caps),
         "SWITCH_VISION_SHARE_DIR": str(work / "share"),
 '''
-if old in text:
+    if old not in text:
+        raise SystemExit("missing environment anchor for share path isolation")
     text = text.replace(old, new, 1)
 path.write_text(text, encoding="utf-8")
