@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.38
+
+- Prefer the existing UniFi 24 RJ45 + 2 SFP generic faceplate and `unifi_24p_rj45_2sfp` calibration profile for unknown/pending UniFi devices whose observed topology fits that layout.
+- Keep neutral stock generic faceplates for larger/different UniFi topologies where no UniFi-specific generic exists yet.
+- Preserve real observed RJ45/SFP counts, link-state/speed/PoE UniFi API telemetry, exact-model mappings, and the v2.1.37 unsupported-model card-generation fallback unchanged.
+- Extend Brendan's four-device regression so UCG Ultra, US 16 PoE 150W, USW Pro Max 24, and USW Ultra must all select the UniFi generic faceplate rather than the neutral stock 24+2 visual.
+
 ## 2.1.37
 
 - Generate a Switch Vision dashboard card for positively detected UniFi switching devices even when no exact model registry entry exists yet.
