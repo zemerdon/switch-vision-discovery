@@ -56,19 +56,28 @@ jobs:
           self_test.write_text(text, encoding='utf-8', newline='\n')
           PY
           sh tools/materialize_runtime.sh
-      - name: Validate Discovery 2.1.40
+      - name: Validate public attribution privacy
+        run: python tools/test_public_attribution_privacy.py
+      - name: Validate UniFi dashboard failure modes
+        run: python tools/test_unifi_dashboard_failure_modes.py
+      - name: Validate runtime archive parity
+        run: python tools/check_runtime_parity.py
+      - name: Validate visual contract policy
+        run: python tools/test_visual_contract_policy.py
+      - name: Validate component contracts
+        run: python tools/check_component_contracts.py
+      - name: Validate interface speed contracts
+        run: python tools/check_speed_contracts.py
+      - name: Validate Hub identity
+        run: python tools/check_hub_identity.py
+      - name: Validate regenerate-YAML contract
+        run: python tools/test_regenerate_yaml_contract.py
+      - name: Validate packaged Discovery self-test
+        run: sh -x runtime_src/self-test.sh
+      - name: Validate Python syntax and repository hygiene
         shell: bash
         run: |
           set -euo pipefail
-          python tools/test_public_attribution_privacy.py
-          python tools/test_unifi_dashboard_failure_modes.py
-          python tools/check_runtime_parity.py
-          python tools/test_visual_contract_policy.py
-          python tools/check_component_contracts.py
-          python tools/check_speed_contracts.py
-          python tools/check_hub_identity.py
-          python tools/test_regenerate_yaml_contract.py
-          sh -x runtime_src/self-test.sh
           python -m py_compile runtime_src/support_web.py runtime_src/registry_lookup.py runtime_src/vendor_sensor_scan.py runtime_src/unifi_dashboard_cards.py tools/sanitize_public_attribution.py tools/test_public_attribution_privacy.py tools/test_unifi_dashboard_failure_modes.py
           find runtime_src tools -type d -name '__pycache__' -prune -exec rm -rf {} +
           find runtime_src tools -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
