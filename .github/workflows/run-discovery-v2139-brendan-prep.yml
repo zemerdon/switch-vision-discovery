@@ -87,13 +87,24 @@ jobs:
 
           self_path = Path('runtime_src/self-test.sh')
           self_text = self_path.read_text(encoding='utf-8')
-          self_text = self_text.replace(
-              '              assert item["status"] == "experimental", model\n',
-              '              expected_status = "experimental" if model == "USW Pro Max 24" else "detected"\n'
-              '              assert item["status"] == expected_status, model\n',
-              1,
+          marker = '# SV-2026-000034/000036 Brendan UniFi exact-model contract regression.'
+          marker_pos = self_text.find(marker)
+          if marker_pos < 0:
+              raise SystemExit('Brendan packaged self-test marker missing after prep payload')
+          prefix = self_text[:marker_pos]
+          suffix = self_text[marker_pos:]
+          suffix, replacements = re.subn(
+              r'(?m)^(\s*)assert item\["status"\] == "experimental", model$',
+              lambda m: (
+                  m.group(1) + 'expected_status = "experimental" if model == "USW Pro Max 24" else "detected"\n' +
+                  m.group(1) + 'assert item["status"] == expected_status, model'
+              ),
+              suffix,
+              count=1,
           )
-          self_path.write_text(self_text, encoding='utf-8', newline='\n')
+          if replacements != 1:
+              raise SystemExit(f'Expected exactly one Brendan status assertion; replaced {replacements}')
+          self_path.write_text(prefix + suffix, encoding='utf-8', newline='\n')
           PYRUNNER
           rm -f \
             .github/workflows/prepare-discovery-v2139-brendan.yml \
