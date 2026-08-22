@@ -91,10 +91,21 @@ def main() -> int:
             "exact support pending: 0; issues: 0"
         ) in healthy.stdout
 
-        # Brendan regression: positively classified but unregistered UniFi
-        # switching devices must still receive working generic dashboard cards,
-        # and layouts up to 24 RJ45 + 2 optical must prefer our UniFi generic.
-        write_json(registry, {"devices": []})
+                # Brendan regression: the four contributed exact hardware contracts must
+        # all render. Pro Max 24 has truthful exact 24+2 visual geometry; the
+        # three compact/legacy models retain safe generic cards until dedicated
+        # artwork exists.
+        write_json(
+            registry,
+            {
+                "devices": [
+                    {"vendor": "Ubiquiti", "model": "UCG Ultra", "status": "detected", "dashboard_support": False},
+                    {"vendor": "Ubiquiti", "model": "US 16 PoE 150W", "status": "detected", "dashboard_support": False},
+                    {"vendor": "Ubiquiti", "model": "USW Pro Max 24", "status": "experimental", "dashboard_support": True, "calibration_profile": "unifi_24p_rj45_2sfp", "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png"},
+                    {"vendor": "Ubiquiti", "model": "USW Ultra", "status": "detected", "dashboard_support": False},
+                ]
+            },
+        )
         write_json(
             snapshot,
             {
@@ -114,10 +125,11 @@ def main() -> int:
             assert f"switch_model: {model}" in brendan.stdout
         assert brendan.stdout.count("calibration_profile: unifi_24p_rj45_2sfp") == 4
         assert brendan.stdout.count("faceplate_file: unifi-24p-rj45-2sfp.png") == 4
-        assert brendan.stdout.count("generic_faceplate: true") == 4
+        assert brendan.stdout.count("generic_faceplate: true") == 3
+        assert brendan.stdout.count("generic_faceplate: false") == 1
         assert (
-            "UniFi cards emitted: 4; exact cards: 0; generic fallbacks: 4; "
-            "exact support pending: 4; issues: 0"
+            "UniFi cards emitted: 4; exact cards: 1; generic fallbacks: 3; "
+            "exact support pending: 3; issues: 0"
         ) in brendan.stdout
 
         # Registered devices waiting for exact visuals also get a generic card.
