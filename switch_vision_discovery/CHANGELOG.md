@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.40
+
+- Apply a general public-attribution privacy policy to Discovery release history and structured public contributor metadata.
+- Remove contributor and tester identities unless explicitly approved by the project owner.
+- Remove submission identifiers, contribution package names, and submission filenames from public release/history text.
+- Preserve technical validation facts using neutral **Community contributor** wording.
+- Add permanent regression coverage preventing non-approved attribution or private submission references from returning.
+- No device mapping, generated YAML, telemetry, dashboard-card, or runtime behaviour changes.
+
 ## 2.1.39
 
 - Add exact UniFi API hardware contracts for `UCG Ultra`, `US 16 PoE 150W`, `USW Pro Max 24`, and `USW Ultra` from community-provided real-hardware validation.
