@@ -29,6 +29,7 @@ jobs:
           git fetch origin main
           git show origin/main:.github/v2142_prepare.py > /tmp/v2142_prepare.py
           git show origin/main:.github/v2142_testfix.py > /tmp/v2142_testfix.py
+          git show origin/main:.github/v2142_patchfix.py > /tmp/v2142_patchfix.py
       - name: Apply and smoke-test Discovery 2.1.42
         shell: bash
         run: |
@@ -40,6 +41,7 @@ jobs:
           fi
           rm -f .github/v2142-review.txt
           if [ -f tools/test_c3750_48p_live_mapping.py ]; then
+            python3 /tmp/v2142_patchfix.py
             python3 /tmp/v2142_testfix.py
           fi
           python3 -m py_compile tools/check_component_contracts.py tools/test_c3750_48p_contract.py
