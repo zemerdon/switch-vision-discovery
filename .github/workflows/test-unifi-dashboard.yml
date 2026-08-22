@@ -6,19 +6,16 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test-and-package:
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     steps:
-      - name: Check out PR branch
+      - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -31,7 +28,7 @@ jobs:
       - name: Run UniFi dashboard fallback regression
         run: python tools/test_unifi_dashboard_failure_modes.py
 
-      - name: Apply Discovery 2.1.37 metadata
+      - name: Build candidate Discovery 2.1.37 runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -43,8 +40,7 @@ jobs:
 
           path = Path('switch_vision_discovery/CHANGELOG.md')
           text = path.read_text(encoding='utf-8')
-          heading = '## 2.1.37\n'
-          if heading not in text:
+          if '## 2.1.37\n' not in text:
               entry = '''## 2.1.37
 
 - Generate a Switch Vision dashboard card for positively detected UniFi switching devices even when no exact model registry entry exists yet.
@@ -58,31 +54,23 @@ jobs:
               marker = '# Changelog\n\n'
               if not text.startswith(marker):
                   raise SystemExit('Unexpected changelog header')
-              text = marker + entry + text[len(marker):]
-              path.write_text(text, encoding='utf-8', newline='\n')
+              path.write_text(marker + entry + text[len(marker):], encoding='utf-8', newline='\n')
           PY
-
-      - name: Rebuild packaged runtime
-        shell: bash
-        run: |
-          set -euo pipefail
           rm -f switch_vision_discovery/runtime.tar.gz
           tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
             -czf switch_vision_discovery/runtime.tar.gz -C runtime_src .
+          python tools/check_runtime_parity.py
+          mkdir -p candidate
+          cp switch_vision_discovery/runtime.tar.gz candidate/runtime.tar.gz
+          cp runtime_src/run.sh candidate/run.sh
+          cp runtime_src/discovery_job.sh candidate/discovery_job.sh
+          cp switch_vision_discovery/config.yaml candidate/config.yaml
+          cp switch_vision_discovery/CHANGELOG.md candidate/CHANGELOG.md
 
-      - name: Validate source/archive parity
-        run: python tools/check_runtime_parity.py
-
-      - name: Commit packaged runtime to PR branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'Switch Vision Runtime Packager'
-          git config user.email 'switch-vision@users.noreply.github.com'
-          git add runtime_src/run.sh runtime_src/discovery_job.sh switch_vision_discovery/config.yaml switch_vision_discovery/CHANGELOG.md switch_vision_discovery/runtime.tar.gz
-          if git diff --cached --quiet; then
-            echo 'Runtime package already current.'
-            exit 0
-          fi
-          git commit -m '[runtime-packager] Discovery 2.1.37 runtime package'
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+      - name: Upload tested 2.1.37 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: discovery-2.1.37-package
+          path: candidate/
+          if-no-files-found: error
+          retention-days: 1
