@@ -1,292 +1,84 @@
 name: Build Discovery app
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  prepare:
-    name: Prepare
+  remediate:
+    if: github.event.head_commit.message == 'Run privacy remediation build'
     runs-on: ubuntu-latest
-    outputs:
-      architectures: ${{ steps.info.outputs.architectures }}
-      build_matrix: ${{ steps.matrix.outputs.matrix }}
-      image_name: ${{ steps.normalize.outputs.image_name }}
-      registry_prefix: ${{ steps.normalize.outputs.registry_prefix }}
-      version: ${{ steps.normalize.outputs.version }}
-      name: ${{ steps.normalize.outputs.name }}
-      description: ${{ steps.normalize.outputs.description }}
-      url: ${{ steps.normalize.outputs.url }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Python for runtime tests
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.12'
-      - name: Install runtime test dependency
-        run: python -m pip install --disable-pip-version-check pyyaml websockets
-      - name: Run UniFi dashboard fallback regression
-        run: python tools/test_unifi_dashboard_failure_modes.py
-      - name: Materialize runtime archive from tracked source
-        shell: bash
-        run: |
-          set -euo pipefail
-          sh tools/materialize_runtime.sh
-      - name: Validate runtime source/archive parity
-        shell: bash
-        run: |
-          set -euo pipefail
-          python tools/check_runtime_parity.py
-
-      - name: Validate runtime archive hygiene
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY_AUDIT'
-          from pathlib import PurePosixPath
-          import tarfile
-
-          path = "./switch_vision_discovery/runtime.tar.gz"
-          problems = []
-          with tarfile.open(path, "r:gz") as archive:
-              for member in archive.getmembers():
-                  p = PurePosixPath(member.name)
-                  if p.is_absolute() or ".." in p.parts:
-                      problems.append(f"unsafe path: {member.name}")
-                  if member.issym() or member.islnk() or member.isdev() or member.isfifo():
-                      problems.append(f"link/special entry: {member.name}")
-                  if "__pycache__" in p.parts or p.suffix in {".pyc", ".pyo"}:
-                      problems.append(f"Python bytecode/cache entry: {member.name}")
-          if problems:
-              for problem in problems:
-                  print(f"ERROR: {problem}")
-              raise SystemExit(1)
-          print("Runtime archive hygiene: PASS")
-          PY_AUDIT
-      - name: Validate packaged Discovery runtime
-        shell: bash
-        run: |
-          set -euo pipefail
-          runtime_dir="$RUNNER_TEMP/switch-vision-discovery-runtime"
-          rm -rf "$runtime_dir"
-          mkdir -p "$runtime_dir"
-          tar -xzf ./switch_vision_discovery/runtime.tar.gz -C "$runtime_dir"
-          test -f "$runtime_dir/opt/switch-vision/devices/supported_devices.json"
-          test -d "$runtime_dir/opt/switch-vision/mib_database"
-          test -d "$runtime_dir/opt/switch-vision/vendors"
-          python -m py_compile \
-            "$runtime_dir/support_web.py" \
-            "$runtime_dir/registry_lookup.py" \
-            "$runtime_dir/vendor_sensor_scan.py" \
-            "$runtime_dir/unifi_dashboard_cards.py"
-          sh "$runtime_dir/self-test.sh"
-      - name: Get app information
-        id: info
-        uses: home-assistant/actions/helpers/info@a7c616ce81ccda50150bf1595786c71b1883fabb
-        with:
-          path: ./switch_vision_discovery
-      - name: Normalize app information
-        id: normalize
-        shell: bash
-        run: |
-          image=${{ steps.info.outputs.image }}
-          echo "image_name=${image##*/}" >> "$GITHUB_OUTPUT"
-          echo "registry_prefix=${image%/*}" >> "$GITHUB_OUTPUT"
-          echo "version=${{ steps.info.outputs.version }}" >> "$GITHUB_OUTPUT"
-          echo "name=${{ steps.info.outputs.name }}" >> "$GITHUB_OUTPUT"
-          echo "description=${{ steps.info.outputs.description }}" >> "$GITHUB_OUTPUT"
-          echo "url=${{ steps.info.outputs.url }}" >> "$GITHUB_OUTPUT"
-      - name: Prepare build matrix
-        id: matrix
-        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
-        with:
-          architectures: ${{ steps.info.outputs.architectures }}
-          image-name: ${{ steps.normalize.outputs.image_name }}
-          registry-prefix: ${{ steps.normalize.outputs.registry_prefix }}
-
-  build_validate:
-    name: Validate build ${{ matrix.arch }}
-    if: github.event_name != 'push' || github.ref != 'refs/heads/main'
-    needs: prepare
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare.outputs.build_matrix) }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Materialize runtime archive from tracked source
-        shell: bash
-        run: |
-          set -euo pipefail
-          sh tools/materialize_runtime.sh
-      - name: Build image without publishing
-        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
-        with:
-          arch: ${{ matrix.arch }}
-          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
-          context: ./switch_vision_discovery
-          image: ${{ matrix.image }}
-          image-tags: |
-            ${{ needs.prepare.outputs.version }}
-            latest
-          labels: |
-            io.hass.type=app
-            io.hass.name=${{ needs.prepare.outputs.name }}
-            io.hass.description=${{ needs.prepare.outputs.description }}
-            io.hass.url=${{ needs.prepare.outputs.url }}
-          push: false
-          version: ${{ needs.prepare.outputs.version }}
-
-  build_publish:
-    name: Publish build ${{ matrix.arch }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[runtime-packager]')
-    needs: prepare
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare.outputs.build_matrix) }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Materialize runtime archive from tracked source
-        shell: bash
-        run: |
-          set -euo pipefail
-          sh tools/materialize_runtime.sh
-      - name: Build and publish image
-        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
-        with:
-          arch: ${{ matrix.arch }}
-          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
-          context: ./switch_vision_discovery
-          image: ${{ matrix.image }}
-          image-tags: |
-            ${{ needs.prepare.outputs.version }}
-            latest
-          labels: |
-            io.hass.type=app
-            io.hass.name=${{ needs.prepare.outputs.name }}
-            io.hass.description=${{ needs.prepare.outputs.description }}
-            io.hass.url=${{ needs.prepare.outputs.url }}
-          push: true
-          version: ${{ needs.prepare.outputs.version }}
-
-  manifest:
-    name: Publish multi-arch manifest
-    needs:
-      - prepare
-      - build_publish
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[runtime-packager]')
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      packages: write
-    steps:
-      - name: Publish multi-arch manifest
-        uses: home-assistant/builder/actions/publish-multi-arch-manifest@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
-        with:
-          architectures: ${{ needs.prepare.outputs.architectures }}
-          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
-          image-name: ${{ needs.prepare.outputs.image_name }}
-          image-tags: |
-            ${{ needs.prepare.outputs.version }}
-            latest
-          registry-prefix: ${{ needs.prepare.outputs.registry_prefix }}
-
-  synchronize_runtime:
-    name: Synchronize generated runtime archive
-    needs:
-      - prepare
-      - manifest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[runtime-packager]')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: true
-      - name: Materialize runtime archive
-        shell: bash
-        run: |
-          set -euo pipefail
-          sh tools/materialize_runtime.sh
-      - name: Synchronize release fragment into changelog
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY_CHANGELOG'
-          from pathlib import Path
-          import re
 
-          config = Path('switch_vision_discovery/config.yaml').read_text(encoding='utf-8')
-          match = re.search(r'^version:\s*"([^"]+)"', config, re.MULTILINE)
-          if not match:
-              raise SystemExit('Could not resolve Discovery version')
-          version = match.group(1)
-          fragment = Path(f'switch_vision_discovery/release-fragments/{version}.md')
-          if not fragment.exists():
-              print(f'No release fragment for {version}; changelog unchanged.')
-              raise SystemExit(0)
-          changelog_path = Path('switch_vision_discovery/CHANGELOG.md')
-          changelog = changelog_path.read_text(encoding='utf-8')
-          heading = f'## {version}\n'
-          if heading in changelog:
-              print(f'Changelog already contains {version}.')
-              raise SystemExit(0)
-          marker = '# Changelog\n\n'
-          if not changelog.startswith(marker):
-              raise SystemExit('Unexpected changelog header')
-          body = fragment.read_text(encoding='utf-8').strip()
-          changelog_path.write_text(
-              marker + heading + '\n' + body + '\n\n' + changelog[len(marker):],
-              encoding='utf-8',
-              newline='\n',
-          )
-          print(f'Added Discovery {version} changelog entry.')
-          PY_CHANGELOG
-      - name: Validate synchronized source/archive parity
-        run: python tools/check_runtime_parity.py
-      - name: Commit synchronized runtime
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check pyyaml websockets
+
+      - name: Sanitize public attribution and prepare Discovery 2.1.40
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'Switch Vision Runtime Packager'
+          python3 tools/sanitize_public_attribution.py --version 2.1.40
+          python3 - <<'PY'
+          from pathlib import Path
+          replacements = {
+              Path('switch_vision_discovery/config.yaml'): ('version: "2.1.39"', 'version: "2.1.40"'),
+              Path('runtime_src/run.sh'): ('SWITCH_VISION_DISCOVERY_VERSION="2.1.39"', 'SWITCH_VISION_DISCOVERY_VERSION="2.1.40"'),
+              Path('runtime_src/discovery_job.sh'): ('SWITCH_VISION_DISCOVERY_VERSION="2.1.39"', 'SWITCH_VISION_DISCOVERY_VERSION="2.1.40"'),
+          }
+          for path, (old, new) in replacements.items():
+              text = path.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'Expected version token missing in {path}: {old}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+          PY
+          sh tools/materialize_runtime.sh
+
+      - name: Validate Discovery privacy remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/test_public_attribution_privacy.py
+          python tools/test_unifi_dashboard_failure_modes.py
+          python tools/check_runtime_parity.py
+          python tools/test_visual_contract_policy.py
+          python tools/check_component_contracts.py
+          python tools/check_speed_contracts.py
+          python tools/check_hub_identity.py
+          python tools/test_regenerate_yaml_contract.py
+          sh -x runtime_src/self-test.sh
+          python -m py_compile runtime_src/support_web.py runtime_src/registry_lookup.py runtime_src/vendor_sensor_scan.py runtime_src/unifi_dashboard_cards.py tools/sanitize_public_attribution.py tools/test_public_attribution_privacy.py
+          find runtime_src tools -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find runtime_src tools -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+          grep -Fq 'version: "2.1.40"' switch_vision_discovery/config.yaml
+          git diff --check
+
+      - name: Restore normal builder and remove temporary remediation files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show HEAD^^:.github/workflows/builder.yaml > .github/workflows/builder.yaml
+          rm -f .github/workflows/prepare-public-attribution-policy.yml .privacy-remediation-trigger
+
+      - name: Commit validated privacy remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'switch-vision-release-bot'
           git config user.email 'switch-vision@users.noreply.github.com'
-          git add \
-            runtime_src/run.sh \
-            runtime_src/discovery_job.sh \
-            runtime_src/self-test.sh \
-            switch_vision_discovery/runtime.tar.gz \
-            switch_vision_discovery/CHANGELOG.md
-          if git diff --cached --quiet; then
-            echo 'Generated runtime is already synchronized.'
-            exit 0
-          fi
-          git commit -m '[runtime-packager] synchronize Discovery runtime'
+          git add -A
+          git commit -m 'Discovery v2.1.40: enforce public attribution privacy policy'
           git push origin HEAD:main
