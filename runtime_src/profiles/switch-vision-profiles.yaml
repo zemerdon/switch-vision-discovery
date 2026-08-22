@@ -597,7 +597,8 @@ profiles:
       - api-port-49
       - api-port-50
     notes:
-    - SV-2026-000002 confirms the legacy sequential API path: RJ45 1-48, 10G SFP+ 49-50, 1G SFP 51-52.
+    - SV-2026-000002 confirms the legacy sequential API path: RJ45 1-48, 10G SFP+
+        49-50, 1G SFP 51-52.
   ubiquiti-us-xg-16-api:
     status: detected
     vendor: Ubiquiti
@@ -630,8 +631,10 @@ profiles:
       - api-port-11
       - api-port-12
     notes:
-    - SV-2026-000002 confirms optical-first API numbering; do not replace this with a copper-first offset.
-    - Dashboard output remains disabled until verified 12-SFP+ + 4-RJ45 visual coordinates exist.
+    - SV-2026-000002 confirms optical-first API numbering; do not replace this with
+      a copper-first offset.
+    - Dashboard output remains disabled until verified 12-SFP+ + 4-RJ45 visual coordinates
+      exist.
   ubiquiti-usw-pro-aggregation-api:
     status: detected
     vendor: Ubiquiti
@@ -683,7 +686,8 @@ profiles:
       - api-port-32
     notes:
     - SV-2026-000002 confirms 28x 10G SFP+ plus 4x 25G SFP28 and no RJ45 ports.
-    - The sfp_25g fields preserve observed hardware truth for this detected-only profile; dashboard output remains disabled until verified 32-port optical geometry exists.
+    - The sfp_25g fields preserve observed hardware truth for this detected-only profile;
+      dashboard output remains disabled until verified 32-port optical geometry exists.
   ubiquiti-ucg-ultra-api:
     status: detected
     vendor: Ubiquiti
@@ -774,3 +778,29 @@ profiles:
     - SV-2026-000034 and SV-2026-000036 confirm eight sequential 1G RJ45 ports.
     - PoE output capability is exposed on ports 1-7 only; port 8 is not a PoE output.
     - Dedicated USW Ultra dashboard artwork remains pending.
+  cisco-3750-48p-48fe-4sfp:
+    status: experimental
+    vendor: Cisco
+    family: Catalyst 3750
+    model_patterns:
+    - WS-C3750-48P
+    layout:
+      members: auto
+      rj45_ports: 48
+      sfp_1g_ports: 4
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - Fa{member}/0/{port}
+      - FastEthernet{member}/0/{port}
+      sfp_1g:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_10g: []
+    notes:
+    - Map FastEthernet member/0/1 through member/0/48 to the 48 access-port positions.
+    - Map GigabitEthernet member/0/1 through member/0/4 to the four physical 1G SFP
+      uplink cages.
+    - Keep FastEthernet maximum capability distinct from the 1G SFP uplinks.
+    - Stack member numbering is accepted, but multi-member live validation remains
+      pending.
