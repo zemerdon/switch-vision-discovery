@@ -31,6 +31,11 @@ cv_cap_set_front_panel_profile() {
         *) CV_CAP_RJ45_LIMIT="48" ;;
       esac
       ;;
+    *C3750-48P*)
+      CV_CAP_FRONT_PANEL_AWARE="true"
+      CV_CAP_PLATFORM="c3750_48p"
+      CV_CAP_RJ45_LIMIT="48"
+      ;;
     *C2960S*|*C2960X*)
       CV_CAP_FRONT_PANEL_AWARE="true"
       CV_CAP_PLATFORM="c2960"
@@ -155,6 +160,14 @@ cv_interface_class_for_name() {
           ;;
       esac
 
+      if [ "${CV_CAP_PLATFORM:-generic}" = "c3750_48p" ]; then
+        case "$short_name" in
+          [0-9]*/0/[1-4]) printf 'sfp' ;;
+          *) printf 'other' ;;
+        esac
+        return 0
+      fi
+
       if [ "${CV_CAP_FRONT_PANEL_AWARE:-false}" = "true" ]; then
         # Catalyst 3650 network-module GigabitEthernet uplinks are 1G SFP.
         # The TenGigabitEthernet names are classified separately as SFP+.
@@ -203,10 +216,25 @@ cv_interface_class_for_name() {
       ;;
     FastEthernet*|Fa*)
       short_name=$(printf '%s' "$name" | sed -E 's/^FastEthernet//; s/^Fa//')
-      case "$short_name" in
-        0|0/0|*/0/0) printf 'other' ;;
-        *) printf 'rj45' ;;
-      esac
+      if [ "${CV_CAP_PLATFORM:-generic}" = "c3750_48p" ]; then
+        slot_number=$(printf '%s' "$short_name" | awk -F/ 'NF == 3 {print $2}')
+        port_number=${short_name##*/}
+        case "$port_number" in
+          ''|*[!0-9]*) printf 'other' ;;
+          *)
+            if [ "$slot_number" = "0" ] && [ "$port_number" -ge 1 ] && [ "$port_number" -le 48 ]; then
+              printf 'rj45'
+            else
+              printf 'other'
+            fi
+            ;;
+        esac
+      else
+        case "$short_name" in
+          0|0/0|*/0/0) printf 'other' ;;
+          *) printf 'rj45' ;;
+        esac
+      fi
       ;;
     swp0[0-9])
       if [ "${CV_CAP_PLATFORM:-generic}" = "zyxel_xs1930_10" ]; then

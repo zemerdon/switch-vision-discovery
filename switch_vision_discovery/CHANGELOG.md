@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.42
+
+- Correct live Cisco `WS-C3750-48P` interface classification to the stock 48-RJ45 + 4-SFP layout: 48 × 10/100 FastEthernet access ports plus four physical 1G SFP uplinks.
+- Prevent `Gi<member>/0/1-4` on this exact model from falling through the generic Catalyst RJ45 classifier.
+- Generate the four uplinks as 1G SFP entities, cap FastEthernet capability at 100 Mbps and SFP capability at 1000 Mbps, and keep SFP+ disabled for this model.
+- Add a synthetic end-to-end 3750 walk regression proving 52 physical interfaces, 48 RJ45, four 1G SFP uplinks, correct generated YAML labels, and the stock `48rj45-4sfp.png` visual contract.
+- Add generic registry-to-profile referential-integrity validation so any exact device that names a missing mapping profile fails CI.
+
 ## 2.1.41
 
 - Add Experimental exact-model Discovery handling for the community-observed Cisco `WS-C3750-48P` platform string.
