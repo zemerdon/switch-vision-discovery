@@ -58,6 +58,9 @@ with tempfile.TemporaryDirectory(prefix="sv-c3750-") as td:
             "live_output_dir": str(work / "live"),
             "live_output_path": str(work / "live" / "live-targeted-snmpwalk.txt"),
             "live_log_path": str(work / "live-snmpwalk.log"),
+            "live_output_dir": str(work / "live"),
+            "live_output_path": str(work / "live" / "live-targeted-snmpwalk.txt"),
+            "live_log_path": str(work / "live-snmpwalk.log"),
         }),
         encoding="utf-8",
     )
@@ -68,6 +71,7 @@ with tempfile.TemporaryDirectory(prefix="sv-c3750-") as td:
         "CV_VENDOR_DIR": str(ROOT / "runtime_src/opt/switch-vision/vendors"),
         "CV_MIB_DATABASE_DIR": str(ROOT / "runtime_src/opt/switch-vision/mib_database"),
         "SWITCH_VISION_CAPABILITIES_DIR": str(caps),
+        "SWITCH_VISION_SHARE_DIR": str(work / "share"),
         "SWITCH_VISION_SHARE_DIR": str(work / "share"),
         "SWITCH_VISION_SHARE_DIR": str(work / "share"),
     })
