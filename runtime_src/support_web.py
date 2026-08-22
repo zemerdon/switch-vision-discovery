@@ -2582,7 +2582,10 @@ def _diagnostics_snapshot(version: str) -> dict[str, Any]:
         # stale when it predates the report by more than two minutes, which
         # indicates it came from an earlier run rather than the same pipeline.
         stale_tolerance_seconds = 120
-        for label, path in [("SNMP2MQTT YAML", share / "generated-snmp2mqtt.yaml"), ("dashboard YAML", share / "generated-dashboard-card.yaml")]:
+        stale_candidates = [("dashboard YAML", share / "generated-dashboard-card.yaml")]
+        if snmp2mqtt_applicability["applicable"]:
+            stale_candidates.insert(0, ("SNMP2MQTT YAML", share / "generated-snmp2mqtt.yaml"))
+        for label, path in stale_candidates:
             if not path.is_file():
                 continue
             generated_mtime = path.stat().st_mtime

@@ -2206,6 +2206,8 @@ assert "UniFi2MQTT-only" in status["reason"]
 source = Path(web.__file__).read_text(encoding="utf-8")
 assert 'if not generated_yaml["found"] and snmp2mqtt_applicability["applicable"]:' in source
 assert '"snmp2mqtt_applicability": snmp2mqtt_applicability' in source
+assert 'if snmp2mqtt_applicability["applicable"]:' in source
+assert 'stale_candidates.insert(0, ("SNMP2MQTT YAML"' in source
 assert 'id="generatedYamlDescription"' in web._PAGE
 assert 'id="generatedYamlActions"' in web._PAGE
 assert 'id="regenerateYamlHelp"' in web._PAGE
