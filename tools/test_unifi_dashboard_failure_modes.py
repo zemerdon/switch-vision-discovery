@@ -14,17 +14,7 @@ HELPER = ROOT / "runtime_src" / "unifi_dashboard_cards.py"
 
 def run(snapshot: Path, registry: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [
-            sys.executable,
-            str(HELPER),
-            "--snapshot",
-            str(snapshot),
-            "--registry",
-            str(registry),
-            "--indent",
-            "6",
-            "--summary",
-        ],
+        [sys.executable, str(HELPER), "--snapshot", str(snapshot), "--registry", str(registry), "--indent", "6", "--summary"],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -64,23 +54,16 @@ def main() -> int:
         # Existing exact-model behavior remains unchanged.
         write_json(
             registry,
-            {
-                "devices": [
-                    {
-                        "vendor": "Ubiquiti",
-                        "model": "USW Test 8",
-                        "status": "experimental",
-                        "dashboard_support": True,
-                        "calibration_profile": "stock_8rj45",
-                        "default_faceplate": "faceplates/8rj45-0sfp.png",
-                    }
-                ]
-            },
+            {"devices": [{
+                "vendor": "Ubiquiti",
+                "model": "USW Test 8",
+                "status": "experimental",
+                "dashboard_support": True,
+                "calibration_profile": "stock_8rj45",
+                "default_faceplate": "faceplates/8rj45-0sfp.png",
+            }]},
         )
-        write_json(
-            snapshot,
-            {"schema_version": 1, "devices": [device("test-switch-1", "USW Test 8", 8)]},
-        )
+        write_json(snapshot, {"schema_version": 1, "devices": [device("test-switch-1", "USW Test 8", 8)]})
         healthy = run(snapshot, registry)
         assert healthy.returncode == 0, healthy
         assert "type: custom:switch-vision-3650" in healthy.stdout
@@ -91,100 +74,70 @@ def main() -> int:
             "exact support pending: 0; issues: 0"
         ) in healthy.stdout
 
-                # Brendan regression: the four contributed exact hardware contracts must
-        # all render. Pro Max 24 has truthful exact 24+2 visual geometry; the
-        # three compact/legacy models retain safe generic cards until dedicated
-        # artwork exists.
+        # Community-validated regression: all four exact hardware contracts render.
+        # Pro Max 24 has truthful exact 24+2 visual geometry; the compact/legacy
+        # models retain safe generic cards until dedicated artwork exists.
         write_json(
             registry,
-            {
-                "devices": [
-                    {"vendor": "Ubiquiti", "model": "UCG Ultra", "status": "detected", "dashboard_support": False},
-                    {"vendor": "Ubiquiti", "model": "US 16 PoE 150W", "status": "detected", "dashboard_support": False},
-                    {"vendor": "Ubiquiti", "model": "USW Pro Max 24", "status": "experimental", "dashboard_support": True, "calibration_profile": "unifi_24p_rj45_2sfp", "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png"},
-                    {"vendor": "Ubiquiti", "model": "USW Ultra", "status": "detected", "dashboard_support": False},
-                ]
-            },
+            {"devices": [
+                {"vendor": "Ubiquiti", "model": "UCG Ultra", "status": "detected", "dashboard_support": False},
+                {"vendor": "Ubiquiti", "model": "US 16 PoE 150W", "status": "detected", "dashboard_support": False},
+                {"vendor": "Ubiquiti", "model": "USW Pro Max 24", "status": "experimental", "dashboard_support": True, "calibration_profile": "unifi_24p_rj45_2sfp", "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png"},
+                {"vendor": "Ubiquiti", "model": "USW Ultra", "status": "detected", "dashboard_support": False},
+            ]},
         )
         write_json(
             snapshot,
-            {
-                "schema_version": 1,
-                "devices": [
-                    device("brendan-ucg", "UCG Ultra", 5),
-                    device("brendan-us16", "US 16 PoE 150W", 16, 2),
-                    device("brendan-promax24", "USW Pro Max 24", 24, 2),
-                    device("brendan-ultra", "USW Ultra", 8),
-                ],
-            },
+            {"schema_version": 1, "devices": [
+                device("community-ucg", "UCG Ultra", 5),
+                device("community-us16", "US 16 PoE 150W", 16, 2),
+                device("community-promax24", "USW Pro Max 24", 24, 2),
+                device("community-ultra", "USW Ultra", 8),
+            ]},
         )
-        brendan = run(snapshot, registry)
-        assert brendan.returncode == 0, brendan
-        assert brendan.stdout.count("type: custom:switch-vision-3650") == 4
+        community = run(snapshot, registry)
+        assert community.returncode == 0, community
+        assert community.stdout.count("type: custom:switch-vision-3650") == 4
         for model in ("UCG Ultra", "US 16 PoE 150W", "USW Pro Max 24", "USW Ultra"):
-            assert f"switch_model: {model}" in brendan.stdout
-        assert brendan.stdout.count("calibration_profile: unifi_24p_rj45_2sfp") == 4
-        assert brendan.stdout.count("faceplate_file: unifi-24p-rj45-2sfp.png") == 4
-        assert brendan.stdout.count("generic_faceplate: true") == 3
-        assert brendan.stdout.count("generic_faceplate: false") == 1
+            assert f"switch_model: {model}" in community.stdout
+        assert community.stdout.count("calibration_profile: unifi_24p_rj45_2sfp") == 4
+        assert community.stdout.count("faceplate_file: unifi-24p-rj45-2sfp.png") == 4
+        assert community.stdout.count("generic_faceplate: true") == 3
+        assert community.stdout.count("generic_faceplate: false") == 1
         assert (
             "UniFi cards emitted: 4; exact cards: 1; generic fallbacks: 3; "
             "exact support pending: 3; issues: 0"
-        ) in brendan.stdout
+        ) in community.stdout
 
         # Registered devices waiting for exact visuals also get a generic card.
-        # A 48-port topology still uses the neutral stock 48+2 because we do not
-        # yet ship a UniFi-specific 48-port generic faceplate.
         write_json(
             registry,
-            {
-                "devices": [
-                    {
-                        "vendor": "Ubiquiti",
-                        "model": "USW Pending 48",
-                        "status": "experimental",
-                        "dashboard_support": False,
-                    }
-                ]
-            },
+            {"devices": [{"vendor": "Ubiquiti", "model": "USW Pending 48", "status": "experimental", "dashboard_support": False}]},
         )
-        write_json(
-            snapshot,
-            {"schema_version": 1, "devices": [device("pending-48", "USW Pending 48", 48, 2)]},
-        )
+        write_json(snapshot, {"schema_version": 1, "devices": [device("pending-48", "USW Pending 48", 48, 2)]})
         pending = run(snapshot, registry)
         assert pending.returncode == 0, pending
         assert "calibration_profile: stock_48rj45_2sfp" in pending.stdout
         assert "faceplate_file: 48rj45-2sfp.png" in pending.stdout
         assert "generic_faceplate: true" in pending.stdout
 
-        # Input failures remain loud and YAML-safe.
         snapshot.write_text("{not-json", encoding="utf-8")
         invalid_snapshot = run(snapshot, registry)
         assert invalid_snapshot.returncode != 0
-        assert (
-            "# ERROR: UniFi dashboard card generation failed: "
-            "UniFi2MQTT snapshot is not valid JSON."
-        ) in invalid_snapshot.stdout
+        assert "# ERROR: UniFi dashboard card generation failed: UniFi2MQTT snapshot is not valid JSON." in invalid_snapshot.stdout
         assert "custom:switch-vision-3650" not in invalid_snapshot.stdout
 
         write_json(snapshot, {"schema_version": 1, "devices": []})
         registry.write_text("[not-an-object]", encoding="utf-8")
         invalid_registry = run(snapshot, registry)
         assert invalid_registry.returncode != 0
-        assert (
-            "# ERROR: UniFi dashboard card generation failed: "
-            "supported-device registry is not valid JSON."
-        ) in invalid_registry.stdout
+        assert "# ERROR: UniFi dashboard card generation failed: supported-device registry is not valid JSON." in invalid_registry.stdout
 
         write_json(registry, {"devices": []})
         empty = run(snapshot, registry)
         assert empty.returncode == 0, empty
         assert "# UniFi snapshot contains 0 normalized switching devices." in empty.stdout
-        assert (
-            "UniFi cards emitted: 0; exact cards: 0; generic fallbacks: 0; "
-            "exact support pending: 0; issues: 0"
-        ) in empty.stdout
+        assert "UniFi cards emitted: 0; exact cards: 0; generic fallbacks: 0; exact support pending: 0; issues: 0" in empty.stdout
 
         write_json(snapshot, {"schema_version": 1, "devices": {"bad": "shape"}})
         bad_shape = run(snapshot, registry)
