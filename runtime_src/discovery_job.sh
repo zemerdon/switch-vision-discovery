@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.1.41"
+SWITCH_VISION_DISCOVERY_VERSION="2.1.42"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -869,6 +869,7 @@ parser_report() {
       if (model ~ /^WS-C3650/) return "untested"
       if (model ~ /^WS-C2960X-24TS/) return "community_validated"
       if (is_2960(model)) return "experimental"
+      if (model ~ /^WS-C3750-48P/) return "experimental"
       if (model ~ /^WS-C3750X/) return "experimental"
       if (model ~ /^WS-C3560CG-8PC/) return "community_validated"
       if (model == "SG500X-24") return "community_validated"
@@ -950,7 +951,7 @@ parser_report() {
         match(line, /Version [0-9][^,]*/)
         ios = substr(line, RSTART + 8, RLENGTH - 8)
       }
-      if (match(line, /WS-C(3650|3750X|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
+      if (match(line, /WS-C(3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
         model_candidate = substr(line, RSTART, RLENGTH)
         if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.(2|7|13)\./ || line ~ /\.3\.6\.1\.4\.1\.9\.5\.1\./) {
           if (model_rank(model_candidate) > model_rank(local_model)) local_model = model_candidate
@@ -959,10 +960,10 @@ parser_report() {
         } else if (model_rank(model_candidate) > model_rank(candidate_model)) candidate_model = model_candidate
       }
       if (line ~ /\.3\.6\.1\.2\.1\.1\.1\.0 = /) sys_descr_present=1
-      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.2\.[0-9]+ = STRING:/ && val ~ /WS-C(3650|3750X|3560CG|2960X|2960S)-[A-Z0-9-]+/) {
+      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.2\.[0-9]+ = STRING:/ && val ~ /WS-C(3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/) {
         idx=oid_index(line); identity_model_descr_idx[idx]=1; identity_idx[idx]=1
       }
-      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.13\.[0-9]+ = STRING:/ && val ~ /WS-C(3650|3750X|3560CG|2960X|2960S)-[A-Z0-9-]+/) {
+      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.13\.[0-9]+ = STRING:/ && val ~ /WS-C(3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/) {
         idx=oid_index(line); identity_model_name_idx[idx]=1; identity_idx[idx]=1
       }
       if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.11\.[0-9]+ = STRING:/) {
@@ -1084,7 +1085,33 @@ parser_report() {
         is_te = (key ~ /^Te/ || key ~ /^TenGigabitEthernet/)
         special = 0
 
-        if (model == "SG500X-24" && n ~ /^gi1\/[0-9]+$/) {
+        if (model == "WS-C3750-48P" && n ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) {
+          c3750_key = n
+          sub(/^FastEthernet/, "", c3750_key)
+          sub(/^Fa/, "", c3750_key)
+          split(c3750_key, cp, "/")
+          member = cp[1] + 0
+          port = cp[3] + 0
+          physical_id = "Fa" member "/0/" port
+          if (!(physical_id in physical_key)) {
+            physical_key[physical_id] = 1; rj45_key[physical_id] = 1
+            member_key[member] = 1; member_physical[member]++; member_rj45[member]++
+          }
+          special = 1
+        } else if (model == "WS-C3750-48P" && n ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) {
+          c3750_key = n
+          sub(/^GigabitEthernet/, "", c3750_key)
+          sub(/^Gi/, "", c3750_key)
+          split(c3750_key, cp, "/")
+          member = cp[1] + 0
+          port = cp[3] + 0
+          physical_id = "Gi" member "/0/" port
+          if (!(physical_id in physical_key)) {
+            physical_key[physical_id] = 1; sfp_key[physical_id] = 1
+            member_key[member] = 1; member_physical[member]++; member_sfp[member]++
+          }
+          special = 1
+        } else if (model == "SG500X-24" && n ~ /^gi1\/[0-9]+$/) {
           port = n; sub(/^gi1\//, "", port)
           physical_id = "Gi1/" port
           if (!(physical_id in physical_key)) {
@@ -1308,6 +1335,9 @@ parser_report() {
         print "- RJ45 ge-0/0/0-47 ports: " rj45
         print "- 1G SFP ge-0/1/* uplinks currently exposed: " sfp_gi
         print "- 10G SFP+ xe-0/1/* uplinks currently exposed: " ten
+      } else if (model == "WS-C3750-48P") {
+        print "- RJ45 FastEthernet <member>/0/1-48 ports: " rj45
+        print "- 1G SFP GigabitEthernet <member>/0/1-4 uplinks: " sfp_gi
       } else if (model == "XS1930-10") {
         print "- RJ45 swp00-swp07 ports: " rj45
         print "- 10G SFP+ swp08-swp09 uplinks: " ten
@@ -1327,6 +1357,7 @@ parser_report() {
       profile_status = profile_status_for(model)
       if (model ~ /^WS-C3650-48/) profile = "cisco-3650-48p-2x10g"
       else if (is_2960(model)) profile = c2960_profile(model)
+      else if (model ~ /^WS-C3750-48P/) profile = "cisco-3750-48p-48fe-4sfp"
       else if (model ~ /^WS-C3750X-24P/) profile = "cisco-3750x-24p"
       else if (model ~ /^WS-C3560CG-8PC/) profile = "cisco-3560cg-8pc-8p-2dual"
       else if (model == "Juniper EX3300-48P") profile = "juniper-ex3300-48p"
@@ -1403,6 +1434,22 @@ parser_report() {
           }
           continue
         }
+        if (model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) {
+          c3750_key = name
+          sub(/^FastEthernet/, "", c3750_key)
+          sub(/^Fa/, "", c3750_key)
+          split(c3750_key, cp, "/")
+          mapped_rows++; print "  - ifIndex " idx " -> " name " -> member " (cp[1] + 0) " RJ45 FastEthernet port " (cp[3] + 0)
+          continue
+        }
+        if (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) {
+          c3750_key = name
+          sub(/^GigabitEthernet/, "", c3750_key)
+          sub(/^Gi/, "", c3750_key)
+          split(c3750_key, cp, "/")
+          mapped_rows++; print "  - ifIndex " idx " -> " name " -> member " (cp[1] + 0) " 1G SFP uplink " (cp[3] + 0)
+          continue
+        }
         if (model == "N2128PX-ON" && name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/0\/[0-9]+$/) {
           dell_key = name
           sub(/^GigabitEthernet/, "", dell_key)
@@ -1469,6 +1516,7 @@ parser_report() {
       else if (is_2960s(model) && profile_status == "supported") print "- PASS: Catalyst 2960S exact model confirmed by supported-device registry"
       else if (is_2960x(model)) print "- WARN: Catalyst 2960X model detected; experimental validation remains"
       else if (is_2960s(model)) print "- WARN: Catalyst 2960S model detected; experimental validation remains"
+      else if (model ~ /^WS-C3750-48P/) print "- INFO: Catalyst 3750 Experimental exact 48 FastEthernet + 4 x 1G SFP mapping loaded"
       else if (model ~ /^WS-C3750X/) print "- WARN: Catalyst 3750X model detected; possible/experimental only, not supported"
       else if (model ~ /^WS-C3560CG/) print "- INFO: Catalyst 3560-CG Community Validated mapping loaded; Gi0/9 and Gi0/10 retain dual-purpose combo semantics"
       else if (model == "SG500X-24") print "- INFO: Cisco SG500X-24 Community Validated mapping loaded from real-hardware contribution evidence"
@@ -1485,7 +1533,7 @@ parser_report() {
       else print (trunk_status_count > 0 ? "- PASS: Cisco trunk status OIDs detected" : "- WARN: Cisco trunk status OIDs not detected")
       if (target_ip != "unknown" && target_ip != "") print "- PASS: management target provided: " target_ip
       else print "- WARN: management target not provided; provide a switch_host in the switch list or targets CSV before generator use"
-      ready = (((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48))
+      ready = (((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48))
       print "- Ready for SNMP2MQTT generation: " (ready ? "yes, review-only" : "no")
       if (profile_status == "supported") print "- Generator confidence: supported profile; review generated YAML before installing"
       else if (profile_status == "community_validated") print "- Generator confidence: community-validated profile; physical layout verified on real hardware"
@@ -1563,6 +1611,10 @@ parser_report() {
           print "- Support status: experimental / partially validated"
           print "- Validation note: SFP/uplink physical validation pending"
         }
+      } else if (model ~ /^WS-C3750-48P/) {
+        print "- Suggested profile: cisco-3750-48p-48fe-4sfp"
+        print "- Confidence: experimental; exact 48 FastEthernet + 4 x 1G SFP physical contract"
+        print "- Support status: experimental / field revalidation required"
       } else if (model ~ /^WS-C3750X-24P/) {
         print "- Suggested profile: cisco-3750x-24p"
         print "- Confidence: experimental; based on submitted walk"
@@ -2528,6 +2580,20 @@ write_generated_yaml_for_walk() {
       return 48
     }
     function physical_label(name, idx, key, parts, member, port, label) {
+      if (model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) {
+        key = name
+        sub(/^FastEthernet/, "", key)
+        sub(/^Fa/, "", key)
+        split(key, parts, "/")
+        return member_label(parts[1] + 0) " Port " (parts[3] + 0)
+      }
+      if (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) {
+        key = name
+        sub(/^GigabitEthernet/, "", key)
+        sub(/^Gi/, "", key)
+        split(key, parts, "/")
+        return member_label(parts[1] + 0) " SFP 1G " (parts[3] + 0)
+      }
       if (model == "N2128PX-ON" && name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/0\/[0-9]+$/) {
         key = name
         sub(/^GigabitEthernet/, "", key)
@@ -2614,6 +2680,8 @@ write_generated_yaml_for_walk() {
     }
     function physical_speed_cap_mbps(model, label) {
       if (model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /) return 1000
+      if (model == "WS-C3750-48P" && label ~ / Port /) return 100
+      if (model == "WS-C3750-48P" && label ~ / SFP 1G /) return 1000
       return 0
     }
     function yaml_speed_sensor(model, idx, label, has_highspeed, has_ifspeed, cap_mbps) {
@@ -2702,7 +2770,8 @@ write_generated_yaml_for_walk() {
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model="S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model="XS1930-10"
       if (line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
-      if (match(line, /WS-C(3650|3750X|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
+      if (line ~ /WS-C3750-48P/) c3750_model="WS-C3750-48P"
+      if (match(line, /WS-C(3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
         model_candidate=substr(line, RSTART, RLENGTH)
         if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.(2|7|13)\./ || line ~ /\.3\.6\.1\.4\.1\.9\.5\.1\./) {
           if (model_rank(model_candidate) > model_rank(local_model)) local_model=model_candidate
@@ -2730,7 +2799,21 @@ write_generated_yaml_for_walk() {
           sub(/\.0$/, "", logical_port)
           juniper_logical_ifindex[logical_port + 0]=idx
         }
-        if (sg500_model != "" && val ~ /^(gi|te)1\/[0-9]+$/) {
+        if (c3750_model != "" && val ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) {
+          physical_count++
+          c3750_key=val
+          sub(/^FastEthernet/, "", c3750_key)
+          sub(/^Fa/, "", c3750_key)
+          split(c3750_key, c3750_parts, "/")
+          physical_member[c3750_parts[1] + 0] = 1
+        } else if (c3750_model != "" && val ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) {
+          physical_count++
+          c3750_key=val
+          sub(/^GigabitEthernet/, "", c3750_key)
+          sub(/^Gi/, "", c3750_key)
+          split(c3750_key, c3750_parts, "/")
+          physical_member[c3750_parts[1] + 0] = 1
+        } else if (sg500_model != "" && val ~ /^(gi|te)1\/[0-9]+$/) {
           physical_count++
           physical_member[1] = 1
         } else if (huawei_s5735_model != "" && val ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) {
@@ -2886,6 +2969,7 @@ write_generated_yaml_for_walk() {
         model = dell_model
         manufacturer = "Dell"
       }
+      else if (c3750_model != "") model = c3750_model
       else if (local_model != "") model = local_model
       else if (sys_model != "") model = sys_model
       else if (candidate_model != "") model = candidate_model
@@ -2910,7 +2994,7 @@ write_generated_yaml_for_walk() {
       phys_n = 0
       for (idx=1; idx<=maxidx; idx++) if (idx in ifname) {
         name=ifname[idx]
-        if ((model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/) {
+        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/) {
           if (model == "Juniper EX3300-48P" && name ~ /^(xe|ge)-0\/1\/[0-3]$/) continue
           if (name ~ /^ge-0\/0\/[0-9]+$/) {
             port_no=name
@@ -3597,7 +3681,7 @@ write_generated_dashboard_card() {
         echo "        status_entity_prefix: sensor.${safe_prefix}_port_"
         echo "        status_entity_suffix: _status"
         case "${effective_model:-${detected_model:-}}" in
-          *S5720-12TP-LI-AC*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
+          *S5720-12TP-LI-AC*|*WS-C3750-48P*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
           *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
         esac
         emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"
@@ -3633,7 +3717,7 @@ write_generated_dashboard_card() {
       echo "        status_entity_prefix: sensor.${safe_prefix}_port_"
       echo "        status_entity_suffix: _status"
       case "${exact_model:-}" in
-        *S5720-12TP-LI-AC*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
+        *S5720-12TP-LI-AC*|*WS-C3750-48P*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
         *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
       esac
       emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"

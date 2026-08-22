@@ -74,6 +74,7 @@ def main() -> int:
     discovery_registry_path = Path(
         "runtime_src/opt/switch-vision/devices/supported_devices.json"
     )
+    discovery_profiles_path = Path("runtime_src/profiles/switch-vision-profiles.yaml")
 
     discovery_config_text = discovery_config_path.read_text(encoding="utf-8")
     discovery_config = yaml.safe_load(discovery_config_text)
@@ -92,6 +93,18 @@ def main() -> int:
         )
 
     discovery_registry = json.loads(discovery_registry_path.read_text(encoding="utf-8"))
+    profile_payload = yaml.safe_load(discovery_profiles_path.read_text(encoding="utf-8")) or {}
+    discovery_profiles = profile_payload.get("profiles") or {}
+    if not isinstance(discovery_profiles, dict):
+        errors.append("Discovery profile file does not contain a profiles mapping")
+        discovery_profiles = {}
+    for item in discovery_registry.get("devices", []):
+        if not isinstance(item, dict):
+            continue
+        model = str(item.get("model") or "").strip() or "<unknown>"
+        mapping_profile = str(item.get("mapping_profile") or "").strip()
+        if mapping_profile and mapping_profile not in discovery_profiles:
+            errors.append(f"{model}: mapping_profile {mapping_profile!r} is not defined in shipped profiles")
     core_registry = json.loads(fetch_text(args.core_registry_url))
     discovery_models = by_model(discovery_registry)
     core_models = by_model(core_registry)
