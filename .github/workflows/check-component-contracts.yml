@@ -26,6 +26,8 @@ jobs:
           python-version: '3.12'
       - name: Install contract dependencies
         run: python3 -m pip install --disable-pip-version-check PyYAML websockets
+      - name: Materialize runtime version contract
+        run: sh tools/materialize_runtime.sh
       - name: Check strict visual contract policy
         run: python3 tools/test_visual_contract_policy.py
       - name: Check cross-component contracts
