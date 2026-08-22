@@ -30,12 +30,13 @@ jobs:
           git show origin/main:.github/v2142_prepare.py > /tmp/v2142_prepare.py
           git show origin/main:.github/v2142_testfix.py > /tmp/v2142_testfix.py
           git show origin/main:.github/v2142_patchfix.py > /tmp/v2142_patchfix.py
+          git show origin/main:.github/v2142_integrityfix.py > /tmp/v2142_integrityfix.py
       - name: Apply and smoke-test Discovery 2.1.42
         shell: bash
         run: |
           set -euo pipefail
           if grep -q 'version: "2.1.42"' switch_vision_discovery/config.yaml; then
-            echo "Discovery 2.1.42 is already prepared; skipping patch application."
+            echo "Discovery 2.1.42 is already prepared; skipping initial patch application."
           else
             python3 /tmp/v2142_prepare.py
           fi
@@ -44,6 +45,7 @@ jobs:
             python3 /tmp/v2142_patchfix.py
             python3 /tmp/v2142_testfix.py
           fi
+          python3 /tmp/v2142_integrityfix.py
           python3 -m py_compile tools/check_component_contracts.py tools/test_c3750_48p_contract.py
           if [ -f tools/test_c3750_48p_live_mapping.py ]; then
             python3 -m py_compile tools/test_c3750_48p_live_mapping.py
