@@ -11,17 +11,15 @@ from typing import Any
 import yaml
 
 # Existing stock/generic Switch Vision faceplates. Unknown or not-yet-visualized
-# UniFi switching devices use the smallest stock layout that can contain the
-# observed copper/optical topology. The real observed counts are still emitted
-# on the card, so unused generic sockets remain inactive.
+# UniFi switching devices use the smallest stock layout that can truthfully
+# contain the observed copper/optical topology. Unused generic sockets remain
+# inactive because the card still receives the real observed port counts.
 GENERIC_VISUALS: tuple[tuple[int, int, str, str], ...] = (
     (24, 2, "stock_24rj45_2sfp", "faceplates/24rj45-2sfp.png"),
     (24, 4, "stock_24rj45_4sfp", "faceplates/24rj45-4sfp.png"),
     (48, 2, "stock_48rj45_2sfp", "faceplates/48rj45-2sfp.png"),
     (48, 4, "stock_48rj45_4sfp", "faceplates/48rj45-4sfp.png"),
 )
-UNIVERSAL_FALLBACK_PROFILE = "stock_48rj45_4sfp"
-UNIVERSAL_FALLBACK_FACEPLATE = "faceplates/48rj45-4sfp.png"
 
 
 class JsonInputError(RuntimeError):
@@ -80,16 +78,15 @@ def visual_geometry_matches(faceplate: str, rj45_count: int, sfp_count: int) -> 
     return bool(name)
 
 
-def generic_visual(rj45_count: int, sfp_count: int) -> tuple[str, str, int, int, bool]:
+def generic_visual(rj45_count: int, sfp_count: int) -> tuple[str, str, int, int] | None:
     """Return the smallest existing stock visual able to contain the device."""
     for max_rj45, max_sfp, profile, faceplate in GENERIC_VISUALS:
         if rj45_count <= max_rj45 and sfp_count <= max_sfp:
-            return profile, faceplate, max_rj45, max_sfp, False
-    # Always provide a dashboard rather than dropping a positively classified
-    # switching device. The largest current generic remains the emergency
-    # fallback; the generated YAML explicitly records when capacity is smaller
-    # than the observed topology so the missing generic layout is visible.
-    return UNIVERSAL_FALLBACK_PROFILE, UNIVERSAL_FALLBACK_FACEPLATE, 48, 4, True
+            return profile, faceplate, max_rj45, max_sfp
+    # Never force an optical-heavy or otherwise oversized topology onto artwork
+    # that cannot represent it. Such a device remains explicitly pending until
+    # a suitable generic or exact faceplate exists.
+    return None
 
 
 def render(
@@ -109,7 +106,6 @@ def render(
     generic = 0
     pending_exact = 0
     invalid = 0
-    capacity_limited = 0
     if not devices:
         lines.append(f"{pad}# UniFi snapshot contains 0 normalized switching devices.")
 
@@ -163,16 +159,25 @@ def render(
             and visual_geometry_matches(faceplate, len(rj45), len(sfp))
         )
         visual_fallback = not exact_visual
-        generic_capacity_limited = False
 
         if visual_fallback:
-            profile, faceplate, visual_rj45, visual_sfp, generic_capacity_limited = generic_visual(
-                len(rj45), len(sfp)
-            )
-            generic += 1
             pending_exact += 1
-            if generic_capacity_limited:
-                capacity_limited += 1
+            generic_choice = generic_visual(len(rj45), len(sfp))
+            if generic_choice is None:
+                if reg and reg.get("dashboard_support") is not True:
+                    lines.append(
+                        f"{pad}# UniFi {json.dumps(model)} detected; dashboard support is pending verified visuals "
+                        f"and no suitable generic faceplate exists for {len(rj45)} RJ45 + {len(sfp)} SFP."
+                    )
+                else:
+                    lines.append(
+                        f"{pad}# UniFi {json.dumps(model)} detected, but no suitable generic faceplate exists for "
+                        f"{len(rj45)} RJ45 + {len(sfp)} SFP; exact support remains pending."
+                    )
+                continue
+
+            profile, faceplate, visual_rj45, visual_sfp = generic_choice
+            generic += 1
             if not reg:
                 reason = "no exact Switch Vision registry entry exists yet"
             elif reg.get("dashboard_support") is not True:
@@ -183,11 +188,6 @@ def render(
                 f"{pad}# UniFi {json.dumps(model)}: {reason}; using generic "
                 f"{visual_rj45} RJ45 + {visual_sfp} SFP faceplate."
             )
-            if generic_capacity_limited:
-                lines.append(
-                    f"{pad}# WARNING: observed topology is {len(rj45)} RJ45 + {len(sfp)} SFP, "
-                    "which exceeds the largest current generic faceplate; exact/generic artwork is still required."
-                )
         else:
             exact += 1
 
@@ -234,7 +234,7 @@ def render(
             lines.append(pad + line)
         emitted += 1
 
-    return "\n".join(lines), emitted, exact, generic, pending_exact, invalid + capacity_limited
+    return "\n".join(lines), emitted, exact, generic, pending_exact, invalid
 
 
 def yaml_safe_error(message: str, indent: int) -> str:
@@ -272,6 +272,12 @@ def main() -> int:
             f"# UniFi cards emitted: {emitted}; exact cards: {exact}; "
             f"generic fallbacks: {generic}; exact support pending: {pending_exact}; "
             f"issues: {issues}"
+        )
+        # Keep the previous concise summary as a compatibility breadcrumb for
+        # existing diagnostics/tests while the detailed counters above become
+        # the primary format.
+        print(
+            f"# UniFi cards emitted: {emitted}; waiting for visuals/registry: {pending_exact}"
         )
     return 0
 
