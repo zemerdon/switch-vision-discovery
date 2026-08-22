@@ -38,3 +38,7 @@ jobs:
         run: python3 tools/check_hub_identity.py
       - name: Check stored-walk YAML regeneration contract
         run: python3 tools/test_regenerate_yaml_contract.py
+      - name: Check Support My Switch SMTP/MIME contract
+        run: python3 tools/test_support_email_mime.py
+      - name: Check Catalyst 3750 exact-model contract
+        run: python3 tools/test_c3750_48p_contract.py
