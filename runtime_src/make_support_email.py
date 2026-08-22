@@ -10,7 +10,7 @@ import argparse
 import html
 import json
 from email.message import EmailMessage
-from email.policy import default
+from email.policy import SMTP
 from pathlib import Path
 from urllib.parse import quote
 
@@ -99,7 +99,7 @@ def main() -> int:
         "Thank you.",
     ])
 
-    message = EmailMessage(policy=default)
+    message = EmailMessage(policy=SMTP)
     message["To"] = SUPPORT_ADDRESS
     message["Subject"] = subject
     message.set_content(body)
@@ -111,7 +111,7 @@ def main() -> int:
     )
 
     args.output_eml.parent.mkdir(parents=True, exist_ok=True)
-    args.output_eml.write_bytes(message.as_bytes())
+    args.output_eml.write_bytes(message.as_bytes(policy=SMTP))
 
     mailto = f"mailto:{SUPPORT_ADDRESS}?subject={quote(subject)}&body={quote(body)}"
     page = f"""<!doctype html>

@@ -1,5 +1,5 @@
 name: Switch Vision Discovery
-version: "2.1.40"
+version: "2.1.41"
 slug: switch_vision_discovery
 description: Read-only multi-vendor switch discovery, capability reporting, and review-only SNMP2MQTT/dashboard generation for Switch Vision.
 url: https://github.com/zemerdon/switch-vision-discovery
