@@ -14,6 +14,10 @@ UNIVERSAL_FALLBACK_FACEPLATE = "faceplates/48rj45-4sfp.png"
 UNIVERSAL_FALLBACK_PROFILE = "default_cisco_48_port"
 
 
+class JsonInputError(RuntimeError):
+    """Raised when a required JSON input cannot be safely consumed."""
+
+
 def canonical_model(value: Any) -> str:
     text = " ".join(str(value or "").strip().split()).casefold()
     for prefix in ("unknown ubiquiti ", "ubiquiti unifi ", "ubiquiti ", "unknown "):
@@ -25,11 +29,22 @@ def canonical_model(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "", text)
 
 
-def load_json(path: Path) -> Any:
+def load_json(path: Path, label: str) -> dict[str, Any]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return None
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise JsonInputError(f"{label} could not be read") from exc
+    except UnicodeDecodeError as exc:
+        raise JsonInputError(f"{label} is not valid UTF-8") from exc
+
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise JsonInputError(f"{label} is not valid JSON") from exc
+
+    if not isinstance(payload, dict):
+        raise JsonInputError(f"{label} root must be a JSON object")
+    return payload
 
 
 def safe_member(device_id: str) -> str:
@@ -55,24 +70,32 @@ def visual_geometry_matches(faceplate: str, rj45_count: int, sfp_count: int) -> 
     return bool(name)
 
 
-def render(snapshot: dict[str, Any], registry: dict[str, Any], indent: int = 6) -> tuple[str, int, int]:
+def render(snapshot: dict[str, Any], registry: dict[str, Any], indent: int = 6) -> tuple[str, int, int, int]:
     pad = " " * indent
-    devices = snapshot.get("devices") if isinstance(snapshot, dict) else []
-    reg_devices = registry.get("devices") if isinstance(registry, dict) else []
+    devices = snapshot.get("devices")
+    reg_devices = registry.get("devices")
     if not isinstance(devices, list):
-        devices = []
+        raise JsonInputError("UniFi2MQTT snapshot field 'devices' must be a list")
     if not isinstance(reg_devices, list):
-        reg_devices = []
+        raise JsonInputError("supported-device registry field 'devices' must be a list")
 
     lines: list[str] = []
     emitted = 0
     skipped = 0
+    invalid = 0
+    if not devices:
+        lines.append(f"{pad}# UniFi snapshot contains 0 normalized switching devices.")
+
     for device in devices:
         if not isinstance(device, dict):
+            lines.append(f"{pad}# UniFi snapshot entry skipped because it is not a device object.")
+            invalid += 1
             continue
         model = str(device.get("model") or "Unknown").strip()
         device_id = str(device.get("id") or "").strip()
         if not device_id:
+            lines.append(f"{pad}# UniFi {json.dumps(model)} skipped because normalized device ID is missing.")
+            invalid += 1
             continue
         reg = registry_match(reg_devices, model)
         profile = str((reg or {}).get("calibration_profile") or "").strip()
@@ -136,7 +159,13 @@ def render(snapshot: dict[str, Any], registry: dict[str, Any], indent: int = 6) 
         for line in dumped:
             lines.append(pad + line)
         emitted += 1
-    return "\n".join(lines), emitted, skipped
+    return "\n".join(lines), emitted, skipped, invalid
+
+
+def yaml_safe_error(message: str, indent: int) -> str:
+    """Return a comment-only diagnostic that cannot invalidate generated YAML."""
+    safe = re.sub(r"[\r\n\t]+", " ", str(message)).strip()
+    return f"{' ' * max(0, indent)}# ERROR: UniFi dashboard card generation failed: {safe}."
 
 
 def main() -> int:
@@ -146,15 +175,26 @@ def main() -> int:
     parser.add_argument("--indent", type=int, default=6)
     parser.add_argument("--summary", action="store_true")
     args = parser.parse_args()
-    snapshot = load_json(args.snapshot)
-    registry = load_json(args.registry)
-    if not isinstance(snapshot, dict) or not isinstance(registry, dict):
-        return 0
-    text, emitted, skipped = render(snapshot, registry, max(0, args.indent))
+    indent = max(0, args.indent)
+
+    try:
+        snapshot = load_json(args.snapshot, "UniFi2MQTT snapshot")
+        registry = load_json(args.registry, "supported-device registry")
+        text, emitted, skipped, invalid = render(snapshot, registry, indent)
+    except JsonInputError as exc:
+        # stdout is intentional: Discovery embeds this helper output inside the
+        # generated YAML and historically suppresses helper stderr. Keep the
+        # error as a YAML comment so the preview tells users why cards vanished.
+        print(yaml_safe_error(str(exc), indent))
+        return 2
+
     if text:
         print(text)
     if args.summary:
-        print(f"# UniFi cards emitted: {emitted}; waiting for visuals/registry: {skipped}")
+        print(
+            f"# UniFi cards emitted: {emitted}; "
+            f"waiting for visuals/registry: {skipped}; invalid devices: {invalid}"
+        )
     return 0
 
 
