@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.36
+
+- Treat generated SNMP2MQTT YAML as **Not applicable** when no enabled SNMP switch targets are configured, including UniFi2MQTT-only installations.
+- Remove the false missing-YAML warning from diagnostics when the SNMP data path is not in use.
+- Hide SNMP2MQTT YAML regeneration/preview/download controls when they are irrelevant, while keeping SNMP cleanup available for users retiring old SNMP state.
+- Show the live SNMP2MQTT state as **Not in use** instead of **Waiting** on UniFi-only installations.
+- Preserve strict missing/invalid generated-YAML validation whenever at least one enabled SNMP target is actually configured.
+- Add a packaged regression covering UniFi-only, active-SNMP, and generator-disabled status behavior.
+
 ## 2.1.35
 
 - Synchronize the reviewed Core exact-model registry for Support My Switch contribution `SV-2026-000002` and preserve the validated Zyxel XS1930-10 contributor evidence.
