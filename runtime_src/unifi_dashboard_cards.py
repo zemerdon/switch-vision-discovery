@@ -10,12 +10,13 @@ from typing import Any
 
 import yaml
 
-# Existing stock/generic Switch Vision faceplates. Unknown or not-yet-visualized
-# UniFi switching devices use the smallest stock layout that can truthfully
-# contain the observed copper/optical topology. Unused generic sockets remain
-# inactive because the card still receives the real observed port counts.
+# Existing generic Switch Vision faceplates for UniFi devices. Prefer the
+# purpose-built UniFi 24 RJ45 + 2 SFP generic whenever the observed topology
+# fits it. Neutral stock generics remain available for larger/different layouts
+# where no UniFi-specific generic artwork exists yet. The real observed counts
+# are still emitted on the card, so unused generic sockets remain inactive.
 GENERIC_VISUALS: tuple[tuple[int, int, str, str], ...] = (
-    (24, 2, "stock_24rj45_2sfp", "faceplates/24rj45-2sfp.png"),
+    (24, 2, "unifi_24p_rj45_2sfp", "faceplates/unifi-24p-rj45-2sfp.png"),
     (24, 4, "stock_24rj45_4sfp", "faceplates/24rj45-4sfp.png"),
     (48, 2, "stock_48rj45_2sfp", "faceplates/48rj45-2sfp.png"),
     (48, 4, "stock_48rj45_4sfp", "faceplates/48rj45-4sfp.png"),
@@ -79,7 +80,7 @@ def visual_geometry_matches(faceplate: str, rj45_count: int, sfp_count: int) -> 
 
 
 def generic_visual(rj45_count: int, sfp_count: int) -> tuple[str, str, int, int] | None:
-    """Return the smallest existing stock visual able to contain the device."""
+    """Return the smallest existing generic visual able to contain the device."""
     for max_rj45, max_sfp, profile, faceplate in GENERIC_VISUALS:
         if rj45_count <= max_rj45 and sfp_count <= max_sfp:
             return profile, faceplate, max_rj45, max_sfp
