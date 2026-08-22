@@ -56,10 +56,21 @@ def sanitize_structured(value: object, identities: set[str], owner: str) -> obje
             if name.casefold() != owner.casefold():
                 result["display_name"] = "community contributor"
                 result["public_credit"] = False
+
+        # Inspect the original contribution IDs, not the recursively sanitized
+        # copies. Otherwise every SV-YYYY-NNNNNN ID becomes the same generic
+        # "community validation" string before it can be disambiguated.
+        original_contributions = value.get("contributions")
         contributions = result.get("contributions")
-        if isinstance(contributions, list):
-            for index, row in enumerate(contributions, start=1):
-                if isinstance(row, dict) and SUBMISSION_ID_RE.search(str(row.get("id") or "")):
+        if isinstance(original_contributions, list) and isinstance(contributions, list):
+            for index, (original_row, row) in enumerate(
+                zip(original_contributions, contributions), start=1
+            ):
+                if (
+                    isinstance(original_row, dict)
+                    and isinstance(row, dict)
+                    and SUBMISSION_ID_RE.search(str(original_row.get("id") or ""))
+                ):
                     row["id"] = f"community-validation-{index}"
         return result
     if isinstance(value, list):
