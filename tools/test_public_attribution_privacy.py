@@ -18,6 +18,21 @@ def check_structured(value: object, path: Path) -> None:
                 raise SystemExit(f"Non-approved public attribution remains in {path}: {name!r}")
             if name.casefold() != OWNER.casefold() and value.get("public_credit") is True:
                 raise SystemExit(f"Non-owner public credit remains enabled in {path}")
+
+        contributions = value.get("contributions")
+        if isinstance(contributions, list):
+            contribution_ids = [
+                str(row.get("id") or "").strip()
+                for row in contributions
+                if isinstance(row, dict) and str(row.get("id") or "").strip()
+            ]
+            if len(contribution_ids) != len(set(contribution_ids)):
+                raise SystemExit(f"Duplicate public contribution identifiers remain in {path}")
+            if any(item.casefold() == "community validation" for item in contribution_ids):
+                raise SystemExit(
+                    f"Non-disambiguated public contribution identifier remains in {path}"
+                )
+
         for child in value.values():
             check_structured(child, path)
     elif isinstance(value, list):
