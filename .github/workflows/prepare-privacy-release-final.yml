@@ -73,7 +73,19 @@ jobs:
       - name: Validate regenerate-YAML contract
         run: python tools/test_regenerate_yaml_contract.py
       - name: Validate packaged Discovery self-test
-        run: sh -x runtime_src/self-test.sh
+        id: packaged_self_test
+        shell: bash
+        run: |
+          set -o pipefail
+          sh -x runtime_src/self-test.sh 2>&1 | tee self-test.log
+      - name: Upload self-test diagnostics
+        if: failure() && steps.packaged_self_test.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: discovery-privacy-self-test-diagnostics
+          path: self-test.log
+          if-no-files-found: error
+          retention-days: 1
       - name: Validate Python syntax and repository hygiene
         shell: bash
         run: |
