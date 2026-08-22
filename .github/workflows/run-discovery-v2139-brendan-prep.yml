@@ -33,6 +33,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PYRUNNER'
           from pathlib import Path
+          import json
           import re
 
           workflow = Path('.github/workflows/prepare-discovery-v2139-brendan.yml')
@@ -45,6 +46,61 @@ jobs:
               for line in match.group(1).splitlines()
           )
           exec(compile(payload, str(workflow), 'exec'), {'__name__': '__main__'})
+
+          pending = {'UCG Ultra', 'US 16 PoE 150W', 'USW Ultra'}
+
+          # Match Core's permanent visual policy: exact models without an enabled
+          # visual remain detected. Only Pro Max 24 is experimental here because
+          # its existing UniFi 24+2 socket geometry is truthful.
+          registry_path = Path('runtime_src/opt/switch-vision/devices/supported_devices.json')
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          for item in registry.get('devices', []):
+              if isinstance(item, dict) and item.get('model') in pending:
+                  item['status'] = 'detected'
+                  if isinstance(item.get('visuals'), dict):
+                      item['visuals']['status'] = 'detected'
+          registry_path.write_text(json.dumps(registry, indent=2) + '\n', encoding='utf-8', newline='\n')
+
+          profiles_path = Path('runtime_src/profiles/switch-vision-profiles.yaml')
+          profiles_text = profiles_path.read_text(encoding='utf-8')
+          for profile in ('ubiquiti-ucg-ultra-api', 'ubiquiti-us-16-poe-150w-api', 'ubiquiti-usw-ultra-api'):
+              needle = f'  {profile}:\n    status: experimental\n'
+              replacement = f'  {profile}:\n    status: detected\n'
+              if needle not in profiles_text:
+                  raise SystemExit(f'Expected profile status block missing: {profile}')
+              profiles_text = profiles_text.replace(needle, replacement, 1)
+          profiles_path.write_text(profiles_text, encoding='utf-8', newline='\n')
+
+          # The original prep payload intentionally builds a replacement block
+          # independently; restore the function's eight-space indentation after
+          # that block was dedented for string construction.
+          test_path = Path('tools/test_unifi_dashboard_failure_modes.py')
+          test_text = test_path.read_text(encoding='utf-8')
+          start = test_text.index('# Brendan regression:')
+          end = test_text.index('        # Registered devices waiting for exact visuals', start)
+          block = test_text[start:end]
+          block = '\n'.join(('        ' + line if line else line) for line in block.splitlines()) + '\n'
+          block = block.replace(
+              '{"vendor": "Ubiquiti", "model": "UCG Ultra", "status": "experimental",',
+              '{"vendor": "Ubiquiti", "model": "UCG Ultra", "status": "detected",',
+          ).replace(
+              '{"vendor": "Ubiquiti", "model": "US 16 PoE 150W", "status": "experimental",',
+              '{"vendor": "Ubiquiti", "model": "US 16 PoE 150W", "status": "detected",',
+          ).replace(
+              '{"vendor": "Ubiquiti", "model": "USW Ultra", "status": "experimental",',
+              '{"vendor": "Ubiquiti", "model": "USW Ultra", "status": "detected",',
+          )
+          test_path.write_text(test_text[:start] + block + test_text[end:], encoding='utf-8', newline='\n')
+
+          self_path = Path('runtime_src/self-test.sh')
+          self_text = self_path.read_text(encoding='utf-8')
+          self_text = self_text.replace(
+              '              assert item["status"] == "experimental", model\n',
+              '              expected_status = "experimental" if model == "USW Pro Max 24" else "detected"\n'
+              '              assert item["status"] == expected_status, model\n',
+              1,
+          )
+          self_path.write_text(self_text, encoding='utf-8', newline='\n')
           PYRUNNER
           rm -f \
             .github/workflows/prepare-discovery-v2139-brendan.yml \
