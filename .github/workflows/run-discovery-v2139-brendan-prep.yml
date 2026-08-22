@@ -124,7 +124,15 @@ jobs:
         run: python tools/test_regenerate_yaml_contract.py
 
       - name: Packaged self-test
-        run: sh -x runtime_src/self-test.sh
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! sh -x runtime_src/self-test.sh > /tmp/switch-vision-self-test.log 2>&1; then
+            echo '---- packaged self-test failure tail ----'
+            tail -n 160 /tmp/switch-vision-self-test.log
+            exit 1
+          fi
+          tail -n 40 /tmp/switch-vision-self-test.log
 
       - name: Compile and clean
         shell: bash
