@@ -28,36 +28,28 @@ jobs:
 
           path = Path('runtime_src/support_web.py')
           text = path.read_text(encoding='utf-8')
-          old = '''        stale_tolerance_seconds = 120
-          for label, path in [("SNMP2MQTT YAML", share / "generated-snmp2mqtt.yaml"), ("dashboard YAML", share / "generated-dashboard-card.yaml")]:
-              if not path.is_file():
-                  continue
-          '''
-          new = '''        stale_tolerance_seconds = 120
-          stale_candidates = [("dashboard YAML", share / "generated-dashboard-card.yaml")]
-          if snmp2mqtt_applicability["applicable"]:
-              stale_candidates.insert(0, ("SNMP2MQTT YAML", share / "generated-snmp2mqtt.yaml"))
-          for label, path in stale_candidates:
-              if not path.is_file():
-                  continue
-          '''
-          if old not in text:
+          old_line = '        for label, path in [("SNMP2MQTT YAML", share / "generated-snmp2mqtt.yaml"), ("dashboard YAML", share / "generated-dashboard-card.yaml")]:\n'
+          new_lines = (
+              '        stale_candidates = [("dashboard YAML", share / "generated-dashboard-card.yaml")]\n'
+              '        if snmp2mqtt_applicability["applicable"]:\n'
+              '            stale_candidates.insert(0, ("SNMP2MQTT YAML", share / "generated-snmp2mqtt.yaml"))\n'
+              '        for label, path in stale_candidates:\n'
+          )
+          if old_line not in text:
               raise SystemExit('Could not locate generated-file stale diagnostic loop')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+          path.write_text(text.replace(old_line, new_lines, 1), encoding='utf-8', newline='\n')
 
           test_path = Path('runtime_src/self-test.sh')
           tests = test_path.read_text(encoding='utf-8')
-          old_assert = '''assert '"snmp2mqtt_applicability": snmp2mqtt_applicability' in source
-          assert 'id="generatedYamlDescription"' in web._PAGE
-          '''
-          new_assert = '''assert '"snmp2mqtt_applicability": snmp2mqtt_applicability' in source
-          assert 'if snmp2mqtt_applicability["applicable"]:' in source
-          assert 'stale_candidates.insert(0, ("SNMP2MQTT YAML"' in source
-          assert 'id="generatedYamlDescription"' in web._PAGE
-          '''
-          if old_assert not in tests:
-              raise SystemExit('Could not locate v2.1.36 regression assertions')
-          test_path.write_text(tests.replace(old_assert, new_assert, 1), encoding='utf-8', newline='\n')
+          anchor = 'assert \'"snmp2mqtt_applicability": snmp2mqtt_applicability\' in source\n'
+          addition = (
+              anchor
+              + 'assert \'if snmp2mqtt_applicability["applicable"]:\' in source\n'
+              + 'assert \'stale_candidates.insert(0, ("SNMP2MQTT YAML"\' in source\n'
+          )
+          if anchor not in tests:
+              raise SystemExit('Could not locate v2.1.36 regression assertion anchor')
+          test_path.write_text(tests.replace(anchor, addition, 1), encoding='utf-8', newline='\n')
           PY
 
           tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
