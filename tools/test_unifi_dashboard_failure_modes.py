@@ -92,7 +92,8 @@ def main() -> int:
         ) in healthy.stdout
 
         # Brendan regression: positively classified but unregistered UniFi
-        # switching devices must still receive working generic dashboard cards.
+        # switching devices must still receive working generic dashboard cards,
+        # and layouts up to 24 RJ45 + 2 optical must prefer our UniFi generic.
         write_json(registry, {"devices": []})
         write_json(
             snapshot,
@@ -111,8 +112,8 @@ def main() -> int:
         assert brendan.stdout.count("type: custom:switch-vision-3650") == 4
         for model in ("UCG Ultra", "US 16 PoE 150W", "USW Pro Max 24", "USW Ultra"):
             assert f"switch_model: {model}" in brendan.stdout
-        assert brendan.stdout.count("calibration_profile: stock_24rj45_2sfp") == 4
-        assert brendan.stdout.count("faceplate_file: 24rj45-2sfp.png") == 4
+        assert brendan.stdout.count("calibration_profile: unifi_24p_rj45_2sfp") == 4
+        assert brendan.stdout.count("faceplate_file: unifi-24p-rj45-2sfp.png") == 4
         assert brendan.stdout.count("generic_faceplate: true") == 4
         assert (
             "UniFi cards emitted: 4; exact cards: 0; generic fallbacks: 4; "
@@ -120,6 +121,8 @@ def main() -> int:
         ) in brendan.stdout
 
         # Registered devices waiting for exact visuals also get a generic card.
+        # A 48-port topology still uses the neutral stock 48+2 because we do not
+        # yet ship a UniFi-specific 48-port generic faceplate.
         write_json(
             registry,
             {
