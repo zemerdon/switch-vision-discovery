@@ -1,17 +1,20 @@
 name: Temporary prepare Discovery 2.1.42
 
 on:
-  push:
+  pull_request:
     branches:
       - main
-    paths:
-      - .github/v2142-trigger.txt
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
 
 jobs:
   prepare:
+    if: github.event.pull_request.head.ref == 'fix/discovery-2.1.42-c3750-profile'
     runs-on: ubuntu-latest
     steps:
       - name: Check out review branch
@@ -23,22 +26,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git fetch origin main
           git show origin/main:.github/v2142_prepare.py > /tmp/v2142_prepare.py
       - name: Apply and smoke-test Discovery 2.1.42
         shell: bash
         run: |
           set -euo pipefail
-          python3 /tmp/v2142_prepare.py
-          python3 -m py_compile tools/check_component_contracts.py tools/test_c3750_48p_contract.py tools/test_c3750_48p_live_mapping.py
-          python3 tools/test_c3750_48p_contract.py
-          python3 tools/test_c3750_48p_live_mapping.py
+          if grep -q 'version: "2.1.42"' switch_vision_discovery/config.yaml; then
+            echo "Discovery 2.1.42 is already prepared; skipping patch application."
+          else
+            python3 /tmp/v2142_prepare.py
+          fi
+          rm -f .github/v2142-review.txt
+          python3 -m py_compile tools/check_component_contracts.py tools/test_c3750_48p_contract.py
+          if [ -f tools/test_c3750_48p_live_mapping.py ]; then
+            python3 -m py_compile tools/test_c3750_48p_live_mapping.py
+            python3 tools/test_c3750_48p_contract.py
+            python3 tools/test_c3750_48p_live_mapping.py
+          fi
           git status --short
-      - name: Commit review branch
+      - name: Commit review branch if changed
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          if git diff --cached --quiet; then
+            echo "No preparation changes remain."
+            exit 0
+          fi
           git commit -m "Discovery 2.1.42: fix Catalyst 3750 live 48+4 mapping"
           git push origin HEAD:fix/discovery-2.1.42-c3750-profile
