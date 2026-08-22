@@ -1,23 +1,23 @@
 name: Rebuild Discovery 2.1.37 runtime
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/unifi-dashboard-card-errors-v2137
+      - main
 
 permissions:
   contents: write
 
 jobs:
   rebuild:
-    if: ${{ !contains(github.event.head_commit.message, '[runtime-packager]') }}
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     steps:
-      - name: Check out branch
+      - name: Check out PR branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: fix/unifi-dashboard-card-errors-v2137
+          ref: ${{ github.event.pull_request.head.ref }}
           persist-credentials: true
 
       - name: Set up Python
@@ -85,4 +85,4 @@ jobs:
             exit 0
           fi
           git commit -m '[runtime-packager] Discovery 2.1.37 runtime package'
-          git push origin HEAD:fix/unifi-dashboard-card-errors-v2137
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
