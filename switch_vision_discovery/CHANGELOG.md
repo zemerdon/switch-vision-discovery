@@ -7,6 +7,7 @@
 - Generate the four uplinks as 1G SFP entities, cap FastEthernet capability at 100 Mbps and SFP capability at 1000 Mbps, and keep SFP+ disabled for this model.
 - Add a synthetic end-to-end 3750 walk regression proving 52 physical interfaces, 48 RJ45, four 1G SFP uplinks, correct generated YAML labels, and the stock `48rj45-4sfp.png` visual contract.
 - Add generic registry-to-profile referential-integrity validation so any exact device that names a missing mapping profile fails CI.
+- Repair the pre-existing `US 48 PoE 500W` registry/profile reference by adding its declared 48-RJ45 + 2-SFP+ + 2-SFP API mapping profile.
 
 ## 2.1.41
 
