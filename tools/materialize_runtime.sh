@@ -10,11 +10,11 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-# Keep runtime-reported versions synchronized with the Home Assistant app
-# version before packaging. This removes hand-maintained version drift from the
-# runtime archive contract.
-for file in runtime_src/run.sh runtime_src/discovery_job.sh; do
-  sed -E -i "s/SWITCH_VISION_DISCOVERY_VERSION=\"[0-9.]+\"/SWITCH_VISION_DISCOVERY_VERSION=\"$VERSION\"/" "$file"
+# Keep runtime-reported versions and their packaged regression assertions
+# synchronized with the Home Assistant app version before packaging. This
+# removes hand-maintained version drift from the runtime archive contract.
+for file in runtime_src/run.sh runtime_src/discovery_job.sh runtime_src/self-test.sh; do
+  sed -E -i "s/SWITCH_VISION_DISCOVERY_VERSION=\"[0-9.]+\"/SWITCH_VISION_DISCOVERY_VERSION=\"$VERSION\"/g" "$file"
   grep -Fq "SWITCH_VISION_DISCOVERY_VERSION=\"$VERSION\"" "$file"
 done
 
