@@ -1977,6 +1977,359 @@
           "height": 448
         }
       }
+    },
+    {
+      "status": "detected",
+      "confirmed_since": "2.4.10",
+      "last_validated_version": "2.4.10",
+      "evidence": "support_my_switch_SV-2026-000034_and_SV-2026-000036_unifi_api",
+      "stack_support": false,
+      "discovery_support": true,
+      "optional_faceplates": [],
+      "tested_firmware": [],
+      "contributor": {
+        "display_name": "Brendan Pratt",
+        "public_credit": true
+      },
+      "vendor": "Ubiquiti",
+      "family": "UniFi Cloud Gateway Ultra",
+      "model": "UCG Ultra",
+      "ports": {
+        "rj45": 5,
+        "poe": false,
+        "uplinks": 0,
+        "uplink_type": "none",
+        "gigabit_sfp": 0,
+        "ten_gigabit_sfp_plus": 0
+      },
+      "dashboard_support": false,
+      "mapping_profile": "ubiquiti-ucg-ultra-api",
+      "calibration_profile": "",
+      "default_faceplate": "",
+      "contributions": [
+        {
+          "id": "SV-2026-000034",
+          "source_component": "UniFi2MQTT 2.0.47",
+          "source_discovery_version": "2.1.37",
+          "devices_observed": 1,
+          "validation_scope": "physical_api_contract_repeat_capture",
+          "api_capabilities": {
+            "port_detail": true,
+            "per_port_traffic": false
+          },
+          "dashboard_validation": "generic_card_generated",
+          "contributor": {
+            "display_name": "Anonymous",
+            "public_credit": false
+          }
+        },
+        {
+          "id": "SV-2026-000036",
+          "source_component": "UniFi2MQTT 2.0.47",
+          "source_discovery_version": "2.1.37",
+          "devices_observed": 1,
+          "validation_scope": "physical_api_contract_repeat_capture",
+          "api_capabilities": {
+            "port_detail": true,
+            "per_port_traffic": false
+          },
+          "dashboard_validation": "generic_card_generated",
+          "contributor": {
+            "display_name": "Brendan Pratt",
+            "public_credit": true
+          }
+        }
+      ],
+      "notes": [
+        "SV-2026-000034 and SV-2026-000036 are two corroborating captures of the same physical UCG Ultra and preserve the same five-port topology while normal live counters change.",
+        "Live UniFi API evidence exposes four 1G RJ45 ports plus one 2.5G-capable RJ45 port and no PoE output capability.",
+        "The device is a Cloud Gateway with integrated switching; Switch Vision accepts it because the UniFi controller advertises switching capability rather than because the model name resembles a switch.",
+        "WAN/LAN role is deliberately not inferred from physical port position; controller state remains authoritative for role semantics.",
+        "Port detail is available while per-port RX/TX traffic is unavailable through the contributed UniFi API path.",
+        "No verified five-port UCG Ultra faceplate exists yet, so exact dashboard visuals remain pending; Discovery uses its safe generic visual while retaining the real five-port count."
+      ],
+      "validation": {
+        "exact_model_detection": "live_api_confirmed_two_corroborating_captures",
+        "rj45_mapping": "live_api_confirmed_five_physical_ports",
+        "poe": "live_api_confirmed_no_poe_output_capability",
+        "system_sensors": "live_api_confirmed_cpu_memory_uptime",
+        "uplinks": "not_applicable",
+        "stack": "not_applicable"
+      },
+      "visuals": {
+        "status": "detected",
+        "recommended_faceplate": "",
+        "optional_faceplates": [],
+        "calibration_profile": "",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
+    },
+    {
+      "status": "detected",
+      "confirmed_since": "2.4.10",
+      "last_validated_version": "2.4.10",
+      "evidence": "support_my_switch_SV-2026-000034_and_SV-2026-000036_unifi_api",
+      "stack_support": false,
+      "discovery_support": true,
+      "optional_faceplates": [],
+      "tested_firmware": [],
+      "contributor": {
+        "display_name": "Brendan Pratt",
+        "public_credit": true
+      },
+      "vendor": "Ubiquiti",
+      "family": "UniFi Switch 16 PoE 150W",
+      "model": "US 16 PoE 150W",
+      "ports": {
+        "rj45": 16,
+        "poe": true,
+        "uplinks": 2,
+        "uplink_type": "2x 1G SFP",
+        "gigabit_sfp": 2,
+        "ten_gigabit_sfp_plus": 0
+      },
+      "dashboard_support": false,
+      "mapping_profile": "ubiquiti-us-16-poe-150w-api",
+      "calibration_profile": "",
+      "default_faceplate": "",
+      "contributions": [
+        {
+          "id": "SV-2026-000034",
+          "source_component": "UniFi2MQTT 2.0.47",
+          "source_discovery_version": "2.1.37",
+          "devices_observed": 1,
+          "validation_scope": "physical_api_contract_repeat_capture",
+          "api_capabilities": {
+            "port_detail": true,
+            "per_port_traffic": false
+          },
+          "dashboard_validation": "generic_card_generated",
+          "contributor": {
+            "display_name": "Anonymous",
+            "public_credit": false
+          }
+        },
+        {
+          "id": "SV-2026-000036",
+          "source_component": "UniFi2MQTT 2.0.47",
+          "source_discovery_version": "2.1.37",
+          "devices_observed": 1,
+          "validation_scope": "physical_api_contract_repeat_capture",
+          "api_capabilities": {
+            "port_detail": true,
+            "per_port_traffic": false
+          },
+          "dashboard_validation": "generic_card_generated",
+          "contributor": {
+            "display_name": "Brendan Pratt",
+            "public_credit": true
+          }
+        }
+      ],
+      "notes": [
+        "SV-2026-000034 and SV-2026-000036 independently repeat the same 16x 1G RJ45 plus 2x 1G SFP topology on the contributed US 16 PoE 150W.",
+        "All sixteen copper ports expose PoE output capability in the normalized UniFi API evidence; the two SFP ports do not.",
+        "The contract records the standardized PoE metadata actually exposed by the API and does not invent legacy passive-24V state that was not present in the contribution.",
+        "Port detail is available while per-port RX/TX traffic is unavailable through the contributed UniFi API path.",
+        "A dedicated 16 RJ45 + 2 SFP faceplate is not yet verified, so exact dashboard visuals remain pending; Discovery uses its safe generic 24+2 visual with the true 16+2 counts."
+      ],
+      "validation": {
+        "exact_model_detection": "live_api_confirmed_two_corroborating_captures",
+        "rj45_mapping": "live_api_confirmed_ports_1_16",
+        "poe": "live_api_confirmed_output_capability_ports_1_16",
+        "system_sensors": "live_api_confirmed_cpu_memory_uptime",
+        "uplinks": "live_api_confirmed_ports_17_18_1g_sfp",
+        "stack": "not_applicable"
+      },
+      "visuals": {
+        "status": "detected",
+        "recommended_faceplate": "",
+        "optional_faceplates": [],
+        "calibration_profile": "",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
+    },
+    {
+      "status": "experimental",
+      "confirmed_since": "2.4.10",
+      "last_validated_version": "2.4.10",
+      "evidence": "support_my_switch_SV-2026-000034_and_SV-2026-000036_unifi_api",
+      "stack_support": false,
+      "discovery_support": true,
+      "optional_faceplates": [],
+      "tested_firmware": [],
+      "contributor": {
+        "display_name": "Brendan Pratt",
+        "public_credit": true
+      },
+      "vendor": "Ubiquiti",
+      "family": "UniFi Switch Pro Max 24",
+      "model": "USW Pro Max 24",
+      "ports": {
+        "rj45": 24,
+        "poe": false,
+        "uplinks": 2,
+        "uplink_type": "2x 10G SFP+",
+        "gigabit_sfp": 0,
+        "ten_gigabit_sfp_plus": 2
+      },
+      "dashboard_support": true,
+      "mapping_profile": "ubiquiti-usw-pro-max-24-api",
+      "calibration_profile": "unifi_24p_rj45_2sfp",
+      "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+      "contributions": [
+        {
+          "id": "SV-2026-000034",
+          "source_component": "UniFi2MQTT 2.0.47",
+          "source_discovery_version": "2.1.37",
+          "devices_observed": 1,
+          "validation_scope": "physical_api_contract_repeat_capture",
+          "api_capabilities": {
+            "port_detail": true,
+            "per_port_traffic": false
+          },
+          "dashboard_validation": "generic_card_generated",
+          "contributor": {
+            "display_name": "Anonymous",
+            "public_credit": false
+          }
+        },
+        {
+          "id": "SV-2026-000036",
+          "source_component": "UniFi2MQTT 2.0.47",
+          "source_discovery_version": "2.1.37",
+          "devices_observed": 1,
+          "validation_scope": "physical_api_contract_repeat_capture",
+          "api_capabilities": {
+            "port_detail": true,
+            "per_port_traffic": false
+          },
+          "dashboard_validation": "generic_card_generated",
+          "contributor": {
+            "display_name": "Brendan Pratt",
+            "public_credit": true
+          }
+        }
+      ],
+      "notes": [
+        "SV-2026-000034 and SV-2026-000036 repeat the same physical/API topology for the non-PoE USW Pro Max 24.",
+        "Ports 1-16 are 1G RJ45, ports 17-24 are 2.5G-capable RJ45, and ports 25-26 are 10G SFP+.",
+        "Maximum connector capability remains separate from current negotiated speed so a 2.5G-capable copper port may truthfully display a lower live link speed.",
+        "No PoE output capability is reported for this non-PoE model.",
+        "Port detail is available while per-port RX/TX traffic is unavailable through the contributed UniFi API path.",
+        "The existing UniFi 24 RJ45 + 2 SFP generic faceplate has exact physical socket geometry for this model and is therefore safe as its current exact layout visual; model-specific artwork may replace it later without changing the API mapping contract."
+      ],
+      "validation": {
+        "exact_model_detection": "live_api_confirmed_two_corroborating_captures",
+        "rj45_mapping": "live_api_confirmed_ports_1_24_with_ports_17_24_2p5g_capable",
+        "poe": "live_api_confirmed_no_poe_output_capability",
+        "system_sensors": "live_api_confirmed_cpu_memory_uptime",
+        "uplinks": "live_api_confirmed_ports_25_26_10g_sfp_plus",
+        "stack": "not_applicable"
+      },
+      "visuals": {
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+        "optional_faceplates": [],
+        "calibration_profile": "unifi_24p_rj45_2sfp",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
+    },
+    {
+      "status": "detected",
+      "confirmed_since": "2.4.10",
+      "last_validated_version": "2.4.10",
+      "evidence": "support_my_switch_SV-2026-000034_and_SV-2026-000036_unifi_api",
+      "stack_support": false,
+      "discovery_support": true,
+      "optional_faceplates": [],
+      "tested_firmware": [],
+      "contributor": {
+        "display_name": "Brendan Pratt",
+        "public_credit": true
+      },
+      "vendor": "Ubiquiti",
+      "family": "UniFi Switch Ultra",
+      "model": "USW Ultra",
+      "ports": {
+        "rj45": 8,
+        "poe": true,
+        "uplinks": 0,
+        "uplink_type": "none",
+        "gigabit_sfp": 0,
+        "ten_gigabit_sfp_plus": 0
+      },
+      "dashboard_support": false,
+      "mapping_profile": "ubiquiti-usw-ultra-api",
+      "calibration_profile": "",
+      "default_faceplate": "",
+      "contributions": [
+        {
+          "id": "SV-2026-000034",
+          "source_component": "UniFi2MQTT 2.0.47",
+          "source_discovery_version": "2.1.37",
+          "devices_observed": 1,
+          "validation_scope": "physical_api_contract_repeat_capture",
+          "api_capabilities": {
+            "port_detail": true,
+            "per_port_traffic": false
+          },
+          "dashboard_validation": "generic_card_generated",
+          "contributor": {
+            "display_name": "Anonymous",
+            "public_credit": false
+          }
+        },
+        {
+          "id": "SV-2026-000036",
+          "source_component": "UniFi2MQTT 2.0.47",
+          "source_discovery_version": "2.1.37",
+          "devices_observed": 1,
+          "validation_scope": "physical_api_contract_repeat_capture",
+          "api_capabilities": {
+            "port_detail": true,
+            "per_port_traffic": false
+          },
+          "dashboard_validation": "generic_card_generated",
+          "contributor": {
+            "display_name": "Brendan Pratt",
+            "public_credit": true
+          }
+        }
+      ],
+      "notes": [
+        "SV-2026-000034 and SV-2026-000036 repeat the same eight-port 1G RJ45 topology for USW Ultra.",
+        "PoE output capability is exposed on ports 1-7 only; port 8 is not advertised as a PoE output port, preserving the hardware distinction between PoE output and the PoE input/uplink port.",
+        "Port detail is available while per-port RX/TX traffic is unavailable through the contributed UniFi API path.",
+        "No verified eight-port USW Ultra faceplate exists yet, so exact dashboard visuals remain pending; Discovery uses its safe generic visual while preserving the real eight-port count."
+      ],
+      "validation": {
+        "exact_model_detection": "live_api_confirmed_two_corroborating_captures",
+        "rj45_mapping": "live_api_confirmed_ports_1_8",
+        "poe": "live_api_confirmed_output_capability_ports_1_7_only",
+        "system_sensors": "live_api_confirmed_cpu_memory_uptime",
+        "uplinks": "not_applicable",
+        "stack": "not_applicable"
+      },
+      "visuals": {
+        "status": "detected",
+        "recommended_faceplate": "",
+        "optional_faceplates": [],
+        "calibration_profile": "",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
     }
   ]
 }

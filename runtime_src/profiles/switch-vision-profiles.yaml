@@ -684,3 +684,93 @@ profiles:
     notes:
     - SV-2026-000002 confirms 28x 10G SFP+ plus 4x 25G SFP28 and no RJ45 ports.
     - The sfp_25g fields preserve observed hardware truth for this detected-only profile; dashboard output remains disabled until verified 32-port optical geometry exists.
+  ubiquiti-ucg-ultra-api:
+    status: detected
+    vendor: Ubiquiti
+    family: UniFi Cloud Gateway Ultra
+    model_patterns:
+    - UCG Ultra
+    layout:
+      members: 1
+      rj45_ports: 5
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g: []
+    notes:
+    - SV-2026-000034 and SV-2026-000036 confirm five sequential API/physical RJ45
+      ports.
+    - Four ports are 1G-capable and one is 2.5G-capable; WAN/LAN role remains controller-driven
+      rather than position-derived.
+    - Dedicated UCG Ultra dashboard artwork remains pending.
+  ubiquiti-us-16-poe-150w-api:
+    status: detected
+    vendor: Ubiquiti
+    family: UniFi Switch 16 PoE 150W
+    model_patterns:
+    - US 16 PoE 150W
+    layout:
+      members: 1
+      rj45_ports: 16
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g:
+      - api-port-17
+      - api-port-18
+      sfp_10g: []
+    notes:
+    - SV-2026-000034 and SV-2026-000036 confirm 16 sequential 1G RJ45 ports followed
+      by two 1G SFP ports.
+    - PoE output capability is exposed on all sixteen copper ports in the contributed
+      UniFi API data.
+    - Dedicated 16+2 dashboard artwork remains pending.
+  ubiquiti-usw-pro-max-24-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch Pro Max 24
+    model_patterns:
+    - USW Pro Max 24
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g:
+      - api-port-25
+      - api-port-26
+    notes:
+    - SV-2026-000034 and SV-2026-000036 confirm ports 1-16 as 1G RJ45, ports 17-24
+      as 2.5G-capable RJ45, and ports 25-26 as 10G SFP+.
+    - This is the non-PoE USW Pro Max 24 variant.
+    - The existing UniFi 24+2 faceplate has truthful physical socket geometry for
+      this exact model.
+  ubiquiti-usw-ultra-api:
+    status: detected
+    vendor: Ubiquiti
+    family: UniFi Switch Ultra
+    model_patterns:
+    - USW Ultra
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g: []
+    notes:
+    - SV-2026-000034 and SV-2026-000036 confirm eight sequential 1G RJ45 ports.
+    - PoE output capability is exposed on ports 1-7 only; port 8 is not a PoE output.
+    - Dedicated USW Ultra dashboard artwork remains pending.
