@@ -1,0 +1,212 @@
+name: Temporary prepare Discovery v2.1.41 review
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out review branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: review/sv-2026-000020-c3750
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply Discovery 2.1.41 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import textwrap
+          import yaml
+
+          config = Path('switch_vision_discovery/config.yaml')
+          config_text = config.read_text(encoding='utf-8')
+          if 'version: "2.1.41"' in config_text:
+              print('Discovery 2.1.41 already prepared on review branch')
+              raise SystemExit(0)
+          if 'version: "2.1.40"' not in config_text:
+              raise SystemExit('Unexpected Discovery base version')
+
+          registry_path = Path('runtime_src/opt/switch-vision/devices/supported_devices.json')
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          devices = registry.get('devices') or []
+          if any(isinstance(d, dict) and d.get('model') == 'WS-C3750-48P' for d in devices):
+              raise SystemExit('WS-C3750-48P already present without version bump')
+          devices.append({
+              'vendor': 'Cisco', 'family': 'Catalyst 3750', 'model': 'WS-C3750-48P',
+              'status': 'experimental', 'confirmed_since': '2.4.12', 'last_validated_version': '2.4.12',
+              'evidence': 'sanitized_community_real_hardware_capture',
+              'ports': {'rj45': 48, 'poe': True, 'uplinks': 4, 'uplink_type': '4x 1G SFP', 'gigabit_sfp': 4, 'ten_gigabit_sfp_plus': 0},
+              'stack_support': True, 'discovery_support': True, 'dashboard_support': True,
+              'mapping_profile': 'cisco-3750-48p-48fe-4sfp',
+              'calibration_profile': 'default_cisco_48_port',
+              'default_faceplate': 'faceplates/48rj45-4sfp.png', 'optional_faceplates': [], 'tested_firmware': [],
+              'contributor': {'display_name': 'Community contributor', 'public_credit': False},
+              'notes': [
+                  'A sanitized real-hardware contribution reports the exact SNMP model string WS-C3750-48P.',
+                  'The non-G Catalyst 3750 48-port PoE platform uses 48 10/100 FastEthernet access ports and four 1G SFP uplinks; access ports must not be advertised as Gigabit-capable.',
+                  'The reported SNMP platform string does not include the retail software-feature suffix, so Switch Vision does not infer an IP Base/IP Services SKU suffix.',
+                  'The 48 RJ45 plus four SFP socket geometry matches the existing neutral 48+4 faceplate; live overlay alignment remains Experimental pending contributor confirmation.',
+                  'Catalyst 3750 StackWise numbering is supported by the mapping profile, but multi-member stack behaviour remains pending live validation.'
+              ],
+              'validation': {
+                  'exact_model_detection': 'contribution_confirmed',
+                  'rj45_mapping': 'candidate_48_fastethernet_ports_pending_live_dashboard_validation',
+                  'poe': 'candidate_platform_contract_pending_live_dashboard_validation',
+                  'system_sensors': 'pending', 'uplinks': 'candidate_four_1g_sfp_pending_live_validation',
+                  'stack': 'capable_pending_live_validation'
+              },
+              'visuals': {'status': 'experimental', 'recommended_faceplate': 'faceplates/48rj45-4sfp.png', 'optional_faceplates': [], 'calibration_profile': 'default_cisco_48_port', 'canvas': {'width': 2048, 'height': 448}}
+          })
+          registry['devices'] = devices
+          registry_path.write_text(json.dumps(registry, indent=2) + '\n', encoding='utf-8', newline='\n')
+
+          profiles_path = Path('runtime_src/profiles/switch-vision-profiles.yaml')
+          profiles_doc = yaml.safe_load(profiles_path.read_text(encoding='utf-8')) or {}
+          profiles = profiles_doc.setdefault('profiles', {})
+          profiles['cisco-3750-48p-48fe-4sfp'] = {
+              'status': 'experimental', 'vendor': 'Cisco', 'family': 'Catalyst 3750',
+              'model_patterns': ['WS-C3750-48P'],
+              'layout': {'members': 'auto', 'rj45_ports': 48, 'sfp_1g_ports': 4, 'sfp_10g_ports': 0},
+              'interface_patterns': {
+                  'rj45': ['Fa{member}/0/{port}', 'FastEthernet{member}/0/{port}'],
+                  'sfp_1g': ['Gi{member}/0/{port}', 'GigabitEthernet{member}/0/{port}'],
+                  'sfp_10g': []
+              },
+              'notes': [
+                  'Map FastEthernet member/0/1 through member/0/48 to the 48 access-port positions.',
+                  'Map GigabitEthernet member/0/1 through member/0/4 to the four physical 1G SFP uplink cages.',
+                  'Keep FastEthernet maximum capability distinct from the 1G SFP uplinks.',
+                  'Stack member numbering is accepted, but multi-member live validation remains pending.'
+              ]
+          }
+          profiles_path.write_text(yaml.safe_dump(profiles_doc, sort_keys=False, allow_unicode=True), encoding='utf-8', newline='\n')
+
+          email_path = Path('runtime_src/make_support_email.py')
+          email_text = email_path.read_text(encoding='utf-8')
+          email_text = email_text.replace('from email.policy import default', 'from email.policy import SMTP', 1)
+          email_text = email_text.replace('EmailMessage(policy=default)', 'EmailMessage(policy=SMTP)', 1)
+          email_text = email_text.replace('message.as_bytes()', 'message.as_bytes(policy=SMTP)', 1)
+          if 'from email.policy import SMTP' not in email_text or 'message.as_bytes(policy=SMTP)' not in email_text:
+              raise SystemExit('SMTP policy patch did not apply')
+          email_path.write_text(email_text, encoding='utf-8', newline='\n')
+
+          Path('tools/test_support_email_mime.py').write_text(textwrap.dedent(r'''
+              from __future__ import annotations
+              from email import policy
+              from email.parser import BytesParser
+              import json
+              from pathlib import Path
+              import subprocess
+              import sys
+              import tempfile
+              ROOT = Path(__file__).resolve().parents[1]
+              SCRIPT = ROOT / "runtime_src" / "make_support_email.py"
+              def main() -> None:
+                  with tempfile.TemporaryDirectory() as td:
+                      root = Path(td)
+                      archive = root / "Switch_Vision_Contribution_test.zip"
+                      payload = b"PK\\x03\\x04switch-vision-test-archive"
+                      archive.write_bytes(payload)
+                      manifest = root / "MANIFEST.json"
+                      manifest.write_text(json.dumps({
+                          "ready_to_send": True, "contribution_id": "SV-TEST-000001",
+                          "switch_vision_version": "2.1.41", "bundle_quality": "PASS",
+                          "recognition": {"type": "anonymous", "value": ""},
+                          "privacy_options": {"secrets_always_removed": True, "serial_numbers_always_masked": True, "mask_management_ips": True, "mask_mac_addresses": True, "mask_hostnames": True, "mask_vlan_names": True, "mask_interface_descriptions": True}
+                      }), encoding="utf-8")
+                      (root / "DEVICE_SUMMARY.json").write_text("[]", encoding="utf-8")
+                      eml = root / "prepared.eml"; html = root / "prepared.html"
+                      subprocess.run([sys.executable, str(SCRIPT), "--archive", str(archive), "--manifest", str(manifest), "--output-eml", str(eml), "--output-html", str(html)], check=True)
+                      raw = eml.read_bytes()
+                      assert b"\r\n" in raw
+                      assert b"\n" not in raw.replace(b"\r\n", b"")
+                      message = BytesParser(policy=policy.SMTP).parsebytes(raw)
+                      assert message["To"] == "switch-vision@zemerdon.com"
+                      assert message["Subject"] == "Switch Vision Contribution - SV-TEST-000001"
+                      assert message.get_content_type() == "multipart/mixed"
+                      attachments = list(message.iter_attachments())
+                      assert len(attachments) == 1
+                      attachment = attachments[0]
+                      assert attachment.get_filename() == archive.name
+                      assert attachment.get_content_type() == "application/zip"
+                      assert attachment.get_payload(decode=True) == payload
+                      assert "MIME-Version" not in str(message["Subject"])
+                      print("Switch Vision Support My Switch SMTP/MIME regression: PASS")
+              if __name__ == "__main__": main()
+          ''').lstrip(), encoding='utf-8', newline='\n')
+
+          Path('tools/test_c3750_48p_contract.py').write_text(textwrap.dedent(r'''
+              from __future__ import annotations
+              import json
+              from pathlib import Path
+              import yaml
+              ROOT = Path(__file__).resolve().parents[1]
+              registry = json.loads((ROOT / "runtime_src/opt/switch-vision/devices/supported_devices.json").read_text(encoding="utf-8"))
+              device = next(d for d in registry["devices"] if d.get("model") == "WS-C3750-48P")
+              assert device["status"] == "experimental"
+              assert device["ports"]["rj45"] == 48 and device["ports"]["poe"] is True
+              assert device["ports"]["gigabit_sfp"] == 4 and device["ports"]["ten_gigabit_sfp_plus"] == 0
+              assert device["mapping_profile"] == "cisco-3750-48p-48fe-4sfp"
+              assert device["contributor"] == {"display_name": "Community contributor", "public_credit": False}
+              assert "SV-2026-" not in json.dumps(device)
+              profiles = yaml.safe_load((ROOT / "runtime_src/profiles/switch-vision-profiles.yaml").read_text(encoding="utf-8"))["profiles"]
+              profile = profiles["cisco-3750-48p-48fe-4sfp"]
+              assert profile["model_patterns"] == ["WS-C3750-48P"]
+              assert profile["layout"] == {"members": "auto", "rj45_ports": 48, "sfp_1g_ports": 4, "sfp_10g_ports": 0}
+              assert "Fa{member}/0/{port}" in profile["interface_patterns"]["rj45"]
+              assert "Gi{member}/0/{port}" in profile["interface_patterns"]["sfp_1g"]
+              print("Switch Vision Discovery Catalyst 3750 contract: PASS")
+          ''').lstrip(), encoding='utf-8', newline='\n')
+
+          config.write_text(config_text.replace('version: "2.1.40"', 'version: "2.1.41"', 1), encoding='utf-8', newline='\n')
+          run = Path('runtime_src/run.sh')
+          run_text = run.read_text(encoding='utf-8')
+          if 'SWITCH_VISION_DISCOVERY_VERSION="2.1.40"' not in run_text:
+              raise SystemExit('Unexpected runtime version')
+          run.write_text(run_text.replace('SWITCH_VISION_DISCOVERY_VERSION="2.1.40"', 'SWITCH_VISION_DISCOVERY_VERSION="2.1.41"', 1), encoding='utf-8', newline='\n')
+
+          Path('switch_vision_discovery/release-fragments/2.1.41.md').write_text(textwrap.dedent('''
+              - Add Experimental exact-model Discovery handling for the community-observed Cisco `WS-C3750-48P` platform string.
+              - Map 48 × 10/100 FastEthernet access ports and four 1G SFP uplinks using stack-aware Catalyst 3750 interface names while keeping live overlay/uplink/stack validation pending.
+              - Generate Support My Switch `.eml` files with the SMTP email policy and RFC-compliant CRLF line endings so MIME headers and ZIP attachments remain structurally valid in strict mail clients.
+              - Add permanent regressions that parse the generated `.eml`, verify the ZIP is a real `application/zip` attachment, and prevent MIME headers from leaking into the Subject/body.
+              - Preserve anonymous public contribution metadata and omit private submission identifiers and filenames.
+          ''').lstrip(), encoding='utf-8', newline='\n')
+
+          builder = Path('.github/workflows/builder.yaml')
+          builder_text = builder.read_text(encoding='utf-8')
+          marker = '      - name: Run UniFi dashboard fallback regression\n        run: python tools/test_unifi_dashboard_failure_modes.py\n'
+          if marker not in builder_text:
+              raise SystemExit('Regression insertion point missing')
+          builder.write_text(builder_text.replace(marker, marker + '      - name: Run Support My Switch SMTP/MIME regression\n        run: python tools/test_support_email_mime.py\n      - name: Run Catalyst 3750 profile regression\n        run: python tools/test_c3750_48p_contract.py\n', 1), encoding='utf-8', newline='\n')
+          PY
+
+      - name: Commit review branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'switch-vision-release-bot'
+          git config user.email 'switch-vision@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit.'
+            exit 0
+          fi
+          git commit -m 'Prepare Switch Vision Discovery v2.1.41 Catalyst 3750 and mail fix'
+          git push origin HEAD:review/sv-2026-000020-c3750
