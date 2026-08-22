@@ -48,10 +48,6 @@ jobs:
           exec(compile(payload, str(workflow), 'exec'), {'__name__': '__main__'})
 
           pending = {'UCG Ultra', 'US 16 PoE 150W', 'USW Ultra'}
-
-          # Match Core's permanent visual policy: exact models without an enabled
-          # visual remain detected. Only Pro Max 24 is experimental here because
-          # its existing UniFi 24+2 socket geometry is truthful.
           registry_path = Path('runtime_src/opt/switch-vision/devices/supported_devices.json')
           registry = json.loads(registry_path.read_text(encoding='utf-8'))
           for item in registry.get('devices', []):
@@ -71,9 +67,6 @@ jobs:
               profiles_text = profiles_text.replace(needle, replacement, 1)
           profiles_path.write_text(profiles_text, encoding='utf-8', newline='\n')
 
-          # The original prep payload intentionally builds a replacement block
-          # independently; restore the function's eight-space indentation after
-          # that block was dedented for string construction.
           test_path = Path('tools/test_unifi_dashboard_failure_modes.py')
           test_text = test_path.read_text(encoding='utf-8')
           start = test_text.index('# Brendan regression:')
@@ -106,19 +99,37 @@ jobs:
             .github/workflows/prepare-discovery-v2139-brendan.yml \
             .github/workflows/run-discovery-v2139-brendan-prep.yml
 
-      - name: Materialize and validate Discovery 2.1.39
+      - name: Materialize runtime
+        run: sh tools/materialize_runtime.sh
+
+      - name: UniFi dashboard regressions
+        run: python tools/test_unifi_dashboard_failure_modes.py
+
+      - name: Runtime parity
+        run: python tools/check_runtime_parity.py
+
+      - name: Visual contract policy
+        run: python tools/test_visual_contract_policy.py
+
+      - name: Cross-component contracts
+        run: python tools/check_component_contracts.py
+
+      - name: Speed contracts
+        run: python tools/check_speed_contracts.py
+
+      - name: Hub identity
+        run: python tools/check_hub_identity.py
+
+      - name: YAML regeneration contract
+        run: python tools/test_regenerate_yaml_contract.py
+
+      - name: Packaged self-test
+        run: sh -x runtime_src/self-test.sh
+
+      - name: Compile and clean
         shell: bash
         run: |
           set -euo pipefail
-          sh tools/materialize_runtime.sh
-          python tools/test_unifi_dashboard_failure_modes.py
-          python tools/check_runtime_parity.py
-          python tools/test_visual_contract_policy.py
-          python tools/check_component_contracts.py
-          python tools/check_speed_contracts.py
-          python tools/check_hub_identity.py
-          python tools/test_regenerate_yaml_contract.py
-          sh -x runtime_src/self-test.sh
           python -m py_compile \
             runtime_src/support_web.py \
             runtime_src/registry_lookup.py \
