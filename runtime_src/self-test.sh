@@ -21,6 +21,97 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
+# v2.2.0 Maintenance Hub MQTT ownership/reconciliation regression
+python3 -m py_compile "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py"
+grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
+grep -Fq 'id="maintenanceCard"' "$BASE_DIR/support_web.py"
+grep -Fq '/api/maintenance/mqtt/scan' "$BASE_DIR/support_web.py"
+grep -Fq '/api/maintenance/mqtt/repair' "$BASE_DIR/support_web.py"
+grep -Fq 'REPAIR STALE MQTT ENTITIES' "$BASE_DIR/maintenance.js"
+
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_MQTT_MAINTENANCE'
+import json
+
+from mqtt_maintenance import (
+    build_repair_plan,
+    classify_owned_retained_config,
+    discovery_subscription_filter,
+    public_repair_plan,
+)
+
+prefix = "homeassistant"
+base = "snmp2mqtt"
+topic = "homeassistant/sensor/snmp2mqtt/sw1_port_1_status/config"
+payload = json.dumps(
+    {
+        "origin": {
+            "name": "Switch Vision SNMP2MQTT",
+            "url": "https://github.com/zemerdon/switch-vision-snmp2mqtt",
+        },
+        "object_id": "sw1_port_1_status",
+        "default_entity_id": "sensor.sw1_port_1_status",
+        "unique_id": "sw1_port_1_status",
+        "state_topic": "snmp2mqtt/sw1/port_1_status/value",
+    }
+)
+assert discovery_subscription_filter(prefix) == "homeassistant/+/snmp2mqtt/+/config"
+owned = classify_owned_retained_config(topic, payload, True, prefix, base)
+assert owned and owned["entity_id"] == "sensor.sw1_port_1_status"
+assert classify_owned_retained_config(topic, payload, False, prefix, base) is None
+
+wrong_origin = json.loads(payload)
+wrong_origin["origin"] = {"name": "Something Else"}
+assert classify_owned_retained_config(topic, json.dumps(wrong_origin), True, prefix, base) is None
+
+wrong_url = json.loads(payload)
+wrong_url["origin"]["url"] = "https://example.invalid/not-switch-vision"
+assert classify_owned_retained_config(topic, json.dumps(wrong_url), True, prefix, base) is None
+
+wrong_state = json.loads(payload)
+wrong_state["state_topic"] = "zigbee2mqtt/sw1/value"
+assert classify_owned_retained_config(topic, json.dumps(wrong_state), True, prefix, base) is None
+
+wrong_unique = json.loads(payload)
+wrong_unique["unique_id"] = "different"
+assert classify_owned_retained_config(topic, json.dumps(wrong_unique), True, prefix, base) is None
+
+unrelated_topic = "homeassistant/sensor/other_app/sw1_port_1_status/config"
+assert classify_owned_retained_config(unrelated_topic, payload, True, prefix, base) is None
+
+stale_topic = "homeassistant/sensor/snmp2mqtt/old_sw_port_1_status/config"
+stale_payload = json.dumps(
+    {
+        "origin": {"name": "Switch Vision SNMP2MQTT"},
+        "object_id": "old_sw_port_1_status",
+        "default_entity_id": "sensor.old_sw_port_1_status",
+        "unique_id": "old_sw_port_1_status",
+        "state_topic": "snmp2mqtt/old_sw/port_1_status/value",
+    }
+)
+stale = classify_owned_retained_config(stale_topic, stale_payload, True, prefix, base)
+assert stale
+
+plan = build_repair_plan([topic], [owned, stale])
+assert plan["owned_retained_count"] == 2
+assert plan["current_retained_count"] == 1
+assert plan["stale_count"] == 1
+assert plan["stale_entries"] == [
+    {
+        "component": "sensor",
+        "object_id": "old_sw_port_1_status",
+        "entity_id": "sensor.old_sw_port_1_status",
+    }
+]
+assert "_stale_topics" not in public_repair_plan(plan)
+assert public_repair_plan(plan)["plan_token"] == public_repair_plan(
+    build_repair_plan([topic], [stale, owned])
+)["plan_token"]
+
+clean = build_repair_plan([topic], [owned])
+assert clean["stale_count"] == 0
+print("Switch Vision Discovery v2.2.0 MQTT maintenance ownership regression: PASS")
+PY_MQTT_MAINTENANCE
+
 # v2.1.47: targeted walks must retain DOT3-MAU-MIB. This is diagnostic
 # evidence for dual-personality media selection; it does not classify or
 # render any connector by itself.
@@ -837,8 +928,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.48"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.48"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.0"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.0"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
