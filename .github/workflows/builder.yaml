@@ -282,6 +282,8 @@ jobs:
             runtime_src/run.sh \
             runtime_src/discovery_job.sh \
             runtime_src/self-test.sh \
+            runtime_src/profiles/switch-vision-profiles.yaml \
+            runtime_src/opt/switch-vision/devices/supported_devices.json \
             switch_vision_discovery/runtime.tar.gz \
             switch_vision_discovery/CHANGELOG.md
           if git diff --cached --quiet; then

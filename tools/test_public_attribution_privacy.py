@@ -7,6 +7,9 @@ ROOT = Path(__file__).resolve().parents[1]
 OWNER = "zemerdon"
 ALLOWED = {"", OWNER.casefold(), "community contributor", "anonymous"}
 SUBMISSION_ID = re.compile(r"(?i)SV[-_]20\d{2}[-_]\d+")
+CONTRIBUTION_BREADCRUMB = re.compile(
+    r"(?i)(?:unifi[-_]contrib|community[-_]validation)[/_-]\d{6}"
+)
 PACKAGE_NAME = re.compile(r"(?i)Switch[_ -]Vision[_ -]Contribution")
 
 
@@ -56,9 +59,18 @@ def main() -> None:
     for path in registries:
         check_structured(json.loads(path.read_text(encoding="utf-8")), path)
 
-    paths = [ROOT / "switch_vision_discovery/CHANGELOG.md"]
-    paths += list((ROOT / "switch_vision_discovery/release-fragments").glob("*.md"))
-    for path in paths:
+    runtime_public_paths = [
+        ROOT / "runtime_src/profiles/switch-vision-profiles.yaml",
+        ROOT / "runtime_src/self-test.sh",
+    ]
+    for path in runtime_public_paths:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if SUBMISSION_ID.search(text) or CONTRIBUTION_BREADCRUMB.search(text):
+            raise SystemExit(f"Private contribution identifier remains in public runtime source: {path}")
+
+    release_paths = [ROOT / "switch_vision_discovery/CHANGELOG.md"]
+    release_paths += list((ROOT / "switch_vision_discovery/release-fragments").glob("*.md"))
+    for path in release_paths:
         text = path.read_text(encoding="utf-8", errors="ignore")
         if SUBMISSION_ID.search(text):
             raise SystemExit(f"Submission identifier remains in public release text: {path}")
