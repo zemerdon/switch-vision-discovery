@@ -45,6 +45,97 @@ assert "MUST_NOT_LEAK" not in repr(result)
 print("Switch Vision Discovery v2.2.1 support diagnostics regression: PASS")
 PY_SUPPORT_DIAGNOSTICS
 
+# v2.2.2: run the real contribution packaging path and inspect the ZIP.
+# This catches runtime filename/wrapper drift that unit-testing support_diagnostics.py
+# alone cannot detect.
+grep -Fq 'SANITIZER_SCRIPT="${SUPPORT_SANITIZER_SCRIPT:-/ha_entity_snapshot_sanitizer.py}"' "$BASE_DIR/support_my_switch.sh"
+grep -Fq 'BASE_SANITIZER_SCRIPT="${SUPPORT_BASE_SANITIZER_SCRIPT:-/sanitize_support_bundle.py}"' "$BASE_DIR/support_my_switch.sh"
+grep -Fq 'BASE_SANITIZER = Path(os.environ.get("SWITCH_VISION_BASE_SANITIZER", "/sanitize_support_bundle.py"))' "$BASE_DIR/ha_entity_snapshot_sanitizer.py"
+
+support_test_dir=$(mktemp -d)
+mkdir -p "$support_test_dir/switch_vision/snmpwalks/test" "$support_test_dir/out"
+cat > "$support_test_dir/switch_vision/generated-snmp2mqtt.yaml" <<'YAML_SUPPORT_E2E'
+mqtt:
+  discovery_prefix: homeassistant
+  topic_prefix: snmp2mqtt
+targets:
+  - name: TEST
+    host: 198.51.100.10
+    sensors:
+      - name: test_port_1_status
+        object_id: test_port_1_status
+        oid: .1.3.6.1.2.1.2.2.1.8.1
+YAML_SUPPORT_E2E
+cat > "$support_test_dir/switch_vision/generated-dashboard-card.yaml" <<'YAML_SUPPORT_CARD'
+- type: custom:switch-vision-3650
+  title: Integration Test
+  selected_switch: TEST
+  sensor_prefix: test
+  status_entity_prefix: sensor.test_port_
+  status_entity_suffix: _status
+YAML_SUPPORT_CARD
+cat > "$support_test_dir/switch_vision/snmpwalks/test/live-targeted-snmpwalk.txt" <<'WALK_SUPPORT_E2E'
+.1.3.6.1.2.1.2.2.1.8.1 = INTEGER: up(1)
+WALK_SUPPORT_E2E
+
+SUPERVISOR_TOKEN="" \
+SWITCH_VISION_DISCOVERY_VERSION="integration-test" \
+SWITCH_VISION_ROOT="$support_test_dir/switch_vision" \
+CONTRIBUTIONS_DIR="$support_test_dir/out" \
+SUPPORT_SANITIZER_SCRIPT="$BASE_DIR/ha_entity_snapshot_sanitizer.py" \
+SUPPORT_BASE_SANITIZER_SCRIPT="$BASE_DIR/sanitize_support_bundle.py" \
+SWITCH_VISION_BASE_SANITIZER="$BASE_DIR/sanitize_support_bundle.py" \
+SUPPORT_EMAIL_BUILDER_SCRIPT="$BASE_DIR/make_support_email.py" \
+SUPPORT_REGISTRY_LOOKUP_SCRIPT="$BASE_DIR/registry_lookup.py" \
+SUPPORT_REGISTRY_FILE="$support_test_dir/missing-registry.json" \
+SUPPORT_MASK_MANAGEMENT_IPS=true \
+SUPPORT_MASK_MAC_ADDRESSES=true \
+SUPPORT_MASK_HOSTNAMES=true \
+SUPPORT_MASK_VLAN_NAMES=true \
+SUPPORT_MASK_INTERFACE_DESCRIPTIONS=true \
+sh "$BASE_DIR/support_my_switch.sh" > "$support_test_dir/run.log"
+
+support_bundle=$(find "$support_test_dir/out" -maxdepth 1 -type f -name '*.zip' | head -n 1)
+[ -n "$support_bundle" ] && [ -s "$support_bundle" ]
+python3 - "$support_bundle" <<'PY_SUPPORT_ZIP'
+import json
+import sys
+import zipfile
+
+path = sys.argv[1]
+expected = (
+    "home-assistant-entity-resolution.json",
+    "mqtt-maintenance-scan.json",
+    "port-pipeline.json",
+    "model-provenance.json",
+    "card-entity-bindings.json",
+    "generated-file-provenance.json",
+    "runtime-versions.json",
+    "diagnostic-summary.json",
+)
+with zipfile.ZipFile(path) as archive:
+    names = archive.namelist()
+    roots = {name.split("/", 1)[0] for name in names if "/" in name}
+    assert len(roots) == 1, roots
+    root = next(iter(roots))
+    for filename in expected:
+        wanted = f"{root}/switch_vision/diagnostics/{filename}"
+        assert names.count(wanted) == 1, (wanted, names.count(wanted))
+    assert not any(name.startswith(f"{root}/diagnostics/") for name in names), "duplicate top-level diagnostics"
+    manifest = json.loads(archive.read(f"{root}/MANIFEST.json"))
+    assert manifest["bundle_version"] == 11
+    summary = json.loads(archive.read(f"{root}/switch_vision/diagnostics/diagnostic-summary.json"))
+    assert summary["privacy"] == {
+        "credentials_included": False,
+        "home_assistant_attributes_included": False,
+        "raw_mqtt_discovery_payloads_included": False,
+        "unrelated_home_assistant_entities_included": False,
+    }
+print("Switch Vision Discovery v2.2.2 Support My Switch packaged diagnostics integration: PASS")
+PY_SUPPORT_ZIP
+rm -rf "$support_test_dir"
+
+
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_MQTT_MAINTENANCE'
 import json
 
@@ -944,8 +1035,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.1"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.1"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.2"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.2"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
