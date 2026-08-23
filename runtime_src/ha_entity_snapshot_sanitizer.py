@@ -19,6 +19,8 @@ from urllib.request import Request, urlopen
 
 import yaml
 
+from support_diagnostics import capture_support_diagnostics
+
 BASE_SANITIZER = Path(os.environ.get("SWITCH_VISION_BASE_SANITIZER", "/sanitize_support_bundle_base.py"))
 HA_STATES_URL = os.environ.get("SWITCH_VISION_HA_STATES_URL", "http://supervisor/core/api/states")
 SNAPSHOT_RELATIVE_PATH = Path("diagnostics/home-assistant-entity-resolution.json")
@@ -212,6 +214,28 @@ def main() -> None:
                             "status": "unavailable",
                             "reason": f"entity snapshot failed safely: {type(exc).__name__}",
                             "entities": [],
+                        },
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+            except OSError:
+                pass
+
+        try:
+            capture_support_diagnostics(root)
+        except Exception as exc:  # Extended diagnostics must never block sanitization.
+            status = root / "diagnostics/support-diagnostics-status.json"
+            try:
+                status.parent.mkdir(parents=True, exist_ok=True)
+                status.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "generated_at": datetime.now(timezone.utc).isoformat(),
+                            "status": "unavailable",
+                            "reason": f"extended diagnostics failed safely: {type(exc).__name__}",
                         },
                         indent=2,
                     )
