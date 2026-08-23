@@ -19,6 +19,8 @@ from urllib.request import Request, urlopen
 
 import yaml
 
+from supervisor_runtime import read_supervisor_token
+
 DIAG_DIR = Path("diagnostics")
 ENTITY_SNAPSHOT = DIAG_DIR / "home-assistant-entity-resolution.json"
 SAFE_MODEL_KEYS = (
@@ -81,7 +83,7 @@ def _safe_state(entity_id: str, raw: Any) -> str | None:
     return "<NON_NUMERIC>"
 
 def _ha_states() -> tuple[list[dict[str, Any]], str | None]:
-    token = os.environ.get("SUPERVISOR_TOKEN", "").strip()
+    token = read_supervisor_token()
     if not token:
         return [], "Home Assistant API token unavailable"
     request = Request(
@@ -172,13 +174,19 @@ def _parse_walk_statuses(root: Path) -> dict[str, str]:
             continue
     return statuses
 
-def build_port_pipeline(generated: Any, states: list[dict[str, Any]], walk_status: dict[str, str]) -> dict[str, Any]:
-    state_map = _state_map(states)
+def build_port_pipeline(
+    generated: Any,
+    states: list[dict[str, Any]],
+    walk_status: dict[str, str],
+    *,
+    ha_available: bool = True,
+) -> dict[str, Any]:
+    state_map = _state_map(states) if ha_available else {}
     rows = []
     for sensor in _sensor_rows(generated):
         if not sensor["object_id"].endswith(STATUS_SUFFIX):
             continue
-        exact = state_map.get(sensor["entity_id"])
+        exact = state_map.get(sensor["entity_id"]) if ha_available else None
         oid = sensor["oid"].lstrip(".")
         rows.append({
             "target": sensor["target"],
@@ -186,16 +194,28 @@ def build_port_pipeline(generated: Any, states: list[dict[str, Any]], walk_statu
             "expected_entity_id": sensor["entity_id"],
             "status_oid": oid or None,
             "walk_if_oper_status": walk_status.get(oid) if oid else None,
-            "exact_present": exact is not None,
+            "exact_present": (exact is not None) if ha_available else None,
             "ha_state": _safe_state(sensor["entity_id"], exact.get("state")) if exact else None,
             "last_updated": str(exact.get("last_updated") or "") if exact else "",
-            "suffix_alternatives": _suffix_alternatives(sensor["entity_id"], state_map),
+            "suffix_alternatives": (
+                _suffix_alternatives(sensor["entity_id"], state_map)
+                if ha_available
+                else []
+            ),
         })
     rows = rows[:MAX_PORT_ROWS]
-    anomalies = [
+    walk_up_rows = [
         row for row in rows
-        if (row["walk_if_oper_status"] and str(row["walk_if_oper_status"]).casefold().startswith("up"))
-        and (not row["exact_present"] or row["ha_state"] not in {"up", "on", "true", "1"})
+        if row["walk_if_oper_status"]
+        and str(row["walk_if_oper_status"]).casefold().startswith("up")
+    ]
+    anomalies = [
+        row for row in walk_up_rows
+        if ha_available
+        and (
+            not row["exact_present"]
+            or row["ha_state"] not in {"up", "on", "true", "1"}
+        )
     ]
     return {
         "schema_version": 1,
@@ -203,8 +223,14 @@ def build_port_pipeline(generated: Any, states: list[dict[str, Any]], walk_statu
         "scope": "generated Switch Vision port status entities correlated with captured walk ifOperStatus and HA state; no attributes",
         "summary": {
             "status_rows": len(rows),
-            "walk_up_but_exact_not_up": len(anomalies),
-            "suffix_alternative_count": sum(len(x["suffix_alternatives"]) for x in rows),
+            "ha_state_status": "available" if ha_available else "unavailable",
+            "walk_up_count": len(walk_up_rows),
+            "walk_up_but_exact_not_up": len(anomalies) if ha_available else None,
+            "suffix_alternative_count": (
+                sum(len(x["suffix_alternatives"]) for x in rows)
+                if ha_available
+                else None
+            ),
         },
         "ports": rows,
         "anomalies": anomalies[:128],
@@ -372,7 +398,7 @@ def build_runtime_versions() -> dict[str, Any]:
         "home_assistant": {},
         "switch_vision_addons": [],
     }
-    token = os.environ.get("SUPERVISOR_TOKEN", "").strip()
+    token = read_supervisor_token()
     if not token:
         payload["status"] = "partial"
         payload["reason"] = "Supervisor token unavailable"
@@ -427,6 +453,8 @@ def build_summary(
             "missing_exact_entity_count": entity_summary.get("missing_exact_count"),
             "suffix_alternative_count": entity_summary.get("suffix_alternative_count"),
             "port_status_rows": port_pipeline.get("summary", {}).get("status_rows"),
+            "ha_state_status": port_pipeline.get("summary", {}).get("ha_state_status"),
+            "walk_up_count": port_pipeline.get("summary", {}).get("walk_up_count"),
             "walk_up_but_exact_not_up": port_pipeline.get("summary", {}).get("walk_up_but_exact_not_up"),
             "mqtt_stale_count": mqtt_scan.get("stale_count") if mqtt_scan.get("status") == "ok" else None,
             "model_device_count": model_provenance.get("device_count"),
@@ -447,7 +475,9 @@ def capture_support_diagnostics(root: Path) -> None:
     walk_status = _parse_walk_statuses(root)
 
     entity_snapshot = _json(root / ENTITY_SNAPSHOT) or {}
-    port_pipeline = build_port_pipeline(generated, states, walk_status)
+    port_pipeline = build_port_pipeline(
+        generated, states, walk_status, ha_available=ha_error is None
+    )
     model_provenance = build_model_provenance(root)
     card_bindings = build_card_bindings(root, generated)
     file_provenance = build_file_provenance(root)
