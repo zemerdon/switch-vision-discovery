@@ -827,3 +827,55 @@ profiles:
     - Keep FastEthernet maximum capability distinct from the 1G SFP uplinks.
     - Stack member numbering is accepted, but multi-member live validation remains
       pending.
+  ubiquiti-udm-pro-max-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Dream Machine Pro Max
+    model_patterns:
+    - UDM Pro Max
+    - UDM-Pro-Max
+    layout:
+      members: 1
+      rj45_ports: 9
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+      sfp_25g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g:
+      - api-port-10
+      - api-port-11
+      sfp_25g: []
+    notes:
+    - API ports 1-8 are 1G-capable RJ45.
+    - API port 9 is 2.5G-capable RJ45.
+    - API ports 10-11 are 10G SFP+.
+    - No RJ45 port reports PoE output capability on the community-observed hardware.
+  ubiquiti-usw-pro-xg-24-poe-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch Pro XG
+    model_patterns:
+    - USW Pro XG 24 PoE
+    - USW-Pro-XG-24-PoE
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+      sfp_25g_ports: 2
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g: []
+      sfp_10g: []
+      sfp_25g:
+      - api-port-25
+      - api-port-26
+    notes:
+    - API ports 1-8 are 2.5G-capable RJ45.
+    - API ports 9-24 are 10G-capable RJ45.
+    - API ports 25-26 are 25G SFP28 and may negotiate at lower supported speeds.
+    - All 24 RJ45 ports report 802.3bt Type 4 PoE capability on the community-observed hardware.

@@ -181,7 +181,8 @@ if [ -n "$CAP_FILES" ]; then
       rj45_count: (.summary.rj45_count // 0),
       sfp_count: (.summary.sfp_count // 0),
       sfp_plus_count: (.summary.sfp_plus_count // 0),
-      uplink_count: (.summary.uplink_count // ((.summary.sfp_count // 0) + (.summary.sfp_plus_count // 0))),
+      sfp28_count: (.summary.sfp28_count // 0),
+      uplink_count: (.summary.uplink_count // ((.summary.sfp_count // 0) + (.summary.sfp_plus_count // 0) + (.summary.sfp28_count // 0))),
       stack_count: (.summary.stack_count // 0)
     }]' $CAP_FILES > "$DEVICE_SUMMARY_FILE"
 else
@@ -238,7 +239,10 @@ for device in snapshot.get("devices", []) if isinstance(snapshot, dict) else []:
     validation = reg.get("validation") if isinstance(reg.get("validation"), dict) else {}
     ports = device.get("ports") if isinstance(device.get("ports"), list) else []
     rj45 = [p for p in ports if isinstance(p, dict) and str(p.get("connector") or "").upper() == "RJ45"]
-    sfp = [p for p in ports if isinstance(p, dict) and str(p.get("connector") or "").upper() in {"SFP", "SFPPLUS", "SFP+"}]
+    sfp = [p for p in ports if isinstance(p, dict) and str(p.get("connector") or "").upper() == "SFP"]
+    sfp_plus = [p for p in ports if isinstance(p, dict) and str(p.get("connector") or "").upper() in {"SFPPLUS", "SFP+"}]
+    sfp28 = [p for p in ports if isinstance(p, dict) and str(p.get("connector") or "").upper() == "SFP28"]
+    uplinks = sfp + sfp_plus + sfp28
     summary.append({
         "source_walk": "",
         "data_source": "unifi_api",
@@ -260,7 +264,10 @@ for device in snapshot.get("devices", []) if isinstance(snapshot, dict) else []:
         "interface_count": len(ports),
         "physical_count": len(ports),
         "rj45_count": len(rj45),
-        "sfp_plus_count": len(sfp),
+        "sfp_count": len(sfp),
+        "sfp_plus_count": len(sfp_plus),
+        "sfp28_count": len(sfp28),
+        "uplink_count": len(uplinks),
         "stack_count": 0,
         "api_capabilities": device.get("api_capabilities") if isinstance(device.get("api_capabilities"), dict) else {},
     })
@@ -269,7 +276,7 @@ PY_UNIFI_SUMMARY
 fi
 
 jq -c '.[]' "$DEVICE_SUMMARY_FILE" | while IFS= read -r device; do
-  canonical=$(printf '%s' "$device" | jq -r '[.vendor,.family,.model,.sys_object_id,.physical_count,.rj45_count,.sfp_plus_count,.stack_count] | map(tostring) | join("|")')
+  canonical=$(printf '%s' "$device" | jq -r '[.vendor,(if (.data_source == "unifi_api" and (.model == "UDM Pro Max" or .model == "USW Pro XG 24 PoE")) then "UniFi" else .family end),.model,.sys_object_id,.physical_count,.rj45_count,((.sfp_count // 0) + (.sfp_plus_count // 0)),.stack_count] | map(tostring) | join("|")')
   fingerprint=$(printf '%s' "$canonical" | sha256sum | awk '{print $1}')
   printf '%s\n' "$device" | jq --arg canonical "$canonical" --arg fingerprint "$fingerprint" '. + {fingerprint_source:$canonical, fingerprint_sha256:$fingerprint}'
 done | jq -s '.' > "$FINGERPRINT_FILE"
