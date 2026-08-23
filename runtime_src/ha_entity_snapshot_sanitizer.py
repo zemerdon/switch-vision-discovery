@@ -19,6 +19,8 @@ from urllib.request import Request, urlopen
 
 import yaml
 
+from supervisor_runtime import read_supervisor_token
+
 BASE_SANITIZER = Path(os.environ.get("SWITCH_VISION_BASE_SANITIZER", "/sanitize_support_bundle.py"))
 HA_STATES_URL = os.environ.get("SWITCH_VISION_HA_STATES_URL", "http://supervisor/core/api/states")
 SNAPSHOT_RELATIVE_PATH = Path("diagnostics/home-assistant-entity-resolution.json")
@@ -156,7 +158,7 @@ def capture_snapshot(root: Path) -> None:
     output = root / SNAPSHOT_RELATIVE_PATH
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    token = os.environ.get("SUPERVISOR_TOKEN", "").strip()
+    token = read_supervisor_token()
     if not token:
         payload = {
             "schema_version": 1,

@@ -3,11 +3,17 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "runtime_src/ha_entity_snapshot_sanitizer.py"
+RUNTIME_DIR = ROOT / "runtime_src"
+sys.path.insert(0, str(RUNTIME_DIR))
+import supervisor_runtime
+
+MODULE_PATH = RUNTIME_DIR / "ha_entity_snapshot_sanitizer.py"
 spec = importlib.util.spec_from_file_location("ha_entity_snapshot_sanitizer", MODULE_PATH)
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
@@ -24,6 +30,28 @@ def main() -> None:
     assert 'BASE_SANITIZER_SCRIPT="${SUPPORT_BASE_SANITIZER_SCRIPT:-/sanitize_support_bundle.py}"' in support_script
     assert 'python3 "$BASE_SANITIZER_SCRIPT" "$BUNDLE_ROOT"' in support_script
     assert str(module.BASE_SANITIZER) == "/sanitize_support_bundle.py"
+
+    original_token_files = supervisor_runtime.TOKEN_FILES
+    original_supervisor = os.environ.pop("SUPERVISOR_TOKEN", None)
+    original_hassio = os.environ.pop("HASSIO_TOKEN", None)
+    try:
+        with tempfile.TemporaryDirectory() as token_tmp:
+            token_file = Path(token_tmp) / "SUPERVISOR_TOKEN"
+            token_file.write_text("s6-test-token\x00", encoding="utf-8")
+            supervisor_runtime.TOKEN_FILES = (token_file,)
+            assert supervisor_runtime.read_supervisor_token() == "s6-test-token"
+            os.environ["SUPERVISOR_TOKEN"] = "env-test-token"
+            assert supervisor_runtime.read_supervisor_token() == "env-test-token"
+    finally:
+        supervisor_runtime.TOKEN_FILES = original_token_files
+        if original_supervisor is None:
+            os.environ.pop("SUPERVISOR_TOKEN", None)
+        else:
+            os.environ["SUPERVISOR_TOKEN"] = original_supervisor
+        if original_hassio is None:
+            os.environ.pop("HASSIO_TOKEN", None)
+        else:
+            os.environ["HASSIO_TOKEN"] = original_hassio
 
     with tempfile.TemporaryDirectory() as tmp:
         generated = Path(tmp) / "generated-snmp2mqtt.yaml"
