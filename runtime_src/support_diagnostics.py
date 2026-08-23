@@ -20,6 +20,7 @@ from urllib.request import Request, urlopen
 import yaml
 
 from supervisor_runtime import read_supervisor_token
+from walk_correlation import build_port_pipeline as build_correlated_port_pipeline
 
 DIAG_DIR = Path("diagnostics")
 ENTITY_SNAPSHOT = DIAG_DIR / "home-assistant-entity-resolution.json"
@@ -454,8 +455,16 @@ def build_summary(
             "suffix_alternative_count": entity_summary.get("suffix_alternative_count"),
             "port_status_rows": port_pipeline.get("summary", {}).get("status_rows"),
             "ha_state_status": port_pipeline.get("summary", {}).get("ha_state_status"),
+            "walk_state_status": port_pipeline.get("summary", {}).get("walk_state_status"),
             "walk_up_count": port_pipeline.get("summary", {}).get("walk_up_count"),
+            "fresh_walk_up_count": port_pipeline.get("summary", {}).get("fresh_walk_up_count"),
+            "stale_walk_up_count": port_pipeline.get("summary", {}).get("stale_walk_up_count"),
             "walk_up_but_exact_not_up": port_pipeline.get("summary", {}).get("walk_up_but_exact_not_up"),
+            "mqtt_current_missing_retained_count": (
+                mqtt_scan.get("current_missing_retained_count")
+                if mqtt_scan.get("status") == "ok"
+                else None
+            ),
             "mqtt_stale_count": mqtt_scan.get("stale_count") if mqtt_scan.get("status") == "ok" else None,
             "model_device_count": model_provenance.get("device_count"),
             "generated_card_binding_count": len(card_bindings.get("cards", [])),
@@ -472,14 +481,16 @@ def build_summary(
 def capture_support_diagnostics(root: Path) -> None:
     generated = _yaml(root / "generated-snmp2mqtt.yaml") or {}
     states, ha_error = _ha_states()
-    walk_status = _parse_walk_statuses(root)
-
     entity_snapshot = _json(root / ENTITY_SNAPSHOT) or {}
-    port_pipeline = build_port_pipeline(
-        generated, states, walk_status, ha_available=ha_error is None
+    card_bindings = build_card_bindings(root, generated)
+    port_pipeline = build_correlated_port_pipeline(
+        root,
+        generated,
+        states,
+        card_bindings,
+        ha_available=ha_error is None,
     )
     model_provenance = build_model_provenance(root)
-    card_bindings = build_card_bindings(root, generated)
     file_provenance = build_file_provenance(root)
     mqtt_scan = capture_mqtt_maintenance(root)
     runtime_versions = build_runtime_versions()
