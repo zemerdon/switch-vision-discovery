@@ -15,6 +15,10 @@ spec.loader.exec_module(module)
 
 
 def main() -> None:
+    dockerfile = (ROOT / "runtime_src/Dockerfile").read_text(encoding="utf-8")
+    assert "COPY sanitize_support_bundle.py /sanitize_support_bundle_base.py" in dockerfile
+    assert "COPY ha_entity_snapshot_sanitizer.py /sanitize_support_bundle.py" in dockerfile
+
     with tempfile.TemporaryDirectory() as tmp:
         generated = Path(tmp) / "generated-snmp2mqtt.yaml"
         generated.write_text(
