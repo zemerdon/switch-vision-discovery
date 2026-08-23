@@ -21,6 +21,31 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
+# v2.1.47: targeted walks must retain DOT3-MAU-MIB. This is diagnostic
+# evidence for dual-personality media selection; it does not classify or
+# render any connector by itself.
+mau_live_oid_count="$(
+  python3 - "$BASE_DIR/discovery_job.sh" <<PY_MAU
+from pathlib import Path
+import sys
+
+inside = False
+count = 0
+for raw in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    line = raw.strip()
+    if not inside and line == 'LIVE_OIDS="':
+        inside = True
+        continue
+    if inside and line == '"':
+        break
+    if inside and line == "1.3.6.1.2.1.26":
+        count += 1
+print(count)
+PY_MAU
+)"
+[ "$mau_live_oid_count" -eq 1 ]
+echo "Switch Vision Discovery v2.1.47 DOT3-MAU targeted-walk regression: PASS"
+
 # Calibration Profile Manager relocation checks
 grep -Fq 'id="openCalibrationProfilesButton"'     "$BASE_DIR/support_web.py"
 
