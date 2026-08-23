@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.44
+
+- Sanitizes public Discovery profile evidence so private Support My Switch submission identifiers never ship in source or runtime metadata.
+- Promotes UCG Ultra, US 16 PoE 150W, and USW Ultra from Detected to Experimental after corroborating real-hardware UniFi API evidence; USW Pro Max 24 remains Experimental.
+- Preserves every existing port count, connector type, PoE mask, physical ordering, and maximum-speed contract; this release does not change hardware geometry.
+- Adds a permanent CI privacy regression covering public profile source in addition to generated registries and release text.
+
 ## 2.1.43
 
 - Add Experimental exact-model Discovery profiles for `UDM Pro Max` and `USW Pro XG 24 PoE` from privacy-processed community real-hardware UniFi API validation.

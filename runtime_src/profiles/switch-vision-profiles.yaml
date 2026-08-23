@@ -283,7 +283,7 @@ profiles:
       sfp_10g:
       - XGigabitEthernet0/0/{port}
     notes:
-    - Profile derived from two matching SV-2026-000010 devices.
+    - Profile derived from two matching community-contributed devices.
     - XGigabitEthernet0/0/1-4 are treated as high-speed uplink interfaces.
   ubiquiti-udm-pro-api:
     status: experimental
@@ -417,8 +417,8 @@ profiles:
       - GigabitEthernet0/0/12
       sfp_10g: []
     notes:
-    - Profile derived from Support My Switch contributions SV-2026-000006 and SV-2026-000014.
-    - SV-2026-000014 confirms an ifDescr-only IF-MIB layout with GigabitEthernet0/0/1-12.
+    - Profile derived from independent Support My Switch community contributions.
+    - Community hardware evidence confirms an ifDescr-only IF-MIB layout with GigabitEthernet0/0/1-12.
     - Ports 1-8 are mapped as RJ45 and ports 9-12 as 1G SFP positions for this exact
       model.
     - Dashboard uses the generic 48 RJ45 + 4 SFP fallback visual until a smaller generic
@@ -450,7 +450,7 @@ profiles:
       - swp08
       - swp09
     notes:
-    - Profile derived from Support My Switch contribution SV-2026-000004.
+    - Profile derived from a Support My Switch community contribution.
     - ifIndex 1-10 maps directly to swp00-swp09.
     - swp00-swp07 map to faceplate ports 1-8; swp08-swp09 map to SFP+ uplinks 1-2.
     - Q-BRIDGE PVID is generated only when the current walk contains the direct bridge-port
@@ -475,7 +475,7 @@ profiles:
       sfp_1g: []
       sfp_10g: []
     notes:
-    - SV-2026-000057 contains three independent live devices with the same five-port
+    - Community hardware evidence contains three independent live devices with the same five-port
       layout.
     - No PoE-output port mask is exposed for this exact model.
   ubiquiti-usw-pro-24-api:
@@ -498,7 +498,7 @@ profiles:
       - api-port-25
       - api-port-26
     notes:
-    - SV-2026-000057 confirms ports 25-26 as 10G SFP+.
+    - Community hardware evidence confirms ports 25-26 as 10G SFP+.
     - This profile intentionally differs from USW-24-PoE, whose two uplinks are 1G
       SFP.
   ubiquiti-us-8-60w-api:
@@ -519,7 +519,7 @@ profiles:
       sfp_1g: []
       sfp_10g: []
     notes:
-    - SV-2026-000057 confirms PoE output capability on ports 5-8 only.
+    - Community hardware evidence confirms PoE output capability on ports 5-8 only.
     - PoE-active state is independent from Ethernet link state.
   ubiquiti-udm-pro-se-api:
     status: experimental
@@ -542,7 +542,7 @@ profiles:
       - api-port-10
       - api-port-11
     notes:
-    - SV-2026-000057 confirms ports 1-8 as 1G PoE RJ45, port 9 as 2.5G RJ45, and ports
+    - Community hardware evidence confirms ports 1-8 as 1G PoE RJ45, port 9 as 2.5G RJ45, and ports
       10-11 as 10G SFP+.
     - Ports 9-11 remain role-neutral pending WAN/LAN role validation.
   dell-n2128px-on:
@@ -597,7 +597,7 @@ profiles:
       - api-port-49
       - api-port-50
     notes:
-    - SV-2026-000002 confirms the legacy sequential API path: RJ45 1-48, 10G SFP+
+    - Community hardware evidence confirms the legacy sequential API path: RJ45 1-48, 10G SFP+
         49-50, 1G SFP 51-52.
   ubiquiti-us-xg-16-api:
     status: detected
@@ -631,7 +631,7 @@ profiles:
       - api-port-11
       - api-port-12
     notes:
-    - SV-2026-000002 confirms optical-first API numbering; do not replace this with
+    - Community hardware evidence confirms optical-first API numbering; do not replace this with
       a copper-first offset.
     - Dashboard output remains disabled until verified 12-SFP+ + 4-RJ45 visual coordinates
       exist.
@@ -685,11 +685,11 @@ profiles:
       - api-port-31
       - api-port-32
     notes:
-    - SV-2026-000002 confirms 28x 10G SFP+ plus 4x 25G SFP28 and no RJ45 ports.
+    - Community hardware evidence confirms 28x 10G SFP+ plus 4x 25G SFP28 and no RJ45 ports.
     - The sfp_25g fields preserve observed hardware truth for this detected-only profile;
       dashboard output remains disabled until verified 32-port optical geometry exists.
   ubiquiti-ucg-ultra-api:
-    status: detected
+    status: experimental
     vendor: Ubiquiti
     family: UniFi Cloud Gateway Ultra
     model_patterns:
@@ -705,13 +705,13 @@ profiles:
       sfp_1g: []
       sfp_10g: []
     notes:
-    - SV-2026-000034 and SV-2026-000036 confirm five sequential API/physical RJ45
+    - Independent community hardware captures confirm five sequential API/physical RJ45
       ports.
     - Four ports are 1G-capable and one is 2.5G-capable; WAN/LAN role remains controller-driven
       rather than position-derived.
     - Dedicated UCG Ultra dashboard artwork remains pending.
   ubiquiti-us-16-poe-150w-api:
-    status: detected
+    status: experimental
     vendor: Ubiquiti
     family: UniFi Switch 16 PoE 150W
     model_patterns:
@@ -729,7 +729,7 @@ profiles:
       - api-port-18
       sfp_10g: []
     notes:
-    - SV-2026-000034 and SV-2026-000036 confirm 16 sequential 1G RJ45 ports followed
+    - Independent community hardware captures confirm 16 sequential 1G RJ45 ports followed
       by two 1G SFP ports.
     - PoE output capability is exposed on all sixteen copper ports in the contributed
       UniFi API data.
@@ -753,13 +753,13 @@ profiles:
       - api-port-25
       - api-port-26
     notes:
-    - SV-2026-000034 and SV-2026-000036 confirm ports 1-16 as 1G RJ45, ports 17-24
+    - Independent community hardware captures confirm ports 1-16 as 1G RJ45, ports 17-24
       as 2.5G-capable RJ45, and ports 25-26 as 10G SFP+.
     - This is the non-PoE USW Pro Max 24 variant.
     - The existing UniFi 24+2 faceplate has truthful physical socket geometry for
       this exact model.
   ubiquiti-usw-ultra-api:
-    status: detected
+    status: experimental
     vendor: Ubiquiti
     family: UniFi Switch Ultra
     model_patterns:
@@ -775,7 +775,7 @@ profiles:
       sfp_1g: []
       sfp_10g: []
     notes:
-    - SV-2026-000034 and SV-2026-000036 confirm eight sequential 1G RJ45 ports.
+    - Independent community hardware captures confirm eight sequential 1G RJ45 ports.
     - PoE output capability is exposed on ports 1-7 only; port 8 is not a PoE output.
     - Dedicated USW Ultra dashboard artwork remains pending.
   ubiquiti-us-48-poe-500w-api:

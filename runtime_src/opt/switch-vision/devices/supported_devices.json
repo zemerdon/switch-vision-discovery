@@ -1979,10 +1979,10 @@
       }
     },
     {
-      "status": "detected",
+      "status": "experimental",
       "confirmed_since": "2.4.10",
       "last_validated_version": "2.4.10",
-      "evidence": "support_my_switch_community validation_and_community validation_unifi_api",
+      "evidence": "multiple_real_hardware_unifi_api_contributions",
       "stack_support": false,
       "discovery_support": true,
       "optional_faceplates": [],
@@ -2068,10 +2068,10 @@
       }
     },
     {
-      "status": "detected",
+      "status": "experimental",
       "confirmed_since": "2.4.10",
       "last_validated_version": "2.4.10",
-      "evidence": "support_my_switch_community validation_and_community validation_unifi_api",
+      "evidence": "multiple_real_hardware_unifi_api_contributions",
       "stack_support": false,
       "discovery_support": true,
       "optional_faceplates": [],
@@ -2159,7 +2159,7 @@
       "status": "experimental",
       "confirmed_since": "2.4.10",
       "last_validated_version": "2.4.10",
-      "evidence": "support_my_switch_community validation_and_community validation_unifi_api",
+      "evidence": "multiple_real_hardware_unifi_api_contributions",
       "stack_support": false,
       "discovery_support": true,
       "optional_faceplates": [],
@@ -2245,10 +2245,10 @@
       }
     },
     {
-      "status": "detected",
+      "status": "experimental",
       "confirmed_since": "2.4.10",
       "last_validated_version": "2.4.10",
-      "evidence": "support_my_switch_community validation_and_community validation_unifi_api",
+      "evidence": "multiple_real_hardware_unifi_api_contributions",
       "stack_support": false,
       "discovery_support": true,
       "optional_faceplates": [],

@@ -322,7 +322,7 @@ grep -q 'unifi_per_port_traffic: false' "$tmp_dir/unifi-cards.yaml"
 ! grep -q 'switch_model: UPS 2U' "$tmp_dir/unifi-cards.yaml"
 ! grep -q 'waiting for a matching generic faceplate/calibration profile' "$tmp_dir/unifi-cards.yaml"
 
-contrib_snapshot="$tmp_dir/unifi-contrib-000003.json"
+contrib_snapshot="$tmp_dir/unifi-community-fixture-a.json"
 
 python3 - "$contrib_snapshot" <<'PYTEST'
 import json
@@ -470,63 +470,63 @@ python3 \
   --snapshot "$contrib_snapshot" \
   --registry "$RUNTIME_REGISTRY" \
   --indent 0 \
-  > "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  > "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'switch_model: USW-24-PoE' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'switch_model: USW-16-PoE' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'switch_model: USW-Lite-8-PoE' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'switch_model: USW Flex 2.5G 8 PoE' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'switch_model: USW Flex' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'port_count: 24' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'port_count: 16' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'port_count: 8' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'port_count: 9' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'port_count: 5' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'sfp_port_count: 2' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'sfp_port_count: 1' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 grep -q \
   'unifi_per_port_traffic: false' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 ! grep -q \
   'no exact Switch Vision registry entry' \
-  "$tmp_dir/unifi-contrib-000003-cards.yaml"
+  "$tmp_dir/unifi-community-fixture-a-cards.yaml"
 
 echo \
   "Switch Vision UniFi contribution community-validation regression: PASS"
@@ -812,8 +812,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.43"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.43"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.44"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.44"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
@@ -1599,8 +1599,8 @@ print("Switch Vision Discovery v2.1.14 Supervisor migration: PASS")
 PY_MIGRATION
 
 # v2.1.19 community-validation UniFi profile regression.
-sv57_snapshot="$tmp_dir/unifi-contrib-000057.json"
-python3 - "$sv57_snapshot" <<'PYTEST_V219_SV57'
+v219_community_snapshot="$tmp_dir/unifi-community-fixture-b.json"
+python3 - "$v219_community_snapshot" <<'PYTEST_V219_COMMUNITY'
 import json, sys
 path = sys.argv[1]
 
@@ -1655,19 +1655,19 @@ devices += [
      "api_capabilities":{"port_detail":True,"per_port_traffic":False}},
 ]
 json.dump({"schema_version":1,"devices":devices}, open(path,"w"))
-PYTEST_V219_SV57
+PYTEST_V219_COMMUNITY
 
 python3 "$BASE_DIR/unifi_dashboard_cards.py" \
-  --snapshot "$sv57_snapshot" \
+  --snapshot "$v219_community_snapshot" \
   --registry "$RUNTIME_REGISTRY" \
   --indent 0 \
-  > "$tmp_dir/unifi-contrib-000057-cards.yaml"
+  > "$tmp_dir/unifi-community-fixture-b-cards.yaml"
 
 for model in "USW Flex Mini" "USW Pro 24" "US 8 60W" "UniFi Dream Machine PRO SE" "USW-24-PoE"; do
-  grep -q "switch_model: $model" "$tmp_dir/unifi-contrib-000057-cards.yaml"
+  grep -q "switch_model: $model" "$tmp_dir/unifi-community-fixture-b-cards.yaml"
 done
 
-[ "$(grep -c 'switch_model: USW Flex Mini' "$tmp_dir/unifi-contrib-000057-cards.yaml")" -eq 3 ]
+[ "$(grep -c 'switch_model: USW Flex Mini' "$tmp_dir/unifi-community-fixture-b-cards.yaml")" -eq 3 ]
 
 python3 - "$RUNTIME_REGISTRY" "$BASE_DIR/profiles/switch-vision-profiles.yaml" <<'PYTEST_V219_REGISTRY'
 import json, sys
@@ -2244,7 +2244,7 @@ assert "disabled" in status["reason"].lower()
 print("Switch Vision Discovery v2.1.36 UniFi-only SNMP2MQTT status regression: PASS")
 PYTEST_V2136_UNIFI_ONLY
 
-# community-validation/000036 Community UniFi exact-model contract regression.
+# community-hardware Community UniFi exact-model contract regression.
 python3 - "$RUNTIME_REGISTRY" "$BASE_DIR/profiles/switch-vision-profiles.yaml" <<'PYTEST_BRENDAN_UNIFI'
 import json
 import sys
@@ -2264,7 +2264,7 @@ expected = {
 }
 for model, (rj45, uplinks, poe, dashboard, profile) in expected.items():
     item = models[model]
-    expected_status = "experimental" if model == "USW Pro Max 24" else "detected"
+    expected_status = "experimental"
     assert item["status"] == expected_status, model
     assert item["ports"]["rj45"] == rj45, model
     assert item["ports"]["uplinks"] == uplinks, model
@@ -2276,6 +2276,7 @@ for model, (rj45, uplinks, poe, dashboard, profile) in expected.items():
     assert item["contributions"][1]["contributor"]["display_name"] == "community contributor", model
     assert all(c["api_capabilities"]["per_port_traffic"] is False for c in item["contributions"]), model
     assert profile in profiles, profile
+    assert profiles[profile]["status"] == "experimental", model
 
 promax = models["USW Pro Max 24"]
 assert promax["calibration_profile"] == "unifi_24p_rj45_2sfp"
@@ -2317,4 +2318,4 @@ grep -q 'switch_model: USW Ultra' "$tmp_dir/community-unifi-cards.yaml"
 test "$(grep -c 'generic_faceplate: true' "$tmp_dir/community-unifi-cards.yaml")" -eq 3
 test "$(grep -c 'generic_faceplate: false' "$tmp_dir/community-unifi-cards.yaml")" -eq 1
 grep -q 'UniFi cards emitted: 4; exact cards: 1; generic fallbacks: 3; exact support pending: 3; issues: 0' "$tmp_dir/community-unifi-cards.yaml"
-echo "Switch Vision Discovery community-validation/000036 generated-card regression: PASS"
+echo "Switch Vision Discovery community-hardware generated-card regression: PASS"
