@@ -19,7 +19,7 @@ from urllib.request import Request, urlopen
 
 import yaml
 
-BASE_SANITIZER = Path(os.environ.get("SWITCH_VISION_BASE_SANITIZER", "/sanitize_support_bundle_base.py"))
+BASE_SANITIZER = Path(os.environ.get("SWITCH_VISION_BASE_SANITIZER", "/sanitize_support_bundle.py"))
 HA_STATES_URL = os.environ.get("SWITCH_VISION_HA_STATES_URL", "http://supervisor/core/api/states")
 SNAPSHOT_RELATIVE_PATH = Path("diagnostics/home-assistant-entity-resolution.json")
 SAFE_OBJECT_SUFFIXES = (

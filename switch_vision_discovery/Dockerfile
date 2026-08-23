@@ -12,6 +12,7 @@ RUN chmod a+x \
     /discovery_job.sh \
     /support_my_switch.sh \
     /sanitize_support_bundle.py \
+    /ha_entity_snapshot_sanitizer.py \
     /make_support_email.py \
     /support_web.py \
     /registry_lookup.py \

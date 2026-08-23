@@ -10,7 +10,8 @@ MASK_MAC_ADDRESSES="${SUPPORT_MASK_MAC_ADDRESSES:-true}"
 MASK_HOSTNAMES="${SUPPORT_MASK_HOSTNAMES:-true}"
 MASK_VLAN_NAMES="${SUPPORT_MASK_VLAN_NAMES:-false}"
 MASK_INTERFACE_DESCRIPTIONS="${SUPPORT_MASK_INTERFACE_DESCRIPTIONS:-false}"
-SANITIZER_SCRIPT="${SUPPORT_SANITIZER_SCRIPT:-/sanitize_support_bundle.py}"
+SANITIZER_SCRIPT="${SUPPORT_SANITIZER_SCRIPT:-/ha_entity_snapshot_sanitizer.py}"
+BASE_SANITIZER_SCRIPT="${SUPPORT_BASE_SANITIZER_SCRIPT:-/sanitize_support_bundle.py}"
 EMAIL_BUILDER_SCRIPT="${SUPPORT_EMAIL_BUILDER_SCRIPT:-/make_support_email.py}"
 REGISTRY_LOOKUP_SCRIPT="${SUPPORT_REGISTRY_LOOKUP_SCRIPT:-/registry_lookup.py}"
 REGISTRY_FILE="${SUPPORT_REGISTRY_FILE:-/opt/switch-vision/devices/supported_devices.json}"
@@ -317,7 +318,7 @@ EOF_README
 
 # Run a second pass over the complete bundle root. This catches any identifying
 # values introduced into generated bundle metadata and performs a residual audit.
-python3 "$SANITIZER_SCRIPT" "$BUNDLE_ROOT" "$FINAL_SANITIZATION_JSON" \
+python3 "$BASE_SANITIZER_SCRIPT" "$BUNDLE_ROOT" "$FINAL_SANITIZATION_JSON" \
   --mask-management-ips "$MASK_MANAGEMENT_IPS" \
   --mask-mac-addresses "$MASK_MAC_ADDRESSES" \
   --mask-hostnames "$MASK_HOSTNAMES" \

@@ -16,8 +16,14 @@ spec.loader.exec_module(module)
 
 def main() -> None:
     dockerfile = (ROOT / "runtime_src/Dockerfile").read_text(encoding="utf-8")
-    assert "COPY sanitize_support_bundle.py /sanitize_support_bundle_base.py" in dockerfile
-    assert "COPY ha_entity_snapshot_sanitizer.py /sanitize_support_bundle.py" in dockerfile
+    assert "COPY sanitize_support_bundle.py /sanitize_support_bundle.py" in dockerfile
+    assert "COPY ha_entity_snapshot_sanitizer.py /ha_entity_snapshot_sanitizer.py" in dockerfile
+
+    support_script = (ROOT / "runtime_src/support_my_switch.sh").read_text(encoding="utf-8")
+    assert 'SANITIZER_SCRIPT="${SUPPORT_SANITIZER_SCRIPT:-/ha_entity_snapshot_sanitizer.py}"' in support_script
+    assert 'BASE_SANITIZER_SCRIPT="${SUPPORT_BASE_SANITIZER_SCRIPT:-/sanitize_support_bundle.py}"' in support_script
+    assert 'python3 "$BASE_SANITIZER_SCRIPT" "$BUNDLE_ROOT"' in support_script
+    assert str(module.BASE_SANITIZER) == "/sanitize_support_bundle.py"
 
     with tempfile.TemporaryDirectory() as tmp:
         generated = Path(tmp) / "generated-snmp2mqtt.yaml"
