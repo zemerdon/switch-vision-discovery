@@ -837,8 +837,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.47"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.47"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.48"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.1.48"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
@@ -2282,10 +2282,10 @@ profiles = profiles_doc.get("profiles", profiles_doc)
 models = {d["model"]: d for d in registry["devices"] if isinstance(d, dict)}
 
 expected = {
-    "UCG Ultra": (5, 0, False, False, "ubiquiti-ucg-ultra-api"),
+    "UCG Ultra": (5, 0, False, True, "ubiquiti-ucg-ultra-api"),
     "US 16 PoE 150W": (16, 2, True, False, "ubiquiti-us-16-poe-150w-api"),
     "USW Pro Max 24": (24, 2, False, True, "ubiquiti-usw-pro-max-24-api"),
-    "USW Ultra": (8, 0, True, False, "ubiquiti-usw-ultra-api"),
+    "USW Ultra": (8, 0, True, True, "ubiquiti-usw-ultra-api"),
 }
 for model, (rj45, uplinks, poe, dashboard, profile) in expected.items():
     item = models[model]
@@ -2306,6 +2306,12 @@ for model, (rj45, uplinks, poe, dashboard, profile) in expected.items():
 promax = models["USW Pro Max 24"]
 assert promax["calibration_profile"] == "unifi_24p_rj45_2sfp"
 assert promax["default_faceplate"] == "faceplates/unifi-24p-rj45-2sfp.png"
+ucg = models["UCG Ultra"]
+assert ucg["calibration_profile"] == "default_unifi_5_rj45"
+assert ucg["default_faceplate"] == "faceplates/unifi-5rj45.png"
+ultra = models["USW Ultra"]
+assert ultra["calibration_profile"] == "default_unifi_8_rj45"
+assert ultra["default_faceplate"] == "faceplates/unifi-8rj45.png"
 assert profiles["ubiquiti-usw-pro-max-24-api"]["interface_patterns"]["sfp_10g"] == ["api-port-25", "api-port-26"]
 assert profiles["ubiquiti-us-16-poe-150w-api"]["interface_patterns"]["sfp_1g"] == ["api-port-17", "api-port-18"]
 assert "ports_1_7_only" in models["USW Ultra"]["validation"]["poe"]
@@ -2340,7 +2346,7 @@ grep -q 'switch_model: UCG Ultra' "$tmp_dir/community-unifi-cards.yaml"
 grep -q 'switch_model: US 16 PoE 150W' "$tmp_dir/community-unifi-cards.yaml"
 grep -q 'switch_model: USW Pro Max 24' "$tmp_dir/community-unifi-cards.yaml"
 grep -q 'switch_model: USW Ultra' "$tmp_dir/community-unifi-cards.yaml"
-test "$(grep -c 'generic_faceplate: true' "$tmp_dir/community-unifi-cards.yaml")" -eq 3
-test "$(grep -c 'generic_faceplate: false' "$tmp_dir/community-unifi-cards.yaml")" -eq 1
-grep -q 'UniFi cards emitted: 4; exact cards: 1; generic fallbacks: 3; exact support pending: 3; issues: 0' "$tmp_dir/community-unifi-cards.yaml"
+test "$(grep -c 'generic_faceplate: true' "$tmp_dir/community-unifi-cards.yaml")" -eq 1
+test "$(grep -c 'generic_faceplate: false' "$tmp_dir/community-unifi-cards.yaml")" -eq 3
+grep -q 'UniFi cards emitted: 4; exact cards: 3; generic fallbacks: 1; exact support pending: 1; issues: 0' "$tmp_dir/community-unifi-cards.yaml"
 echo "Switch Vision Discovery community-hardware generated-card regression: PASS"

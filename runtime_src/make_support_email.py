@@ -21,6 +21,10 @@ def _bool_text(value: object) -> str:
     return "Yes" if bool(value) else "No"
 
 
+def _identity_key(value: object) -> str:
+    return " ".join(str(value).split()).casefold()
+
+
 def _device_lines(manifest_path: Path) -> list[str]:
     summary_path = manifest_path.parent / "DEVICE_SUMMARY.json"
     if not summary_path.exists():
@@ -35,7 +39,8 @@ def _device_lines(manifest_path: Path) -> list[str]:
         model = str(device.get("model") or "Unknown model")
         family = str(device.get("family") or "").strip()
         suffix = f" ({family})" if family and family.lower() != "unknown" else ""
-        lines.append(f"- {vendor} {model}{suffix}")
+        identity = model if _identity_key(vendor) == _identity_key(model) else f"{vendor} {model}"
+        lines.append(f"- {identity}{suffix}")
     return lines or ["- No devices were detected."]
 
 
