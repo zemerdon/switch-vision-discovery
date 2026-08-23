@@ -30,6 +30,16 @@ cv_known_vendor_identity() {
         ;;
     esac
   fi
+  if [ "$vendor_id" = "hp_aruba" ]; then
+    case "${CV_ID_SYS_DESCR:-}" in
+      *J8693A*|*j8693a*|*3500yl-48G*|*3500YL-48G*)
+        CV_ID_FAMILY="3500yl"
+        CV_ID_MODEL_HINT="HP J8693A Switch 3500yl-48G"
+        CV_ID_PRODUCT_MATCH="j8693a-local-sysdescr"
+        CV_ID_SUPPORT_STATUS="detected"
+        ;;
+    esac
+  fi
   if [ "$vendor_id" = "zyxel" ]; then
     case "${CV_ID_SYS_OBJECT_ID:-}|${CV_ID_SYS_DESCR:-}" in
       1.3.6.1.4.1.890.1.15*'|'*XS1930-10*|*'|'*XS1930-10*)
