@@ -9,7 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "switch_vision_discovery/config.yaml"
 PROFILES = ROOT / "runtime_src/profiles/switch-vision-profiles.yaml"
 REGISTRY = ROOT / "runtime_src/opt/switch-vision/devices/supported_devices.json"
+SELF_TEST = ROOT / "runtime_src/self-test.sh"
 SUBMISSION_ID = re.compile(r"(?i)SV[-_]20\d{2}[-_]\d+")
+CONTRIBUTION_BREADCRUMB = re.compile(
+    r"(?i)(?:unifi[-_]contrib|community[-_]validation)[/_-]\d{6}"
+)
 VERSION_RE = re.compile(r'(?m)^version:\s*"([^"]+)"')
 MIGRATION_VERSION = "2.1.44"
 
@@ -125,6 +129,50 @@ def migrate_registry() -> None:
         REGISTRY.write_text(rendered, encoding="utf-8", newline="\n")
 
 
+def migrate_self_test() -> None:
+    original = SELF_TEST.read_text(encoding="utf-8")
+    text = original
+
+    old_status = '    expected_status = "experimental" if model == "USW Pro Max 24" else "detected"\n'
+    new_status = '    expected_status = "experimental"\n'
+    if old_status in text:
+        text = text.replace(old_status, new_status, 1)
+    elif new_status not in text:
+        raise SystemExit("Could not update Community UniFi support-status regression")
+
+    old_profile_assert = '    assert profile in profiles, profile\n'
+    new_profile_assert = (
+        '    assert profile in profiles, profile\n'
+        '    assert profiles[profile]["status"] == "experimental", model\n'
+    )
+    if new_profile_assert not in text:
+        if old_profile_assert not in text:
+            raise SystemExit("Could not extend Community UniFi profile-status regression")
+        text = text.replace(old_profile_assert, new_profile_assert, 1)
+
+    replacements = {
+        "community-validation/000036": "community-hardware",
+        "unifi-contrib-000003": "unifi-community-fixture-a",
+        "unifi-contrib-000057": "unifi-community-fixture-b",
+        "sv57_snapshot": "v219_community_snapshot",
+        "PYTEST_V219_SV57": "PYTEST_V219_COMMUNITY",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+
+    if SUBMISSION_ID.search(text) or CONTRIBUTION_BREADCRUMB.search(text):
+        raise SystemExit("Private contribution identifier remains in shipped runtime self-test")
+    if text != original:
+        SELF_TEST.write_text(text, encoding="utf-8", newline="\n")
+
+
+def assert_public_runtime_clean() -> None:
+    for path in (PROFILES, SELF_TEST):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if SUBMISSION_ID.search(text) or CONTRIBUTION_BREADCRUMB.search(text):
+            raise SystemExit(f"Private contribution identifier remains in public runtime source: {path}")
+
+
 def main() -> None:
     version = current_version()
     profiles = PROFILES.read_text(encoding="utf-8")
@@ -136,17 +184,15 @@ def main() -> None:
         if migrated != profiles:
             PROFILES.write_text(migrated, encoding="utf-8", newline="\n")
         migrate_registry()
+        migrate_self_test()
+        assert_public_runtime_clean()
         print("Public support metadata v2.1.44 migration: PASS")
         return
 
     # The migration is deliberately not a permanent auto-sanitizer. After
     # v2.1.44, new private IDs in public source are a hard failure that requires
     # an explicit canonical-source fix.
-    if SUBMISSION_ID.search(profiles):
-        raise SystemExit(
-            "Private Support My Switch identifier found in public profile source; "
-            "automatic sanitization is disabled after v2.1.44"
-        )
+    assert_public_runtime_clean()
     print("Public support metadata privacy preflight: PASS")
 
 
