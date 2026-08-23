@@ -1,0 +1,189 @@
+name: Workbench prepare Discovery 2.1.44
+
+on:
+  push:
+    branches:
+      - workbench/discovery-2.1.44-privacy-status
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: ${{ !contains(github.event.head_commit.message, '[workbench-prepared]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out workbench branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: workbench/discovery-2.1.44-privacy-status
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check pyyaml websockets
+
+      - name: Apply canonical 2.1.44 maintenance changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          root = Path('.')
+          profiles_path = root / 'runtime_src/profiles/switch-vision-profiles.yaml'
+          profiles = profiles_path.read_text(encoding='utf-8')
+
+          # Public/shipping profile notes must never expose private Support My Switch IDs.
+          profiles = re.sub(
+              r'SV-2026-\d+\s+and\s+SV-2026-\d+',
+              'independent community contributions',
+              profiles,
+          )
+          profiles = re.sub(r'SV-2026-\d+', 'community contribution', profiles)
+          replacements = {
+              'Support My Switch contributions independent community contributions':
+                  'independent Support My Switch community contributions',
+              'Support My Switch contribution community contribution':
+                  'a Support My Switch community contribution',
+              'two matching community contribution devices':
+                  'two matching community-contributed devices',
+              'community contribution contains three independent live devices':
+                  'Community hardware evidence contains three independent live devices',
+              'community contribution confirms':
+                  'Community hardware evidence confirms',
+              'independent community contributions confirm':
+                  'Independent community hardware captures confirm',
+              'independent community contributions independently repeat':
+                  'Independent community hardware captures repeat',
+          }
+          for old, new in replacements.items():
+              profiles = profiles.replace(old, new)
+
+          def set_profile_status(profile: str, old: str, new: str) -> None:
+              nonlocal_profiles = None
+
+          for profile in (
+              'ubiquiti-ucg-ultra-api',
+              'ubiquiti-us-16-poe-150w-api',
+              'ubiquiti-usw-ultra-api',
+          ):
+              pattern = re.compile(
+                  rf'(?m)(^  {re.escape(profile)}:\n    status: )detected$'
+              )
+              profiles, count = pattern.subn(r'\1experimental', profiles, count=1)
+              if count != 1:
+                  raise SystemExit(f'Could not promote {profile} from detected to experimental')
+
+          if re.search(r'(?i)SV[-_]20\d{2}[-_]\d+', profiles):
+              raise SystemExit('Private Support My Switch identifier remains in public profile source')
+          profiles_path.write_text(profiles, encoding='utf-8', newline='\n')
+
+          registry_path = root / 'runtime_src/opt/switch-vision/devices/supported_devices.json'
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          promote = {'UCG Ultra', 'US 16 PoE 150W', 'USW Ultra'}
+          observed = set()
+          for device in registry.get('devices', []):
+              model = str(device.get('model') or '')
+              if model in promote:
+                  if device.get('status') != 'detected':
+                      raise SystemExit(f'Unexpected pre-promotion status for {model}: {device.get("status")}')
+                  device['status'] = 'experimental'
+                  device['evidence'] = 'multiple_real_hardware_unifi_api_contributions'
+                  observed.add(model)
+              elif model == 'USW Pro Max 24':
+                  if device.get('status') != 'experimental':
+                      raise SystemExit('USW Pro Max 24 must remain Experimental')
+                  device['evidence'] = 'multiple_real_hardware_unifi_api_contributions'
+          if observed != promote:
+              raise SystemExit(f'Missing expected registry models: {sorted(promote - observed)}')
+          registry_path.write_text(
+              json.dumps(registry, indent=2, ensure_ascii=False) + '\n',
+              encoding='utf-8',
+              newline='\n',
+          )
+
+          privacy_path = root / 'tools/test_public_attribution_privacy.py'
+          privacy = privacy_path.read_text(encoding='utf-8')
+          old = '    paths = [ROOT / "switch_vision_discovery/CHANGELOG.md"]\n'
+          new = (
+              '    paths = [\n'
+              '        ROOT / "runtime_src/profiles/switch-vision-profiles.yaml",\n'
+              '        ROOT / "switch_vision_discovery/CHANGELOG.md",\n'
+              '    ]\n'
+          )
+          if old not in privacy:
+              raise SystemExit('Could not locate public-text privacy path list')
+          privacy = privacy.replace(old, new, 1)
+          privacy_path.write_text(privacy, encoding='utf-8', newline='\n')
+
+          workflow_path = root / '.github/workflows/check-component-contracts.yml'
+          workflow = workflow_path.read_text(encoding='utf-8')
+          marker = (
+              '      - name: Check Support My Switch SMTP/MIME contract\n'
+              '        run: python3 tools/test_support_email_mime.py\n'
+          )
+          privacy_step = (
+              marker
+              + '      - name: Check public attribution and submission privacy\n'
+              + '        run: python3 tools/test_public_attribution_privacy.py\n'
+          )
+          if marker not in workflow:
+              raise SystemExit('Could not locate permanent contract workflow insertion point')
+          workflow = workflow.replace(marker, privacy_step, 1)
+          workflow_path.write_text(workflow, encoding='utf-8', newline='\n')
+
+          config_path = root / 'switch_vision_discovery/config.yaml'
+          config = config_path.read_text(encoding='utf-8')
+          if 'version: "2.1.43"' not in config:
+              raise SystemExit('Expected Discovery 2.1.43 baseline not found')
+          config = config.replace('version: "2.1.43"', 'version: "2.1.44"', 1)
+          config_path.write_text(config, encoding='utf-8', newline='\n')
+
+          fragment = root / 'switch_vision_discovery/release-fragments/2.1.44.md'
+          fragment.write_text(
+              '- Sanitizes public Discovery profile evidence so private Support My Switch submission identifiers never ship in source or runtime metadata.\n'
+              '- Promotes UCG Ultra, US 16 PoE 150W, and USW Ultra from Detected to Experimental after corroborating real-hardware UniFi API evidence; USW Pro Max 24 remains Experimental.\n'
+              '- Preserves every existing port count, connector type, PoE mask, physical ordering, and maximum-speed contract; this release does not change hardware geometry.\n'
+              '- Adds a permanent CI privacy regression covering public profile source in addition to generated registries and release text.\n',
+              encoding='utf-8',
+              newline='\n',
+          )
+          PY
+
+      - name: Materialize deterministic runtime
+        run: sh tools/materialize_runtime.sh
+
+      - name: Run maintenance regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/test_public_attribution_privacy.py
+          python tools/test_visual_contract_policy.py
+          python tools/check_component_contracts.py
+          python tools/check_speed_contracts.py
+          python tools/test_unifi_dashboard_failure_modes.py
+          python tools/check_runtime_parity.py
+          runtime_dir="$RUNNER_TEMP/discovery-runtime"
+          rm -rf "$runtime_dir"
+          mkdir -p "$runtime_dir"
+          tar -xzf switch_vision_discovery/runtime.tar.gz -C "$runtime_dir"
+          sh "$runtime_dir/self-test.sh"
+
+      - name: Remove temporary workbench workflow and commit prepared product branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/workbench-discovery-2.1.44.yml
+          git config user.name 'Switch Vision Workbench'
+          git config user.email 'switch-vision@users.noreply.github.com'
+          git add -A
+          git commit -m '[workbench-prepared] Discovery 2.1.44 privacy and support-status maintenance'
+          git push origin HEAD:workbench/discovery-2.1.44-privacy-status
