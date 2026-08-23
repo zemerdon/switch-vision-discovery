@@ -18,7 +18,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         generated = Path(tmp) / "generated-snmp2mqtt.yaml"
         generated.write_text(
-            """targets:\n"
+            "targets:\n"
             "  - name: Switch Vision test Traffic\n"
             "    sensors:\n"
             "      - oid: 1.3.6.1.2.1.31.1.1.1.6.4\n"
@@ -30,8 +30,7 @@ def main() -> None:
             "      - oid: 1.3.6.1.2.1.31.1.1.1.15.4\n"
             "        name: RackSW Port 4 Speed Mbps\n"
             "      - oid: 1.3.6.1.2.1.31.1.1.1.18.4\n"
-            "        name: RackSW Port 4 Alias\n"
-            """,
+            "        name: RackSW Port 4 Alias\n",
             encoding="utf-8",
         )
         expected = module.expected_entity_ids(generated)
