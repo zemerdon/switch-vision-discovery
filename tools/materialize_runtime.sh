@@ -4,6 +4,11 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 
+# Normalize public support metadata before packaging so private Support My Switch
+# identifiers cannot enter the runtime archive and reviewed support-status
+# promotions stay synchronized with the copied public registry.
+python3 tools/normalize_public_support_metadata.py
+
 VERSION=$(sed -n 's/^version: "\([^"]*\)"/\1/p' switch_vision_discovery/config.yaml | head -n 1)
 if [ -z "$VERSION" ]; then
   echo "ERROR: Could not resolve Discovery version from config.yaml" >&2
