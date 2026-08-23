@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.47
+
+- Extends the read-only targeted SNMP walk with standard DOT3-MAU-MIB (`1.3.6.1.2.1.26`) so Support My Switch evidence can identify the active media exposed by devices with dual-personality copper/SFP interfaces.
+- Adds a packaged runtime regression that the DOT3-MAU subtree remains in the targeted `LIVE_OIDS` capture set.
+- This is diagnostic evidence only: no HP port classification, connector rendering, SNMP2MQTT entity generation, telemetry synthesis, or support-status change is introduced.
+
 ## 2.1.46
 
 - Adds a private Support My Switch diagnostic snapshot that compares generated Switch Vision port status, RX/TX byte-counter, and speed entity IDs with the entities Home Assistant actually exposes at bundle-creation time.
