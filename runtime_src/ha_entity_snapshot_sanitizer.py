@@ -19,8 +19,6 @@ from urllib.request import Request, urlopen
 
 import yaml
 
-from support_diagnostics import capture_support_diagnostics
-
 BASE_SANITIZER = Path(os.environ.get("SWITCH_VISION_BASE_SANITIZER", "/sanitize_support_bundle_base.py"))
 HA_STATES_URL = os.environ.get("SWITCH_VISION_HA_STATES_URL", "http://supervisor/core/api/states")
 SNAPSHOT_RELATIVE_PATH = Path("diagnostics/home-assistant-entity-resolution.json")
@@ -224,6 +222,7 @@ def main() -> None:
                 pass
 
         try:
+            from support_diagnostics import capture_support_diagnostics
             capture_support_diagnostics(root)
         except Exception as exc:  # Extended diagnostics must never block sanitization.
             status = root / "diagnostics/support-diagnostics-status.json"
