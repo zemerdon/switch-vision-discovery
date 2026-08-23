@@ -2975,7 +2975,7 @@ body.density-dense .step{padding:7px 9px}
 <div class="warning"><b>Safe scope:</b> Scan is read-only. Repair never performs a broker-wide wipe and never edits Home Assistant <code>.storage</code>. A current valid generated SNMP2MQTT YAML is required so Switch Vision can distinguish current entities from historical ghosts.</div>
 <div id="mqttRepairSummary" class="diag-summary"></div>
 <div id="mqttRepairEntities"></div>
-<div class="actions"><button id="scanMqttEntitiesButton" class="primary" type="button">Scan MQTT Entities</button><button id="repairMqttEntitiesButton" type="button" disabled>Repair Stale MQTT Entities</button></div>
+<div class="actions"><button id="scanMqttEntitiesButton" class="primary" type="button">Scan MQTT Entities</button><button id="exportMqttResultsButton" type="button" disabled>Export Results</button><button id="repairMqttEntitiesButton" type="button" disabled>Repair Stale MQTT Entities</button></div>
 <p id="mqttRepairStatus" class="muted">Run a scan to check for historical Switch Vision MQTT entities.</p>
 <hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
 <h3>Reset SNMP Discovery Data</h3>

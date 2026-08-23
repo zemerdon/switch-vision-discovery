@@ -22,12 +22,28 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 # v2.2.0 Maintenance Hub MQTT ownership/reconciliation regression
-python3 -m py_compile "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py"
+python3 -m py_compile "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py"
 grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
 grep -Fq 'id="maintenanceCard"' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/scan' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/repair' "$BASE_DIR/support_web.py"
 grep -Fq 'REPAIR STALE MQTT ENTITIES' "$BASE_DIR/maintenance.js"
+grep -Fq 'id="exportMqttResultsButton"' "$BASE_DIR/support_web.py"
+grep -Fq 'Stale Switch Vision MQTT entities (' "$BASE_DIR/maintenance.js"
+grep -Fq 'switch-vision-mqtt-maintenance-scan-v1' "$BASE_DIR/maintenance.js"
+
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_SUPPORT_DIAGNOSTICS'
+from support_diagnostics import build_port_pipeline
+
+generated = {"targets": [{"name": "SW1", "sensors": [{"object_id": "sw1_port_1_status", "oid": ".1.3.6.1.2.1.2.2.1.8.1"}]}]}
+states = [{"entity_id": "sensor.sw1_port_1_status_2", "state": "up", "attributes": {"secret": "MUST_NOT_LEAK"}, "last_updated": "2026-08-24T00:00:00+00:00"}]
+result = build_port_pipeline(generated, states, {"1.3.6.1.2.1.2.2.1.8.1": "up(1)"})
+assert result["summary"]["status_rows"] == 1
+assert result["summary"]["walk_up_but_exact_not_up"] == 1
+assert result["ports"][0]["suffix_alternatives"][0]["entity_id"] == "sensor.sw1_port_1_status_2"
+assert "MUST_NOT_LEAK" not in repr(result)
+print("Switch Vision Discovery v2.2.1 support diagnostics regression: PASS")
+PY_SUPPORT_DIAGNOSTICS
 
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_MQTT_MAINTENANCE'
 import json
@@ -928,8 +944,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.0"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.0"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.1"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.1"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco

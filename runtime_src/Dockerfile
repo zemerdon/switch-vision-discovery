@@ -10,6 +10,7 @@ COPY discovery_job.sh /discovery_job.sh
 COPY support_my_switch.sh /support_my_switch.sh
 COPY sanitize_support_bundle.py /sanitize_support_bundle_base.py
 COPY ha_entity_snapshot_sanitizer.py /sanitize_support_bundle.py
+COPY support_diagnostics.py /support_diagnostics.py
 COPY make_support_email.py /make_support_email.py
 COPY support_web.py /support_web.py
 COPY mqtt_maintenance.py /mqtt_maintenance.py

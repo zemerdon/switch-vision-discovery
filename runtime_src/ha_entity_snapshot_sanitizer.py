@@ -221,6 +221,29 @@ def main() -> None:
             except OSError:
                 pass
 
+        try:
+            from support_diagnostics import capture_support_diagnostics
+            capture_support_diagnostics(root)
+        except Exception as exc:  # Extended diagnostics must never block sanitization.
+            status = root / "diagnostics/support-diagnostics-status.json"
+            try:
+                status.parent.mkdir(parents=True, exist_ok=True)
+                status.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "generated_at": datetime.now(timezone.utc).isoformat(),
+                            "status": "unavailable",
+                            "reason": f"extended diagnostics failed safely: {type(exc).__name__}",
+                        },
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+            except OSError:
+                pass
+
     if not BASE_SANITIZER.is_file():
         raise SystemExit(f"Base sanitizer not found: {BASE_SANITIZER}")
     os.execv(sys.executable, [sys.executable, str(BASE_SANITIZER), *sys.argv[1:]])

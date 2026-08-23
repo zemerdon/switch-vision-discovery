@@ -3,11 +3,41 @@
 
   const el = (id) => document.getElementById(id);
 
+  function safeExportPlan(plan) {
+    if (!plan || typeof plan !== "object") return null;
+    const stale = Array.isArray(plan.stale_entries)
+      ? plan.stale_entries.map((entry) => ({
+          component: entry.component || null,
+          object_id: entry.object_id || null,
+          entity_id: entry.entity_id || null,
+        }))
+      : [];
+    return {
+      format: "switch-vision-mqtt-maintenance-scan-v1",
+      exported_at: new Date().toISOString(),
+      current_expected_count: Number(plan.current_expected_count || 0),
+      current_retained_count: Number(plan.current_retained_count || 0),
+      current_missing_retained_count: Number(
+        plan.current_missing_retained_count || 0
+      ),
+      owned_retained_count: Number(plan.owned_retained_count || 0),
+      stale_count: Number(plan.stale_count || 0),
+      snmp2mqtt_state: plan.snmp2mqtt_state || "unknown",
+      generated_yaml_found: Boolean(plan.generated_yaml_found),
+      stale_entries: stale,
+      privacy: {
+        raw_mqtt_payloads_included: false,
+        credentials_included: false,
+      },
+    };
+  }
+
   function renderPlan(data) {
     lastPlan = data && typeof data === "object" ? data : null;
     const summary = el("mqttRepairSummary");
     const list = el("mqttRepairEntities");
     const repair = el("repairMqttEntitiesButton");
+    const exportButton = el("exportMqttResultsButton");
     if (!summary || !list || !repair) return;
 
     summary.replaceChildren();
@@ -15,6 +45,7 @@
 
     if (!lastPlan) {
       repair.disabled = true;
+      if (exportButton) exportButton.disabled = true;
       return;
     }
 
@@ -41,11 +72,11 @@
       ? lastPlan.stale_entries
       : [];
     if (stale.length) {
-      const wrap = document.createElement("div");
-      wrap.className = "device-card";
-      const title = document.createElement("strong");
-      title.textContent = "Stale Switch Vision MQTT entities";
-      wrap.appendChild(title);
+      const details = document.createElement("details");
+      details.className = "device-card";
+      const title = document.createElement("summary");
+      title.textContent = `Stale Switch Vision MQTT entities (${stale.length})`;
+      details.appendChild(title);
       const ul = document.createElement("ul");
       for (const entry of stale) {
         const li = document.createElement("li");
@@ -54,8 +85,8 @@
           `${entry.component || "sensor"}.${entry.object_id || "unknown"}`;
         ul.appendChild(li);
       }
-      wrap.appendChild(ul);
-      list.appendChild(wrap);
+      details.appendChild(ul);
+      list.appendChild(details);
     } else {
       const clean = document.createElement("div");
       clean.className = "success";
@@ -67,16 +98,41 @@
     repair.disabled = !(
       Number(lastPlan.stale_count) > 0 && lastPlan.plan_token
     );
+    if (exportButton) exportButton.disabled = false;
+  }
+
+  function exportResults() {
+    const status = el("mqttRepairStatus");
+    const safe = safeExportPlan(lastPlan);
+    if (!safe) {
+      if (status) status.textContent = "Scan MQTT entities before exporting results.";
+      return;
+    }
+    const blob = new Blob([JSON.stringify(safe, null, 2) + "\n"], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    anchor.href = url;
+    anchor.download = `Switch_Vision_MQTT_Maintenance_${stamp}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    if (status) status.textContent = "Maintenance scan results exported.";
   }
 
   async function scan() {
     const button = el("scanMqttEntitiesButton");
     const repair = el("repairMqttEntitiesButton");
+    const exportButton = el("exportMqttResultsButton");
     const status = el("mqttRepairStatus");
     if (!button || !repair || !status) return;
 
     button.disabled = true;
     repair.disabled = true;
+    if (exportButton) exportButton.disabled = true;
     status.textContent =
       "Scanning retained Switch Vision MQTT discovery entries…";
     try {
@@ -179,6 +235,7 @@
   }
   el("scanMqttEntitiesButton")?.addEventListener("click", scan);
   el("repairMqttEntitiesButton")?.addEventListener("click", repair);
+  el("exportMqttResultsButton")?.addEventListener("click", exportResults);
 
   if (
     new URLSearchParams(window.location.search).get("view") === "maintenance"
@@ -187,5 +244,5 @@
     scan();
   }
 
-  window.SwitchVisionMaintenance = { scan, repair };
+  window.SwitchVisionMaintenance = { scan, repair, exportResults };
 })();
