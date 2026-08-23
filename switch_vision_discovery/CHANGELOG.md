@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.45
+
+- Prevents remote LLDP/CDP neighbour model strings from contaminating local switch model detection by restricting exact-model extraction to local sysDescr and ENTITY-MIB identity fields.
+- Detects HP J8693A / 3500yl-48G local identity as Detected from real-hardware evidence without claiming unresolved combo-port geometry or broader HP family support.
+- Adds a permanent CI regression covering HP-with-Dell-neighbour contamination plus existing local ENTITY-MIB exact-SKU precedence.
+
 ## 2.1.44
 
 - Sanitizes public Discovery profile evidence so private Support My Switch submission identifiers never ship in source or runtime metadata.
