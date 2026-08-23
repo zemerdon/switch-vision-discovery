@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.46
+
+- Adds a private Support My Switch diagnostic snapshot that compares generated Switch Vision port status, RX/TX byte-counter, and speed entity IDs with the entities Home Assistant actually exposes at bundle-creation time.
+- Records only expected entity IDs, exact-presence state, safe numeric/enumerated values, update timestamps, and numeric-suffix alternatives such as `_2`; Home Assistant attributes and unrelated entities are excluded.
+- Keeps the existing Support My Switch sanitizer authoritative and makes diagnostic capture fail-safe so Home Assistant API errors cannot block bundle sanitization.
+- Makes no switch mapping, polling, port geometry, telemetry synthesis, or support-status changes.
+
 ## 2.1.45
 
 - Prevents remote LLDP/CDP neighbour model strings from contaminating local switch model detection by restricting exact-model extraction to local sysDescr and ENTITY-MIB identity fields.
