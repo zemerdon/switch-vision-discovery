@@ -35,6 +35,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 from registry_lookup import lookup as registry_lookup
+from mqtt_maintenance_runtime import repair_mqtt_entities, scan_mqtt_entities
 
 SUPPORT_ADDRESS = "switch-vision@zemerdon.com"
 GITHUB_SPONSORS_URL = "https://github.com/sponsors/zemerdon"
@@ -2908,6 +2909,7 @@ body.density-dense .step{padding:7px 9px}
 <button id="openSupportButton" class="nav-card" type="button"><b>Support My Switch</b><span class="nav-points"><span>Create contribution package to add/increase support for your switch</span></span></button>
 <button id="openDiagnosticsButton" class="nav-card" type="button"><b>Detected Device Information</b><span class="nav-points"><span>Detailed device(s) information</span></span></button>
 <button id="openConfigurationButton" class="nav-card" type="button"><b>Import / Export Configuration</b><span class="nav-points"><span>Import / export Discovery configuration</span></span></button>
+<button id="openMaintenanceButton" class="nav-card" type="button"><b>Maintenance</b><span class="nav-points"><span>Repair stale MQTT entities</span><span>Reset generated SNMP data</span></span></button>
 </div>
 <div class="nav-grid" style="margin-top:12px">
 <button id="openIntegrationSettingsButton" class="nav-card" type="button"><b>Switch Vision Settings</b><span class="nav-points"><span>Sidebar toggles</span><span>Native card options</span><span>UI font &amp; display</span></span></button>
@@ -2964,6 +2966,25 @@ body.density-dense .step{padding:7px 9px}
 <p id="configurationStatus" class="muted">No configuration imported.</p>
 </section>
 
+
+<section id="maintenanceCard" class="card hidden">
+<h2>Maintenance</h2>
+<p class="lead">Repair Switch Vision-managed runtime state without touching unrelated Home Assistant or MQTT data.</p>
+<h3>Repair MQTT Entities</h3>
+<p>Scan retained Home Assistant MQTT Discovery entries and compare them with the current generated SNMP2MQTT YAML. Only retained entries that prove Switch Vision SNMP2MQTT ownership through their topic, origin, IDs and state-topic contract are eligible for repair.</p>
+<div class="warning"><b>Safe scope:</b> Scan is read-only. Repair never performs a broker-wide wipe and never edits Home Assistant <code>.storage</code>. A current valid generated SNMP2MQTT YAML is required so Switch Vision can distinguish current entities from historical ghosts.</div>
+<div id="mqttRepairSummary" class="diag-summary"></div>
+<div id="mqttRepairEntities"></div>
+<div class="actions"><button id="scanMqttEntitiesButton" class="primary" type="button">Scan MQTT Entities</button><button id="repairMqttEntitiesButton" type="button" disabled>Repair Stale MQTT Entities</button></div>
+<p id="mqttRepairStatus" class="muted">Run a scan to check for historical Switch Vision MQTT entities.</p>
+<hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
+<h3>Reset SNMP Discovery Data</h3>
+<p>Stronger cleanup for retiring SNMP switches or rebuilding the complete SNMP-generated state. It stops Switch Vision SNMP2MQTT, retires the exact retained discovery topics Switch Vision already knows about, deletes saved SNMP walk/capability/generated SNMP data, and clears the generated card. UniFi data and settings are preserved.</p>
+<div class="warning"><b>This is more destructive than Repair MQTT Entities.</b> Use Repair first for stale Home Assistant entities. Reset is for a deliberate clean SNMP rebuild.</div>
+<div class="actions"><button id="resetSnmpDiscoveryButton" class="danger" type="button">Reset SNMP Discovery Data</button></div>
+<p id="resetSnmpDiscoveryStatus" class="muted"></p>
+</section>
+
 <section id="discoveryCard" class="card hidden">
 <h2>Run Discovery</h2>
 <p id="discoveryStatus" class="lead">Idle / Ready</p>
@@ -2988,7 +3009,6 @@ body.density-dense .step{padding:7px 9px}
 <div class="actions"><button class="primary" id="runDiscoveryButton" type="button">Run Discovery</button><button id="regenerateYamlButton" type="button">Regenerate SNMP2MQTT YAML</button><button id="stopDiscoveryButton" type="button" disabled>Stop Discovery</button><button id="viewResultsButton" type="button">View Results</button><button id="toggleDebugButton" type="button">Show Debug</button></div>
 <p id="regenerateYamlHelp" class="muted">Regenerate SNMP2MQTT YAML uses the existing saved Discovery data and SNMP walks. No new SNMP walks are performed.</p>
 <p id="regenerateYamlStatus" class="muted"></p>
-<details class="advanced"><summary>SNMP cleanup</summary><p class="muted">Use this when retiring SNMP switches or moving to a UniFi API-only setup. It stops Switch Vision SNMP2MQTT, removes retained Home Assistant MQTT Discovery entries that can be identified from the current generated YAML, clears saved SNMP walks/capability caches/generated SNMP files, and clears the generated card so the next Discovery rebuilds it. UniFi API data and UniFi2MQTT settings are not touched.</p><div class="actions"><button id="resetSnmpDiscoveryButton" class="danger" type="button">Reset SNMP Discovery Data</button></div><p id="resetSnmpDiscoveryStatus" class="muted"></p></details>
 <details class="yaml-manager generated-card-manager" open>
 <summary><strong>Generated Card YAML</strong></summary>
 <p>Exact dashboard YAML produced by Discovery. Review, copy, or download it before using it in a custom Home Assistant dashboard. Discovery does not install this file automatically.</p>
@@ -3079,7 +3099,7 @@ function mailto(latest){const subject=`Switch Vision Contribution - ${latest.con
 function statusLabel(value){return String(value||'unknown').replaceAll('_',' ')}
 function validationItem(label,value){const item=document.createElement('div');item.className='validation-item';const name=document.createElement('span');name.textContent=label;const state=document.createElement('span');const normalized=String(value||'unknown').toLowerCase();state.className=`state-${normalized}`;state.textContent=statusLabel(normalized);item.append(name,state);return item}
 function deviceCard(d){const card=document.createElement('div');card.className='device-card';const head=document.createElement('div');head.className='device-head';const title=document.createElement('div');const strong=document.createElement('strong');strong.textContent=d.model||'Unknown model';title.appendChild(strong);const detail=document.createElement('div');detail.className='muted';detail.textContent=`${d.vendor_name||d.vendor||'Unknown vendor'}${d.family&&d.family!=='unknown'?` · ${d.family}`:''}`;title.appendChild(detail);const status=String(d.registry_status||'detected').toLowerCase();const badge=document.createElement('span');badge.className=`badge badge-${status}`;badge.textContent=statusLabel(status);head.append(title,badge);card.appendChild(head);const meta=document.createElement('div');meta.className='meta';meta.style.marginTop='10px';const fields=[['Registry match',d.registry_match?'Yes':'No'],['Last validated',d.registry_last_validated_version?`v${d.registry_last_validated_version}`:'Not recorded'],['Physical interfaces',d.physical_count??0],['RJ45 interfaces',d.rj45_count??0]];for(const [label,value] of fields){const dt=document.createElement('dt');dt.textContent=label;const dd=document.createElement('dd');dd.textContent=String(value);meta.append(dt,dd)}card.appendChild(meta);const validation=d.registry_validation||{};const grid=document.createElement('div');grid.className='validation-grid';for(const [label,key] of [['Exact model','exact_model_detection'],['RJ45 mapping','rj45_mapping'],['PoE','poe'],['System sensors','system_sensors'],['Uplinks','uplinks'],['Stack','stack']])grid.appendChild(validationItem(label,validation[key]));card.appendChild(grid);return card}
-function setView(view){currentView=view;const isHome=view==='home';$('backButton').textContent=isHome?'← Back to Home Assistant':'← Back';const titles={home:['Switch Vision Hub',''],discovery:['Discovery','Run a guided discovery job and review its progress.'],devices:['Devices','Latest detected hardware and generated configuration status.'],support:['Support My Switch','Prepare a privacy-processed contribution bundle. Nothing is sent automatically.'],diagnostics:['Detected Device Information','Detailed device(s) information.'],configuration:['Import / Export Configuration','Export or import the saved Discovery switch list and Discovery settings.'],profiles:['Calibration Profiles','Manage saved faceplate calibration profiles.'],unifi2mqtt:['UniFi2MQTT Settings','Configure the UniFi controller API and MQTT support path.'],progress:['Support My Switch','Preparing your contribution bundle.'],ready:['Support My Switch','Your contribution bundle is ready to review.']};const title=titles[view]||titles.home;$('pageHeading').textContent=title[0];$('pageLead').textContent=title[1];$('pageLead').classList.toggle('hidden',!title[1]);$('homeCard').classList.toggle('hidden',view!=='home');$('discoveryCard').classList.toggle('hidden',view!=='discovery');$('devicesCard').classList.toggle('hidden',view!=='devices');$('createCard').classList.toggle('hidden',view!=='support');$('importantCard').classList.toggle('hidden',view!=='support');$('diagnosticsCard').classList.toggle('hidden',view!=='diagnostics');$('configurationCard').classList.toggle('hidden',view!=='configuration');$('calibrationProfilesCard').classList.toggle('hidden',view!=='profiles');$('unifi2mqttCard').classList.toggle('hidden',view!=='unifi2mqtt');$('progressCard').classList.toggle('hidden',view!=='progress');$('readyCard').classList.toggle('hidden',view!=='ready');window.scrollTo({top:0,behavior:'smooth'})}
+function setView(view){currentView=view;const isHome=view==='home';$('backButton').textContent=isHome?'← Back to Home Assistant':'← Back';const titles={home:['Switch Vision Hub',''],discovery:['Discovery','Run a guided discovery job and review its progress.'],devices:['Devices','Latest detected hardware and generated configuration status.'],support:['Support My Switch','Prepare a privacy-processed contribution bundle. Nothing is sent automatically.'],diagnostics:['Detected Device Information','Detailed device(s) information.'],configuration:['Import / Export Configuration','Export or import the saved Discovery switch list and Discovery settings.'],maintenance:['Maintenance','Repair and reset Switch Vision-managed runtime state safely.'],profiles:['Calibration Profiles','Manage saved faceplate calibration profiles.'],unifi2mqtt:['UniFi2MQTT Settings','Configure the UniFi controller API and MQTT support path.'],progress:['Support My Switch','Preparing your contribution bundle.'],ready:['Support My Switch','Your contribution bundle is ready to review.']};const title=titles[view]||titles.home;$('pageHeading').textContent=title[0];$('pageLead').textContent=title[1];$('pageLead').classList.toggle('hidden',!title[1]);$('homeCard').classList.toggle('hidden',view!=='home');$('discoveryCard').classList.toggle('hidden',view!=='discovery');$('devicesCard').classList.toggle('hidden',view!=='devices');$('createCard').classList.toggle('hidden',view!=='support');$('importantCard').classList.toggle('hidden',view!=='support');$('diagnosticsCard').classList.toggle('hidden',view!=='diagnostics');$('configurationCard').classList.toggle('hidden',view!=='configuration');$('maintenanceCard').classList.toggle('hidden',view!=='maintenance');$('calibrationProfilesCard').classList.toggle('hidden',view!=='profiles');$('unifi2mqttCard').classList.toggle('hidden',view!=='unifi2mqtt');$('progressCard').classList.toggle('hidden',view!=='progress');$('readyCard').classList.toggle('hidden',view!=='ready');window.scrollTo({top:0,behavior:'smooth'})}
 function goBack(){if(!$('homeCard').classList.contains('hidden')){try{if(history.length>1){history.back();return}}catch(_e){}try{window.top.location.href='/';return}catch(_e){}location.href='/';return}setView('home')}
 function openHomeAssistantPath(path){try{window.top.location.href=path;return}catch(_e){}window.location.href=path}
 let appLinksCache=null;
@@ -3207,6 +3227,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){if(polling
 async function create(){const btn=$('createButton');btn.disabled=true;setView('progress');$('progressMessage').textContent='Starting…';try{const r=await fetch(endpoint('api/create'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start contribution');await refresh()}catch(e){$('progressMessage').textContent=`Could not start: ${e}`;btn.disabled=false}}
 $('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openCalibrationProfilesButton').addEventListener('click',()=>{setView('profiles');window.SwitchVisionCalibrationProfiles?.load()});$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedCardYamlButton').addEventListener('click',previewGeneratedCardYaml);$('copyGeneratedCardYamlButton').addEventListener('click',copyGeneratedCardYaml);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('openDiagnosticsButton').addEventListener('click',loadDiagnostics);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json')});$('openIntegrationSettingsButton').addEventListener('click',()=>openHomeAssistantPath('/config/integrations/integration/switch_vision'));$('openDiscoverySettingsButton').addEventListener('click',()=>openResolvedApp('discovery'));$('openSnmp2mqttSettingsButton').addEventListener('click',()=>openResolvedApp('snmp2mqtt'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('refreshDiagnosticsButton').addEventListener('click',loadDiagnostics);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('diagnosticsRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});setView('home');startElapsedTicker();refresh();
 </script>
+<script src="maintenance.js"></script>
 <script src="calibration_profiles.js"></script>
 </body></html>"""
 
@@ -3301,8 +3322,13 @@ class SupportHandler(BaseHTTPRequestHandler):
             self._json({"status": "ok", "version": self.app.version})
         elif path == "/api/app-links":
             self._json(_installed_switch_vision_app_links())
-        elif path == "/calibration_profiles.js":
-            script_path = Path("/calibration_profiles.js")
+        elif path == "/api/maintenance/mqtt/scan":
+            try:
+                self._json(scan_mqtt_entities())
+            except (ValueError, RuntimeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        elif path in {"/calibration_profiles.js", "/maintenance.js"}:
+            script_path = Path("/" + Path(path).name)
 
             if not script_path.is_file():
                 self.send_error(
@@ -3625,6 +3651,19 @@ class SupportHandler(BaseHTTPRequestHandler):
                         "switch_count": _configured_switch_count(imported.get("switches")),
                         "restart_required": False,
                     })
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/maintenance/mqtt/repair":
+            try:
+                with _exclusive_operation("MQTT entity repair"):
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 8192:
+                        raise ValueError("Invalid MQTT repair request size.")
+                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    self._json(repair_mqtt_entities(data))
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:

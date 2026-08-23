@@ -12,6 +12,9 @@ COPY sanitize_support_bundle.py /sanitize_support_bundle_base.py
 COPY ha_entity_snapshot_sanitizer.py /sanitize_support_bundle.py
 COPY make_support_email.py /make_support_email.py
 COPY support_web.py /support_web.py
+COPY mqtt_maintenance.py /mqtt_maintenance.py
+COPY mqtt_maintenance_runtime.py /mqtt_maintenance_runtime.py
+COPY maintenance.js /maintenance.js
 COPY migrate_options.py /migrate_options.py
 COPY registry_lookup.py /registry_lookup.py
 COPY standard_sensor_scan.py /standard_sensor_scan.py
