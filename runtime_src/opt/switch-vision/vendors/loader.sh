@@ -1,6 +1,13 @@
 #!/usr/bin/env sh
-CV_VENDOR_LAYER_VERSION="3"
+CV_VENDOR_LAYER_VERSION="4"
 CV_KNOWN_VENDOR_IDS="juniper hp_aruba dell extreme ruckus_brocade mikrotik ubiquiti netgear huawei zyxel"
+
+# interface.sh historically defined model extraction by scanning the complete
+# walk. Load the local-identity implementation after interface.sh so neighbour
+# identity from LLDP/CDP can never override the local switch model.
+if [ -f "$CV_VENDOR_DIR/model_identity.sh" ]; then
+  . "$CV_VENDOR_DIR/model_identity.sh"
+fi
 
 cv_vendor_database_self_test() {
   required_files="
