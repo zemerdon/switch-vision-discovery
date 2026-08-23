@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.48
+
+- Fixes the Support My Switch detected-hardware email summary so adjacent detected-name/model values that are identical after case/whitespace normalization are rendered once.
+- Preserves both identity fields when they genuinely differ, and preserves the existing family description suffix.
+- Adds a permanent SMTP/MIME regression covering UniFi duplicate-name examples plus a distinct vendor/model case.
+- Synchronizes the shared UCG Ultra and USW Ultra dashboard visual metadata with Core 2.4.18, including their exact five-RJ45 and eight-RJ45 UniFi faceplates/calibration profiles; rendered community alignment remains pending.
+- No hardware detection, port mapping, connector geometry, polling, telemetry, privacy policy, or support-status change is introduced.
+
 ## 2.1.47
 
 - Extends the read-only targeted SNMP walk with standard DOT3-MAU-MIB (`1.3.6.1.2.1.26`) so Support My Switch evidence can identify the active media exposed by devices with dual-personality copper/SFP interfaces.
