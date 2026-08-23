@@ -2002,10 +2002,10 @@
         "gigabit_sfp": 0,
         "ten_gigabit_sfp_plus": 0
       },
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "ubiquiti-ucg-ultra-api",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "default_unifi_5_rj45",
+      "default_faceplate": "faceplates/unifi-5rj45.png",
       "contributions": [
         {
           "id": "community-validation-1",
@@ -2046,7 +2046,7 @@
         "The device is a Cloud Gateway with integrated switching; Switch Vision accepts it because the UniFi controller advertises switching capability rather than because the model name resembles a switch.",
         "WAN/LAN role is deliberately not inferred from physical port position; controller state remains authoritative for role semantics.",
         "Port detail is available while per-port RX/TX traffic is unavailable through the contributed UniFi API path.",
-        "No verified five-port UCG Ultra faceplate exists yet, so exact dashboard visuals remain pending; Discovery uses its safe generic visual while retaining the real five-port count."
+        "A dedicated five-RJ45 UniFi faceplate and factory calibration are bundled for this exact model; rendered alignment remains pending community confirmation."
       ],
       "validation": {
         "exact_model_detection": "live_api_confirmed_two_corroborating_captures",
@@ -2057,10 +2057,10 @@
         "stack": "not_applicable"
       },
       "visuals": {
-        "status": "detected",
-        "recommended_faceplate": "",
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/unifi-5rj45.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "default_unifi_5_rj45",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -2268,10 +2268,10 @@
         "gigabit_sfp": 0,
         "ten_gigabit_sfp_plus": 0
       },
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-ultra-api",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "default_unifi_8_rj45",
+      "default_faceplate": "faceplates/unifi-8rj45.png",
       "contributions": [
         {
           "id": "community-validation-1",
@@ -2310,7 +2310,7 @@
         "community validation and community validation repeat the same eight-port 1G RJ45 topology for USW Ultra.",
         "PoE output capability is exposed on ports 1-7 only; port 8 is not advertised as a PoE output port, preserving the hardware distinction between PoE output and the PoE input/uplink port.",
         "Port detail is available while per-port RX/TX traffic is unavailable through the contributed UniFi API path.",
-        "No verified eight-port USW Ultra faceplate exists yet, so exact dashboard visuals remain pending; Discovery uses its safe generic visual while preserving the real eight-port count."
+        "A dedicated eight-RJ45 UniFi faceplate and factory calibration are bundled for this exact model; rendered alignment remains pending community confirmation."
       ],
       "validation": {
         "exact_model_detection": "live_api_confirmed_two_corroborating_captures",
@@ -2321,10 +2321,10 @@
         "stack": "not_applicable"
       },
       "visuals": {
-        "status": "detected",
-        "recommended_faceplate": "",
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/unifi-8rj45.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "default_unifi_8_rj45",
         "canvas": {
           "width": 2048,
           "height": 448
