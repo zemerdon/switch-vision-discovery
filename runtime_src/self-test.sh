@@ -22,7 +22,7 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 # v2.2.0 Maintenance Hub MQTT ownership/reconciliation regression
-python3 -m py_compile "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py"
+python3 -m py_compile "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py" "$BASE_DIR/walk_correlation.py"
 grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
 grep -Fq 'id="maintenanceCard"' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/scan' "$BASE_DIR/support_web.py"
@@ -59,6 +59,70 @@ assert unavailable["ports"][0]["exact_present"] is None
 assert unavailable["anomalies"] == []
 print("Switch Vision Discovery v2.2.3 support diagnostics availability regression: PASS")
 PY_SUPPORT_DIAGNOSTICS
+
+
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_DIAGNOSTIC_CORRELATION'
+from datetime import datetime, timedelta, timezone
+import os
+from pathlib import Path
+import tempfile
+
+from walk_correlation import build_port_pipeline
+from mqtt_maintenance_runtime import _retained_receive_timeout
+
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    a = root / "snmpwalks" / "Switch_A"
+    b = root / "snmpwalks" / "Switch_B"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+    walk_a = a / "live-targeted-snmpwalk.txt"
+    walk_b = b / "live-targeted-snmpwalk.txt"
+    walk_a.write_text(".1.3.6.1.2.1.2.2.1.8.1 = INTEGER: up(1)\n", encoding="utf-8")
+    walk_b.write_text(".1.3.6.1.2.1.2.2.1.8.1 = INTEGER: down(2)\n", encoding="utf-8")
+    now = datetime.now(timezone.utc)
+    os.utime(walk_a, (now.timestamp(), now.timestamp()))
+    os.utime(walk_b, (now.timestamp(), now.timestamp()))
+
+    generated = {"targets": [
+        {"name": "Switch Vision sw1 Status", "sensors": [
+            {"object_id": "sw1_port_1_status", "oid": ".1.3.6.1.2.1.2.2.1.8.1"}
+        ]},
+        {"name": "Switch Vision sw2 Status", "sensors": [
+            {"object_id": "sw2_port_1_status", "oid": ".1.3.6.1.2.1.2.2.1.8.1"}
+        ]},
+    ]}
+    cards = {"cards": [
+        {"selected_switch": "SW1", "discovery_selected_switch": "Switch A", "status_entity_prefix": "sensor.sw1_port_"},
+        {"selected_switch": "SW2", "discovery_selected_switch": "Switch B", "status_entity_prefix": "sensor.sw2_port_"},
+    ]}
+    states = [
+        {"entity_id": "sensor.sw1_port_1_status", "state": "1"},
+        {"entity_id": "sensor.sw2_port_1_status", "state": "2"},
+    ]
+
+    fresh = build_port_pipeline(root, generated, states, cards, now=now)
+    by_id = {row["object_id"]: row for row in fresh["ports"]}
+    assert by_id["sw1_port_1_status"]["walk_if_oper_status"] == "up(1)"
+    assert by_id["sw2_port_1_status"]["walk_if_oper_status"] == "down(2)"
+    assert by_id["sw1_port_1_status"]["walk_source"] != by_id["sw2_port_1_status"]["walk_source"]
+    assert fresh["summary"]["walk_state_status"] == "fresh"
+    assert fresh["summary"]["walk_up_but_exact_not_up"] == 0
+
+    old = (now - timedelta(hours=2)).timestamp()
+    os.utime(walk_a, (old, old))
+    os.utime(walk_b, (old, old))
+    stale = build_port_pipeline(root, generated, states, cards, now=now)
+    assert stale["summary"]["walk_state_status"] == "stale"
+    assert stale["summary"]["walk_up_but_exact_not_up"] is None
+    assert stale["anomalies"] == []
+    assert stale["summary"]["stale_walk_status_rows"] == 2
+
+assert _retained_receive_timeout(False, 0, 99.0) == 12.0
+assert _retained_receive_timeout(True, 0, 99.0) == 5.0
+assert _retained_receive_timeout(True, 1, 99.0) == 1.0
+print("Switch Vision Discovery v2.2.4 diagnostic correlation/timing regression: PASS")
+PY_DIAGNOSTIC_CORRELATION
 
 # v2.2.2: run the real contribution packaging path and inspect the ZIP.
 # This catches runtime filename/wrapper drift that unit-testing support_diagnostics.py
@@ -1050,8 +1114,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.3"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.3"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.4"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.4"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco

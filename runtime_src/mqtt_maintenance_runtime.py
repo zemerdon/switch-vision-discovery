@@ -26,6 +26,22 @@ from mqtt_maintenance import (
 GENERATED_YAML = Path("/share/switch_vision/generated-snmp2mqtt.yaml")
 RETIREMENT_STATE = Path("/data/snmp2mqtt-retirement-topics.json")
 MAX_RETAINED_MESSAGES = 5000
+FIRST_RETAINED_MESSAGE_TIMEOUT = 5.0
+RETAINED_IDLE_TIMEOUT = 1.0
+RETAINED_SCAN_HARD_TIMEOUT = 20.0
+
+def _retained_receive_timeout(
+    result_seen: bool,
+    message_count: int,
+    remaining: float,
+    *,
+    idle_timeout: float = RETAINED_IDLE_TIMEOUT,
+    first_event_timeout: float = FIRST_RETAINED_MESSAGE_TIMEOUT,
+) -> float:
+    if not result_seen:
+        return min(12.0, remaining)
+    wait = first_event_timeout if message_count == 0 else idle_timeout
+    return min(wait, remaining)
 
 
 def _read_supervisor_token() -> str:
@@ -261,8 +277,9 @@ def _generated_discovery_topics(path: Path, prefix: str) -> list[str]:
 def _retained_messages(
     topic_filter: str,
     *,
-    idle_timeout: float = 1.0,
-    hard_timeout: float = 8.0,
+    idle_timeout: float = RETAINED_IDLE_TIMEOUT,
+    first_event_timeout: float = FIRST_RETAINED_MESSAGE_TIMEOUT,
+    hard_timeout: float = RETAINED_SCAN_HARD_TIMEOUT,
 ) -> list[dict[str, Any]]:
     token = _read_supervisor_token()
     if not token:
@@ -304,10 +321,19 @@ def _retained_messages(
             while True:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    if result_seen:
+                    if result_seen and not messages:
                         break
-                    raise RuntimeError("Home Assistant MQTT subscription timed out.")
-                timeout = min(12.0 if not result_seen else idle_timeout, remaining)
+                    raise RuntimeError(
+                        "Home Assistant MQTT retained scan exceeded its completion "
+                        "timeout; no repair plan was created."
+                    )
+                timeout = _retained_receive_timeout(
+                    result_seen,
+                    len(messages),
+                    remaining,
+                    idle_timeout=idle_timeout,
+                    first_event_timeout=first_event_timeout,
+                )
                 try:
                     response = json.loads(connection.recv(timeout=timeout))
                 except TimeoutError:
