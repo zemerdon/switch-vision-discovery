@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.43
+
+- Add Experimental exact-model Discovery profiles for `UDM Pro Max` and `USW Pro XG 24 PoE` from privacy-processed community real-hardware UniFi API validation.
+- Preserve the UDM Pro Max contract as 8 × 1G RJ45 + 1 × 2.5G-capable RJ45 + 2 × 10G SFP+ with no PoE output.
+- Preserve the USW Pro XG 24 PoE contract as 8 × 2.5G RJ45 + 16 × 10G RJ45 + 2 × 25G SFP28 with 802.3bt Type 4 PoE capability on all 24 copper ports.
+- Teach Support My Switch UniFi summaries to distinguish 1G SFP, 10G SFP+ and 25G SFP28 while retaining a combined `uplink_count`, fixing SFP28 devices being reported with zero optical uplinks.
+- Preserve established UniFi contribution fingerprints while adding the connector split: the legacy fingerprint optical value remains 1G SFP + SFP+ only, SFP28 remains excluded as before, and the two models first registered in this release retain their prior generic `UniFi` fingerprint family.
+- Merge only the two reviewed Core 2.4.14 model records into Discovery's existing registry so stricter Discovery public-contribution metadata for previously supported models is preserved.
+- Keep maximum connector capability separate from negotiated speed; 25G SFP28 ports may legitimately report a current 10G link and 10G-capable copper may negotiate at 100M/1G.
+- Synchronize the reviewed Core exact-model registry and add permanent regressions for SFP28 contribution summaries, dashboard generation, model profiles, registry matching and attribution privacy.
+
 ## 2.1.42
 
 - Correct live Cisco `WS-C3750-48P` interface classification to the stock 48-RJ45 + 4-SFP layout: 48 × 10/100 FastEthernet access ports plus four physical 1G SFP uplinks.
