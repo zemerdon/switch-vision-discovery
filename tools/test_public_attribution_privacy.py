@@ -56,14 +56,17 @@ def main() -> None:
     for path in registries:
         check_structured(json.loads(path.read_text(encoding="utf-8")), path)
 
-    paths = [ROOT / "switch_vision_discovery/CHANGELOG.md"]
+    paths = [
+        ROOT / "runtime_src/profiles/switch-vision-profiles.yaml",
+        ROOT / "switch_vision_discovery/CHANGELOG.md",
+    ]
     paths += list((ROOT / "switch_vision_discovery/release-fragments").glob("*.md"))
     for path in paths:
         text = path.read_text(encoding="utf-8", errors="ignore")
         if SUBMISSION_ID.search(text):
-            raise SystemExit(f"Submission identifier remains in public release text: {path}")
+            raise SystemExit(f"Submission identifier remains in public release/source text: {path}")
         if PACKAGE_NAME.search(text):
-            raise SystemExit(f"Contribution package reference remains in public release text: {path}")
+            raise SystemExit(f"Contribution package reference remains in public release/source text: {path}")
 
     print("Public attribution privacy policy: PASS")
 
