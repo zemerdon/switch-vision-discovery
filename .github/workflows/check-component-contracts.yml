@@ -30,6 +30,8 @@ jobs:
         run: sh tools/materialize_runtime.sh
       - name: Check local model identity isolation
         run: python3 tools/test_local_model_identity.py
+      - name: Check HA entity resolution snapshot privacy
+        run: python3 tools/test_ha_entity_snapshot.py
       - name: Check public attribution and submission privacy
         run: python3 tools/test_public_attribution_privacy.py
       - name: Check strict visual contract policy
