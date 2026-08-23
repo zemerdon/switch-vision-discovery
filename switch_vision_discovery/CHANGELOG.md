@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.2.4
+
+# Discovery 2.2.4
+
+- Fix Support My Switch port-pipeline correlation so standard IF-MIB OIDs are never merged across different switches. Each generated sensor prefix is now bound to the correct Discovery-selected switch and its own captured walk source.
+- Add explicit walk provenance/freshness to port diagnostics, including source, capture time and age. Historical/stale walk evidence is preserved for support analysis but is never treated as a current Home Assistant mismatch.
+- Report fresh/stale/unmapped walk row counts separately and only compute `walk up but HA not up` anomalies from fresh, correctly-bound walk evidence.
+- Harden Maintenance retained-MQTT scanning against a startup/busy-Home-Assistant race by allowing a longer grace period before the first retained event, while retaining the shorter idle-completion timeout after retained delivery starts.
+- Fail safely instead of returning a partial retained scan if the hard completion limit is reached while retained events are still arriving.
+- Add permanent regressions proving two switches with the same IF-MIB status OID remain isolated, stale walks cannot generate current HA anomalies, and MQTT first-event/idle timeout semantics stay distinct.
+- Preserve Support My Switch schema 11, all Maintenance repair ownership/deletion safeguards, switch mapping, geometry, connector type, PoE, polling, telemetry, maximum capability, support status and Core contracts.
+
 ## 2.2.3
 
 - Fix Support My Switch Home Assistant/runtime diagnostics so they use the same Supervisor-token discovery semantics already proven by Maintenance, including the Home Assistant s6 container-environment fallback.
