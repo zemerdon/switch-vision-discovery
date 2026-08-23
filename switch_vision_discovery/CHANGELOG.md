@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.3
+
+- Fix Support My Switch Home Assistant/runtime diagnostics so they use the same Supervisor-token discovery semantics already proven by Maintenance, including the Home Assistant s6 container-environment fallback.
+- Restore real Home Assistant entity-resolution snapshots and installed runtime/component version reporting when the Supervisor token is mounted outside the normal process environment.
+- Make port-pipeline diagnostics explicitly availability-aware: if Home Assistant state capture is unavailable, retain walk evidence but report HA correlation as unavailable instead of generating false `walk up but HA not up` mismatches or zero suffix counts.
+- Add permanent regressions for environment-token priority, s6 token-file fallback, unavailable-HA port-pipeline semantics, and continued exclusion of Home Assistant attributes/unrelated entities.
+- Preserve Support My Switch schema 11, MQTT Maintenance repair behavior, switch mapping, geometry, connector type, PoE, polling, telemetry, maximum capability, support status, and Core contracts.
+
 ## 2.2.2
 
 - Fix Support My Switch schema-11 packaging so the Home Assistant entity snapshot and extended cross-layer diagnostics are actually generated in real contribution archives before sanitization.
