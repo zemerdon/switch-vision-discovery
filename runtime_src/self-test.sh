@@ -1830,15 +1830,38 @@ store = {
     "unrelated_secret": "keep-me",
 }
 posts = []
+backup_calls = []
+retention_calls = []
+backup_dir = tmp / "import-backups"
+
 def get_options():
     return dict(store)
+
 def supervisor(path, *, method="GET", timeout=12.0, payload=None):
     if path == "/addons/self/options" and method == "POST":
+        assert backup_calls == ["configuration_import"], (
+            "pre-mutation backup must run before the Supervisor options POST",
+            backup_calls,
+        )
         store.clear()
         store.update(payload["options"])
         posts.append(dict(store))
         return {"result": "ok"}
     raise AssertionError((path, method))
+
+real_create_backup = web.create_pre_mutation_backup
+real_enforce_retention = web.enforce_retention
+
+def create_test_backup(options, *, reason):
+    backup_calls.append(reason)
+    return real_create_backup(options, reason=reason, directory=backup_dir)
+
+def enforce_test_retention(options):
+    retention_calls.append(True)
+    return real_enforce_retention(options, directory=backup_dir)
+
+web.create_pre_mutation_backup = create_test_backup
+web.enforce_retention = enforce_test_retention
 web._self_addon_options = get_options
 web._supervisor_json = supervisor
 web._import_discovery_options({
@@ -1847,6 +1870,8 @@ web._import_discovery_options({
     "run_snmp_walks": "false",
 })
 assert posts and store["unrelated_secret"] == "keep-me" and store["run_snmp_walks"] == "false"
+assert retention_calls == [True], retention_calls
+assert len(list(backup_dir.glob("switch-vision-discovery-backup-*.json"))) == 1
 
 # Export must read Supervisor, not a stale /data-style local copy.
 stale = tmp / "options.json"
