@@ -391,6 +391,401 @@ def capture_mqtt_maintenance(root: Path) -> dict[str, Any]:
     _write(root, DIAG_DIR / "mqtt-maintenance-scan.json", payload)
     return payload
 
+DEFAULT_DISCOVERY_PATHS = {
+    "input_path": "/share/switch_vision/snmpwalk.txt",
+    "snmpwalks_dir": "/share/switch_vision/snmpwalks",
+    "report_path": "/share/switch_vision/discovery-report.txt",
+    "targets_csv": "/share/switch_vision/discovery-targets.csv",
+    "last_run_summary_path": "/share/switch_vision/last-discovery-run.txt",
+    "generated_yaml_path": "/share/switch_vision/generated-snmp2mqtt.yaml",
+    "generated_card_path": "/share/switch_vision/generated-dashboard-card.yaml",
+    "snmp_log_path": "/share/switch_vision/snmpwalk.log",
+}
+DEFAULT_SNMP_PATHS = {
+    "targets_path": "/config/app_configs/switch_vision_snmp2mqtt/targets.yaml",
+    "switch_vision_generated_yaml_path": "/share/switch_vision/generated-snmp2mqtt.yaml",
+    "imported_targets_path": "/config/app_configs/switch_vision_snmp2mqtt/imported/generated-snmp2mqtt.yaml",
+}
+DEFAULT_INSTALLER_RELEASE_API = (
+    "https://api.github.com/repos/zemerdon/switch-vision-releases/releases/latest"
+)
+
+def _configured(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip()) and value.strip().casefold() != "null"
+    return True
+
+def _boolish(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in {0, 1}:
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().casefold()
+        if text in {"true", "1", "yes", "on", "enabled"}:
+            return True
+        if text in {"false", "0", "no", "off", "disabled"}:
+            return False
+    return None
+
+def _intish(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+def _mode(value: Any, expected: str) -> str:
+    if not _configured(value):
+        return "missing"
+    return "default" if str(value).strip() == expected else "custom"
+
+def _mqtt_host_mode(value: Any) -> str:
+    if not _configured(value):
+        return "supervisor_default"
+    text = str(value).strip().casefold()
+    if text in {"localhost", "127.0.0.1", "core-mosquitto"}:
+        return "supervisor_default"
+    return "custom"
+
+def _enabled_state(value: Any) -> str:
+    state = _boolish(value)
+    if state is not None:
+        return "enabled" if state else "disabled"
+    text = str(value or "").strip().casefold()
+    if text in {"", "enabled"}:
+        return "enabled"
+    return "custom"
+
+def _safe_discovery_options(options: Any) -> dict[str, Any]:
+    data = options if isinstance(options, dict) else {}
+    known = {
+        *DEFAULT_DISCOVERY_PATHS,
+        "run_snmp_walks", "enable_switch_list", "switches",
+        "stack_member_prefixes", "parse_all_walks", "generate_snmp2mqtt",
+        "clean_output_before_walk", "snmp_timeout", "snmp_retries",
+        "minimum_valid_walk_lines", "backup_retention_enabled",
+        "backup_retention_count", "generate_support_my_switch_bundle",
+        "support_mask_management_ips", "support_mask_mac_addresses",
+        "support_mask_hostnames", "support_mask_vlan_names",
+        "support_mask_interface_descriptions", "support_contributor_type",
+        "support_contributor_value",
+    }
+    switches = data.get("switches")
+    safe_switches = []
+    for index, row in enumerate(switches if isinstance(switches, list) else [], start=1):
+        if not isinstance(row, dict):
+            safe_switches.append({"index": index, "valid_row": False})
+            continue
+        safe_switches.append({
+            "index": index,
+            "valid_row": True,
+            "configured": _configured(row.get("switch_name")) or _configured(row.get("switch_host")),
+            "switch_name_configured": _configured(row.get("switch_name")),
+            "switch_host_configured": _configured(row.get("switch_host")),
+            "sensor_prefix_configured": _configured(row.get("sensor_prefix")),
+            "snmp_community_configured": _configured(row.get("snmp_community")),
+            "enabled": _enabled_state(row.get("enabled", "enabled")),
+            "walk_mode": (
+                str(row.get("walk_mode")).strip().casefold()
+                if str(row.get("walk_mode") or "").strip().casefold() in {"targeted", "full"}
+                else "custom"
+            ),
+            "switch_model": str(row.get("switch_model") or "auto").strip() or "auto",
+            "display_name_configured": _configured(row.get("display_name")),
+            "card_header_title_configured": _configured(row.get("card_header_title")),
+        })
+    stack = data.get("stack_member_prefixes")
+    safe_stack = []
+    for index, row in enumerate(stack if isinstance(stack, list) else [], start=1):
+        if not isinstance(row, dict):
+            safe_stack.append({"index": index, "valid_row": False})
+            continue
+        safe_stack.append({
+            "index": index,
+            "valid_row": True,
+            "switch_name_configured": _configured(row.get("switch_name")),
+            "member": _intish(row.get("member")),
+            "display_name_configured": _configured(row.get("display_name")),
+            "sensor_prefix_configured": _configured(row.get("sensor_prefix")),
+            "card_header_title_configured": _configured(row.get("card_header_title")),
+        })
+    return {
+        "paths": {key: _mode(data.get(key), expected) for key, expected in DEFAULT_DISCOVERY_PATHS.items()},
+        "run_snmp_walks": _boolish(data.get("run_snmp_walks")),
+        "enable_switch_list": _boolish(data.get("enable_switch_list")),
+        "parse_all_walks": _boolish(data.get("parse_all_walks")),
+        "generate_snmp2mqtt": _boolish(data.get("generate_snmp2mqtt")),
+        "clean_output_before_walk": _boolish(data.get("clean_output_before_walk")),
+        "snmp_timeout": _intish(data.get("snmp_timeout")),
+        "snmp_retries": _intish(data.get("snmp_retries")),
+        "minimum_valid_walk_lines": _intish(data.get("minimum_valid_walk_lines")),
+        "backup_retention_enabled": _boolish(data.get("backup_retention_enabled")),
+        "backup_retention_count": _intish(data.get("backup_retention_count")),
+        "generate_support_my_switch_bundle": _boolish(data.get("generate_support_my_switch_bundle")),
+        "privacy": {
+            "mask_management_ips": _boolish(data.get("support_mask_management_ips")),
+            "mask_mac_addresses": _boolish(data.get("support_mask_mac_addresses")),
+            "mask_hostnames": _boolish(data.get("support_mask_hostnames")),
+            "mask_vlan_names": _boolish(data.get("support_mask_vlan_names")),
+            "mask_interface_descriptions": _boolish(data.get("support_mask_interface_descriptions")),
+        },
+        "recognition": {
+            "type": str(data.get("support_contributor_type") or "anonymous").strip(),
+            "value_configured": _configured(data.get("support_contributor_value")),
+        },
+        "switches": safe_switches,
+        "stack_members": safe_stack,
+        "unknown_option_keys": sorted(str(key) for key in data if key not in known),
+    }
+
+def _safe_snmp2mqtt_options(options: Any) -> dict[str, Any]:
+    data = options if isinstance(options, dict) else {}
+    mqtt = data.get("mqtt") if isinstance(data.get("mqtt"), dict) else {}
+    homeassistant = data.get("homeassistant") if isinstance(data.get("homeassistant"), dict) else {}
+    known = {
+        "mqtt", "targets_path", "use_switch_vision_generated_yaml",
+        "switch_vision_generated_yaml_path", "imported_targets_path",
+        "backup_existing_config", "homeassistant", "log",
+    }
+    known_mqtt = {
+        "host", "port", "username", "password", "client_id", "keepalive",
+        "clean", "retain", "qos", "base_topic", "host_name_as_target",
+        "ca", "cert", "key", "reject_unauthorized",
+    }
+    log_value = str(data.get("log") or "").strip().casefold()
+    return {
+        "mqtt": {
+            "host_mode": _mqtt_host_mode(mqtt.get("host")),
+            "port": _intish(mqtt.get("port")),
+            "username_configured": _configured(mqtt.get("username")),
+            "password_configured": _configured(mqtt.get("password")),
+            "client_id_mode": _mode(mqtt.get("client_id"), "snmp2mqtt"),
+            "keepalive": _intish(mqtt.get("keepalive")),
+            "clean": _boolish(mqtt.get("clean")),
+            "retain": _boolish(mqtt.get("retain")),
+            "qos": _intish(mqtt.get("qos")),
+            "base_topic_mode": _mode(mqtt.get("base_topic"), "snmp2mqtt"),
+            "host_name_as_target": _boolish(mqtt.get("host_name_as_target")),
+            "ca_configured": _configured(mqtt.get("ca")),
+            "cert_configured": _configured(mqtt.get("cert")),
+            "key_configured": _configured(mqtt.get("key")),
+            "reject_unauthorized": _boolish(mqtt.get("reject_unauthorized")),
+            "unknown_option_keys": sorted(str(key) for key in mqtt if key not in known_mqtt),
+        },
+        "targets_path_mode": _mode(data.get("targets_path"), DEFAULT_SNMP_PATHS["targets_path"]),
+        "generated_yaml_import": _boolish(data.get("use_switch_vision_generated_yaml")),
+        "generated_yaml_path_mode": _mode(
+            data.get("switch_vision_generated_yaml_path"),
+            DEFAULT_SNMP_PATHS["switch_vision_generated_yaml_path"],
+        ),
+        "imported_targets_path_mode": _mode(
+            data.get("imported_targets_path"),
+            DEFAULT_SNMP_PATHS["imported_targets_path"],
+        ),
+        "backup_existing_config": _boolish(data.get("backup_existing_config")),
+        "homeassistant": {
+            "discovery_requested": _boolish(homeassistant.get("discovery")),
+            "prefix_mode": _mode(homeassistant.get("prefix"), "homeassistant"),
+        },
+        "log": log_value if log_value in {"debug", "info", "warning", "error"} else None,
+        "unknown_option_keys": sorted(str(key) for key in data if key not in known),
+    }
+
+def _safe_unifi2mqtt_options(options: Any) -> dict[str, Any]:
+    data = options if isinstance(options, dict) else {}
+    known = {
+        "controller_url", "site_id", "api_key", "verify_ssl",
+        "allow_insecure_http", "poll_interval", "mqtt_host", "mqtt_port",
+        "mqtt_username", "mqtt_password", "mqtt_tls", "mqtt_verify_ssl",
+        "mqtt_ca", "mqtt_topic_prefix", "mqtt_discovery_prefix",
+    }
+    controller = str(data.get("controller_url") or "").strip().casefold()
+    controller_mode = (
+        "missing" if not controller
+        else "https" if controller.startswith("https://")
+        else "http" if controller.startswith("http://")
+        else "custom"
+    )
+    site = str(data.get("site_id") or "").strip().casefold()
+    site_mode = "auto" if site in {"", "auto", "default"} else "custom"
+    return {
+        "controller": {
+            "configured": _configured(data.get("controller_url")),
+            "transport": controller_mode,
+            "api_key_configured": _configured(data.get("api_key")),
+            "site_mode": site_mode,
+            "verify_ssl": _boolish(data.get("verify_ssl")),
+            "allow_insecure_http": _boolish(data.get("allow_insecure_http")),
+            "poll_interval": _intish(data.get("poll_interval")),
+        },
+        "mqtt": {
+            "host_mode": _mqtt_host_mode(data.get("mqtt_host")),
+            "port": _intish(data.get("mqtt_port")),
+            "username_configured": _configured(data.get("mqtt_username")),
+            "password_configured": _configured(data.get("mqtt_password")),
+            "tls": _boolish(data.get("mqtt_tls")),
+            "verify_ssl": _boolish(data.get("mqtt_verify_ssl")),
+            "ca_configured": _configured(data.get("mqtt_ca")),
+            "topic_prefix_mode": _mode(data.get("mqtt_topic_prefix"), "switch_vision/unifi"),
+            "discovery_prefix_mode": _mode(data.get("mqtt_discovery_prefix"), "homeassistant"),
+        },
+        "unknown_option_keys": sorted(str(key) for key in data if key not in known),
+    }
+
+def _safe_installer_options(options: Any) -> dict[str, Any]:
+    data = options if isinstance(options, dict) else {}
+    known = {
+        "release_api_url", "allow_custom_release_source", "release_asset_pattern",
+        "preserve_custom_assets", "create_backup", "allow_prerelease",
+        "backup_retention",
+    }
+    return {
+        "release_source_mode": _mode(data.get("release_api_url"), DEFAULT_INSTALLER_RELEASE_API),
+        "allow_custom_release_source": _boolish(data.get("allow_custom_release_source")),
+        "release_asset_pattern_mode": _mode(data.get("release_asset_pattern"), "switch-vision-*.zip"),
+        "preserve_custom_assets": _boolish(data.get("preserve_custom_assets")),
+        "create_backup": _boolish(data.get("create_backup")),
+        "allow_prerelease": _boolish(data.get("allow_prerelease")),
+        "backup_retention": _intish(data.get("backup_retention")),
+        "unknown_option_keys": sorted(str(key) for key in data if key not in known),
+    }
+
+def _safe_snmp2mqtt_runtime(root: Path) -> dict[str, Any]:
+    raw = _json(root / DIAG_DIR / "snmp2mqtt-runtime.json")
+    if not isinstance(raw, dict):
+        return {"status": "unavailable"}
+    result: dict[str, Any] = {"status": "ok"}
+    source = str(raw.get("configuration_source") or "").strip()
+    if source in {"manual_targets", "switch_vision_generated_yaml"}:
+        result["configuration_source"] = source
+    version = str(raw.get("app_version") or "").strip()
+    if re.fullmatch(r"\d+\.\d+\.\d+", version):
+        result["app_version"] = version
+    result["generated_yaml_import_requested"] = _boolish(raw.get("generated_yaml_import_requested"))
+    result["generated_yaml_import_effective"] = _boolish(raw.get("generated_yaml_import_effective"))
+    result["generated_target_count"] = _intish(raw.get("generated_target_count"))
+    result["generated_sensor_count"] = _intish(raw.get("generated_sensor_count"))
+    digest = str(raw.get("generated_yaml_sha256") or "").strip().casefold()
+    result["generated_yaml_sha256"] = digest if re.fullmatch(r"[0-9a-f]{64}", digest) else None
+    result["homeassistant_discovery_requested"] = _boolish(raw.get("homeassistant_discovery_requested"))
+    result["homeassistant_discovery_effective"] = _boolish(raw.get("homeassistant_discovery_effective"))
+    requested_mode = str(raw.get("homeassistant_prefix_requested_mode") or "").strip()
+    if requested_mode in {"homeassistant", "custom"}:
+        result["homeassistant_prefix_requested_mode"] = requested_mode
+    result["homeassistant_prefix_effective"] = (
+        "homeassistant"
+        if str(raw.get("homeassistant_prefix_effective") or "").strip() == "homeassistant"
+        else "custom"
+    )
+    return result
+
+def _addon_kind(slug: Any, name: Any) -> str | None:
+    text = f"{slug or ''} {name or ''}".casefold().replace("-", "_")
+    if "switch_vision_snmp2mqtt" in text or "switch vision snmp2mqtt" in text:
+        return "snmp2mqtt"
+    if "switch_vision_unifi2mqtt" in text or "switch vision unifi2mqtt" in text:
+        return "unifi2mqtt"
+    if "switch_vision_discovery" in text or "switch vision discovery" in text:
+        return "discovery"
+    if "switch_vision_installer" in text or "switch vision installer" in text:
+        return "installer"
+    return None
+
+def _configuration_from_documents(root: Path, documents: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    safe = {
+        "discovery": _safe_discovery_options(documents.get("discovery", {}).get("options")) if "discovery" in documents else None,
+        "snmp2mqtt": _safe_snmp2mqtt_options(documents.get("snmp2mqtt", {}).get("options")) if "snmp2mqtt" in documents else None,
+        "unifi2mqtt": _safe_unifi2mqtt_options(documents.get("unifi2mqtt", {}).get("options")) if "unifi2mqtt" in documents else None,
+        "installer": _safe_installer_options(documents.get("installer", {}).get("options")) if "installer" in documents else None,
+    }
+    for kind, document in documents.items():
+        if kind not in safe or safe[kind] is None:
+            continue
+        safe[kind] = {
+            "version": str(document.get("version") or "").strip() or None,
+            "state": str(document.get("state") or "").strip() or None,
+            "options": safe[kind],
+        }
+    return {
+        "schema_version": 1,
+        "generated_at": _now(),
+        "scope": (
+            "privacy-safe Switch Vision operational configuration; credentials, "
+            "management addresses, community strings, API keys, private names and "
+            "raw custom paths/topics are excluded"
+        ),
+        "status": "ok",
+        "components": safe,
+        "effective_snmp2mqtt": _safe_snmp2mqtt_runtime(root),
+        "privacy": {
+            "credential_values_included": False,
+            "management_addresses_included": False,
+            "snmp_communities_included": False,
+            "api_keys_included": False,
+            "private_switch_names_included": False,
+            "raw_custom_paths_or_topics_included": False,
+        },
+    }
+
+def build_configuration_snapshot(root: Path) -> dict[str, Any]:
+    token = read_supervisor_token()
+    if not token:
+        payload = _configuration_from_documents(root, {})
+        payload["status"] = "partial"
+        payload["reason"] = "Supervisor token unavailable"
+        return payload
+
+    def get(path: str) -> Any:
+        req = Request(
+            f"http://supervisor{path}",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        )
+        with urlopen(req, timeout=8) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    documents: dict[str, dict[str, Any]] = {}
+    warnings: list[str] = []
+    try:
+        addons_doc = get("/addons")
+        data = addons_doc.get("data") if isinstance(addons_doc, dict) and isinstance(addons_doc.get("data"), dict) else addons_doc
+        addons = data.get("addons") if isinstance(data, dict) else []
+        for addon in addons if isinstance(addons, list) else []:
+            if not isinstance(addon, dict):
+                continue
+            kind = _addon_kind(addon.get("slug"), addon.get("name"))
+            if not kind or kind in documents:
+                continue
+            slug = str(addon.get("slug") or "").strip()
+            if not slug:
+                continue
+            try:
+                info_doc = get(f"/addons/{slug}/info")
+                info = info_doc.get("data") if isinstance(info_doc, dict) and isinstance(info_doc.get("data"), dict) else info_doc
+                if not isinstance(info, dict):
+                    raise ValueError("add-on info was not an object")
+                documents[kind] = {
+                    "version": info.get("version") or addon.get("version"),
+                    "state": info.get("state") or addon.get("state"),
+                    "options": info.get("options") if isinstance(info.get("options"), dict) else {},
+                }
+            except Exception as exc:
+                warnings.append(f"{kind} option query failed: {type(exc).__name__}")
+    except Exception as exc:
+        payload = _configuration_from_documents(root, {})
+        payload["status"] = "partial"
+        payload["reason"] = f"Supervisor add-on query failed: {type(exc).__name__}"
+        return payload
+
+    payload = _configuration_from_documents(root, documents)
+    if warnings:
+        payload["status"] = "partial"
+        payload["warnings"] = warnings
+    return payload
+
 def build_runtime_versions() -> dict[str, Any]:
     payload = {
         "schema_version": 1,
@@ -494,6 +889,7 @@ def capture_support_diagnostics(root: Path) -> None:
     file_provenance = build_file_provenance(root)
     mqtt_scan = capture_mqtt_maintenance(root)
     runtime_versions = build_runtime_versions()
+    configuration_snapshot = build_configuration_snapshot(root)
     if ha_error:
         runtime_versions.setdefault("warnings", []).append(ha_error)
 
@@ -502,6 +898,7 @@ def capture_support_diagnostics(root: Path) -> None:
     _write(root, DIAG_DIR / "card-entity-bindings.json", card_bindings)
     _write(root, DIAG_DIR / "generated-file-provenance.json", file_provenance)
     _write(root, DIAG_DIR / "runtime-versions.json", runtime_versions)
+    _write(root, DIAG_DIR / "configuration-snapshot.json", configuration_snapshot)
     _write(
         root,
         DIAG_DIR / "diagnostic-summary.json",
