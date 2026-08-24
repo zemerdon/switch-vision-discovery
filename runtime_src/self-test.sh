@@ -22,7 +22,7 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 # v2.2.0 Maintenance Hub MQTT ownership/reconciliation regression
-python3 -m py_compile "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py" "$BASE_DIR/walk_correlation.py"
+python3 -m py_compile "$BASE_DIR/discovery_backups.py" "$BASE_DIR/discovery_backups_regression.py" "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py" "$BASE_DIR/walk_correlation.py"
 grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
 grep -Fq 'id="maintenanceCard"' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/scan' "$BASE_DIR/support_web.py"
@@ -31,6 +31,15 @@ grep -Fq 'REPAIR STALE MQTT ENTITIES' "$BASE_DIR/maintenance.js"
 grep -Fq 'id="exportMqttResultsButton"' "$BASE_DIR/support_web.py"
 grep -Fq 'Stale Switch Vision MQTT entities (' "$BASE_DIR/maintenance.js"
 grep -Fq 'switch-vision-mqtt-maintenance-scan-v1' "$BASE_DIR/maintenance.js"
+
+# v2.3.0 Discovery configuration backup retention and privacy regressions
+grep -Fq 'id="discoveryBackupSummary"' "$BASE_DIR/support_web.py"
+grep -Fq '/api/maintenance/discovery-backups' "$BASE_DIR/support_web.py"
+grep -Fq '/api/maintenance/discovery-backups/remove' "$BASE_DIR/support_web.py"
+grep -Fq 'reason="configuration_import"' "$BASE_DIR/support_web.py"
+grep -Fq 'reason="device_state_update"' "$BASE_DIR/support_web.py"
+grep -Fq 'api/maintenance/discovery-backups' "$BASE_DIR/maintenance.js"
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/discovery_backups_regression.py"
 
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_SUPPORT_DIAGNOSTICS'
 from support_diagnostics import build_port_pipeline
@@ -1114,8 +1123,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.5"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.5"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.0"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.0"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
