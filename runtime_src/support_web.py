@@ -44,6 +44,7 @@ from discovery_backups import (
 )
 
 SUPPORT_ADDRESS = "switch-vision@zemerdon.com"
+SUPERVISOR_INGRESS_IP = "172.30.32.2"
 GITHUB_SPONSORS_URL = "https://github.com/sponsors/zemerdon"
 DEFAULT_CONTRIBUTIONS_DIR = Path("/share/switch_vision/contributions")
 DEFAULT_OPTIONS_FILE = Path("/data/options.json")
@@ -3605,6 +3606,12 @@ $('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.valu
 class SupportHandler(BaseHTTPRequestHandler):
     server_version = "SwitchVisionSupport/1.0"
 
+    def _allow_ingress_request(self) -> bool:
+        if self.client_address[0] == SUPERVISOR_INGRESS_IP:
+            return True
+        self.send_error(HTTPStatus.FORBIDDEN)
+        return False
+
     @property
     def app(self) -> "SupportServer":
         return self.server  # type: ignore[return-value]
@@ -3677,6 +3684,8 @@ class SupportHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:  # noqa: N802
+        if not self._allow_ingress_request():
+            return
         path = urlparse(self.path).path.rstrip("/") or "/"
         if path == "/":
             self._html()
@@ -3816,6 +3825,8 @@ class SupportHandler(BaseHTTPRequestHandler):
             self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._allow_ingress_request():
+            return
         path = urlparse(self.path).path.rstrip("/")
 
         if path in {
