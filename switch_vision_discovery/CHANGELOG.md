@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.2.5
+
+# Discovery 2.2.5
+
+- Verify the Discovery → SNMP2MQTT handoff instead of treating a Supervisor restart request as proof that the newly generated configuration became active.
+- Detect an explicit SNMP2MQTT manual-target configuration and stop with a clear warning rather than reporting generated-YAML application success or silently overriding the user's deliberate mode.
+- Verify the current generated MQTT Discovery identity set appears after SNMP2MQTT starts/restarts; if activation cannot be proven, keep the previous retained identities intact and report the handoff as unverified.
+- Retire previous generated MQTT Discovery identities only after the replacement identity set has been observed live.
+- Defer automatic Support My Switch bundle creation until after the SNMP2MQTT handoff check, so a normal Discovery contribution captures the post-restart runtime rather than an unavoidable pre-handoff snapshot. Failed handoffs are captured after the failed verification with previous retained identities preserved.
+- Make Support My Switch walk freshness aware of the current Discovery transaction window so a long multi-switch run cannot make its own newly captured walks stale before the contribution bundle is created.
+- Preserve the ordinary 15-minute freshness rule for stored/offline walks outside the current Discovery run.
+- Add permanent regressions for manual-target mode, successful and failed post-restart activation verification, delayed MQTT publication, safe retirement ordering, post-handoff bundle ordering, same-run walk freshness, old-walk staleness, and malformed run metadata fallback.
+- No switch mapping, physical geometry, connector type, PoE, polling, telemetry, maximum capability, support status, Core or privacy contract changes.
+
 ## 2.2.4
 
 # Discovery 2.2.4
