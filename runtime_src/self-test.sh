@@ -1430,6 +1430,7 @@ spec.loader.exec_module(module)
 
 authoritative = {
     "enable_switch_list": "true",
+    "generate_support_my_switch_bundle": True,
     "switches": [
         {
             "switch_name": "SW_DISABLED",
@@ -1456,7 +1457,10 @@ snapshot = tmp / "authoritative-run-options.json"
 result = module._write_authoritative_discovery_options_snapshot(snapshot)
 assert result == snapshot
 loaded = json.loads(snapshot.read_text(encoding="utf-8"))
-assert loaded == authoritative
+expected_snapshot = dict(authoritative)
+expected_snapshot["generate_support_my_switch_bundle"] = False
+assert loaded == expected_snapshot
+assert authoritative["generate_support_my_switch_bundle"] is True
 assert stat.S_IMODE(snapshot.stat().st_mode) == 0o600, oct(stat.S_IMODE(snapshot.stat().st_mode))
 assert loaded["switches"][0]["enabled"] == "disabled"
 assert loaded["switches"][1]["enabled"] == "enabled"
