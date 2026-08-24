@@ -1,5 +1,5 @@
 name: Switch Vision Discovery
-version: "2.2.5"
+version: "2.3.0"
 slug: switch_vision_discovery
 description: Read-only multi-vendor switch discovery, capability reporting, and review-only SNMP2MQTT/dashboard generation for Switch Vision.
 url: https://github.com/zemerdon/switch-vision-discovery
@@ -64,6 +64,11 @@ options:
   snmp_log_path: /share/switch_vision/snmpwalk.log
   minimum_valid_walk_lines: "100"
 
+  # Private retained configuration backups created before Hub-owned mutations.
+  # The dedicated backup directory is /share/switch_vision/backups/discovery/.
+  backup_retention_enabled: "true"
+  backup_retention_count: 5
+
   # Support My Switch contribution bundle.
   # Creates a ZIP from /share/switch_vision without changing live data.
   # Includes a manifest, device summary, stable fingerprints, and privacy report.
@@ -112,6 +117,8 @@ schema:
   snmp_retries: str
   snmp_log_path: str
   minimum_valid_walk_lines: str
+  backup_retention_enabled: list(false|true)
+  backup_retention_count: int(1,10)
   generate_support_my_switch_bundle: list(false|true)
   support_mask_management_ips: list(false|true)
   support_mask_mac_addresses: list(false|true)

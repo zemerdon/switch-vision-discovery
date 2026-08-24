@@ -36,6 +36,12 @@ from urllib.error import HTTPError, URLError
 
 from registry_lookup import lookup as registry_lookup
 from mqtt_maintenance_runtime import repair_mqtt_entities, scan_mqtt_entities
+from discovery_backups import (
+    create_pre_mutation_backup,
+    discovery_backup_status,
+    enforce_retention,
+    remove_discovery_backup,
+)
 
 SUPPORT_ADDRESS = "switch-vision@zemerdon.com"
 GITHUB_SPONSORS_URL = "https://github.com/sponsors/zemerdon"
@@ -135,6 +141,7 @@ DISCOVERY_CONFIG_KEYS = {
     "targets_csv", "last_run_summary_path", "generated_yaml_path",
     "generated_card_path", "snmp_timeout", "snmp_retries",
     "snmp_log_path", "minimum_valid_walk_lines",
+    "backup_retention_enabled", "backup_retention_count",
 }
 
 
@@ -456,7 +463,7 @@ def _validate_discovery_import(data: Any) -> dict[str, Any]:
         if not (walk_root == "/share/switch_vision/snmpwalks" or walk_root.startswith("/share/switch_vision/snmpwalks/")):
             raise ValueError("snmpwalks_dir must stay under /share/switch_vision/snmpwalks.")
 
-    for key in {"run_snmp_walks", "enable_switch_list", "parse_all_walks", "generate_snmp2mqtt", "clean_output_before_walk"}:
+    for key in {"run_snmp_walks", "enable_switch_list", "parse_all_walks", "generate_snmp2mqtt", "clean_output_before_walk", "backup_retention_enabled"}:
         if key in validated:
             validated[key] = _bool_string(validated[key], key)
     if "snmp_timeout" in validated:
@@ -465,6 +472,10 @@ def _validate_discovery_import(data: Any) -> dict[str, Any]:
         validated["snmp_retries"] = _bounded_int_string(validated["snmp_retries"], "snmp_retries", 0, 10)
     if "minimum_valid_walk_lines" in validated:
         validated["minimum_valid_walk_lines"] = _bounded_int_string(validated["minimum_valid_walk_lines"], "minimum_valid_walk_lines", 1, 1000000)
+    if "backup_retention_count" in validated:
+        validated["backup_retention_count"] = int(
+            _bounded_int_string(validated["backup_retention_count"], "backup_retention_count", 1, 10)
+        )
 
     switches = validated.get("switches", [])
     if not isinstance(switches, list):
@@ -506,6 +517,7 @@ def _import_discovery_options(imported: dict[str, Any]) -> None:
         merged = dict(current)
         merged.update(imported)
         _validate_inventory_identities(merged)
+        create_pre_mutation_backup(current, reason="configuration_import")
         _supervisor_json(
             "/addons/self/options",
             method="POST",
@@ -518,6 +530,7 @@ def _import_discovery_options(imported: dict[str, Any]) -> None:
                 raise RuntimeError(
                     f"Home Assistant did not confirm imported Discovery option '{key}'."
                 )
+        enforce_retention(confirmed)
 
 
 _STATE_LOCK = threading.Lock()
@@ -1196,6 +1209,7 @@ def _set_configured_device_state(options_file: Path, request_data: Any) -> dict[
         updated_options = dict(options)
         updated_options["switches"] = updated_rows
         _validate_inventory_identities(updated_options)
+        create_pre_mutation_backup(options, reason="device_state_update")
 
         # Home Assistant Supervisor remains the source of truth. Sending the
         # complete current options dictionary preserves unrelated settings and
@@ -3318,6 +3332,14 @@ body.density-dense .step{padding:7px 9px}
 <section id="maintenanceCard" class="card hidden">
 <h2>Maintenance</h2>
 <p class="lead">Repair Switch Vision-managed runtime state without touching unrelated Home Assistant or MQTT data.</p>
+<h3>Discovery Configuration Backups</h3>
+<p>Switch Vision can retain private snapshots before persistent configuration changes made through the Hub, including configuration import and saved-device enable/disable. Changes made independently through Home Assistant's add-on Configuration page are outside this interception path.</p>
+<div class="warning"><b>Private data:</b> Backup files may contain saved configuration and secrets. Maintenance exposes only backup name, time, size and count; it never shows or downloads backup contents.</div>
+<div id="discoveryBackupSummary" class="diag-summary"></div>
+<div id="discoveryBackupList"></div>
+<div class="actions"><button id="refreshDiscoveryBackupsButton" type="button">Refresh Backups</button></div>
+<p id="discoveryBackupStatus" class="muted">Loading retained Discovery backups…</p>
+<hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
 <h3>Repair MQTT Entities</h3>
 <p>Scan retained Home Assistant MQTT Discovery entries and compare them with the current generated SNMP2MQTT YAML. Only retained entries that prove Switch Vision SNMP2MQTT ownership through their topic, origin, IDs and state-topic contract are eligible for repair.</p>
 <div class="warning"><b>Safe scope:</b> Scan is read-only. Repair never performs a broker-wide wipe and never edits Home Assistant <code>.storage</code>. A current valid generated SNMP2MQTT YAML is required so Switch Vision can distinguish current entities from historical ghosts.</div>
@@ -3670,6 +3692,11 @@ class SupportHandler(BaseHTTPRequestHandler):
             self._json({"status": "ok", "version": self.app.version})
         elif path == "/api/app-links":
             self._json(_installed_switch_vision_app_links())
+        elif path == "/api/maintenance/discovery-backups":
+            try:
+                self._json(discovery_backup_status(_self_addon_options()))
+            except (ValueError, RuntimeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         elif path == "/api/maintenance/mqtt/scan":
             try:
                 self._json(scan_mqtt_entities())
@@ -3999,6 +4026,24 @@ class SupportHandler(BaseHTTPRequestHandler):
                         "switch_count": _configured_switch_count(imported.get("switches")),
                         "restart_required": False,
                     })
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/maintenance/discovery-backups/remove":
+            try:
+                with _exclusive_operation("Discovery backup removal"):
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 8192:
+                        raise ValueError("Invalid Discovery backup removal request size.")
+                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    if not isinstance(data, dict):
+                        raise ValueError("Discovery backup removal request must contain a JSON object.")
+                    options = _self_addon_options()
+                    discovery_backup_status(options)
+                    remove_discovery_backup(data.get("name"))
+                    self._json(discovery_backup_status(options))
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:

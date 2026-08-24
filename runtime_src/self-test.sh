@@ -22,7 +22,7 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 # v2.2.0 Maintenance Hub MQTT ownership/reconciliation regression
-python3 -m py_compile "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py" "$BASE_DIR/walk_correlation.py"
+python3 -m py_compile "$BASE_DIR/discovery_backups.py" "$BASE_DIR/discovery_backups_regression.py" "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py" "$BASE_DIR/walk_correlation.py"
 grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
 grep -Fq 'id="maintenanceCard"' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/scan' "$BASE_DIR/support_web.py"
@@ -31,6 +31,15 @@ grep -Fq 'REPAIR STALE MQTT ENTITIES' "$BASE_DIR/maintenance.js"
 grep -Fq 'id="exportMqttResultsButton"' "$BASE_DIR/support_web.py"
 grep -Fq 'Stale Switch Vision MQTT entities (' "$BASE_DIR/maintenance.js"
 grep -Fq 'switch-vision-mqtt-maintenance-scan-v1' "$BASE_DIR/maintenance.js"
+
+# v2.3.0 Discovery configuration backup retention and privacy regressions
+grep -Fq 'id="discoveryBackupSummary"' "$BASE_DIR/support_web.py"
+grep -Fq '/api/maintenance/discovery-backups' "$BASE_DIR/support_web.py"
+grep -Fq '/api/maintenance/discovery-backups/remove' "$BASE_DIR/support_web.py"
+grep -Fq 'reason="configuration_import"' "$BASE_DIR/support_web.py"
+grep -Fq 'reason="device_state_update"' "$BASE_DIR/support_web.py"
+grep -Fq 'api/maintenance/discovery-backups' "$BASE_DIR/maintenance.js"
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/discovery_backups_regression.py"
 
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_SUPPORT_DIAGNOSTICS'
 from support_diagnostics import build_port_pipeline
@@ -1114,8 +1123,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.5"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.2.5"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.0"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.0"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
@@ -1362,11 +1371,13 @@ stored = {
     ],
 }
 posts = []
+backup_calls = []
 
 def fake_supervisor(path, *, method="GET", timeout=12.0, payload=None):
     if path == "/addons/self/info" and method == "GET":
         return {"data": {"options": copy.deepcopy(stored)}}
     if path == "/addons/self/options" and method == "POST":
+        assert backup_calls, "pre-mutation backup must run before the Supervisor options POST"
         assert isinstance(payload, dict) and isinstance(payload.get("options"), dict), payload
         posts.append(copy.deepcopy(payload))
         stored.clear()
@@ -1374,6 +1385,16 @@ def fake_supervisor(path, *, method="GET", timeout=12.0, payload=None):
         return {"result": "ok", "data": {}}
     raise AssertionError((path, method, payload))
 
+real_create_backup = module.create_pre_mutation_backup
+def create_test_backup(options, *, reason):
+    backup_calls.append(reason)
+    return real_create_backup(
+        options,
+        reason=reason,
+        directory=tmp / "discovery-backups",
+    )
+
+module.create_pre_mutation_backup = create_test_backup
 module._supervisor_json = fake_supervisor
 fallback = tmp / "hub-toggle-options.json"
 fallback.write_text("{}", encoding="utf-8")
@@ -1809,15 +1830,38 @@ store = {
     "unrelated_secret": "keep-me",
 }
 posts = []
+backup_calls = []
+retention_calls = []
+backup_dir = tmp / "import-backups"
+
 def get_options():
     return dict(store)
+
 def supervisor(path, *, method="GET", timeout=12.0, payload=None):
     if path == "/addons/self/options" and method == "POST":
+        assert backup_calls == ["configuration_import"], (
+            "pre-mutation backup must run before the Supervisor options POST",
+            backup_calls,
+        )
         store.clear()
         store.update(payload["options"])
         posts.append(dict(store))
         return {"result": "ok"}
     raise AssertionError((path, method))
+
+real_create_backup = web.create_pre_mutation_backup
+real_enforce_retention = web.enforce_retention
+
+def create_test_backup(options, *, reason):
+    backup_calls.append(reason)
+    return real_create_backup(options, reason=reason, directory=backup_dir)
+
+def enforce_test_retention(options):
+    retention_calls.append(True)
+    return real_enforce_retention(options, directory=backup_dir)
+
+web.create_pre_mutation_backup = create_test_backup
+web.enforce_retention = enforce_test_retention
 web._self_addon_options = get_options
 web._supervisor_json = supervisor
 web._import_discovery_options({
@@ -1826,6 +1870,8 @@ web._import_discovery_options({
     "run_snmp_walks": "false",
 })
 assert posts and store["unrelated_secret"] == "keep-me" and store["run_snmp_walks"] == "false"
+assert retention_calls == [True], retention_calls
+assert len(list(backup_dir.glob("switch-vision-discovery-backup-*.json"))) == 1
 
 # Export must read Supervisor, not a stale /data-style local copy.
 stale = tmp / "options.json"
