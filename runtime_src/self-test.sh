@@ -1371,11 +1371,13 @@ stored = {
     ],
 }
 posts = []
+backup_calls = []
 
 def fake_supervisor(path, *, method="GET", timeout=12.0, payload=None):
     if path == "/addons/self/info" and method == "GET":
         return {"data": {"options": copy.deepcopy(stored)}}
     if path == "/addons/self/options" and method == "POST":
+        assert backup_calls, "pre-mutation backup must run before the Supervisor options POST"
         assert isinstance(payload, dict) and isinstance(payload.get("options"), dict), payload
         posts.append(copy.deepcopy(payload))
         stored.clear()
@@ -1383,6 +1385,16 @@ def fake_supervisor(path, *, method="GET", timeout=12.0, payload=None):
         return {"result": "ok", "data": {}}
     raise AssertionError((path, method, payload))
 
+real_create_backup = module.create_pre_mutation_backup
+def create_test_backup(options, *, reason):
+    backup_calls.append(reason)
+    return real_create_backup(
+        options,
+        reason=reason,
+        directory=tmp / "discovery-backups",
+    )
+
+module.create_pre_mutation_backup = create_test_backup
 module._supervisor_json = fake_supervisor
 fallback = tmp / "hub-toggle-options.json"
 fallback.write_text("{}", encoding="utf-8")
