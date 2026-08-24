@@ -607,11 +607,17 @@ def _load_options(path: Path) -> dict[str, Any]:
         return {}
 
 
-def _defaults(options_file: Path) -> dict[str, Any]:
-    options = _load_options(options_file)
+def _support_settings_from_options(options: dict[str, Any]) -> dict[str, Any]:
+    """Return Support My Switch settings without exposing unrelated options."""
     contributor_type = str(options.get("support_contributor_type") or "anonymous")
     if contributor_type not in {"anonymous", "first_name", "full_name", "github", "forum"}:
         contributor_type = "anonymous"
+    contributor_value = (
+        str(options.get("support_contributor_value") or "")
+        .replace("\n", " ")
+        .replace("\r", " ")
+        .strip()[:120]
+    )
     return {
         "mask_management_ips": _safe_bool(options.get("support_mask_management_ips"), True),
         "mask_mac_addresses": _safe_bool(options.get("support_mask_mac_addresses"), True),
@@ -619,8 +625,12 @@ def _defaults(options_file: Path) -> dict[str, Any]:
         "mask_vlan_names": _safe_bool(options.get("support_mask_vlan_names"), False),
         "mask_interface_descriptions": _safe_bool(options.get("support_mask_interface_descriptions"), False),
         "contributor_type": contributor_type,
-        "contributor_value": str(options.get("support_contributor_value") or "")[:120],
+        "contributor_value": contributor_value,
     }
+
+
+def _defaults(options_file: Path) -> dict[str, Any]:
+    return _support_settings_from_options(_load_options(options_file))
 
 
 def _zip_member_json(archive: Path, suffix: str) -> Any:
@@ -732,6 +742,62 @@ def _request_discovery_stop() -> bool:
     return True
 
 
+def _generate_automatic_support_bundle(
+    settings: dict[str, Any],
+    lines: list[str],
+) -> bool:
+    """Capture an automatic contribution only after the runtime handoff check."""
+    if not DEFAULT_SUPPORT_SCRIPT.is_file():
+        lines.append(
+            "Automatic Support My Switch capture skipped because the support backend is unavailable."
+        )
+        return False
+    DEFAULT_CONTRIBUTIONS_DIR.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env.update({
+        "SWITCH_VISION_DISCOVERY_VERSION": os.environ.get(
+            "SWITCH_VISION_DISCOVERY_VERSION",
+            "unknown",
+        ),
+        "SUPPORT_MASK_MANAGEMENT_IPS": str(settings["mask_management_ips"]).lower(),
+        "SUPPORT_MASK_MAC_ADDRESSES": str(settings["mask_mac_addresses"]).lower(),
+        "SUPPORT_MASK_HOSTNAMES": str(settings["mask_hostnames"]).lower(),
+        "SUPPORT_MASK_VLAN_NAMES": str(settings["mask_vlan_names"]).lower(),
+        "SUPPORT_MASK_INTERFACE_DESCRIPTIONS": str(
+            settings["mask_interface_descriptions"]
+        ).lower(),
+        "SUPPORT_CONTRIBUTOR_TYPE": str(settings["contributor_type"]),
+        "SUPPORT_CONTRIBUTOR_VALUE": str(settings["contributor_value"]),
+        "CONTRIBUTIONS_DIR": str(DEFAULT_CONTRIBUTIONS_DIR),
+    })
+    try:
+        result = subprocess.run(
+            [str(DEFAULT_SUPPORT_SCRIPT)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            env=env,
+            timeout=180,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        lines.append(
+            "Automatic Support My Switch capture failed after the SNMP2MQTT "
+            f"handoff check: {type(exc).__name__}."
+        )
+        return False
+    if result.returncode != 0:
+        lines.append(
+            "Automatic Support My Switch capture failed after the SNMP2MQTT "
+            f"handoff check with exit code {result.returncode}."
+        )
+        return False
+    lines.append(
+        "Automatic Support My Switch contribution captured after the "
+        "SNMP2MQTT handoff check."
+    )
+    return True
+
+
 def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
     global _DISCOVERY_PROCESS
     log_path = DEFAULT_DISCOVERY_LOG
@@ -761,11 +827,22 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
     )
     try:
         _ensure_runtime_paths()
-        options_snapshot = (
-            _write_snmp2mqtt_regeneration_options_snapshot()
-            if regenerate_only
-            else _write_authoritative_discovery_options_snapshot()
-        )
+        if regenerate_only:
+            auto_bundle_settings = None
+            options_snapshot = _write_snmp2mqtt_regeneration_options_snapshot()
+        else:
+            authoritative_options = _self_addon_options()
+            auto_bundle_settings = (
+                _support_settings_from_options(authoritative_options)
+                if _safe_bool(
+                    authoritative_options.get("generate_support_my_switch_bundle"),
+                    True,
+                )
+                else None
+            )
+            options_snapshot = _write_authoritative_discovery_options_snapshot(
+                options=authoritative_options,
+            )
         discovery_env = os.environ.copy()
         discovery_env["SWITCH_VISION_OPTIONS_FILE"] = str(options_snapshot)
         if regenerate_only:
@@ -844,6 +921,20 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
             raise RuntimeError(f"{operation_name} exited with code {return_code}.")
         _set_discovery_state(stage="Starting SNMP2MQTT", activity="Validating generated SNMP2MQTT YAML", command="Supervisor app action", phase="running")
         snmp2mqtt_result = _ensure_snmp2mqtt_running(lines, generated_yaml_previous_mtime, generated_yaml_previous_topics)
+        if auto_bundle_settings is not None:
+            _set_discovery_state(
+                stage="Capturing Support My Switch",
+                activity="Capturing diagnostics after the SNMP2MQTT handoff check",
+                command="Support My Switch",
+                phase="running",
+            )
+            bundle_captured = _generate_automatic_support_bundle(
+                auto_bundle_settings,
+                lines,
+            )
+            snmp2mqtt_result["support_bundle_after_handoff"] = (
+                "captured" if bundle_captured else "failed"
+            )
         if snmp2mqtt_result.get("handoff_failed"):
             failure_message = str(
                 snmp2mqtt_result.get("message")
@@ -956,14 +1047,22 @@ def _self_addon_options() -> dict[str, Any]:
 
 def _write_authoritative_discovery_options_snapshot(
     destination: Path = Path("/tmp/switch_vision_discovery_options.json"),
+    *,
+    options: dict[str, Any] | None = None,
 ) -> Path:
-    """Write one fail-closed Supervisor options snapshot for an upcoming Discovery run."""
-    options = _self_addon_options()
-    _validate_inventory_identities(options)
+    """Write one fail-closed Supervisor snapshot for the shell Discovery stage.
+
+    Automatic Support My Switch capture is suppressed in this run-local copy.
+    The Hub creates that bundle only after the SNMP2MQTT handoff has been checked.
+    """
+    source_options = dict(options) if isinstance(options, dict) else _self_addon_options()
+    _validate_inventory_identities(source_options)
+    snapshot_options = dict(source_options)
+    snapshot_options["generate_support_my_switch_bundle"] = False
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
     try:
-        temporary.write_text(json.dumps(options, indent=2) + "\n", encoding="utf-8")
+        temporary.write_text(json.dumps(snapshot_options, indent=2) + "\n", encoding="utf-8")
         os.chmod(temporary, 0o600)
         temporary.replace(destination)
         os.chmod(destination, 0o600)
@@ -996,6 +1095,7 @@ def _write_snmp2mqtt_regeneration_options_snapshot(
     regenerated["clean_output_before_walk"] = False
     regenerated["parse_all_walks"] = True
     regenerated["generate_snmp2mqtt"] = True
+    regenerated["generate_support_my_switch_bundle"] = False
     regenerated["report_path"] = "/tmp/switch_vision_regenerate_report.txt"
     regenerated["last_run_summary_path"] = "/tmp/switch_vision_regenerate_summary.txt"
     regenerated["generated_card_path"] = "/tmp/switch_vision_regenerate_dashboard.yaml"
