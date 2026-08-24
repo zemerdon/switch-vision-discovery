@@ -607,11 +607,17 @@ def _load_options(path: Path) -> dict[str, Any]:
         return {}
 
 
-def _defaults(options_file: Path) -> dict[str, Any]:
-    options = _load_options(options_file)
+def _support_settings_from_options(options: dict[str, Any]) -> dict[str, Any]:
+    """Return Support My Switch settings without exposing unrelated options."""
     contributor_type = str(options.get("support_contributor_type") or "anonymous")
     if contributor_type not in {"anonymous", "first_name", "full_name", "github", "forum"}:
         contributor_type = "anonymous"
+    contributor_value = (
+        str(options.get("support_contributor_value") or "")
+        .replace("\n", " ")
+        .replace("\r", " ")
+        .strip()[:120]
+    )
     return {
         "mask_management_ips": _safe_bool(options.get("support_mask_management_ips"), True),
         "mask_mac_addresses": _safe_bool(options.get("support_mask_mac_addresses"), True),
@@ -619,8 +625,12 @@ def _defaults(options_file: Path) -> dict[str, Any]:
         "mask_vlan_names": _safe_bool(options.get("support_mask_vlan_names"), False),
         "mask_interface_descriptions": _safe_bool(options.get("support_mask_interface_descriptions"), False),
         "contributor_type": contributor_type,
-        "contributor_value": str(options.get("support_contributor_value") or "")[:120],
+        "contributor_value": contributor_value,
     }
+
+
+def _defaults(options_file: Path) -> dict[str, Any]:
+    return _support_settings_from_options(_load_options(options_file))
 
 
 def _zip_member_json(archive: Path, suffix: str) -> Any:
@@ -732,6 +742,62 @@ def _request_discovery_stop() -> bool:
     return True
 
 
+def _generate_automatic_support_bundle(
+    settings: dict[str, Any],
+    lines: list[str],
+) -> bool:
+    """Capture an automatic contribution only after the runtime handoff check."""
+    if not DEFAULT_SUPPORT_SCRIPT.is_file():
+        lines.append(
+            "Automatic Support My Switch capture skipped because the support backend is unavailable."
+        )
+        return False
+    DEFAULT_CONTRIBUTIONS_DIR.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env.update({
+        "SWITCH_VISION_DISCOVERY_VERSION": os.environ.get(
+            "SWITCH_VISION_DISCOVERY_VERSION",
+            "unknown",
+        ),
+        "SUPPORT_MASK_MANAGEMENT_IPS": str(settings["mask_management_ips"]).lower(),
+        "SUPPORT_MASK_MAC_ADDRESSES": str(settings["mask_mac_addresses"]).lower(),
+        "SUPPORT_MASK_HOSTNAMES": str(settings["mask_hostnames"]).lower(),
+        "SUPPORT_MASK_VLAN_NAMES": str(settings["mask_vlan_names"]).lower(),
+        "SUPPORT_MASK_INTERFACE_DESCRIPTIONS": str(
+            settings["mask_interface_descriptions"]
+        ).lower(),
+        "SUPPORT_CONTRIBUTOR_TYPE": str(settings["contributor_type"]),
+        "SUPPORT_CONTRIBUTOR_VALUE": str(settings["contributor_value"]),
+        "CONTRIBUTIONS_DIR": str(DEFAULT_CONTRIBUTIONS_DIR),
+    })
+    try:
+        result = subprocess.run(
+            [str(DEFAULT_SUPPORT_SCRIPT)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            env=env,
+            timeout=180,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        lines.append(
+            "Automatic Support My Switch capture failed after the SNMP2MQTT "
+            f"handoff check: {type(exc).__name__}."
+        )
+        return False
+    if result.returncode != 0:
+        lines.append(
+            "Automatic Support My Switch capture failed after the SNMP2MQTT "
+            f"handoff check with exit code {result.returncode}."
+        )
+        return False
+    lines.append(
+        "Automatic Support My Switch contribution captured after the "
+        "SNMP2MQTT handoff check."
+    )
+    return True
+
+
 def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
     global _DISCOVERY_PROCESS
     log_path = DEFAULT_DISCOVERY_LOG
@@ -761,11 +827,22 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
     )
     try:
         _ensure_runtime_paths()
-        options_snapshot = (
-            _write_snmp2mqtt_regeneration_options_snapshot()
-            if regenerate_only
-            else _write_authoritative_discovery_options_snapshot()
-        )
+        if regenerate_only:
+            auto_bundle_settings = None
+            options_snapshot = _write_snmp2mqtt_regeneration_options_snapshot()
+        else:
+            authoritative_options = _self_addon_options()
+            auto_bundle_settings = (
+                _support_settings_from_options(authoritative_options)
+                if _safe_bool(
+                    authoritative_options.get("generate_support_my_switch_bundle"),
+                    True,
+                )
+                else None
+            )
+            options_snapshot = _write_authoritative_discovery_options_snapshot(
+                options=authoritative_options,
+            )
         discovery_env = os.environ.copy()
         discovery_env["SWITCH_VISION_OPTIONS_FILE"] = str(options_snapshot)
         if regenerate_only:
@@ -844,6 +921,36 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
             raise RuntimeError(f"{operation_name} exited with code {return_code}.")
         _set_discovery_state(stage="Starting SNMP2MQTT", activity="Validating generated SNMP2MQTT YAML", command="Supervisor app action", phase="running")
         snmp2mqtt_result = _ensure_snmp2mqtt_running(lines, generated_yaml_previous_mtime, generated_yaml_previous_topics)
+        if auto_bundle_settings is not None:
+            _set_discovery_state(
+                stage="Capturing Support My Switch",
+                activity="Capturing diagnostics after the SNMP2MQTT handoff check",
+                command="Support My Switch",
+                phase="running",
+            )
+            bundle_captured = _generate_automatic_support_bundle(
+                auto_bundle_settings,
+                lines,
+            )
+            snmp2mqtt_result["support_bundle_after_handoff"] = (
+                "captured" if bundle_captured else "failed"
+            )
+        if snmp2mqtt_result.get("handoff_failed"):
+            failure_message = str(
+                snmp2mqtt_result.get("message")
+                or "SNMP2MQTT generated-configuration handoff could not be verified."
+            )
+            _set_discovery_state(
+                success=False,
+                message=failure_message,
+                stage="SNMP2MQTT handoff not verified",
+                activity=failure_message,
+                command="",
+                phase="failed",
+                log_tail=lines[-300:],
+                snmp2mqtt=snmp2mqtt_result,
+            )
+            return
         auto_message = "SNMP2MQTT YAML regeneration complete" if regenerate_only else "Discovery complete"
         _set_discovery_state(
             success=True,
@@ -940,14 +1047,22 @@ def _self_addon_options() -> dict[str, Any]:
 
 def _write_authoritative_discovery_options_snapshot(
     destination: Path = Path("/tmp/switch_vision_discovery_options.json"),
+    *,
+    options: dict[str, Any] | None = None,
 ) -> Path:
-    """Write one fail-closed Supervisor options snapshot for an upcoming Discovery run."""
-    options = _self_addon_options()
-    _validate_inventory_identities(options)
+    """Write one fail-closed Supervisor snapshot for the shell Discovery stage.
+
+    Automatic Support My Switch capture is suppressed in this run-local copy.
+    The Hub creates that bundle only after the SNMP2MQTT handoff has been checked.
+    """
+    source_options = dict(options) if isinstance(options, dict) else _self_addon_options()
+    _validate_inventory_identities(source_options)
+    snapshot_options = dict(source_options)
+    snapshot_options["generate_support_my_switch_bundle"] = False
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
     try:
-        temporary.write_text(json.dumps(options, indent=2) + "\n", encoding="utf-8")
+        temporary.write_text(json.dumps(snapshot_options, indent=2) + "\n", encoding="utf-8")
         os.chmod(temporary, 0o600)
         temporary.replace(destination)
         os.chmod(destination, 0o600)
@@ -980,6 +1095,7 @@ def _write_snmp2mqtt_regeneration_options_snapshot(
     regenerated["clean_output_before_walk"] = False
     regenerated["parse_all_walks"] = True
     regenerated["generate_snmp2mqtt"] = True
+    regenerated["generate_support_my_switch_bundle"] = False
     regenerated["report_path"] = "/tmp/switch_vision_regenerate_report.txt"
     regenerated["last_run_summary_path"] = "/tmp/switch_vision_regenerate_summary.txt"
     regenerated["generated_card_path"] = "/tmp/switch_vision_regenerate_dashboard.yaml"
@@ -1335,6 +1451,9 @@ def _snmp2mqtt_runtime_info() -> dict[str, Any]:
             "homeassistant_prefix": None,
             "base_topic": None,
             "host_name_as_target": None,
+            "wrapper_options_readable": False,
+            "use_switch_vision_generated_yaml": None,
+            "switch_vision_generated_yaml_path": None,
         }
     slug = str(addon.get("slug") or "").strip()
     state = str(addon.get("state") or addon.get("status") or "unknown").lower()
@@ -1346,6 +1465,9 @@ def _snmp2mqtt_runtime_info() -> dict[str, Any]:
         "homeassistant_prefix": None,
         "base_topic": None,
         "host_name_as_target": None,
+        "wrapper_options_readable": False,
+        "use_switch_vision_generated_yaml": None,
+        "switch_vision_generated_yaml_path": None,
     }
     if not slug:
         return result
@@ -1358,6 +1480,21 @@ def _snmp2mqtt_runtime_info() -> dict[str, Any]:
         options = data.get("options")
         if not isinstance(options, dict):
             return result
+        result["wrapper_options_readable"] = True
+        generated_mode = options.get("use_switch_vision_generated_yaml")
+        if isinstance(generated_mode, bool):
+            result["use_switch_vision_generated_yaml"] = generated_mode
+        elif isinstance(generated_mode, str):
+            normalized_mode = generated_mode.strip().casefold()
+            if normalized_mode in {"true", "1", "yes", "on", "enabled"}:
+                result["use_switch_vision_generated_yaml"] = True
+            elif normalized_mode in {"false", "0", "no", "off", "disabled"}:
+                result["use_switch_vision_generated_yaml"] = False
+        generated_path = str(
+            options.get("switch_vision_generated_yaml_path")
+            or DEFAULT_GENERATED_SNMP2MQTT
+        ).strip()
+        result["switch_vision_generated_yaml_path"] = generated_path
         mqtt = options.get("mqtt") if isinstance(options.get("mqtt"), dict) else {}
         homeassistant = options.get("homeassistant") if isinstance(options.get("homeassistant"), dict) else {}
         prefix = str(homeassistant.get("prefix") or "homeassistant").strip().strip("/")
@@ -2046,6 +2183,104 @@ def _installed_switch_vision_app_links() -> dict[str, Any]:
     return links
 
 
+def _snmp2mqtt_handoff_mode(runtime: dict[str, Any]) -> tuple[str, str | None]:
+    """Return the generated/manual handoff mode without exposing credentials."""
+    if not runtime.get("wrapper_options_readable"):
+        return "unknown", None
+    configured = runtime.get("use_switch_vision_generated_yaml")
+    if configured is False:
+        return (
+            "manual",
+            "Switch Vision SNMP2MQTT is configured for manual targets. "
+            "Discovery generated a new YAML file but will not override deliberate manual mode. "
+            "Enable Use Switch Vision generated YAML in the SNMP2MQTT app configuration, then run Discovery again.",
+        )
+    generated_path = str(
+        runtime.get("switch_vision_generated_yaml_path")
+        or DEFAULT_GENERATED_SNMP2MQTT
+    ).strip()
+    if Path(generated_path) != DEFAULT_GENERATED_SNMP2MQTT:
+        return (
+            "generated_path_mismatch",
+            "Switch Vision SNMP2MQTT is configured to read generated YAML from a different path. "
+            f"Set its generated YAML path to {DEFAULT_GENERATED_SNMP2MQTT}, then run Discovery again.",
+        )
+    return ("generated" if configured is True else "generated_default"), None
+
+
+def _verify_snmp2mqtt_activation(
+    lines: list[str],
+    *,
+    attempts: int = 3,
+    retry_delay: float = 2.0,
+) -> dict[str, Any]:
+    """Prove the generated MQTT discovery identity set is retained and current."""
+    last = {
+        "activation_verified": False,
+        "mqtt_current_expected": None,
+        "mqtt_current_retained": None,
+        "mqtt_current_missing": None,
+        "mqtt_stale_count": None,
+        "verification_status": "unavailable",
+    }
+    for attempt in range(1, max(1, attempts) + 1):
+        if attempt > 1 and retry_delay > 0:
+            time.sleep(retry_delay)
+        try:
+            scan = scan_mqtt_entities()
+        except Exception as exc:
+            lines.append(
+                f"SNMP2MQTT activation verification attempt {attempt} unavailable: "
+                f"{type(exc).__name__}."
+            )
+            continue
+        if not isinstance(scan, dict):
+            lines.append(
+                f"SNMP2MQTT activation verification attempt {attempt} returned invalid data."
+            )
+            continue
+
+        def safe_count(key: str) -> int | None:
+            value = scan.get(key)
+            return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+        expected = safe_count("current_expected_count")
+        retained = safe_count("current_retained_count")
+        missing = safe_count("current_missing_retained_count")
+        stale = safe_count("stale_count")
+        last = {
+            "activation_verified": bool(
+                expected is not None
+                and expected > 0
+                and retained == expected
+                and missing == 0
+            ),
+            "mqtt_current_expected": expected,
+            "mqtt_current_retained": retained,
+            "mqtt_current_missing": missing,
+            "mqtt_stale_count": stale,
+            "verification_status": "verified" if (
+                expected is not None
+                and expected > 0
+                and retained == expected
+                and missing == 0
+            ) else "incomplete",
+        }
+        if last["activation_verified"]:
+            lines.append(
+                "SNMP2MQTT activation verified from retained MQTT discovery counts: "
+                f"{retained}/{expected} current."
+            )
+            return last
+        lines.append(
+            "SNMP2MQTT activation verification incomplete: "
+            f"{retained if retained is not None else 'unknown'}/"
+            f"{expected if expected is not None else 'unknown'} current; "
+            f"missing {missing if missing is not None else 'unknown'}."
+        )
+    return last
+
+
 def _ensure_snmp2mqtt_running(
     lines: list[str],
     previous_mtime: float | None,
@@ -2104,49 +2339,154 @@ def _ensure_snmp2mqtt_running(
         message = f"Generated SNMP2MQTT YAML was not applied: {validation.get('error')}"
         lines.append(message)
         return {"status": "Warning", "action": "none", "slug": None, "state": None, "message": message}
+
     try:
-        current_topics = _remember_current_snmp2mqtt_topics()
-        addon = _find_snmp2mqtt_addon()
-        if addon is None:
+        runtime = _snmp2mqtt_runtime_info()
+        if not runtime.get("installed") or not runtime.get("slug"):
             message = "Switch Vision SNMP2MQTT app is not installed; Discovery completed without restarting it."
             lines.append(message)
             return {"status": "Warning", "action": "none", "slug": None, "state": "not_installed", "message": message}
-        slug = str(addon.get("slug") or "")
-        state = str(addon.get("state") or addon.get("status") or "unknown").lower()
+
+        configuration_mode, mode_issue = _snmp2mqtt_handoff_mode(runtime)
+        slug = str(runtime.get("slug") or "")
+        state = str(runtime.get("state") or "unknown").lower()
+        if mode_issue:
+            lines.append(mode_issue)
+            return {
+                "status": "Warning",
+                "action": "blocked_configuration",
+                "slug": slug,
+                "state": state,
+                "configuration_mode": configuration_mode,
+                "activation_verified": False,
+                "handoff_failed": True,
+                "message": mode_issue,
+            }
+
         action = "restart" if state in {"started", "running"} else "start"
         lines.append(f"SNMP2MQTT app found: {slug} ({state}); requesting {action}.")
         _supervisor_json(f"/addons/{quote(slug, safe='')}/{action}", method="POST", timeout=20.0)
-        # Give Supervisor a moment, then retrieve the resulting state when possible.
-        time.sleep(1.0)
+
+        # Supervisor accepting a restart request is not proof that the new
+        # generated file was consumed. Wait briefly, inspect state, then prove
+        # the expected retained MQTT discovery set is live.
+        time.sleep(2.0)
         resulting_state = "requested"
         try:
             info = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
             info_data = info.get("data") if isinstance(info.get("data"), dict) else info
             if isinstance(info_data, dict):
                 resulting_state = str(info_data.get("state") or resulting_state)
-        except Exception as exc:  # The action succeeded; an info refresh failure is non-fatal.
-            lines.append(f"SNMP2MQTT status refresh warning: {exc}")
+        except Exception as exc:
+            lines.append(f"SNMP2MQTT status refresh warning: {type(exc).__name__}.")
 
-        # If this run removed only some SNMP sensors/switches, retire their old
-        # retained discovery configs after the bridge has reloaded the new YAML.
-        retired_topics = sorted(set(previous_topics or []) - set(current_topics or []))
+        activation = _verify_snmp2mqtt_activation(lines)
+        try:
+            info = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
+            info_data = info.get("data") if isinstance(info.get("data"), dict) else info
+            if isinstance(info_data, dict):
+                resulting_state = str(info_data.get("state") or resulting_state)
+        except Exception as exc:
+            lines.append(f"SNMP2MQTT final status refresh warning: {type(exc).__name__}.")
+
+        if resulting_state not in {"started", "running"}:
+            message = (
+                f"Switch Vision SNMP2MQTT {action} was requested, but the app did not "
+                "return to a running state. Previous retained identities were preserved."
+            )
+            lines.append(message)
+            return {
+                "status": "Warning",
+                "action": action,
+                "slug": slug,
+                "state": resulting_state,
+                "configuration_mode": configuration_mode,
+                **activation,
+                "activation_verified": False,
+                "handoff_failed": True,
+                "message": message,
+            }
+
+        if not activation.get("activation_verified"):
+            expected = activation.get("mqtt_current_expected")
+            retained = activation.get("mqtt_current_retained")
+            missing = activation.get("mqtt_current_missing")
+            if activation.get("verification_status") == "unavailable":
+                detail = "the MQTT activation check was unavailable"
+            else:
+                detail = (
+                    f"only {retained if retained is not None else 'unknown'}/"
+                    f"{expected if expected is not None else 'unknown'} expected retained "
+                    f"discovery entries were current; missing "
+                    f"{missing if missing is not None else 'unknown'}"
+                )
+            message = (
+                f"Switch Vision SNMP2MQTT {action} was requested, but the newly generated "
+                f"configuration was not verified active because {detail}. "
+                "Previous retained identities were preserved. Review the SNMP2MQTT app "
+                "configuration/log, then run Discovery again."
+            )
+            lines.append(message)
+            return {
+                "status": "Warning",
+                "action": action,
+                "slug": slug,
+                "state": resulting_state,
+                "configuration_mode": configuration_mode,
+                **activation,
+                "activation_verified": False,
+                "handoff_failed": True,
+                "message": message,
+            }
+
+        # The replacement identity set is proven live. Only now may older exact
+        # generated identities be retired.
+        refreshed_runtime = _snmp2mqtt_runtime_info()
+        prefix = str(
+            refreshed_runtime.get("homeassistant_prefix")
+            or runtime.get("homeassistant_prefix")
+            or ""
+        ).strip().strip("/")
+        current_topics = (
+            _snmp2mqtt_discovery_topics(DEFAULT_GENERATED_SNMP2MQTT, prefix)
+            if prefix
+            else []
+        )
+        retired_topics = sorted(set(previous_topics or []) - set(current_topics))
         retired_cleared = 0
         retired_warnings: list[str] = []
         if retired_topics:
             retired_cleared, retired_warnings = _clear_retained_snmp2mqtt_discovery(retired_topics)
             lines.extend(retired_warnings)
 
-        message = f"Switch Vision SNMP2MQTT {action} requested successfully; status: {resulting_state}."
+        if current_topics:
+            retirement_state = current_topics if not retired_warnings else sorted(
+                set(current_topics) | set(retired_topics)
+            )
+            _save_snmp2mqtt_retirement_topics(retirement_state)
+
+        message = (
+            f"Switch Vision SNMP2MQTT {action} verified active; "
+            f"{activation.get('mqtt_current_retained')}/"
+            f"{activation.get('mqtt_current_expected')} expected MQTT discovery entries are current."
+        )
         if retired_topics:
-            message += f" Retired Home Assistant MQTT discovery entries: {retired_cleared}/{len(retired_topics)}."
+            message += (
+                f" Previous generated discovery entries retired: "
+                f"{retired_cleared}/{len(retired_topics)}."
+            )
         if retired_warnings:
-            message += " Some retired discovery entries could not be cleared."
+            message += " Some previous generated discovery entries could not be retired."
         lines.append(message)
         return {
-            "status": "Warning" if retired_warnings else ("Running" if resulting_state in {"started", "running"} else "Action requested"),
+            "status": "Warning" if retired_warnings else "Running",
             "action": action,
             "slug": slug,
             "state": resulting_state,
+            "configuration_mode": configuration_mode,
+            **activation,
+            "activation_verified": True,
+            "handoff_failed": False,
             "mqtt_topics_retired": retired_cleared,
             "mqtt_topics_retired_found": len(retired_topics),
             "message": message,
@@ -2154,7 +2494,15 @@ def _ensure_snmp2mqtt_running(
     except Exception as exc:
         message = f"Could not start or restart Switch Vision SNMP2MQTT: {exc}"
         lines.append(message)
-        return {"status": "Warning", "action": "failed", "slug": None, "state": None, "message": message}
+        return {
+            "status": "Warning",
+            "action": "failed",
+            "slug": None,
+            "state": None,
+            "activation_verified": False,
+            "handoff_failed": True,
+            "message": message,
+        }
 
 
 def _validate_snmp2mqtt_yaml(path: Path) -> dict[str, Any]:

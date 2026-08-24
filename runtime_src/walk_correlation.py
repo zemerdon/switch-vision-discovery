@@ -15,6 +15,38 @@ MAX_WALK_AGE_SECONDS = 15 * 60
 def _now_dt() -> datetime:
     return datetime.now(timezone.utc)
 
+def _parse_run_timestamp(value: str) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+def _discovery_run_window(root: Path) -> tuple[datetime, datetime] | None:
+    """Return the trustworthy timestamp window from the latest Discovery run."""
+    path = root / "last-discovery-run.txt"
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    started = None
+    generated = None
+    for line in lines:
+        if line.startswith("Discovery app loaded: "):
+            started = _parse_run_timestamp(line.split(": ", 1)[1])
+        elif line.startswith("Generated: "):
+            generated = _parse_run_timestamp(line.split(": ", 1)[1])
+    if started is None or generated is None or generated < started:
+        return None
+    if (generated - started).total_seconds() > 24 * 60 * 60:
+        return None
+    return started, generated
+
 def _slug(value: Any) -> str:
     text = str(value or "").strip().lower().replace("-", "_").replace("~", "_")
     text = re.sub(r"[^a-z0-9_]+", "_", text)
@@ -124,6 +156,7 @@ def _walk_source_key(root: Path, path: Path) -> str:
 
 def _parse_walk_sources(root: Path, *, now: datetime | None = None) -> dict[str, dict[str, Any]]:
     now = now or _now_dt()
+    discovery_window = _discovery_run_window(root)
     pattern = re.compile(
         r"^\s*\.?(1\.3\.6\.1\.2\.1\.2\.2\.1\.8\.\d+)\s*=\s*(?:INTEGER:\s*)?([A-Za-z]+(?:\(\d+\))?|\d+)",
         re.I,
@@ -153,6 +186,23 @@ def _parse_walk_sources(root: Path, *, now: datetime | None = None) -> dict[str,
         if previous and float(previous["mtime"]) >= stat.st_mtime:
             continue
         age_seconds = max(0.0, now.timestamp() - stat.st_mtime)
+        current_discovery_run = False
+        if discovery_window is not None:
+            run_start, run_end = discovery_window
+            # Filesystem timestamps can differ by a few seconds from the shell
+            # timestamps written into last-discovery-run.txt.
+            current_discovery_run = (
+                run_start.timestamp() - 5.0
+                <= stat.st_mtime
+                <= run_end.timestamp() + 5.0
+            )
+        fresh_by_age = age_seconds <= MAX_WALK_AGE_SECONDS
+        fresh = current_discovery_run or fresh_by_age
+        freshness_reason = (
+            "current_discovery_run"
+            if current_discovery_run
+            else ("age" if fresh_by_age else "stale")
+        )
         try:
             relative = str(path.relative_to(root))
         except ValueError:
@@ -162,7 +212,9 @@ def _parse_walk_sources(root: Path, *, now: datetime | None = None) -> dict[str,
             "mtime": stat.st_mtime,
             "captured_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
             "age_seconds": round(age_seconds, 3),
-            "fresh": age_seconds <= MAX_WALK_AGE_SECONDS,
+            "fresh": fresh,
+            "current_discovery_run": current_discovery_run,
+            "freshness_reason": freshness_reason,
             "statuses": statuses,
         }
     return sources
@@ -217,6 +269,8 @@ def build_port_pipeline(
             "walk_source": source["path"] if source else None,
             "walk_captured_at": source["captured_at"] if source else None,
             "walk_age_seconds": source["age_seconds"] if source else None,
+            "walk_current_discovery_run": source["current_discovery_run"] if source else None,
+            "walk_freshness_reason": source["freshness_reason"] if source else None,
             "exact_present": (exact is not None) if ha_available else None,
             "ha_state": _safe_state(sensor["entity_id"], exact.get("state")) if exact else None,
             "last_updated": str(exact.get("last_updated") or "") if exact else "",
@@ -263,6 +317,8 @@ def build_port_pipeline(
             "captured_at": source["captured_at"],
             "age_seconds": source["age_seconds"],
             "fresh": source["fresh"],
+            "current_discovery_run": source["current_discovery_run"],
+            "freshness_reason": source["freshness_reason"],
         }
         for key, source in sorted(walk_sources.items())
     ]
@@ -281,6 +337,7 @@ def build_port_pipeline(
             "walk_state_status": walk_state_status,
             "walk_freshness_limit_seconds": MAX_WALK_AGE_SECONDS,
             "fresh_walk_status_rows": sum(1 for row in rows if row["walk_source_status"] == "fresh"),
+            "current_run_walk_status_rows": sum(1 for row in rows if row.get("walk_current_discovery_run") is True),
             "stale_walk_status_rows": sum(1 for row in rows if row["walk_source_status"] == "stale"),
             "unmapped_walk_status_rows": sum(1 for row in rows if row["walk_source_status"] == "unmapped"),
             "fresh_walk_up_count": len(fresh_walk_up_rows),
