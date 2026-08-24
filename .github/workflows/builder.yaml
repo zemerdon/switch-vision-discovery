@@ -7,6 +7,8 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '.github/**'
   workflow_dispatch:
 
 permissions:
@@ -225,10 +227,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Check out main
+      - name: Check out triggering publication commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: true
       - name: Materialize runtime archive
@@ -276,6 +278,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git fetch origin main
+          current_main="$(git rev-parse origin/main)"
+          if [ "$current_main" != "$GITHUB_SHA" ]; then
+            echo "Discovery main advanced from triggering commit $GITHUB_SHA to $current_main."
+            echo "Refusing to synchronize stale generated runtime; the newer main push owns synchronization."
+            exit 1
+          fi
           git config user.name 'Switch Vision Runtime Packager'
           git config user.email 'switch-vision@users.noreply.github.com'
           git add \
