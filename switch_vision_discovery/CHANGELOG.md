@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.3.0
+
+# Discovery 2.3.0
+
+- Add private retained backups for Switch Vision Discovery configuration mutations made through the Hub.
+- Store owned backups only under `/share/switch_vision/backups/discovery/`, with the directory forced to `0700` and backup files to `0600`.
+- Create the backup atomically before Hub configuration import and saved-device enable/disable changes.
+- Add automatic retention control with a retained-count range of 1–10 and a default of 5; pruning is oldest-first and matches strict Switch Vision Discovery backup filenames only.
+- Keep unrelated files and Support My Switch contributions outside the retention/removal scope.
+- Add Maintenance metadata and manual removal controls that expose only backup name, time, size and count; saved configuration and secrets are never returned by the Maintenance API.
+- Keep manual removal available when automatic retention is disabled, while invalid counts and backup names fail closed.
+- Add permanent regressions for retention ordering, permissions, atomic cleanup, disabled retention, malicious/hand-edited names, metadata privacy, unrelated-file preservation and Support My Switch isolation.
+- These backups cover persistent configuration mutations owned by the Switch Vision Hub. Discovery does not claim to intercept changes made independently through Home Assistant's add-on Configuration page.
+- No switch mapping, physical geometry, connector type, PoE, polling, telemetry, maximum-capability or support-status changes.
+
 ## 2.2.5
 
 # Discovery 2.2.5
