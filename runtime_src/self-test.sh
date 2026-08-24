@@ -96,6 +96,130 @@ assert unavailable["anomalies"] == []
 print("Switch Vision Discovery v2.2.3 support diagnostics availability regression: PASS")
 PY_SUPPORT_DIAGNOSTICS
 
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_CONFIGURATION_SNAPSHOT'
+import json
+from pathlib import Path
+import tempfile
+
+from support_diagnostics import (
+    _configuration_from_documents,
+    _safe_discovery_options,
+    _safe_installer_options,
+    _safe_snmp2mqtt_options,
+    _safe_unifi2mqtt_options,
+)
+
+private_values = {
+    "switch_host": "10.20.30.40",
+    "community": "PRIVATE_COMMUNITY",
+    "mqtt_password": "PRIVATE_MQTT_PASSWORD",
+    "api_key": "PRIVATE_API_KEY",
+    "controller": "https://private-controller.example",
+    "contributor": "Private Person",
+    "custom_prefix": "private/homeassistant/prefix",
+}
+discovery = _safe_discovery_options({
+    "run_snmp_walks": "true",
+    "generate_snmp2mqtt": "true",
+    "snmp_timeout": "3",
+    "support_contributor_type": "full_name",
+    "support_contributor_value": private_values["contributor"],
+    "switches": [{
+        "switch_name": "PRIVATE_SWITCH",
+        "switch_host": private_values["switch_host"],
+        "sensor_prefix": "private_sensor",
+        "snmp_community": private_values["community"],
+        "enabled": "enabled",
+        "walk_mode": "targeted",
+        "switch_model": "N2128PX-ON",
+        "display_name": "Private Rack Switch",
+    }],
+})
+assert discovery["run_snmp_walks"] is True
+assert discovery["generate_snmp2mqtt"] is True
+assert discovery["switches"][0]["switch_host_configured"] is True
+assert discovery["switches"][0]["snmp_community_configured"] is True
+assert discovery["switches"][0]["switch_model"] == "N2128PX-ON"
+
+snmp = _safe_snmp2mqtt_options({
+    "mqtt": {
+        "host": "private-broker.example",
+        "port": 1883,
+        "username": "private-user",
+        "password": private_values["mqtt_password"],
+        "base_topic": "private/base/topic",
+    },
+    "targets_path": "/private/custom-targets.yaml",
+    "use_switch_vision_generated_yaml": False,
+    "homeassistant": {"discovery": False, "prefix": private_values["custom_prefix"]},
+})
+assert snmp["generated_yaml_import"] is False
+assert snmp["homeassistant"]["discovery_requested"] is False
+assert snmp["homeassistant"]["prefix_mode"] == "custom"
+assert snmp["mqtt"]["host_mode"] == "custom"
+assert snmp["mqtt"]["password_configured"] is True
+
+unifi = _safe_unifi2mqtt_options({
+    "controller_url": private_values["controller"],
+    "site_id": "private-site",
+    "api_key": private_values["api_key"],
+    "verify_ssl": "true",
+    "poll_interval": "30",
+    "mqtt_discovery_prefix": private_values["custom_prefix"],
+})
+assert unifi["controller"]["transport"] == "https"
+assert unifi["controller"]["api_key_configured"] is True
+assert unifi["controller"]["site_mode"] == "custom"
+assert unifi["mqtt"]["discovery_prefix_mode"] == "custom"
+
+installer = _safe_installer_options({
+    "release_api_url": "https://private-release.example/api",
+    "allow_custom_release_source": True,
+    "backup_retention": 7,
+})
+assert installer["release_source_mode"] == "custom"
+assert installer["allow_custom_release_source"] is True
+
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    diag = root / "diagnostics"
+    diag.mkdir()
+    (diag / "snmp2mqtt-runtime.json").write_text(json.dumps({
+        "app_version": "0.9.18",
+        "configuration_source": "switch_vision_generated_yaml",
+        "generated_yaml_import_requested": "false",
+        "generated_yaml_import_effective": True,
+        "generated_target_count": 1,
+        "generated_sensor_count": 60,
+        "generated_yaml_sha256": "a" * 64,
+        "homeassistant_discovery_requested": "false",
+        "homeassistant_discovery_effective": True,
+        "homeassistant_prefix_requested_mode": "custom",
+        "homeassistant_prefix_effective": "homeassistant",
+        "homeassistant_prefix_requested": private_values["custom_prefix"],
+    }), encoding="utf-8")
+    snapshot = _configuration_from_documents(root, {
+        "discovery": {"version": "2.3.2", "state": "started", "options": {}},
+        "snmp2mqtt": {"version": "0.9.18", "state": "started", "options": {}},
+        "unifi2mqtt": {"version": "2.0.50", "state": "started", "options": {}},
+        "installer": {"version": "2.1.30", "state": "stopped", "options": {}},
+    })
+    assert snapshot["effective_snmp2mqtt"]["homeassistant_discovery_requested"] is False
+    assert snapshot["effective_snmp2mqtt"]["homeassistant_discovery_effective"] is True
+    assert snapshot["effective_snmp2mqtt"]["homeassistant_prefix_requested_mode"] == "custom"
+    assert snapshot["effective_snmp2mqtt"]["homeassistant_prefix_effective"] == "homeassistant"
+    rendered = repr(snapshot) + repr(discovery) + repr(snmp) + repr(unifi) + repr(installer)
+    for value in private_values.values():
+        assert value not in rendered, value
+    assert "PRIVATE_SWITCH" not in rendered
+    assert "private-broker.example" not in rendered
+    assert "private/base/topic" not in rendered
+    assert "private-user" not in rendered
+    assert "/private/custom-targets.yaml" not in rendered
+
+print("Switch Vision Discovery v2.3.2 privacy-safe configuration snapshot regression: PASS")
+PY_CONFIGURATION_SNAPSHOT
+
 
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_DIAGNOSTIC_CORRELATION'
 from datetime import datetime, timedelta, timezone
@@ -226,6 +350,7 @@ expected = (
     "card-entity-bindings.json",
     "generated-file-provenance.json",
     "runtime-versions.json",
+    "configuration-snapshot.json",
     "diagnostic-summary.json",
 )
 with zipfile.ZipFile(path) as archive:
@@ -238,7 +363,7 @@ with zipfile.ZipFile(path) as archive:
         assert names.count(wanted) == 1, (wanted, names.count(wanted))
     assert not any(name.startswith(f"{root}/diagnostics/") for name in names), "duplicate top-level diagnostics"
     manifest = json.loads(archive.read(f"{root}/MANIFEST.json"))
-    assert manifest["bundle_version"] == 11
+    assert manifest["bundle_version"] == 12
     summary = json.loads(archive.read(f"{root}/switch_vision/diagnostics/diagnostic-summary.json"))
     assert summary["privacy"] == {
         "credentials_included": False,
@@ -1150,8 +1275,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.1"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.1"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.2"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.2"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
