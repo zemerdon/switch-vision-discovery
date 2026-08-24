@@ -1468,7 +1468,7 @@ assert loaded["switches"][0]["snmp_community"] == "secret-disabled"
 PY_AUTHORITATIVE_RUN_OPTIONS
 
 grep -Fq 'CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"' "$BASE_DIR/discovery_job.sh"
-grep -q '_write_authoritative_discovery_options_snapshot()' "$BASE_DIR/support_web.py"
+grep -Fq '_write_authoritative_discovery_options_snapshot(' "$BASE_DIR/support_web.py"
 grep -q 'discovery_env\["SWITCH_VISION_OPTIONS_FILE"\]' "$BASE_DIR/support_web.py"
 grep -q 'Discovery configuration: authoritative Supervisor snapshot' "$BASE_DIR/support_web.py"
 printf "%s\n" "Switch Vision authoritative run-options regression: PASS"
