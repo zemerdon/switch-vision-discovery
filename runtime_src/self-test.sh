@@ -2535,15 +2535,20 @@ profiles_doc = yaml.safe_load(Path(sys.argv[2]).read_text(encoding="utf-8")) or 
 profiles = profiles_doc.get("profiles", profiles_doc)
 job = Path(sys.argv[3]).read_text(encoding="utf-8")
 models = {d["model"]: d for d in registry["devices"] if isinstance(d, dict)}
-expected = {
-    "WS-C2960X-24TS-L",
-    "WS-C3560CG-8PC-S",
+community_validated = {
     "SG500X-24",
     "S5735-L8P4X-A1",
     "S5720-12TP-LI-AC",
 }
-for model in expected:
+for model in community_validated:
     assert models[model]["status"] == "community_validated", model
+
+pending_experimental = {
+    "WS-C2960X-24TS-L",
+    "WS-C3560CG-8PC-S",
+}
+for model in pending_experimental:
+    assert models[model]["status"] == "experimental", model
 
 p3560 = next(p for p in profiles.values() if "WS-C3560CG-8PC-S" in (p.get("model_patterns") or []))
 assert p3560["layout"]["rj45_ports"] == 8
