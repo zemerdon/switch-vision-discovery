@@ -5,7 +5,9 @@
 - Compact Calibration Profiles cards into one visual block by placing the action controls inline with the Internal profile row on desktop and wrapping them beneath it on narrow screens.
 - Remove the visible Base profile, Faceplate exists and SHA-256 detail rows; base-profile compatibility, faceplate-existence state and integrity/duplicate metadata remain available to backend/runtime logic.
 - Remove the old separator/details band and excess action-row margin while preserving the shared Hub control/button geometry and tightening only the spacing between profile actions.
-- Add a packaged regression protecting the compact card structure, all profile actions, hidden-only technical metadata and duplicate-state behavior.
+- Compact Settings checkbox/toggle groups into left-anchored content-width columns instead of two half-card columns, reducing wasted horizontal space while preserving one-column mobile stacking.
+- Reduce the sticky Save/Reload footer to a slim command bar by removing excess outer padding/margins while keeping the same shared 38px button geometry.
+- Add a packaged regression protecting the compact card structure, all profile actions, hidden-only technical metadata, duplicate-state behavior, compact toggle columns and slim Save bar.
 - No settings ownership, switch mapping, physical geometry, connector, PoE, telemetry, maximum-capability, support-status or privacy contracts change.
 
 ## 2.3.7
