@@ -30,12 +30,8 @@ grep -Fq '/api/settings/discovery' "$BASE_DIR/support_web.py"
 grep -Fq "SwitchVisionHubSettings?.open('core')" "$BASE_DIR/support_web.py"
 grep -Fq "SwitchVisionHubSettings?.open('snmp2mqtt')" "$BASE_DIR/support_web.py"
 grep -Fq "SwitchVisionHubSettings?.open('discovery')" "$BASE_DIR/support_web.py"
-grep -Fq 'Normal (~15.7 px)' "$BASE_DIR/support_web.py"
-grep -Fq 'Small (14.4 px)' "$BASE_DIR/support_web.py"
-# v2.3.5 Hub settings form alignment/density regression
-grep -Fq '.hub-setting-field{margin:6px 0;gap:4px;align-self:start;align-content:start}' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-setting-field>input,.hub-setting-field>select{width:100%;height:38px;min-height:38px;padding:6px 10px}' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-settings-section .grid{align-items:start;gap:8px 14px}' "$BASE_DIR/support_web.py"
+# v2.3.7 explicit font range + shared Hub component geometry regression
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/hub_density_regression.py"
 # v2.3.6 themed visual hierarchy / elegance regression
 grep -Fq -- '--heading:#69c8ff;--heading-strong:#a6e3ff;--heading-line:#2787c7' "$BASE_DIR/support_web.py"
 grep -Fq -- '--heading:#4fc3e8;--heading-strong:#86dcf3;--heading-line:#049fd9' "$BASE_DIR/support_web.py"
@@ -1462,8 +1458,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.6"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.6"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.7"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.7"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.3.7
+
+- Introduce one shared Hub component geometry contract across Core, SNMP2MQTT and Discovery settings: common 38px controls, radii, padding, field/helper spacing, toggle alignment, subsection rows, buttons, grid gaps and responsive behavior.
+- Align checkbox/toggle rows even when neighboring labels wrap, and reduce selectable option labels to normal weight so themed section headings and field labels carry the visual hierarchy.
+- Put Native header Shortcut order beside its toggle group on desktop as a compact single vertical sequence instead of stretching an empty full-width panel below the options.
+- Pack Activity LED controls into a denser responsive four-column desktop grid while retaining the same shared control geometry and mobile stacking.
+- Consume Core 2.6.3's explicit **10–20 px** Discovery/Installer body-font choices, preserving legacy `normal` as 16 px and `small` as 14 px.
+- Apply the same 38px control geometry to ordinary Hub fields/buttons outside Settings so Support My Switch, UniFi2MQTT and other Hub forms no longer drift in box size.
+- Keep SHA-256 as a private/backend integrity primitive but do not expose it as a normal Support My Switch/Last-bundle summary field.
+- Add permanent packaged regressions for font migration, shared geometry, normal-weight selectable options, compact shortcut layout, dense Activity LED layout and hidden-only integrity hashing.
+- No settings ownership, secret handling, switch mapping, physical geometry, connector, PoE, telemetry, maximum-capability or support-status changes.
+
 ## 2.3.6
 
 - Give all four Hub management themes their own accessible heading palette so section hierarchy is visually distinct from ordinary body text: Switch Vision electric sky, Cisco Classic cyan, Cisco Nexus ice-cyan and UniFi deep blue.
