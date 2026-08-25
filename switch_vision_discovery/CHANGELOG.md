@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.3.4
+
+- Make Switch Vision Hub the normal settings centre for Switch Vision Core, SNMP2MQTT and Discovery, while each component keeps its existing authoritative settings store.
+- Add one Hub Save changes workflow with dirty-state tracking and explicit partial-save/error reporting instead of pretending cross-component writes are atomic.
+- Keep Home Assistant Integration/App configuration pages available as fallback and recovery surfaces.
+- Keep SNMP2MQTT MQTT passwords, Discovery SNMP communities and optional contributor identity write-only in the Hub; blank secret fields preserve existing stored values.
+- Keep SNMP2MQTT Home Assistant MQTT Discovery enabled with the canonical `homeassistant` prefix, matching the existing effective runtime contract.
+- Add complete Discovery controls for saved switches, stack display mappings, walk/generation controls, paths/timing, Discovery backup retention and Support My Switch privacy/recognition options.
+- Label Discovery/Installer Core text-size choices with their actual current body sizes: Normal (~15.7 px) and Small (14.4 px).
+- Explicitly require administrator access to the Hub ingress panel with `panel_admin: true`.
+- Add packaged regressions for authoritative ownership, secret non-disclosure/preservation, enforced SNMP2MQTT discovery settings and Hub settings wiring.
+- No switch hardware mapping, physical geometry, connector, PoE, telemetry, maximum-capability or support-status changes.
+
 ## 2.3.3
 
 - Move Installer recovery backup management into Switch Vision → Maintenance while keeping Installer recovery backups physically private under `/data/switch-vision-backups`.
