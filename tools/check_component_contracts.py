@@ -292,7 +292,7 @@ def main() -> int:
         "discovery_support",
         "dashboard_support",
     )
-    support_fields = ("status", "evidence", "validation")
+    support_fields = ("status", "evidence", "validation", "notes")
     visual_fields = ("calibration_profile", "default_faceplate")
 
     for model in sorted(core_models.keys() & discovery_models.keys()):
