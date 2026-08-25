@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.6
+
+- Give all four Hub management themes their own accessible heading palette so section hierarchy is visually distinct from ordinary body text: Switch Vision electric sky, Cisco Classic cyan, Cisco Nexus ice-cyan and UniFi deep blue.
+- Add theme-owned heading/title/line/soft/glow tokens rather than hard-coding one colour across every theme.
+- Improve Hub visual hierarchy with themed page and section headings, subtle section rails, softly tinted component summaries, restrained card depth, navigation-card accent strips, stronger input focus states and a more deliberate sticky Save bar.
+- Keep body text neutral and preserve existing status/warning/success/error semantics so accent colour communicates hierarchy rather than replacing state colours.
+- Preserve the 2.3.5 compact 38px Hub form-control sizing and alignment contract.
+- Add permanent packaged regressions for every theme heading palette and the major hierarchy/focus styling hooks.
+- No settings ownership, saved values, secret handling, switch mapping, physical geometry, connector, PoE, telemetry or support-status changes.
+
 ## 2.3.5
 
 - Tighten the new Hub settings form controls to a consistent 38px height with smaller vertical padding instead of inheriting the larger general Discovery form sizing.
