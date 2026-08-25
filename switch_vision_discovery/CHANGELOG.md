@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.8
+
+- Compact Calibration Profiles cards into one visual block by placing the action controls inline with the Internal profile row on desktop and wrapping them beneath it on narrow screens.
+- Remove the visible Base profile, Faceplate exists and SHA-256 detail rows; base-profile compatibility, faceplate-existence state and integrity/duplicate metadata remain available to backend/runtime logic.
+- Remove the old separator/details band and excess action-row margin while preserving the shared Hub control/button geometry and tightening only the spacing between profile actions.
+- Add a packaged regression protecting the compact card structure, all profile actions, hidden-only technical metadata and duplicate-state behavior.
+- No settings ownership, switch mapping, physical geometry, connector, PoE, telemetry, maximum-capability, support-status or privacy contracts change.
+
 ## 2.3.7
 
 - Introduce one shared Hub component geometry contract across Core, SNMP2MQTT and Discovery settings: common 38px controls, radii, padding, field/helper spacing, toggle alignment, subsection rows, buttons, grid gaps and responsive behavior.
