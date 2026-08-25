@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Permanent Discovery 2.3.7 Hub density/consistency regression."""
+"""Permanent Discovery 2.3.9 Hub density/consistency regression."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -28,6 +28,9 @@ for marker in (
     "--control-radius:8px",
     "--hub-control-height:var(--control-height)",
     ".hub-toggle-grid{display:grid",
+    "--hub-toggle-min-height:24px",
+    "repeat(2,minmax(240px,300px));column-gap:10px",
+    "padding:2px 0;gap:7px;align-items:center",
     ".hub-control-grid",
     ".hub-header-layout{display:grid",
     ".hub-grid-dense",
@@ -58,6 +61,16 @@ assert "createElement('b')" not in toggle_source
 assert "headerLayout.className='hub-header-layout'" in SOURCE
 assert "headerLayout.append(headerTog,box)" in SOURCE
 assert "grid-template-columns:minmax(0,1fr) minmax(320px,420px)" in SOURCE
+assert "padding-top:10px;margin-top:11px" in SOURCE
+
+# The Hub homepage has one consolidated Switch Vision Settings entry. Discovery
+# and SNMP2MQTT remain first-class settings sections, but no longer duplicate
+# themselves as separate landing-page cards.
+assert '<span>UI Settings</span><span>Discovery Settings</span><span>SNMP2MQTT Settings</span>' in SOURCE
+assert 'id="openDiscoverySettingsButton"' not in SOURCE
+assert 'id="openSnmp2mqttSettingsButton"' not in SOURCE
+assert "$('openDiscoverySettingsButton').addEventListener" not in SOURCE
+assert "$('openSnmp2mqttSettingsButton').addEventListener" not in SOURCE
 
 # Activity LED controls are the intentionally denser variant of the same field
 # geometry, never a separate control size system.
@@ -70,4 +83,4 @@ assert "hashlib.sha256" in SOURCE
 assert '"SHA-256"' not in SOURCE
 assert ">SHA-256<" not in SOURCE
 
-print("Switch Vision Discovery 2.3.7 Hub density/consistency: PASS")
+print("Switch Vision Discovery 2.3.9 Hub density/consistency: PASS")
