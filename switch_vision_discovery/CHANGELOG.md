@@ -10,7 +10,7 @@
 - Add complete Discovery controls for saved switches, stack display mappings, walk/generation controls, paths/timing, Discovery backup retention and Support My Switch privacy/recognition options.
 - Label Discovery/Installer Core text-size choices with their actual current body sizes: Normal (~15.7 px) and Small (14.4 px).
 - Explicitly require administrator access to the Hub ingress panel with `panel_admin: true`.
-- Add packaged regressions for authoritative ownership, secret non-disclosure/preservation, enforced SNMP2MQTT discovery settings and Hub settings wiring.
+- Add packaged regressions for authoritative ownership, secret non-disclosure/preservation, enforced SNMP2MQTT discovery settings and Hub settings wiring, plus a permanent cross-component guard that fails if Core's public Hub settings groups, keys or admin-only WebSocket contract drift.
 - No switch hardware mapping, physical geometry, connector, PoE, telemetry, maximum-capability or support-status changes.
 
 ## 2.3.3
