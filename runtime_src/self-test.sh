@@ -36,6 +36,16 @@ grep -Fq 'Small (14.4 px)' "$BASE_DIR/support_web.py"
 grep -Fq '.hub-setting-field{margin:6px 0;gap:4px;align-self:start;align-content:start}' "$BASE_DIR/support_web.py"
 grep -Fq '.hub-setting-field>input,.hub-setting-field>select{width:100%;height:38px;min-height:38px;padding:6px 10px}' "$BASE_DIR/support_web.py"
 grep -Fq '.hub-settings-section .grid{align-items:start;gap:8px 14px}' "$BASE_DIR/support_web.py"
+# v2.3.6 themed visual hierarchy / elegance regression
+grep -Fq -- '--heading:#69c8ff;--heading-strong:#a6e3ff;--heading-line:#2787c7' "$BASE_DIR/support_web.py"
+grep -Fq -- '--heading:#4fc3e8;--heading-strong:#86dcf3;--heading-line:#049fd9' "$BASE_DIR/support_web.py"
+grep -Fq -- '--heading:#79d7f5;--heading-strong:#ace9fb;--heading-line:#42b4e6' "$BASE_DIR/support_web.py"
+grep -Fq -- '--heading:#005ed8;--heading-strong:#003f9e;--heading-line:#6aa7ff' "$BASE_DIR/support_web.py"
+grep -Fq 'h2{font-size:var(--sv-font-section-title);line-height:1.25;color:var(--heading)}' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-settings-section h3::before{content:"";position:absolute;left:0;top:.12em;width:3px;height:1.05em' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-component>summary{cursor:pointer;font-size:1rem;font-weight:750;color:var(--heading)' "$BASE_DIR/support_web.py"
+grep -Fq 'box-shadow:0 0 0 3px var(--accent-soft)' "$BASE_DIR/support_web.py"
+grep -Fq '.nav-card::before{content:"";position:absolute;left:0;top:0;right:0;height:2px' "$BASE_DIR/support_web.py"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_HUB_SETTINGS'
 import copy
 import support_web
@@ -1452,8 +1462,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.5"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.5"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.6"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.6"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
