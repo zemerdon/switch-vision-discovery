@@ -7,7 +7,9 @@
 - Remove the old separator/details band and excess action-row margin while preserving the shared Hub control/button geometry and tightening only the spacing between profile actions.
 - Compact Settings checkbox/toggle groups into left-anchored content-width columns instead of two half-card columns, reducing wasted horizontal space while preserving one-column mobile stacking.
 - Reduce the sticky Save/Reload footer to a slim command bar by removing excess outer padding/margins while keeping the same shared 38px button geometry.
-- Add a packaged regression protecting the compact card structure, all profile actions, hidden-only technical metadata, duplicate-state behavior, compact toggle columns and slim Save bar.
+- Compact detected-device facts into one responsive line (`Registry · Validated · Physical · RJ45`) instead of a four-row definition block.
+- Compact Installer recovery-backup rows into one responsive line containing backup name, timestamp and Switch Vision version, with actions alongside; remove the visible component inventory while preserving it in private backup metadata and restore validation.
+- Add a packaged regression protecting the compact card structure, all profile actions, hidden-only technical metadata, duplicate-state behavior, compact toggle columns, slim Save bar, compact device facts and compact backup rows.
 - No settings ownership, switch mapping, physical geometry, connector, PoE, telemetry, maximum-capability, support-status or privacy contracts change.
 
 ## 2.3.7
