@@ -69,6 +69,13 @@ cv_cap_set_front_panel_profile() {
       CV_CAP_PLATFORM="dell_n2128px_on"
       CV_CAP_RJ45_LIMIT="28"
       ;;
+    *J8693A*3500yl-48G*|*J8693A*3500YL-48G*|*3500yl-48G*J8693A*|*3500YL-48G*J8693A*)
+      # Exact HP 3500yl-48G hardware: 44 fixed copper logical ports and
+      # four dual-personality copper/mini-GBIC logical ports.
+      CV_CAP_FRONT_PANEL_AWARE="true"
+      CV_CAP_PLATFORM="hp_3500yl_48g"
+      CV_CAP_RJ45_LIMIT="44"
+      ;;
     *XS1930-10*)
       CV_CAP_FRONT_PANEL_AWARE="true"
       CV_CAP_PLATFORM="zyxel_xs1930_10"
@@ -79,6 +86,17 @@ cv_cap_set_front_panel_profile() {
 
 cv_interface_class_for_name() {
   name="$1"
+
+  # HP J8693A / 3500yl-48G exposes its physical logical ports as
+  # numeric ifName values. Keep this exact-model exception ahead of the
+  # generic name parser so numeric interfaces on other vendors stay excluded.
+  if [ "${CV_CAP_PLATFORM:-generic}" = "hp_3500yl_48g" ]; then
+    case "$name" in
+      [1-9]|[1-3][0-9]|4[0-4]) printf 'rj45'; return 0 ;;
+      4[5-8]) printf 'sfp'; return 0 ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
 
   # Dell N2128PX-ON uses Cisco-like Gi/Te names, but its Te uplinks live
   # in slot 0. Handle the exact Dell platform before the generic parser

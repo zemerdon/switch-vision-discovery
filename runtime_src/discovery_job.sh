@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.3.10"
+SWITCH_VISION_DISCOVERY_VERSION="2.3.11"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -935,6 +935,7 @@ parser_report() {
       if (line ~ /S5735-L8P4X-A1/) huawei_s5735_model = "S5735-L8P4X-A1"
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model = "S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model = "XS1930-10"
+      if (tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model = "HP J8693A Switch 3500yl-48G"
       if (line ~ /N2128PX-ON/) dell_model = "N2128PX-ON"
       if (line ~ /N2128PX-ON, [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+,/ && match(line, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
         ios = substr(line, RSTART, RLENGTH)
@@ -1060,6 +1061,10 @@ parser_report() {
         model = juniper_model
         manufacturer = "Juniper"
       }
+      else if (hp_3500yl_model != "") {
+        model = hp_3500yl_model
+        manufacturer = "HP"
+      }
       else if (dell_model != "") model = dell_model
       else if (local_model != "") model = local_model
       else if (sys_model != "") model = sys_model
@@ -1168,6 +1173,20 @@ parser_report() {
               rj45_key[physical_id] = 1; member_rj45[1]++
             } else {
               ten_key[physical_id] = 1; member_ten[1]++
+            }
+          }
+          special = 1
+        } else if (model == "HP J8693A Switch 3500yl-48G" && n ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
+          port = n + 0
+          physical_id = "hp-" port
+          if (!(physical_id in physical_key)) {
+            physical_key[physical_id] = 1
+            member_key[1] = 1
+            member_physical[1]++
+            if (port <= 44) {
+              rj45_key[physical_id] = 1; member_rj45[1]++
+            } else {
+              sfp_key[physical_id] = 1; member_sfp[1]++
             }
           }
           special = 1
@@ -1344,6 +1363,9 @@ parser_report() {
       } else if (model == "N2128PX-ON") {
         print "- RJ45 Gi <member>/0/1-28 ports: " rj45
         print "- 10G SFP+ Te <member>/0/1-2 uplinks: " ten
+      } else if (model == "HP J8693A Switch 3500yl-48G") {
+        print "- Fixed RJ45 logical ports 1-44: " rj45
+        print "- Dual-personality copper/SFP logical ports 45-48: " sfp_gi
       } else {
         print "- RJ45 Gi x/0/1-48 style ports: " rj45
         print "- SFP Gi x/1/* uplinks: " sfp_gi
@@ -1431,6 +1453,15 @@ parser_report() {
             mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone RJ45 port " ((port + 0) + 1)
           } else {
             mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone 10G SFP+ uplink " ((port + 0) - 7)
+          }
+          continue
+        }
+        if (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
+          port = name + 0
+          if (port <= 44) {
+            mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone RJ45 port " port
+          } else {
+            mapped_rows++; print "  - ifIndex " idx " -> " name " -> dual-personality copper/SFP uplink " (port - 44)
           }
           continue
         }
@@ -2608,6 +2639,11 @@ write_generated_yaml_for_walk() {
         if ((name ~ /^(Gi|GigabitEthernet)/) && parts[2] == "0" && port >= 1 && port <= 28) return label " Port " port
         if ((name ~ /^(Te|TenGigabitEthernet)/) && parts[2] == "0" && port >= 1 && port <= 2) return label " SFP 10G " port
       }
+      if (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
+        port = name + 0
+        if (port <= 44) return prefix " Port " port
+        return prefix " Uplink " (port - 44)
+      }
       if (model == "SG500X-24" && name ~ /^gi1\/[0-9]+$/) {
         port = name; sub(/^gi1\//, "", port); return prefix " Port " (port + 0)
       }
@@ -2680,6 +2716,7 @@ write_generated_yaml_for_walk() {
       print "    name: " name
     }
     function physical_speed_cap_mbps(model, label) {
+      if (model == "HP J8693A Switch 3500yl-48G") return 1000
       if (model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /) return 1000
       if (model == "WS-C3750-48P" && label ~ / Port /) return 100
       if (model == "WS-C3750-48P" && label ~ / SFP 1G /) return 1000
@@ -2770,6 +2807,7 @@ write_generated_yaml_for_walk() {
       if (line ~ /S5735-L8P4X-A1/) huawei_s5735_model="S5735-L8P4X-A1"
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model="S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model="XS1930-10"
+      if (tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
       if (line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
       if (line ~ /WS-C3750-48P/) c3750_model="WS-C3750-48P"
       if (match(line, /WS-C(3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
@@ -2824,6 +2862,9 @@ write_generated_yaml_for_walk() {
           physical_count++
           physical_member[1] = 1
         } else if (zyxel_model != "" && val ~ /^swp0[0-9]$/) {
+          physical_count++
+          physical_member[1] = 1
+        } else if (hp_3500yl_model != "" && val ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
           physical_count++
           physical_member[1] = 1
         } else if (val ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || val ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) {
@@ -2966,6 +3007,10 @@ write_generated_yaml_for_walk() {
         model = juniper_model
         manufacturer = "Juniper"
       }
+      else if (hp_3500yl_model != "") {
+        model = hp_3500yl_model
+        manufacturer = "HP"
+      }
       else if (dell_model != "") {
         model = dell_model
         manufacturer = "Dell"
@@ -2995,7 +3040,7 @@ write_generated_yaml_for_walk() {
       phys_n = 0
       for (idx=1; idx<=maxidx; idx++) if (idx in ifname) {
         name=ifname[idx]
-        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/) {
+        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/) {
           if (model == "Juniper EX3300-48P" && name ~ /^(xe|ge)-0\/1\/[0-3]$/) continue
           if (name ~ /^ge-0\/0\/[0-9]+$/) {
             port_no=name
