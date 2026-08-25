@@ -30,10 +30,7 @@
   function setInstallerControlsDisabled(disabled) {
     for (const id of [
       "installerBackupAutomaticRetention",
-      "installerBackupRetentionCount",
-      "saveInstallerBackupPolicyButton",
       "createInstallerBackupButton",
-      "applyInstallerBackupRetentionButton",
       "refreshInstallerBackupsButton",
     ]) {
       const node = el(id);
@@ -47,47 +44,30 @@
     const summary = el("installerBackupSummary");
     const list = el("installerBackupList");
     const automatic = el("installerBackupAutomaticRetention");
-    const count = el("installerBackupRetentionCount");
-    if (!summary || !list || !automatic || !count) return;
+    if (!summary || !list || !automatic) return;
 
     summary.replaceChildren();
     list.replaceChildren();
 
     if (!lastInstallerBackupStatus) {
       setInstallerControlsDisabled(true);
+      automatic.setAttribute("aria-pressed", "false");
+      automatic.classList.remove("primary");
+      automatic.textContent = "Automatic retention: Unavailable";
+      summary.textContent = "Backup status unavailable";
       return;
     }
 
-    automatic.checked = Boolean(lastInstallerBackupStatus.automatic_retention);
-    count.value = String(lastInstallerBackupStatus.retention_count ?? 5);
+    const retentionEnabled = Boolean(lastInstallerBackupStatus.automatic_retention);
+    automatic.setAttribute("aria-pressed", String(retentionEnabled));
+    automatic.classList.toggle("primary", retentionEnabled);
+    automatic.textContent = `Automatic retention: ${retentionEnabled ? "On" : "Off"}`;
     setInstallerControlsDisabled(false);
 
     const backups = Array.isArray(lastInstallerBackupStatus.backups)
       ? lastInstallerBackupStatus.backups
       : [];
-    const fields = [
-      ["Automatic retention", automatic.checked ? "On" : "Off"],
-      ["Retained limit", lastInstallerBackupStatus.retention_count ?? 5],
-      ["Current backups", backups.length],
-      [
-        "Installer",
-        lastInstallerBackupStatus.installer_version
-          ? `v${lastInstallerBackupStatus.installer_version}`
-          : "Available",
-      ],
-    ];
-    for (const [label, value] of fields) {
-      const tile = document.createElement("div");
-      tile.className = "diag-tile";
-      const name = document.createElement("div");
-      name.className = "muted";
-      name.textContent = label;
-      const content = document.createElement("div");
-      content.className = "diag-value";
-      content.textContent = String(value);
-      tile.append(name, content);
-      summary.appendChild(tile);
-    }
+    summary.textContent = `${backups.length} retained backup${backups.length === 1 ? "" : "s"}`;
 
     if (!backups.length) {
       const empty = document.createElement("div");
@@ -182,10 +162,8 @@
         status.textContent =
           operationMessage ||
           (data.automatic_retention
-            ? `Automatic retention is on; keeping the newest ${data.retention_count} backup${
-                Number(data.retention_count) === 1 ? "" : "s"
-              }.`
-            : "Automatic retention is off. Existing Installer recovery backups are kept until you delete them or apply retention manually.");
+            ? "Automatic retention is on."
+            : "Automatic retention is off. Existing Installer recovery backups are kept until you delete them manually.");
       }
     } catch (error) {
       renderInstallerBackups(null);
@@ -230,63 +208,42 @@
     }
   }
 
-  async function saveInstallerBackupPolicy() {
-    const automatic = el("installerBackupAutomaticRetention");
-    const count = el("installerBackupRetentionCount");
-    const button = el("saveInstallerBackupPolicyButton");
-    if (!automatic || !count) return;
-    const retention = Number(count.value);
+  async function toggleInstallerBackupRetention() {
+    const button = el("installerBackupAutomaticRetention");
+    if (!button || !lastInstallerBackupStatus) return;
+
+    const retention = Number(lastInstallerBackupStatus.retention_count ?? 5);
     if (!Number.isInteger(retention) || retention < 1 || retention > 10) {
       el("installerBackupStatus").textContent =
-        "Retained backup count must be between 1 and 10.";
+        "Stored Installer retention policy is invalid.";
       return;
     }
-    const current = Array.isArray(lastInstallerBackupStatus?.backups)
+
+    const currentlyEnabled = Boolean(lastInstallerBackupStatus.automatic_retention);
+    const current = Array.isArray(lastInstallerBackupStatus.backups)
       ? lastInstallerBackupStatus.backups.length
       : 0;
+    const removeCount = Math.max(0, current - retention);
+
     if (
-      automatic.checked &&
-      current > retention &&
+      !currentlyEnabled &&
+      removeCount &&
       !confirm(
-        `Saving this policy will immediately keep only the newest ${retention} Installer recovery backup${
-          retention === 1 ? "" : "s"
-        } and delete ${current - retention} older backup${
-          current - retention === 1 ? "" : "s"
-        }. Continue?`
+        `Enable automatic retention? Installer will immediately apply its existing retention policy and delete ${removeCount} older backup${
+          removeCount === 1 ? "" : "s"
+        }.`
       )
     ) {
       return;
     }
+
     await runInstallerBackupAction(
       "set_policy",
       {
-        automatic_retention: automatic.checked,
+        automatic_retention: !currentlyEnabled,
         retention_count: retention,
       },
       button
-    );
-  }
-
-  async function applyInstallerBackupRetention() {
-    const limit = Number(lastInstallerBackupStatus?.retention_count ?? 5);
-    const current = Array.isArray(lastInstallerBackupStatus?.backups)
-      ? lastInstallerBackupStatus.backups.length
-      : 0;
-    const removeCount = Math.max(0, current - limit);
-    if (
-      removeCount &&
-      !confirm(
-        `Apply retention now? This will keep the newest ${limit} Installer recovery backup${
-          limit === 1 ? "" : "s"
-        } and delete ${removeCount} older backup${removeCount === 1 ? "" : "s"}.`
-      )
-    ) {
-      return;
-    }
-    await runInstallerBackupAction(
-      "apply_retention",
-      {},
-      el("applyInstallerBackupRetentionButton")
     );
   }
 
@@ -659,20 +616,14 @@
     open.addEventListener("click", () => {
       setView("maintenance");
       loadInstallerBackups();
-      loadBackups();
       scan();
     });
   }
   el("refreshInstallerBackupsButton")?.addEventListener("click", () => loadInstallerBackups());
-  el("saveInstallerBackupPolicyButton")?.addEventListener("click", saveInstallerBackupPolicy);
+  el("installerBackupAutomaticRetention")?.addEventListener("click", toggleInstallerBackupRetention);
   el("createInstallerBackupButton")?.addEventListener("click", () =>
     runInstallerBackupAction("create_backup", {}, el("createInstallerBackupButton"))
   );
-  el("applyInstallerBackupRetentionButton")?.addEventListener(
-    "click",
-    applyInstallerBackupRetention
-  );
-  el("refreshDiscoveryBackupsButton")?.addEventListener("click", loadBackups);
   el("scanMqttEntitiesButton")?.addEventListener("click", scan);
   el("repairMqttEntitiesButton")?.addEventListener("click", repair);
   el("exportMqttResultsButton")?.addEventListener("click", exportResults);
@@ -682,17 +633,13 @@
   ) {
     setView("maintenance");
     loadInstallerBackups();
-    loadBackups();
     scan();
   }
 
   window.SwitchVisionMaintenance = {
     loadInstallerBackups,
     runInstallerBackupAction,
-    saveInstallerBackupPolicy,
-    applyInstallerBackupRetention,
-    loadBackups,
-    removeBackup,
+    toggleInstallerBackupRetention,
     scan,
     repair,
     exportResults,
