@@ -21,6 +21,50 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
+# v2.3.11 HP J8693A / 3500yl numeric-interface regression.
+# Exact hardware contract: 44 fixed copper logical ports plus four
+# dual-personality copper/mini-GBIC logical ports (45-48).  No private
+# contribution values are embedded in this regression.
+HP_TEST_WALK=$(mktemp)
+HP_TEST_CAP=$(mktemp)
+trap 'rm -f "$HP_TEST_WALK" "$HP_TEST_CAP"' EXIT HUP INT TERM
+{
+  echo '.1.3.6.1.2.1.1.1.0 = STRING: HP J8693A Switch 3500yl-48G'
+  i=1
+  while [ "$i" -le 48 ]; do
+    echo ".1.3.6.1.2.1.31.1.1.1.1.$i = STRING: \"$i\""
+    i=$((i + 1))
+  done
+} > "$HP_TEST_WALK"
+CV_MIB_DATABASE_DIR="$BASE_DIR/opt/switch-vision/mib_database"
+CV_VENDOR_DIR="$BASE_DIR/opt/switch-vision/vendors"
+. "$CV_VENDOR_DIR/base.sh"
+. "$CV_VENDOR_DIR/generic.sh"
+. "$CV_VENDOR_DIR/cisco.sh"
+. "$CV_VENDOR_DIR/known_vendor.sh"
+. "$CV_VENDOR_DIR/interface.sh"
+. "$CV_VENDOR_DIR/loader.sh"
+CV_ID_VENDOR="hp_aruba"
+CV_ID_VENDOR_NAME="HP / Aruba"
+CV_ID_FAMILY="3500yl"
+CV_ID_SUPPORT_STATUS="detected"
+CV_ID_SYS_OBJECT_ID="1.3.6.1.4.1.11.2.3.7.11.59"
+CV_ID_SYS_DESCR="HP J8693A Switch 3500yl-48G"
+cv_write_capabilities_json "$HP_TEST_WALK" "$HP_TEST_CAP" ""
+jq -e '
+  (.device.model_text | contains("J8693A"))
+  and ([.interfaces[] | select(.physical == true)] | length == 48)
+  and ([.interfaces[] | select(.media == "rj45")] | length == 44)
+  and ([.interfaces[] | select(.media == "uplink")] | length == 4)
+  and (any(.interfaces[]; .name == "44" and .media == "rj45" and .physical == true))
+  and (any(.interfaces[]; .name == "45" and .media == "uplink" and .physical == true))
+  and (any(.interfaces[]; .name == "48" and .media == "uplink" and .physical == true))
+' "$HP_TEST_CAP" >/dev/null
+grep -Fq 'hp_3500yl_model = "HP J8693A Switch 3500yl-48G"' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'hp_3500yl_model="HP J8693A Switch 3500yl-48G"' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/' "$BASE_DIR/discovery_job.sh"
+echo 'Switch Vision Discovery v2.3.11 HP 3500yl numeric interface contract: PASS'
+
 # v2.3.8 compact calibration-profile card regression
 grep -Fq 'class="sv-profile-meta-actions"' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'class="sv-profile-internal"' "$BASE_DIR/calibration_profiles.js"
@@ -1489,8 +1533,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.10"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.10"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.11"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.11"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco

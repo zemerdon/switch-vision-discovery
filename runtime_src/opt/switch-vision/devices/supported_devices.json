@@ -1012,8 +1012,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "dell-n2128px-on",
-      "calibration_profile": "default_cisco_48_port",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
+      "calibration_profile": "dell_28rj45_2sfp",
+      "default_faceplate": "faceplates/dell-28-rj45-2sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [
         "6.7.1.27",
@@ -1044,9 +1044,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
+        "recommended_faceplate": "faceplates/dell-28-rj45-2sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "default_cisco_48_port",
+        "calibration_profile": "dell_28rj45_2sfp",
         "canvas": {
           "width": 2048,
           "height": 448
