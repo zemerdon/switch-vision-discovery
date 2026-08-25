@@ -1,6 +1,5 @@
 (() => {
   let lastPlan = null;
-  let lastBackupStatus = null;
   let lastInstallerBackupStatus = null;
   let installerPollTimer = null;
 
@@ -247,14 +246,6 @@
     );
   }
 
-  function formatBytes(value) {
-    const bytes = Number(value || 0);
-    if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-  }
-
   function safeExportPlan(plan) {
     if (!plan || typeof plan !== "object") return null;
     const stale = Array.isArray(plan.stale_entries)
@@ -282,139 +273,6 @@
         credentials_included: false,
       },
     };
-  }
-
-  function renderBackups(data) {
-    lastBackupStatus = data && typeof data === "object" ? data : null;
-    const summary = el("discoveryBackupSummary");
-    const list = el("discoveryBackupList");
-    if (!summary || !list) return;
-    summary.replaceChildren();
-    list.replaceChildren();
-
-    if (!lastBackupStatus) return;
-
-    const fields = [
-      ["Automatic retention", lastBackupStatus.automatic_retention ? "On" : "Off"],
-      ["Retained limit", lastBackupStatus.retained_limit ?? 5],
-      ["Current backups", lastBackupStatus.count ?? 0],
-    ];
-    for (const [label, value] of fields) {
-      const tile = document.createElement("div");
-      tile.className = "diag-tile";
-      const name = document.createElement("div");
-      name.className = "muted";
-      name.textContent = label;
-      const content = document.createElement("div");
-      content.className = "diag-value";
-      content.textContent = String(value);
-      tile.append(name, content);
-      summary.appendChild(tile);
-    }
-
-    const backups = Array.isArray(lastBackupStatus.backups)
-      ? lastBackupStatus.backups
-      : [];
-    if (!backups.length) {
-      const empty = document.createElement("div");
-      empty.className = "muted";
-      empty.textContent = "No retained Discovery configuration backups.";
-      list.appendChild(empty);
-      return;
-    }
-
-    for (const backup of backups) {
-      const row = document.createElement("div");
-      row.className = "device-card";
-      const title = document.createElement("strong");
-      title.textContent = backup.name || "Discovery backup";
-      const detail = document.createElement("div");
-      detail.className = "muted";
-      detail.textContent = `${backup.time || "Unknown time"} · ${formatBytes(
-        backup.size
-      )}`;
-      const actions = document.createElement("div");
-      actions.className = "actions";
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "danger";
-      remove.textContent = "Remove Backup";
-      remove.addEventListener("click", () => removeBackup(backup.name, remove));
-      actions.appendChild(remove);
-      row.append(title, detail, actions);
-      list.appendChild(row);
-    }
-  }
-
-  async function loadBackups() {
-    const status = el("discoveryBackupStatus");
-    const refresh = el("refreshDiscoveryBackupsButton");
-    if (refresh) refresh.disabled = true;
-    if (status) status.textContent = "Loading retained Discovery backups…";
-    try {
-      const response = await fetch(
-        endpoint("api/maintenance/discovery-backups"),
-        { cache: "no-store" }
-      );
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Discovery backup status failed");
-      }
-      renderBackups(data);
-      if (status) {
-        status.textContent = data.automatic_retention
-          ? `Automatic retention is on; keeping up to ${data.retained_limit} backup${
-              Number(data.retained_limit) === 1 ? "" : "s"
-            }.`
-          : "Automatic retention is off. Existing backups remain until you remove them manually.";
-      }
-    } catch (error) {
-      renderBackups(null);
-      if (status) {
-        status.textContent = `Could not load Discovery backups: ${
-          error.message || error
-        }`;
-      }
-    } finally {
-      if (refresh) refresh.disabled = false;
-    }
-  }
-
-  async function removeBackup(name, button) {
-    const status = el("discoveryBackupStatus");
-    if (!name) return;
-    if (
-      !confirm(
-        `Remove retained Discovery backup ${name}? This removes only that Switch Vision Discovery backup file.`
-      )
-    ) {
-      return;
-    }
-    if (button) button.disabled = true;
-    if (status) status.textContent = "Removing retained Discovery backup…";
-    try {
-      const response = await fetch(
-        endpoint("api/maintenance/discovery-backups/remove"),
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        }
-      );
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Discovery backup removal failed");
-      }
-      renderBackups(data);
-      if (status) status.textContent = `Removed ${name}.`;
-    } catch (error) {
-      if (status) {
-        status.textContent = `Could not remove Discovery backup: ${
-          error.message || error
-        }`;
-      }
-      if (button) button.disabled = false;
-    }
   }
 
   function renderPlan(data) {
