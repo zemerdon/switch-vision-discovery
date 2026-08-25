@@ -292,6 +292,7 @@ def main() -> int:
         "discovery_support",
         "dashboard_support",
     )
+    support_fields = ("status", "evidence", "validation")
     visual_fields = ("calibration_profile", "default_faceplate")
 
     for model in sorted(core_models.keys() & discovery_models.keys()):
@@ -306,6 +307,16 @@ def main() -> int:
         if changed_hardware:
             errors.append(
                 f"{model}: hardware contract drift in " + ", ".join(changed_hardware)
+            )
+
+        changed_support = [
+            field
+            for field in support_fields
+            if core.get(field) != discovery.get(field)
+        ]
+        if changed_support:
+            errors.append(
+                f"{model}: support-status contract drift in " + ", ".join(changed_support)
             )
 
         changed_visuals = [
