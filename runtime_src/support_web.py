@@ -51,6 +51,7 @@ DEFAULT_OPTIONS_FILE = Path("/data/options.json")
 DEFAULT_SUPPORT_SCRIPT = Path("/support_my_switch.sh")
 DEFAULT_DISCOVERY_SCRIPT = Path("/discovery_job.sh")
 DEFAULT_SHARE_DIR = Path("/share/switch_vision")
+DEFAULT_INSTALLER_MAINTENANCE_RESPONSE = DEFAULT_SHARE_DIR / "installer-maintenance-response.json"
 DEFAULT_REGISTRY_FILE = Path("/opt/switch-vision/devices/supported_devices.json")
 DEFAULT_GENERATED_SNMP2MQTT = Path("/share/switch_vision/generated-snmp2mqtt.yaml")
 DEFAULT_GENERATED_CARD = Path("/share/switch_vision/generated-dashboard-card.yaml")
@@ -1047,6 +1048,162 @@ def _supervisor_json(
     if isinstance(payload, dict) and payload.get("result") == "error":
         raise RuntimeError(str(payload.get("message") or "Supervisor API reported an error."))
     return payload if isinstance(payload, dict) else {}
+
+
+INSTALLER_MAINTENANCE_SCHEMA = "switch-vision-installer-maintenance-v1"
+_INSTALLER_MAINTENANCE_LOCK = threading.Lock()
+
+
+def _installer_maintenance_request(
+    action: str,
+    *,
+    response_path: Path = DEFAULT_INSTALLER_MAINTENANCE_RESPONSE,
+    timeout: float = 5.0,
+    **fields: Any,
+) -> dict[str, Any]:
+    """Send one narrow Maintenance command to Installer through Supervisor STDIN."""
+    if action not in {
+        "status",
+        "set_policy",
+        "create_backup",
+        "validate_backup",
+        "restore_backup",
+        "delete_backup",
+        "apply_retention",
+    }:
+        raise ValueError("Unsupported Installer maintenance action.")
+
+    with _INSTALLER_MAINTENANCE_LOCK:
+        links = _installed_switch_vision_app_links()
+        installer = links.get("installer") if isinstance(links, dict) else None
+        if not isinstance(installer, dict) or not installer.get("found"):
+            raise RuntimeError(
+                "Switch Vision Installer is not installed. Install or update Installer "
+                "before managing recovery backups from Maintenance."
+            )
+        slug = str(installer.get("slug") or "").strip()
+        if not slug:
+            raise RuntimeError("Switch Vision Installer slug could not be resolved.")
+
+        info_path = f"/addons/{quote(slug, safe='')}/info"
+        info_payload = _supervisor_json(info_path)
+        info = (
+            info_payload.get("data")
+            if isinstance(info_payload.get("data"), dict)
+            else info_payload
+        )
+        if not isinstance(info, dict) or info.get("stdin") is not True:
+            raise RuntimeError(
+                "Switch Vision Installer 2.1.31 or later is required for "
+                "Maintenance backup controls."
+            )
+
+        state = str(info.get("state") or "").strip().lower()
+        if state not in {"started", "running"}:
+            _supervisor_json(
+                f"/addons/{quote(slug, safe='')}/start",
+                method="POST",
+                timeout=30.0,
+            )
+            start_deadline = time.monotonic() + 20.0
+            while time.monotonic() < start_deadline:
+                refreshed_payload = _supervisor_json(info_path)
+                refreshed = (
+                    refreshed_payload.get("data")
+                    if isinstance(refreshed_payload.get("data"), dict)
+                    else refreshed_payload
+                )
+                state = (
+                    str(refreshed.get("state") or "").strip().lower()
+                    if isinstance(refreshed, dict)
+                    else ""
+                )
+                if state in {"started", "running"}:
+                    break
+                time.sleep(0.1)
+            else:
+                raise RuntimeError(
+                    "Switch Vision Installer did not reach a running state after "
+                    "Maintenance requested its start."
+                )
+
+        request_id = f"maintenance-{time.monotonic_ns()}"
+        command = {
+            "schema": INSTALLER_MAINTENANCE_SCHEMA,
+            "request_id": request_id,
+            "action": action,
+            **fields,
+        }
+        _supervisor_json(
+            f"/addons/{quote(slug, safe='')}/stdin",
+            method="POST",
+            payload=command,
+        )
+
+        deadline = time.monotonic() + max(0.5, min(float(timeout), 15.0))
+        while time.monotonic() < deadline:
+            try:
+                if response_path.is_symlink():
+                    raise RuntimeError(
+                        "Installer Maintenance response path must not be a symbolic link."
+                    )
+                if not response_path.is_file():
+                    time.sleep(0.05)
+                    continue
+                if response_path.stat().st_size > 1024 * 1024:
+                    raise RuntimeError("Installer Maintenance response is unexpectedly large.")
+                document = json.loads(response_path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                time.sleep(0.05)
+                continue
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise RuntimeError(
+                    f"Installer Maintenance response could not be read safely: {exc}"
+                ) from exc
+
+            if not isinstance(document, dict):
+                raise RuntimeError("Installer Maintenance response is invalid.")
+            if (
+                document.get("schema") != INSTALLER_MAINTENANCE_SCHEMA
+                or document.get("request_id") != request_id
+            ):
+                time.sleep(0.05)
+                continue
+            if document.get("ok") is not True:
+                raise RuntimeError(
+                    str(document.get("error") or "Installer Maintenance request failed.")
+                )
+            return document
+
+        raise RuntimeError(
+            "Timed out waiting for Switch Vision Installer Maintenance response."
+        )
+
+
+def _installer_maintenance_browser_request(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("Installer backup request must contain a JSON object.")
+    action = str(data.get("action") or "").strip()
+    if action == "set_policy":
+        automatic = data.get("automatic_retention")
+        count = data.get("retention_count")
+        if not isinstance(automatic, bool):
+            raise ValueError("Automatic retention must be true or false.")
+        if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 10:
+            raise ValueError("Retained backup count must be between 1 and 10.")
+        return _installer_maintenance_request(
+            action,
+            automatic_retention=automatic,
+            retention_count=count,
+        )
+    if action in {"validate_backup", "restore_backup", "delete_backup"}:
+        name = data.get("name")
+        if not isinstance(name, str) or not name or len(name) > 160 or Path(name).name != name:
+            raise ValueError("Backup name is invalid.")
+        return _installer_maintenance_request(action, name=name)
+    if action in {"create_backup", "apply_retention"}:
+        return _installer_maintenance_request(action)
+    raise ValueError("Unsupported Installer backup request.")
 
 
 def _self_addon_options() -> dict[str, Any]:
@@ -3272,7 +3429,7 @@ body.density-dense .step{padding:7px 9px}
 <button id="openSupportButton" class="nav-card" type="button"><b>Support My Switch</b><span class="nav-points"><span>Create contribution package to add/increase support for your switch</span></span></button>
 <button id="openDiagnosticsButton" class="nav-card" type="button"><b>Detected Device Information</b><span class="nav-points"><span>Detailed device(s) information</span></span></button>
 <button id="openConfigurationButton" class="nav-card" type="button"><b>Import / Export Configuration</b><span class="nav-points"><span>Import / export Discovery configuration</span></span></button>
-<button id="openMaintenanceButton" class="nav-card" type="button"><b>Maintenance</b><span class="nav-points"><span>Repair stale MQTT entities</span><span>Reset generated SNMP data</span></span></button>
+<button id="openMaintenanceButton" class="nav-card" type="button"><b>Maintenance</b><span class="nav-points"><span>Manage backups</span><span>Repair stale MQTT entities</span><span>Reset generated SNMP data</span></span></button>
 </div>
 <div class="nav-grid" style="margin-top:12px">
 <button id="openIntegrationSettingsButton" class="nav-card" type="button"><b>Switch Vision Settings</b><span class="nav-points"><span>Sidebar toggles</span><span>Native card options</span><span>UI font &amp; display</span></span></button>
@@ -3333,6 +3490,18 @@ body.density-dense .step{padding:7px 9px}
 <section id="maintenanceCard" class="card hidden">
 <h2>Maintenance</h2>
 <p class="lead">Repair Switch Vision-managed runtime state without touching unrelated Home Assistant or MQTT data.</p>
+<h3>Installer Recovery Backups</h3>
+<p>Manage the full Switch Vision recovery backups created by Installer. These remain separate from the smaller Discovery configuration snapshots below.</p>
+<div class="warning"><b>Private boundary preserved:</b> Recovery files stay inside Installer-owned <code>/data/switch-vision-backups</code>. Maintenance receives only sanitized metadata and sends narrow commands through Home Assistant Supervisor; backup files, saved option payloads and credentials are never exposed here.</div>
+<div class="grid">
+<label class="option"><input id="installerBackupAutomaticRetention" type="checkbox"><span><b>Automatic retention</b><br><small>When enabled, Installer prunes old recovery backups after creating a new backup.</small></span></label>
+<label class="field"><span><b>Retained backups</b></span><input id="installerBackupRetentionCount" type="number" min="1" max="10" step="1" value="5"><small>Keep between 1 and 10 recovery backups.</small></label>
+</div>
+<div id="installerBackupSummary" class="diag-summary"></div>
+<div class="actions"><button id="saveInstallerBackupPolicyButton" class="primary" type="button">Save Backup Policy</button><button id="createInstallerBackupButton" type="button">Create Backup</button><button id="applyInstallerBackupRetentionButton" type="button">Apply Retention Now</button><button id="refreshInstallerBackupsButton" type="button">Refresh Backups</button></div>
+<p id="installerBackupStatus" class="muted">Loading Installer recovery backups…</p>
+<div id="installerBackupList"></div>
+<hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
 <h3>Discovery Configuration Backups</h3>
 <p>Switch Vision can retain private snapshots before persistent configuration changes made through the Hub, including configuration import and saved-device enable/disable. Changes made independently through Home Assistant's add-on Configuration page are outside this interception path.</p>
 <div class="warning"><b>Private data:</b> Backup files may contain saved configuration and secrets. Maintenance exposes only backup name, time, size and count; it never shows or downloads backup contents.</div>
@@ -3701,6 +3870,11 @@ class SupportHandler(BaseHTTPRequestHandler):
             self._json({"status": "ok", "version": self.app.version})
         elif path == "/api/app-links":
             self._json(_installed_switch_vision_app_links())
+        elif path == "/api/maintenance/installer-backups":
+            try:
+                self._json(_installer_maintenance_request("status"))
+            except (ValueError, RuntimeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
         elif path == "/api/maintenance/discovery-backups":
             try:
                 self._json(discovery_backup_status(_self_addon_options()))
@@ -4039,6 +4213,16 @@ class SupportHandler(BaseHTTPRequestHandler):
                     })
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/maintenance/installer-backups":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0 or length > 8192:
+                    raise ValueError("Invalid Installer backup request size.")
+                data = json.loads(self.rfile.read(length).decode("utf-8"))
+                self._json(_installer_maintenance_browser_request(data))
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return

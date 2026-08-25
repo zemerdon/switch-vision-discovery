@@ -51,6 +51,7 @@ PY_INGRESS_GATE
 # v2.2.0 Maintenance Hub MQTT ownership/reconciliation regression
 python3 -m py_compile "$BASE_DIR/discovery_backups.py" "$BASE_DIR/discovery_backups_regression.py" "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py" "$BASE_DIR/walk_correlation.py"
 grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
+grep -Fq '<span>Manage backups</span>' "$BASE_DIR/support_web.py"
 grep -Fq 'id="maintenanceCard"' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/scan' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/repair' "$BASE_DIR/support_web.py"
@@ -67,6 +68,115 @@ grep -Fq 'reason="configuration_import"' "$BASE_DIR/support_web.py"
 grep -Fq 'reason="device_state_update"' "$BASE_DIR/support_web.py"
 grep -Fq 'api/maintenance/discovery-backups' "$BASE_DIR/maintenance.js"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/discovery_backups_regression.py"
+
+# v2.3.3 Installer recovery backup Maintenance bridge/UI regression
+grep -Fq 'id="installerBackupSummary"' "$BASE_DIR/support_web.py"
+grep -Fq '/api/maintenance/installer-backups' "$BASE_DIR/support_web.py"
+grep -Fq 'switch-vision-installer-maintenance-v1' "$BASE_DIR/support_web.py"
+grep -Fq 'installerBackupAutomaticRetention' "$BASE_DIR/maintenance.js"
+grep -Fq 'retention_count: retention' "$BASE_DIR/maintenance.js"
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_INSTALLER_BACKUPS'
+import json
+from pathlib import Path
+import tempfile
+
+import support_web
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    response_path = Path(tmp) / "installer-maintenance-response.json"
+    calls = []
+
+    support_web._installed_switch_vision_app_links = lambda: {
+        "installer": {
+            "found": True,
+            "slug": "switch_vision_installer",
+            "ingress_url": "/api/hassio_ingress/example/",
+        }
+    }
+
+    def supervisor(path, *, method="GET", timeout=12.0, payload=None):
+        calls.append((path, method, payload))
+        if path.endswith("/info"):
+            info_calls = len([call for call in calls if call[0].endswith("/info")])
+            return {
+                "data": {
+                    "stdin": True,
+                    "state": "stopped" if info_calls == 1 else "started",
+                }
+            }
+        if path.endswith("/start"):
+            return {"result": "ok"}
+        if path.endswith("/stdin"):
+            response_path.write_text(
+                json.dumps(
+                    {
+                        "schema": support_web.INSTALLER_MAINTENANCE_SCHEMA,
+                        "request_id": payload["request_id"],
+                        "ok": True,
+                        "automatic_retention": True,
+                        "retention_count": 4,
+                        "backups": [
+                            {
+                                "name": "switch-vision-test",
+                                "created_at": "2026-08-25T00:00:00+00:00",
+                                "version": "2.6.0",
+                                "contents": ["Custom component"],
+                            }
+                        ],
+                        "operation": {
+                            "active": False,
+                            "kind": None,
+                            "message": "Ready.",
+                            "percent": 0,
+                            "result": None,
+                            "error": None,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return {"result": "ok"}
+        raise AssertionError(path)
+
+    support_web._supervisor_json = supervisor
+    result = support_web._installer_maintenance_request(
+        "status", response_path=response_path
+    )
+    assert result["retention_count"] == 4
+    assert result["backups"][0]["name"] == "switch-vision-test"
+    start_calls = [call for call in calls if call[0].endswith("/start")]
+    assert len(start_calls) == 1
+    stdin_call = [call for call in calls if call[0].endswith("/stdin")][0]
+    assert calls.index(start_calls[0]) < calls.index(stdin_call)
+    command = stdin_call[2]
+    assert command["schema"] == "switch-vision-installer-maintenance-v1"
+    assert command["action"] == "status"
+    assert command["request_id"].startswith("maintenance-")
+    assert "/data/switch-vision-backups" not in repr(result)
+
+try:
+    support_web._installer_maintenance_browser_request(
+        {
+            "action": "set_policy",
+            "automatic_retention": True,
+            "retention_count": 11,
+        }
+    )
+except ValueError:
+    pass
+else:
+    raise AssertionError("Installer retention count above 10 was accepted")
+
+try:
+    support_web._installer_maintenance_browser_request({"action": "shell"})
+except ValueError:
+    pass
+else:
+    raise AssertionError("Unapproved Installer Maintenance action was accepted")
+
+print("Switch Vision Discovery v2.3.3 Installer backup Maintenance bridge: PASS")
+PY_INSTALLER_BACKUPS
 
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_SUPPORT_DIAGNOSTICS'
 from support_diagnostics import build_port_pipeline
@@ -1275,8 +1385,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.2"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.2"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.3"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.3"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco

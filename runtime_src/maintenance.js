@@ -1,8 +1,293 @@
 (() => {
   let lastPlan = null;
   let lastBackupStatus = null;
+  let lastInstallerBackupStatus = null;
+  let installerPollTimer = null;
 
   const el = (id) => document.getElementById(id);
+
+  function installerOperationMessage(operation) {
+    if (!operation || typeof operation !== "object") return "";
+    if (operation.active) {
+      return `${operation.message || "Installer backup operation in progress…"} ${
+        Number(operation.percent || 0)
+      }%`.trim();
+    }
+    if (operation.error) return `Installer backup operation failed: ${operation.error}`;
+    const result = operation.result;
+    if (!result || typeof result !== "object") return "";
+    if (Array.isArray(result.required_actions) && result.required_actions.length) {
+      return `Backup operation completed. Required next steps: ${result.required_actions.join(
+        "; "
+      )}.`;
+    }
+    if (result.backup_created) return `Backup ${result.backup || ""} created and verified.`.trim();
+    if (result.backup_validated) return `Backup ${result.backup || ""} validation passed.`.trim();
+    if (Array.isArray(result.restored)) return `Backup ${result.backup || ""} restored.`.trim();
+    return "Installer backup operation completed.";
+  }
+
+  function setInstallerControlsDisabled(disabled) {
+    for (const id of [
+      "installerBackupAutomaticRetention",
+      "installerBackupRetentionCount",
+      "saveInstallerBackupPolicyButton",
+      "createInstallerBackupButton",
+      "applyInstallerBackupRetentionButton",
+      "refreshInstallerBackupsButton",
+    ]) {
+      const node = el(id);
+      if (node) node.disabled = disabled;
+    }
+  }
+
+  function renderInstallerBackups(data) {
+    lastInstallerBackupStatus =
+      data && typeof data === "object" ? data : null;
+    const summary = el("installerBackupSummary");
+    const list = el("installerBackupList");
+    const automatic = el("installerBackupAutomaticRetention");
+    const count = el("installerBackupRetentionCount");
+    if (!summary || !list || !automatic || !count) return;
+
+    summary.replaceChildren();
+    list.replaceChildren();
+
+    if (!lastInstallerBackupStatus) {
+      setInstallerControlsDisabled(true);
+      return;
+    }
+
+    automatic.checked = Boolean(lastInstallerBackupStatus.automatic_retention);
+    count.value = String(lastInstallerBackupStatus.retention_count ?? 5);
+    setInstallerControlsDisabled(false);
+
+    const backups = Array.isArray(lastInstallerBackupStatus.backups)
+      ? lastInstallerBackupStatus.backups
+      : [];
+    const fields = [
+      ["Automatic retention", automatic.checked ? "On" : "Off"],
+      ["Retained limit", lastInstallerBackupStatus.retention_count ?? 5],
+      ["Current backups", backups.length],
+      [
+        "Installer",
+        lastInstallerBackupStatus.installer_version
+          ? `v${lastInstallerBackupStatus.installer_version}`
+          : "Available",
+      ],
+    ];
+    for (const [label, value] of fields) {
+      const tile = document.createElement("div");
+      tile.className = "diag-tile";
+      const name = document.createElement("div");
+      name.className = "muted";
+      name.textContent = label;
+      const content = document.createElement("div");
+      content.className = "diag-value";
+      content.textContent = String(value);
+      tile.append(name, content);
+      summary.appendChild(tile);
+    }
+
+    if (!backups.length) {
+      const empty = document.createElement("div");
+      empty.className = "muted";
+      empty.textContent = "No Installer recovery backups.";
+      list.appendChild(empty);
+    } else {
+      for (const backup of backups) {
+        const row = document.createElement("div");
+        row.className = "device-card";
+        const title = document.createElement("strong");
+        title.textContent = backup.name || "Installer recovery backup";
+        const detail = document.createElement("div");
+        detail.className = "muted";
+        const version = backup.version ? ` · Switch Vision v${backup.version}` : "";
+        const contents =
+          Array.isArray(backup.contents) && backup.contents.length
+            ? ` · ${backup.contents.join(", ")}`
+            : "";
+        detail.textContent = `${backup.created_at || "Unknown time"}${version}${contents}`;
+
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        const validate = document.createElement("button");
+        validate.type = "button";
+        validate.textContent = "Validate";
+        validate.addEventListener("click", () =>
+          runInstallerBackupAction("validate_backup", { name: backup.name }, validate)
+        );
+        const restore = document.createElement("button");
+        restore.type = "button";
+        restore.className = "danger";
+        restore.textContent = "Restore";
+        restore.addEventListener("click", () => {
+          if (
+            confirm(
+              `Restore ${backup.name}? This will replace the Switch Vision components contained in that private recovery backup.`
+            )
+          ) {
+            runInstallerBackupAction("restore_backup", { name: backup.name }, restore);
+          }
+        });
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", () => {
+          if (
+            confirm(
+              `Delete Installer recovery backup ${backup.name}? This cannot be undone.`
+            )
+          ) {
+            runInstallerBackupAction("delete_backup", { name: backup.name }, remove);
+          }
+        });
+        actions.append(validate, restore, remove);
+        row.append(title, detail, actions);
+        list.appendChild(row);
+      }
+    }
+
+    const operation = lastInstallerBackupStatus.operation;
+    if (operation && operation.active) {
+      scheduleInstallerBackupPoll();
+    }
+  }
+
+  function scheduleInstallerBackupPoll() {
+    if (installerPollTimer) clearTimeout(installerPollTimer);
+    installerPollTimer = setTimeout(() => {
+      installerPollTimer = null;
+      loadInstallerBackups({ quiet: true });
+    }, 800);
+  }
+
+  async function loadInstallerBackups({ quiet = false } = {}) {
+    const status = el("installerBackupStatus");
+    const refresh = el("refreshInstallerBackupsButton");
+    if (refresh) refresh.disabled = true;
+    if (status && !quiet) status.textContent = "Loading Installer recovery backups…";
+    try {
+      const response = await fetch(endpoint("api/maintenance/installer-backups"), {
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Installer backup status failed");
+      }
+      renderInstallerBackups(data);
+      if (status) {
+        const operationMessage = installerOperationMessage(data.operation);
+        status.textContent =
+          operationMessage ||
+          (data.automatic_retention
+            ? `Automatic retention is on; keeping the newest ${data.retention_count} backup${
+                Number(data.retention_count) === 1 ? "" : "s"
+              }.`
+            : "Automatic retention is off. Existing Installer recovery backups are kept until you delete them or apply retention manually.");
+      }
+    } catch (error) {
+      renderInstallerBackups(null);
+      if (status) {
+        status.textContent = `Could not load Installer recovery backups: ${
+          error.message || error
+        }`;
+      }
+    } finally {
+      if (refresh && lastInstallerBackupStatus) refresh.disabled = false;
+    }
+  }
+
+  async function runInstallerBackupAction(action, payload = {}, button = null) {
+    const status = el("installerBackupStatus");
+    if (button) button.disabled = true;
+    if (status) status.textContent = "Sending Installer backup request…";
+    try {
+      const response = await fetch(endpoint("api/maintenance/installer-backups"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...payload }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Installer backup request failed");
+      }
+      renderInstallerBackups(data);
+      if (status) {
+        status.textContent =
+          installerOperationMessage(data.operation) ||
+          "Installer backup settings updated.";
+      }
+      if (data.operation && data.operation.active) scheduleInstallerBackupPoll();
+    } catch (error) {
+      if (status) {
+        status.textContent = `Installer backup request failed: ${
+          error.message || error
+        }`;
+      }
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function saveInstallerBackupPolicy() {
+    const automatic = el("installerBackupAutomaticRetention");
+    const count = el("installerBackupRetentionCount");
+    const button = el("saveInstallerBackupPolicyButton");
+    if (!automatic || !count) return;
+    const retention = Number(count.value);
+    if (!Number.isInteger(retention) || retention < 1 || retention > 10) {
+      el("installerBackupStatus").textContent =
+        "Retained backup count must be between 1 and 10.";
+      return;
+    }
+    const current = Array.isArray(lastInstallerBackupStatus?.backups)
+      ? lastInstallerBackupStatus.backups.length
+      : 0;
+    if (
+      automatic.checked &&
+      current > retention &&
+      !confirm(
+        `Saving this policy will immediately keep only the newest ${retention} Installer recovery backup${
+          retention === 1 ? "" : "s"
+        } and delete ${current - retention} older backup${
+          current - retention === 1 ? "" : "s"
+        }. Continue?`
+      )
+    ) {
+      return;
+    }
+    await runInstallerBackupAction(
+      "set_policy",
+      {
+        automatic_retention: automatic.checked,
+        retention_count: retention,
+      },
+      button
+    );
+  }
+
+  async function applyInstallerBackupRetention() {
+    const limit = Number(lastInstallerBackupStatus?.retention_count ?? 5);
+    const current = Array.isArray(lastInstallerBackupStatus?.backups)
+      ? lastInstallerBackupStatus.backups.length
+      : 0;
+    const removeCount = Math.max(0, current - limit);
+    if (
+      removeCount &&
+      !confirm(
+        `Apply retention now? This will keep the newest ${limit} Installer recovery backup${
+          limit === 1 ? "" : "s"
+        } and delete ${removeCount} older backup${removeCount === 1 ? "" : "s"}.`
+      )
+    ) {
+      return;
+    }
+    await runInstallerBackupAction(
+      "apply_retention",
+      {},
+      el("applyInstallerBackupRetentionButton")
+    );
+  }
 
   function formatBytes(value) {
     const bytes = Number(value || 0);
@@ -372,10 +657,20 @@
   if (open) {
     open.addEventListener("click", () => {
       setView("maintenance");
+      loadInstallerBackups();
       loadBackups();
       scan();
     });
   }
+  el("refreshInstallerBackupsButton")?.addEventListener("click", () => loadInstallerBackups());
+  el("saveInstallerBackupPolicyButton")?.addEventListener("click", saveInstallerBackupPolicy);
+  el("createInstallerBackupButton")?.addEventListener("click", () =>
+    runInstallerBackupAction("create_backup", {}, el("createInstallerBackupButton"))
+  );
+  el("applyInstallerBackupRetentionButton")?.addEventListener(
+    "click",
+    applyInstallerBackupRetention
+  );
   el("refreshDiscoveryBackupsButton")?.addEventListener("click", loadBackups);
   el("scanMqttEntitiesButton")?.addEventListener("click", scan);
   el("repairMqttEntitiesButton")?.addEventListener("click", repair);
@@ -385,11 +680,16 @@
     new URLSearchParams(window.location.search).get("view") === "maintenance"
   ) {
     setView("maintenance");
+    loadInstallerBackups();
     loadBackups();
     scan();
   }
 
   window.SwitchVisionMaintenance = {
+    loadInstallerBackups,
+    runInstallerBackupAction,
+    saveInstallerBackupPolicy,
+    applyInstallerBackupRetention,
     loadBackups,
     removeBackup,
     scan,
