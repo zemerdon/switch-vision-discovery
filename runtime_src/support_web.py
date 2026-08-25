@@ -1085,7 +1085,8 @@ def _installer_maintenance_request(
         if not slug:
             raise RuntimeError("Switch Vision Installer slug could not be resolved.")
 
-        info_payload = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
+        info_path = f"/addons/{quote(slug, safe='')}/info"
+        info_payload = _supervisor_json(info_path)
         info = (
             info_payload.get("data")
             if isinstance(info_payload.get("data"), dict)
@@ -1096,6 +1097,35 @@ def _installer_maintenance_request(
                 "Switch Vision Installer 2.1.31 or later is required for "
                 "Maintenance backup controls."
             )
+
+        state = str(info.get("state") or "").strip().lower()
+        if state not in {"started", "running"}:
+            _supervisor_json(
+                f"/addons/{quote(slug, safe='')}/start",
+                method="POST",
+                timeout=30.0,
+            )
+            start_deadline = time.monotonic() + 20.0
+            while time.monotonic() < start_deadline:
+                refreshed_payload = _supervisor_json(info_path)
+                refreshed = (
+                    refreshed_payload.get("data")
+                    if isinstance(refreshed_payload.get("data"), dict)
+                    else refreshed_payload
+                )
+                state = (
+                    str(refreshed.get("state") or "").strip().lower()
+                    if isinstance(refreshed, dict)
+                    else ""
+                )
+                if state in {"started", "running"}:
+                    break
+                time.sleep(0.1)
+            else:
+                raise RuntimeError(
+                    "Switch Vision Installer did not reach a running state after "
+                    "Maintenance requested its start."
+                )
 
         request_id = f"maintenance-{time.monotonic_ns()}"
         command = {

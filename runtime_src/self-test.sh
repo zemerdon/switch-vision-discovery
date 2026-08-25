@@ -98,7 +98,15 @@ with tempfile.TemporaryDirectory() as tmp:
     def supervisor(path, *, method="GET", timeout=12.0, payload=None):
         calls.append((path, method, payload))
         if path.endswith("/info"):
-            return {"data": {"stdin": True}}
+            info_calls = len([call for call in calls if call[0].endswith("/info")])
+            return {
+                "data": {
+                    "stdin": True,
+                    "state": "stopped" if info_calls == 1 else "started",
+                }
+            }
+        if path.endswith("/start"):
+            return {"result": "ok"}
         if path.endswith("/stdin"):
             response_path.write_text(
                 json.dumps(
@@ -137,7 +145,10 @@ with tempfile.TemporaryDirectory() as tmp:
     )
     assert result["retention_count"] == 4
     assert result["backups"][0]["name"] == "switch-vision-test"
+    start_calls = [call for call in calls if call[0].endswith("/start")]
+    assert len(start_calls) == 1
     stdin_call = [call for call in calls if call[0].endswith("/stdin")][0]
+    assert calls.index(start_calls[0]) < calls.index(stdin_call)
     command = stdin_call[2]
     assert command["schema"] == "switch-vision-installer-maintenance-v1"
     assert command["action"] == "status"

@@ -4,6 +4,7 @@
 
 - Move Installer recovery backup management into Switch Vision → Maintenance while keeping Installer recovery backups physically private under `/data/switch-vision-backups`.
 - Use Home Assistant Supervisor's app STDIN control path instead of relaxing Installer's Supervisor-ingress-only HTTP boundary or adding direct app-to-app privileged HTTP.
+- Start the manual-boot Installer on demand through Supervisor before sending a Maintenance command, and fail closed if it does not reach a running state.
 - Add Maintenance controls for automatic retention on/off, a strict retained-backup count of 1–10, create, validate, restore, delete and manual retention.
 - Keep Installer full recovery backups clearly separate from Discovery retained configuration backups under `/share/switch_vision/backups/discovery/`.
 - Return only sanitized Installer backup metadata and operation state to Discovery; backup paths, saved option payloads, credentials and file contents are not exposed through the bridge.
