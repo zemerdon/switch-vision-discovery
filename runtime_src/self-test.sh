@@ -36,7 +36,14 @@ trap 'rm -f "$HP_TEST_WALK" "$HP_TEST_CAP"' EXIT HUP INT TERM
     i=$((i + 1))
   done
 } > "$HP_TEST_WALK"
-. "$BASE_DIR/opt/switch-vision/vendors/interface.sh"
+CV_MIB_DATABASE_DIR="$BASE_DIR/opt/switch-vision/mib_database"
+CV_VENDOR_DIR="$BASE_DIR/opt/switch-vision/vendors"
+. "$CV_VENDOR_DIR/base.sh"
+. "$CV_VENDOR_DIR/generic.sh"
+. "$CV_VENDOR_DIR/cisco.sh"
+. "$CV_VENDOR_DIR/known_vendor.sh"
+. "$CV_VENDOR_DIR/interface.sh"
+. "$CV_VENDOR_DIR/loader.sh"
 CV_ID_VENDOR="hp_aruba"
 CV_ID_VENDOR_NAME="HP / Aruba"
 CV_ID_FAMILY="3500yl"
@@ -48,10 +55,10 @@ jq -e '
   (.device.model_text | contains("J8693A"))
   and ([.interfaces[] | select(.physical == true)] | length == 48)
   and ([.interfaces[] | select(.media == "rj45")] | length == 44)
-  and ([.interfaces[] | select(.media == "sfp")] | length == 4)
+  and ([.interfaces[] | select(.media == "uplink")] | length == 4)
   and (any(.interfaces[]; .name == "44" and .media == "rj45" and .physical == true))
-  and (any(.interfaces[]; .name == "45" and .media == "sfp" and .physical == true))
-  and (any(.interfaces[]; .name == "48" and .media == "sfp" and .physical == true))
+  and (any(.interfaces[]; .name == "45" and .media == "uplink" and .physical == true))
+  and (any(.interfaces[]; .name == "48" and .media == "uplink" and .physical == true))
 ' "$HP_TEST_CAP" >/dev/null
 grep -Fq 'hp_3500yl_model = "HP J8693A Switch 3500yl-48G"' "$BASE_DIR/discovery_job.sh"
 grep -Fq 'hp_3500yl_model="HP J8693A Switch 3500yl-48G"' "$BASE_DIR/discovery_job.sh"

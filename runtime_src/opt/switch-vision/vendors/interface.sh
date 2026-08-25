@@ -93,7 +93,7 @@ cv_interface_class_for_name() {
   if [ "${CV_CAP_PLATFORM:-generic}" = "hp_3500yl_48g" ]; then
     case "$name" in
       [1-9]|[1-3][0-9]|4[0-4]) printf 'rj45'; return 0 ;;
-      4[5-8]) printf 'sfp'; return 0 ;;
+      4[5-8]) printf 'uplink'; return 0 ;;
       *) printf 'other'; return 0 ;;
     esac
   fi
