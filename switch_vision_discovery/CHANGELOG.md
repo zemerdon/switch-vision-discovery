@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.12
+
+- Synchronize Discovery's embedded device registry with the authoritative Core 2.6.7 support-status evidence for WS-C2960X-24TS-L and WS-C3560CG-8PC-S.
+- Return both models to Experimental while their recorded live dashboard, interface/activity, uplink/media, PoE/sensor or stack checks remain pending/candidate; preserve their existing hardware mapping, geometry, connector semantics and polling contracts.
+- Synchronize Dell N2128PX-ON public evidence wording with Core's privacy-neutral community-hardware metadata; Dell remains Experimental and its hardware contract is unchanged.
+- Extend the permanent Core/Discovery registry contract so shared support status, evidence and validation must remain synchronized; also pin Dell's privacy-neutral leading evidence note while preserving legitimate Discovery-specific runtime notes for other models.
+- Update the packaged support-status regression so evidence-backed Community Validated models stay promoted while WS-C2960X-24TS-L and WS-C3560CG-8PC-S remain Experimental until their pending live checks are completed.
+
 ## 2.3.11
 
 - Restore interface discovery for the exact HP J8693A / 3500yl-48G when IF-MIB exposes the 48 physical logical ports as numeric names.
