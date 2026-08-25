@@ -292,6 +292,7 @@ def main() -> int:
         "discovery_support",
         "dashboard_support",
     )
+    support_fields = ("status", "evidence", "validation")
     visual_fields = ("calibration_profile", "default_faceplate")
 
     for model in sorted(core_models.keys() & discovery_models.keys()):
@@ -307,6 +308,28 @@ def main() -> int:
             errors.append(
                 f"{model}: hardware contract drift in " + ", ".join(changed_hardware)
             )
+
+        changed_support = [
+            field
+            for field in support_fields
+            if core.get(field) != discovery.get(field)
+        ]
+        if changed_support:
+            errors.append(
+                f"{model}: support-status contract drift in " + ", ".join(changed_support)
+            )
+
+        if model == "N2128PX-ON":
+            core_notes = core.get("notes") if isinstance(core.get("notes"), list) else []
+            discovery_notes = (
+                discovery.get("notes") if isinstance(discovery.get("notes"), list) else []
+            )
+            core_first_note = core_notes[0] if core_notes else None
+            discovery_first_note = discovery_notes[0] if discovery_notes else None
+            if core_first_note != discovery_first_note:
+                errors.append(
+                    "N2128PX-ON: privacy-neutral public evidence note drift"
+                )
 
         changed_visuals = [
             field
