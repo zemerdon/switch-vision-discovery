@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.5
+
+- Tighten the new Hub settings form controls to a consistent 38px height with smaller vertical padding instead of inheriting the larger general Discovery form sizing.
+- Prevent CSS grid row stretching from shifting controls when a neighboring field has helper text, keeping MQTT password/community and ordinary text/number/select controls on the same top baseline.
+- Reduce Hub-only settings grid gaps while leaving the established Discovery, Support My Switch and other non-settings form layouts unchanged.
+- Add a packaged regression protecting the Hub-specific alignment and control-size contract.
+- No settings ownership, saved values, secret handling, switch mapping, geometry, connector, PoE, telemetry or support-status changes.
+
 ## 2.3.4
 
 - Make Switch Vision Hub the normal settings centre for Switch Vision Core, SNMP2MQTT and Discovery, while each component keeps its existing authoritative settings store.
