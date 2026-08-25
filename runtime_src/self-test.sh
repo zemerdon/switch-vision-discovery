@@ -44,6 +44,11 @@ grep -Fq 'line.className = "installer-backup-line"' "$BASE_DIR/maintenance.js"
 ! grep -Fq 'backup.contents.join' "$BASE_DIR/maintenance.js"
 grep -Fq 'restore_backup' "$BASE_DIR/maintenance.js"
 grep -Fq 'validate_backup' "$BASE_DIR/maintenance.js"
+grep -Fq '.validation-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:4px;margin-top:7px}' "$BASE_DIR/support_web.py"
+grep -Fq '.validation-item{display:flex;justify-content:space-between;align-items:center;gap:6px;border-top:1px solid var(--line);padding:4px 5px 2px}' "$BASE_DIR/support_web.py"
+! grep -Fq 'id="hubComponent-core" class="hub-component" open' "$BASE_DIR/support_web.py"
+! grep -Fq 'class="yaml-manager generated-card-manager" open' "$BASE_DIR/support_web.py"
+! grep -Fq 'class="yaml-manager" open' "$BASE_DIR/support_web.py"
 
 # v2.3.4 Hub-owned settings UX / authoritative-store / privacy regressions
 grep -Fq 'id="settingsCard"' "$BASE_DIR/support_web.py"

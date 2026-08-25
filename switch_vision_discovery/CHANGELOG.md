@@ -9,7 +9,9 @@
 - Reduce the sticky Save/Reload footer to a slim command bar by removing excess outer padding/margins while keeping the same shared 38px button geometry.
 - Compact detected-device facts into one responsive line (`Registry · Validated · Physical · RJ45`) instead of a four-row definition block.
 - Compact Installer recovery-backup rows into one responsive line containing backup name, timestamp and Switch Vision version, with actions alongside; remove the visible component inventory while preserving it in private backup metadata and restore validation.
-- Add a packaged regression protecting the compact card structure, all profile actions, hidden-only technical metadata, duplicate-state behavior, compact toggle columns, slim Save bar, compact device facts and compact backup rows.
+- Tighten detected-device validation status cells by reducing their grid gap, top margin and internal padding while preserving status colour/readability.
+- Start all collapsible Hub sections closed by default, including Core Settings and both generated-YAML managers; direct settings shortcuts still expand the requested component programmatically.
+- Add a packaged regression protecting the compact card structure, all profile actions, hidden-only technical metadata, duplicate-state behavior, compact toggle columns, slim Save bar, compact device facts/backups, compact validation cells and collapsed defaults.
 - No settings ownership, switch mapping, physical geometry, connector, PoE, telemetry, maximum-capability, support-status or privacy contracts change.
 
 ## 2.3.7
