@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.3.9
+
+- Consolidate the Hub landing page around one Switch Vision Settings card: remove the redundant Discovery Settings and SNMP2MQTT Settings homepage cards while keeping both settings sections fully available inside Switch Vision Settings.
+- Give the Switch Vision Settings homepage card exactly three concise bullets: UI Settings, Discovery Settings and SNMP2MQTT Settings.
+- Tighten Hub settings option rows vertically by reducing toggle minimum height, internal padding and checkbox-to-label spacing without changing the shared 38px input/select/button geometry.
+- Tighten the two-column option layout horizontally, reduce subsection/header spacing, and compact Shortcut order row spacing while preserving responsive one-column mobile behavior.
+- Add permanent packaged regressions protecting the consolidated homepage navigation and the tighter Hub settings spacing contract.
+- No settings ownership, secret handling, switch mapping, physical geometry, connector, PoE, telemetry, maximum-capability, support-status or privacy contracts change.
+
 ## 2.3.8
 
 - Compact Calibration Profiles cards into one visual block by placing the action controls inline with the Internal profile row on desktop and wrapping them beneath it on narrow screens.
