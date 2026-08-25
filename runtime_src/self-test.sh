@@ -21,6 +21,69 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
+# v2.3.4 Hub-owned settings UX / authoritative-store / privacy regressions
+grep -Fq 'id="settingsCard"' "$BASE_DIR/support_web.py"
+grep -Fq 'id="hubSettingsSave"' "$BASE_DIR/support_web.py"
+grep -Fq '/api/settings/core' "$BASE_DIR/support_web.py"
+grep -Fq '/api/settings/snmp2mqtt' "$BASE_DIR/support_web.py"
+grep -Fq '/api/settings/discovery' "$BASE_DIR/support_web.py"
+grep -Fq "SwitchVisionHubSettings?.open('core')" "$BASE_DIR/support_web.py"
+grep -Fq "SwitchVisionHubSettings?.open('snmp2mqtt')" "$BASE_DIR/support_web.py"
+grep -Fq "SwitchVisionHubSettings?.open('discovery')" "$BASE_DIR/support_web.py"
+grep -Fq 'Normal (~15.7 px)' "$BASE_DIR/support_web.py"
+grep -Fq 'Small (14.4 px)' "$BASE_DIR/support_web.py"
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_HUB_SETTINGS'
+import copy
+import support_web
+
+# Core uses only its admin WebSocket contract.
+ws=[]
+def fake_ws(command):
+    ws.append(copy.deepcopy(command))
+    return {"schema_version":1,"settings":{"sidebar":{"show_panel_in_sidebar":True}},"defaults":{}}
+support_web._home_assistant_ws=fake_ws
+assert support_web._core_settings_status()["settings"]
+support_web._save_core_settings({"settings":{"sidebar":{"show_panel_in_sidebar":False}}})
+assert ws[-1]["type"]=="switch_vision/set_settings"
+
+# SNMP2MQTT secrets never return; blank preserves; required HA discovery is fail-closed.
+snmp={"mqtt":{"host":"core-mosquitto","port":1883,"username":"u","password":"PRIVATE_MQTT_PASSWORD"},"targets_path":"/config/app_configs/switch_vision_snmp2mqtt/targets.yaml","use_switch_vision_generated_yaml":True,"switch_vision_generated_yaml_path":"/share/switch_vision/generated-snmp2mqtt.yaml","imported_targets_path":"/config/app_configs/switch_vision_snmp2mqtt/imported/generated-snmp2mqtt.yaml","backup_existing_config":False,"homeassistant":{"discovery":False,"prefix":"old"},"future":"keep"}
+support_web._find_snmp2mqtt_addon=lambda:{"slug":"switch_vision_snmp2mqtt","state":"started"}
+def sup(path,method="GET",timeout=12.0,payload=None):
+    if path.endswith('/info'): return {"data":{"state":"started","options":copy.deepcopy(snmp)}}
+    if path.endswith('/options'):
+        snmp.clear();snmp.update(copy.deepcopy(payload["options"]));return {"result":"ok"}
+    if path.endswith('/restart'): return {"result":"ok"}
+    raise AssertionError(path)
+support_web._supervisor_json=sup
+st=support_web._snmp2mqtt_settings_status();assert st["password_configured"] and "PRIVATE_MQTT_PASSWORD" not in repr(st)
+r=copy.deepcopy(st["settings"]);r["mqtt"]["host"]="mqtt.local"
+saved=support_web._save_snmp2mqtt_settings({"settings":r})
+assert snmp["mqtt"]["password"]=="PRIVATE_MQTT_PASSWORD" and snmp["future"]=="keep"
+assert snmp["homeassistant"]=={"discovery":True,"prefix":"homeassistant"} and "PRIVATE_MQTT_PASSWORD" not in repr(saved)
+bad=copy.deepcopy(r);bad["homeassistant"]={"discovery":False,"prefix":"wrong"}
+try: support_web._save_snmp2mqtt_settings({"settings":bad})
+except ValueError: pass
+else: raise AssertionError('noncanonical SNMP2MQTT HA discovery accepted')
+
+# Discovery SNMP community and contributor identity are write-only; blank preserves both.
+disc={"input_path":"/share/switch_vision/snmpwalk.txt","snmpwalks_dir":"/share/switch_vision/snmpwalks","report_path":"/share/switch_vision/discovery-report.txt","run_snmp_walks":"true","enable_switch_list":"true","switches":[{"switch_name":"SW1","display_name":"Lab","switch_host":"192.0.2.10","sensor_prefix":"sw1","snmp_community":"PRIVATE_SNMP_COMMUNITY","enabled":"enabled","walk_mode":"targeted","switch_model":"auto","card_header_title":""}],"stack_member_prefixes":[],"parse_all_walks":"false","generate_snmp2mqtt":"true","clean_output_before_walk":"false","targets_csv":"/share/switch_vision/discovery-targets.csv","last_run_summary_path":"/share/switch_vision/last-discovery-run.txt","generated_yaml_path":"/share/switch_vision/generated-snmp2mqtt.yaml","generated_card_path":"/share/switch_vision/generated-dashboard-card.yaml","snmp_timeout":"3","snmp_retries":"1","snmp_log_path":"/share/switch_vision/snmpwalk.log","minimum_valid_walk_lines":"100","backup_retention_enabled":"true","backup_retention_count":5,"generate_support_my_switch_bundle":"true","support_mask_management_ips":"true","support_mask_mac_addresses":"true","support_mask_hostnames":"true","support_mask_vlan_names":"true","support_mask_interface_descriptions":"true","support_contributor_type":"forum","support_contributor_value":"PRIVATE_CONTRIBUTOR","future":"keep-too"}
+def dsup(path,method="GET",timeout=12.0,payload=None):
+    if path=='/addons/self/info': return {"data":{"options":copy.deepcopy(disc)}}
+    if path=='/addons/self/options': disc.clear();disc.update(copy.deepcopy(payload["options"]));return {"result":"ok"}
+    raise AssertionError(path)
+support_web._supervisor_json=dsup
+support_web._manual_snmp_override_models=lambda:{"WS-C3650-48PD-E"}
+support_web.create_pre_mutation_backup=lambda *a,**k:None
+support_web.enforce_retention=lambda *a,**k:None
+st=support_web._discovery_settings_status();assert "PRIVATE_SNMP_COMMUNITY" not in repr(st) and "PRIVATE_CONTRIBUTOR" not in repr(st)
+r=copy.deepcopy(st["settings"]);r["snmp_timeout"]="4"
+saved=support_web._save_discovery_settings({"settings":r})
+assert disc["switches"][0]["snmp_community"]=="PRIVATE_SNMP_COMMUNITY" and disc["support_contributor_value"]=="PRIVATE_CONTRIBUTOR" and disc["future"]=="keep-too"
+assert "PRIVATE_SNMP_COMMUNITY" not in repr(saved) and "PRIVATE_CONTRIBUTOR" not in repr(saved)
+print('Switch Vision Discovery v2.3.4 Hub settings ownership/privacy: PASS')
+PY_HUB_SETTINGS
+
 # v2.3.1 Supervisor ingress source gate regression
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_INGRESS_GATE'
 from http import HTTPStatus
@@ -1385,8 +1448,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.3"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.3"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.4"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.4"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco

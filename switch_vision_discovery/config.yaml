@@ -1,5 +1,5 @@
 name: Switch Vision Discovery
-version: "2.3.3"
+version: "2.3.4"
 slug: switch_vision_discovery
 description: Read-only multi-vendor switch discovery, capability reporting, and review-only SNMP2MQTT/dashboard generation for Switch Vision.
 url: https://github.com/zemerdon/switch-vision-discovery
@@ -11,6 +11,7 @@ boot: auto
 init: false
 ingress: true
 ingress_port: 8099
+panel_admin: true
 hassio_api: true
 homeassistant_api: true
 hassio_role: manager
