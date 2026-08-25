@@ -57,8 +57,8 @@ grep -Fq '/api/settings/core' "$BASE_DIR/support_web.py"
 grep -Fq '/api/settings/snmp2mqtt' "$BASE_DIR/support_web.py"
 grep -Fq '/api/settings/discovery' "$BASE_DIR/support_web.py"
 grep -Fq "SwitchVisionHubSettings?.open('core')" "$BASE_DIR/support_web.py"
-grep -Fq "SwitchVisionHubSettings?.open('snmp2mqtt')" "$BASE_DIR/support_web.py"
-grep -Fq "SwitchVisionHubSettings?.open('discovery')" "$BASE_DIR/support_web.py"
+grep -Fq 'id="hubComponent-snmp2mqtt"' "$BASE_DIR/support_web.py"
+grep -Fq 'id="hubComponent-discovery"' "$BASE_DIR/support_web.py"
 # v2.3.7 explicit font range + shared Hub component geometry regression
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/hub_density_regression.py"
 # v2.3.6 themed visual hierarchy / elegance regression
