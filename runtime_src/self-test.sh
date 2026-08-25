@@ -51,6 +51,7 @@ PY_INGRESS_GATE
 # v2.2.0 Maintenance Hub MQTT ownership/reconciliation regression
 python3 -m py_compile "$BASE_DIR/discovery_backups.py" "$BASE_DIR/discovery_backups_regression.py" "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py" "$BASE_DIR/walk_correlation.py"
 grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
+grep -Fq '<span>Manage backups</span>' "$BASE_DIR/support_web.py"
 grep -Fq 'id="maintenanceCard"' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/scan' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/repair' "$BASE_DIR/support_web.py"

@@ -3399,7 +3399,7 @@ body.density-dense .step{padding:7px 9px}
 <button id="openSupportButton" class="nav-card" type="button"><b>Support My Switch</b><span class="nav-points"><span>Create contribution package to add/increase support for your switch</span></span></button>
 <button id="openDiagnosticsButton" class="nav-card" type="button"><b>Detected Device Information</b><span class="nav-points"><span>Detailed device(s) information</span></span></button>
 <button id="openConfigurationButton" class="nav-card" type="button"><b>Import / Export Configuration</b><span class="nav-points"><span>Import / export Discovery configuration</span></span></button>
-<button id="openMaintenanceButton" class="nav-card" type="button"><b>Maintenance</b><span class="nav-points"><span>Repair stale MQTT entities</span><span>Reset generated SNMP data</span></span></button>
+<button id="openMaintenanceButton" class="nav-card" type="button"><b>Maintenance</b><span class="nav-points"><span>Manage backups</span><span>Repair stale MQTT entities</span><span>Reset generated SNMP data</span></span></button>
 </div>
 <div class="nav-grid" style="margin-top:12px">
 <button id="openIntegrationSettingsButton" class="nav-card" type="button"><b>Switch Vision Settings</b><span class="nav-points"><span>Sidebar toggles</span><span>Native card options</span><span>UI font &amp; display</span></span></button>
