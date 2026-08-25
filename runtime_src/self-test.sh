@@ -36,7 +36,7 @@ grep -Fq '.hub-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(26
 grep -Fq '.hub-settings-actions{position:sticky;bottom:0;display:flex;gap:6px' "$BASE_DIR/support_web.py"
 grep -Fq 'padding:3px 6px;margin:10px -6px -4px' "$BASE_DIR/support_web.py"
 grep -Fq '.hub-settings-status{margin:0 0 0 auto;line-height:1.2}' "$BASE_DIR/support_web.py"
-grep -Fq 'className="device-meta-line"' "$BASE_DIR/support_web.py"
+grep -Fq "className='device-meta-line'" "$BASE_DIR/support_web.py"
 grep -Fq "['Registry',d.registry_match?'Yes':'No']" "$BASE_DIR/support_web.py"
 grep -Fq "['Validated',d.registry_last_validated_version" "$BASE_DIR/support_web.py"
 grep -Fq 'row.className = "device-card installer-backup-row"' "$BASE_DIR/maintenance.js"
