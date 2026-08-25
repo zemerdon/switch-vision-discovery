@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.3.8
+
+- Compact Calibration Profiles cards into one visual block by placing the action controls inline with the Internal profile row on desktop and wrapping them beneath it on narrow screens.
+- Remove the visible Base profile, Faceplate exists and SHA-256 detail rows; base-profile compatibility, faceplate-existence state and integrity/duplicate metadata remain available to backend/runtime logic.
+- Remove the old separator/details band and excess action-row margin while preserving the shared Hub control/button geometry and tightening only the spacing between profile actions.
+- Compact Settings checkbox/toggle groups into left-anchored content-width columns instead of two half-card columns, reducing wasted horizontal space while preserving one-column mobile stacking.
+- Reduce the sticky Save/Reload footer to a slim command bar by removing excess outer padding/margins while keeping the same shared 38px button geometry.
+- Compact detected-device facts into one responsive line (`Registry · Validated · Physical · RJ45`) instead of a four-row definition block.
+- Compact Installer recovery-backup rows into one responsive line containing backup name, timestamp and Switch Vision version, with actions alongside; remove the visible component inventory while preserving it in private backup metadata and restore validation.
+- Tighten detected-device validation status cells by reducing their grid gap, top margin and internal padding while preserving status colour/readability.
+- Start all collapsible Hub sections closed by default, including Core Settings and both generated-YAML managers; direct settings shortcuts still expand the requested component programmatically.
+- Add a packaged regression protecting the compact card structure, all profile actions, hidden-only technical metadata, duplicate-state behavior, compact toggle columns, slim Save bar, compact device facts/backups, compact validation cells and collapsed defaults.
+- No settings ownership, switch mapping, physical geometry, connector, PoE, telemetry, maximum-capability, support-status or privacy contracts change.
+
 ## 2.3.7
 
 - Introduce one shared Hub component geometry contract across Core, SNMP2MQTT and Discovery settings: common 38px controls, radii, padding, field/helper spacing, toggle alignment, subsection rows, buttons, grid gaps and responsive behavior.

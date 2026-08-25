@@ -97,17 +97,18 @@
     } else {
       for (const backup of backups) {
         const row = document.createElement("div");
-        row.className = "device-card";
+        row.className = "device-card installer-backup-row";
+        const line = document.createElement("div");
+        line.className = "installer-backup-line";
         const title = document.createElement("strong");
         title.textContent = backup.name || "Installer recovery backup";
-        const detail = document.createElement("div");
-        detail.className = "muted";
-        const version = backup.version ? ` · Switch Vision v${backup.version}` : "";
-        const contents =
-          Array.isArray(backup.contents) && backup.contents.length
-            ? ` · ${backup.contents.join(", ")}`
-            : "";
-        detail.textContent = `${backup.created_at || "Unknown time"}${version}${contents}`;
+        const created = document.createElement("span");
+        created.className = "muted";
+        created.textContent = backup.created_at || "Unknown time";
+        const version = document.createElement("span");
+        version.className = "muted";
+        version.textContent = backup.version ? `Switch Vision v${backup.version}` : "Version unknown";
+        line.append(title, created, version);
 
         const actions = document.createElement("div");
         actions.className = "actions";
@@ -143,7 +144,7 @@
           }
         });
         actions.append(validate, restore, remove);
-        row.append(title, detail, actions);
+        row.append(line, actions);
         list.appendChild(row);
       }
     }

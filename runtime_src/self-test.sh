@@ -21,6 +21,35 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
+# v2.3.8 compact calibration-profile card regression
+grep -Fq 'class="sv-profile-meta-actions"' "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'class="sv-profile-internal"' "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'data-profile-export=' "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'data-profile-import=' "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'data-profile-copy=' "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'data-profile-delete=' "$BASE_DIR/calibration_profiles.js"
+! grep -Fq '<b>Base profile:</b>' "$BASE_DIR/calibration_profiles.js"
+! grep -Fq '<b>Faceplate exists:</b>' "$BASE_DIR/calibration_profiles.js"
+! grep -Fq '<b>SHA-256:</b>' "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'duplicate_faceplate_content' "$BASE_DIR/calibration_profiles.js"
+grep -Fq '.hub-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,340px));column-gap:14px;justify-content:start;align-items:start}' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-settings-actions{position:sticky;bottom:0;display:flex;gap:6px' "$BASE_DIR/support_web.py"
+grep -Fq 'padding:3px 6px;margin:10px -6px -4px' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-settings-status{margin:0 0 0 auto;line-height:1.2}' "$BASE_DIR/support_web.py"
+grep -Fq "className='device-meta-line'" "$BASE_DIR/support_web.py"
+grep -Fq "['Registry',d.registry_match?'Yes':'No']" "$BASE_DIR/support_web.py"
+grep -Fq "['Validated',d.registry_last_validated_version" "$BASE_DIR/support_web.py"
+grep -Fq 'row.className = "device-card installer-backup-row"' "$BASE_DIR/maintenance.js"
+grep -Fq 'line.className = "installer-backup-line"' "$BASE_DIR/maintenance.js"
+! grep -Fq 'backup.contents.join' "$BASE_DIR/maintenance.js"
+grep -Fq 'restore_backup' "$BASE_DIR/maintenance.js"
+grep -Fq 'validate_backup' "$BASE_DIR/maintenance.js"
+grep -Fq '.validation-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:4px;margin-top:7px}' "$BASE_DIR/support_web.py"
+grep -Fq '.validation-item{display:flex;justify-content:space-between;align-items:center;gap:6px;border-top:1px solid var(--line);padding:4px 5px 2px}' "$BASE_DIR/support_web.py"
+! grep -Fq 'id="hubComponent-core" class="hub-component" open' "$BASE_DIR/support_web.py"
+! grep -Fq 'class="yaml-manager generated-card-manager" open' "$BASE_DIR/support_web.py"
+! grep -Fq 'class="yaml-manager" open' "$BASE_DIR/support_web.py"
+
 # v2.3.4 Hub-owned settings UX / authoritative-store / privacy regressions
 grep -Fq 'id="settingsCard"' "$BASE_DIR/support_web.py"
 grep -Fq 'id="hubSettingsSave"' "$BASE_DIR/support_web.py"
@@ -1458,8 +1487,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.7"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.7"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.8"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.8"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco

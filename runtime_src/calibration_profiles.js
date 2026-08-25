@@ -181,15 +181,25 @@
         font-size:var(--sv-font-small)
       }
 
-      .sv-profile-details{
+      .sv-profile-meta-actions{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        flex-wrap:wrap;
         margin-top:9px;
-        padding-top:9px;
-        border-top:1px solid var(--line-soft);
-        font-size:var(--sv-font-small);
-        line-height:1.55
+        font-size:var(--sv-font-small)
       }
 
-      .sv-profile-details code{
+      .sv-profile-internal{
+        display:flex;
+        align-items:baseline;
+        gap:5px;
+        min-width:0;
+        flex:1 1 260px;
+        line-height:1.4
+      }
+
+      .sv-profile-internal code{
         word-break:break-all
       }
 
@@ -197,13 +207,19 @@
         display:flex;
         justify-content:flex-end;
         align-items:center;
-        gap:8px;
+        gap:6px;
+        flex:0 1 auto;
         flex-wrap:wrap;
-        margin-top:12px
+        margin:0
       }
 
       .sv-profile-actions select{
-        max-width:260px
+        max-width:220px
+      }
+
+      @media(max-width:720px){
+        .sv-profile-internal{flex-basis:100%}
+        .sv-profile-actions{justify-content:flex-start;width:100%}
       }
 
       .sv-profile-empty{
@@ -482,16 +498,6 @@
             item.model || "Unknown model"
           );
 
-        const sha =
-          String(
-            item.faceplate_sha256 || ""
-          );
-
-        const duplicates =
-          Array.isArray(item.duplicate_faceplates)
-            ? item.duplicate_faceplates
-            : [];
-
         const protectedProfile =
           item.active === true ||
           scope === "factory";
@@ -591,26 +597,6 @@
             )
             .join("");
 
-        const duplicateText =
-          duplicates.length > 1
-            ? (
-                `<div>` +
-                `<b>Same image content:</b> ` +
-                `${duplicates.map(esc).join(", ")}` +
-                `</div>`
-              )
-            : "";
-
-        const fingerprintText =
-          sha
-            ? (
-                `<div>` +
-                `<b>SHA-256:</b> ` +
-                `<code>${esc(sha)}</code>` +
-                `</div>`
-              )
-            : "";
-
         return `
           <article class="${classes.join(" ")}">
 
@@ -646,97 +632,78 @@
               · Faceplate: ${esc(faceplate)}
             </div>
 
-            <div class="sv-profile-details">
-              <div>
+            <div class="sv-profile-meta-actions">
+              <div class="sv-profile-internal">
                 <b>Internal profile:</b>
                 <code>${esc(profile)}</code>
               </div>
 
-              <div>
-                <b>Base profile:</b>
-                <code>${esc(base)}</code>
-              </div>
+              <div class="sv-profile-actions">
+                <button
+                  type="button"
+                  data-profile-export="${index}"
+                >
+                  Export Profile
+                </button>
 
-              <div>
-                <b>Faceplate exists:</b>
                 ${
-                  item.faceplate_exists === false
-                    ? "No"
-                    : "Yes"
+                  scope !== "factory" &&
+                  item.stale !== true
+                    ? `
+                      <button
+                        type="button"
+                        data-profile-import="${index}"
+                      >
+                        Import Into Profile
+                      </button>
+
+                      <input
+                        type="file"
+                        accept="application/json,.json"
+                        data-profile-import-file="${index}"
+                        hidden
+                      >
+                    `
+                    : ""
                 }
-              </div>
 
-              ${duplicateText}
-              ${fingerprintText}
-            </div>
-
-            <div class="sv-profile-actions">
-
-              <button
-                type="button"
-                data-profile-export="${index}"
-              >
-                Export Profile
-              </button>
-
-              ${
-                scope !== "factory" &&
-                item.stale !== true
-                  ? `
-                    <button
-                      type="button"
-                      data-profile-import="${index}"
-                    >
-                      Import Into Profile
-                    </button>
-
-                    <input
-                      type="file"
-                      accept="application/json,.json"
-                      data-profile-import-file="${index}"
-                      hidden
-                    >
-                  `
-                  : ""
-              }
-
-              ${
-                copyTargets.length
-                  ? `
-                    <select
-                      data-profile-copy-target="${index}"
-                    >
-                      <option value="">
-                        Copy to…
-                      </option>
-                      ${copyOptions}
-                    </select>
-
-                    <button
-                      type="button"
-                      data-profile-copy="${index}"
-                    >
-                      Copy Profile
-                    </button>
-                  `
-                  : ""
-              }
-
-              <button
-                type="button"
-                class="danger"
-                data-profile-delete="${index}"
-                ${protectedProfile ? "disabled" : ""}
-              >
                 ${
-                  scope === "factory"
-                    ? "Factory — Protected"
-                    : item.active === true
-                      ? "Active — Protected"
-                      : "Delete Profile"
-                }
-              </button>
+                  copyTargets.length
+                    ? `
+                      <select
+                        data-profile-copy-target="${index}"
+                      >
+                        <option value="">
+                          Copy to…
+                        </option>
+                        ${copyOptions}
+                      </select>
 
+                      <button
+                        type="button"
+                        data-profile-copy="${index}"
+                      >
+                        Copy Profile
+                      </button>
+                    `
+                    : ""
+                }
+
+                <button
+                  type="button"
+                  class="danger"
+                  data-profile-delete="${index}"
+                  ${protectedProfile ? "disabled" : ""}
+                >
+                  ${
+                    scope === "factory"
+                      ? "Factory — Protected"
+                      : item.active === true
+                        ? "Active — Protected"
+                        : "Delete Profile"
+                  }
+                </button>
+              </div>
             </div>
           </article>
         `;
