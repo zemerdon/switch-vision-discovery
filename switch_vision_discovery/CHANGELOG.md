@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.10
+
+- Apply a Hub-wide option/field-label hierarchy using theme-owned muted blue-grey label colours while preserving brighter section headings, dimmer helper text and normal input/value text.
+- Consolidate Maintenance backup management into the Installer Recovery Backups section: replace the checkbox/policy form with one Automatic retention toggle button, remove the visible retained-limit control, remove the Installer version summary tile, and remove the duplicate Discovery Configuration Backups UI.
+- Render the retained-backup count directly from the same backup array used to render rows so the visible count cannot disagree with the visible list in one render pass.
+- Compact retained Installer backups into single-line desktop rows with responsive wrapping on narrow screens, keeping Validate, Restore and Delete actions.
+- Preserve the existing private Installer backup transport, internal retention policy value, Discovery pre-mutation backup backend, restore validation, secret handling and privacy boundaries.
+- Add permanent packaged regressions for the four-theme label palette, consolidated backup manager, toggle wiring, count/list source-of-truth and hidden duplicate Discovery backup UI.
+- No switch mapping, physical geometry, connector, PoE, telemetry, maximum-capability, support-status or Core source contract changes.
+
 ## 2.3.9
 
 - Consolidate the Hub landing page around one Switch Vision Settings card: remove the redundant Discovery Settings and SNMP2MQTT Settings homepage cards while keeping both settings sections fully available inside Switch Vision Settings.

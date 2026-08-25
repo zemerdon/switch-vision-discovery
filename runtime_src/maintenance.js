@@ -1,6 +1,5 @@
 (() => {
   let lastPlan = null;
-  let lastBackupStatus = null;
   let lastInstallerBackupStatus = null;
   let installerPollTimer = null;
 
@@ -30,10 +29,7 @@
   function setInstallerControlsDisabled(disabled) {
     for (const id of [
       "installerBackupAutomaticRetention",
-      "installerBackupRetentionCount",
-      "saveInstallerBackupPolicyButton",
       "createInstallerBackupButton",
-      "applyInstallerBackupRetentionButton",
       "refreshInstallerBackupsButton",
     ]) {
       const node = el(id);
@@ -47,47 +43,30 @@
     const summary = el("installerBackupSummary");
     const list = el("installerBackupList");
     const automatic = el("installerBackupAutomaticRetention");
-    const count = el("installerBackupRetentionCount");
-    if (!summary || !list || !automatic || !count) return;
+    if (!summary || !list || !automatic) return;
 
     summary.replaceChildren();
     list.replaceChildren();
 
     if (!lastInstallerBackupStatus) {
       setInstallerControlsDisabled(true);
+      automatic.setAttribute("aria-pressed", "false");
+      automatic.classList.remove("primary");
+      automatic.textContent = "Automatic retention: Unavailable";
+      summary.textContent = "Backup status unavailable";
       return;
     }
 
-    automatic.checked = Boolean(lastInstallerBackupStatus.automatic_retention);
-    count.value = String(lastInstallerBackupStatus.retention_count ?? 5);
+    const retentionEnabled = Boolean(lastInstallerBackupStatus.automatic_retention);
+    automatic.setAttribute("aria-pressed", String(retentionEnabled));
+    automatic.classList.toggle("primary", retentionEnabled);
+    automatic.textContent = `Automatic retention: ${retentionEnabled ? "On" : "Off"}`;
     setInstallerControlsDisabled(false);
 
     const backups = Array.isArray(lastInstallerBackupStatus.backups)
       ? lastInstallerBackupStatus.backups
       : [];
-    const fields = [
-      ["Automatic retention", automatic.checked ? "On" : "Off"],
-      ["Retained limit", lastInstallerBackupStatus.retention_count ?? 5],
-      ["Current backups", backups.length],
-      [
-        "Installer",
-        lastInstallerBackupStatus.installer_version
-          ? `v${lastInstallerBackupStatus.installer_version}`
-          : "Available",
-      ],
-    ];
-    for (const [label, value] of fields) {
-      const tile = document.createElement("div");
-      tile.className = "diag-tile";
-      const name = document.createElement("div");
-      name.className = "muted";
-      name.textContent = label;
-      const content = document.createElement("div");
-      content.className = "diag-value";
-      content.textContent = String(value);
-      tile.append(name, content);
-      summary.appendChild(tile);
-    }
+    summary.textContent = `${backups.length} retained backup${backups.length === 1 ? "" : "s"}`;
 
     if (!backups.length) {
       const empty = document.createElement("div");
@@ -182,10 +161,8 @@
         status.textContent =
           operationMessage ||
           (data.automatic_retention
-            ? `Automatic retention is on; keeping the newest ${data.retention_count} backup${
-                Number(data.retention_count) === 1 ? "" : "s"
-              }.`
-            : "Automatic retention is off. Existing Installer recovery backups are kept until you delete them or apply retention manually.");
+            ? "Automatic retention is on."
+            : "Automatic retention is off. Existing Installer recovery backups are kept until you delete them manually.");
       }
     } catch (error) {
       renderInstallerBackups(null);
@@ -230,72 +207,43 @@
     }
   }
 
-  async function saveInstallerBackupPolicy() {
-    const automatic = el("installerBackupAutomaticRetention");
-    const count = el("installerBackupRetentionCount");
-    const button = el("saveInstallerBackupPolicyButton");
-    if (!automatic || !count) return;
-    const retention = Number(count.value);
+  async function toggleInstallerBackupRetention() {
+    const button = el("installerBackupAutomaticRetention");
+    if (!button || !lastInstallerBackupStatus) return;
+
+    const retention = Number(lastInstallerBackupStatus.retention_count ?? 5);
     if (!Number.isInteger(retention) || retention < 1 || retention > 10) {
       el("installerBackupStatus").textContent =
-        "Retained backup count must be between 1 and 10.";
+        "Stored Installer retention policy is invalid.";
       return;
     }
-    const current = Array.isArray(lastInstallerBackupStatus?.backups)
+
+    const currentlyEnabled = Boolean(lastInstallerBackupStatus.automatic_retention);
+    const current = Array.isArray(lastInstallerBackupStatus.backups)
       ? lastInstallerBackupStatus.backups.length
       : 0;
+    const removeCount = Math.max(0, current - retention);
+
     if (
-      automatic.checked &&
-      current > retention &&
+      !currentlyEnabled &&
+      removeCount &&
       !confirm(
-        `Saving this policy will immediately keep only the newest ${retention} Installer recovery backup${
-          retention === 1 ? "" : "s"
-        } and delete ${current - retention} older backup${
-          current - retention === 1 ? "" : "s"
-        }. Continue?`
+        `Enable automatic retention? Installer will immediately apply its existing retention policy and delete ${removeCount} older backup${
+          removeCount === 1 ? "" : "s"
+        }.`
       )
     ) {
       return;
     }
+
     await runInstallerBackupAction(
       "set_policy",
       {
-        automatic_retention: automatic.checked,
+        automatic_retention: !currentlyEnabled,
         retention_count: retention,
       },
       button
     );
-  }
-
-  async function applyInstallerBackupRetention() {
-    const limit = Number(lastInstallerBackupStatus?.retention_count ?? 5);
-    const current = Array.isArray(lastInstallerBackupStatus?.backups)
-      ? lastInstallerBackupStatus.backups.length
-      : 0;
-    const removeCount = Math.max(0, current - limit);
-    if (
-      removeCount &&
-      !confirm(
-        `Apply retention now? This will keep the newest ${limit} Installer recovery backup${
-          limit === 1 ? "" : "s"
-        } and delete ${removeCount} older backup${removeCount === 1 ? "" : "s"}.`
-      )
-    ) {
-      return;
-    }
-    await runInstallerBackupAction(
-      "apply_retention",
-      {},
-      el("applyInstallerBackupRetentionButton")
-    );
-  }
-
-  function formatBytes(value) {
-    const bytes = Number(value || 0);
-    if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
   }
 
   function safeExportPlan(plan) {
@@ -325,139 +273,6 @@
         credentials_included: false,
       },
     };
-  }
-
-  function renderBackups(data) {
-    lastBackupStatus = data && typeof data === "object" ? data : null;
-    const summary = el("discoveryBackupSummary");
-    const list = el("discoveryBackupList");
-    if (!summary || !list) return;
-    summary.replaceChildren();
-    list.replaceChildren();
-
-    if (!lastBackupStatus) return;
-
-    const fields = [
-      ["Automatic retention", lastBackupStatus.automatic_retention ? "On" : "Off"],
-      ["Retained limit", lastBackupStatus.retained_limit ?? 5],
-      ["Current backups", lastBackupStatus.count ?? 0],
-    ];
-    for (const [label, value] of fields) {
-      const tile = document.createElement("div");
-      tile.className = "diag-tile";
-      const name = document.createElement("div");
-      name.className = "muted";
-      name.textContent = label;
-      const content = document.createElement("div");
-      content.className = "diag-value";
-      content.textContent = String(value);
-      tile.append(name, content);
-      summary.appendChild(tile);
-    }
-
-    const backups = Array.isArray(lastBackupStatus.backups)
-      ? lastBackupStatus.backups
-      : [];
-    if (!backups.length) {
-      const empty = document.createElement("div");
-      empty.className = "muted";
-      empty.textContent = "No retained Discovery configuration backups.";
-      list.appendChild(empty);
-      return;
-    }
-
-    for (const backup of backups) {
-      const row = document.createElement("div");
-      row.className = "device-card";
-      const title = document.createElement("strong");
-      title.textContent = backup.name || "Discovery backup";
-      const detail = document.createElement("div");
-      detail.className = "muted";
-      detail.textContent = `${backup.time || "Unknown time"} · ${formatBytes(
-        backup.size
-      )}`;
-      const actions = document.createElement("div");
-      actions.className = "actions";
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "danger";
-      remove.textContent = "Remove Backup";
-      remove.addEventListener("click", () => removeBackup(backup.name, remove));
-      actions.appendChild(remove);
-      row.append(title, detail, actions);
-      list.appendChild(row);
-    }
-  }
-
-  async function loadBackups() {
-    const status = el("discoveryBackupStatus");
-    const refresh = el("refreshDiscoveryBackupsButton");
-    if (refresh) refresh.disabled = true;
-    if (status) status.textContent = "Loading retained Discovery backups…";
-    try {
-      const response = await fetch(
-        endpoint("api/maintenance/discovery-backups"),
-        { cache: "no-store" }
-      );
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Discovery backup status failed");
-      }
-      renderBackups(data);
-      if (status) {
-        status.textContent = data.automatic_retention
-          ? `Automatic retention is on; keeping up to ${data.retained_limit} backup${
-              Number(data.retained_limit) === 1 ? "" : "s"
-            }.`
-          : "Automatic retention is off. Existing backups remain until you remove them manually.";
-      }
-    } catch (error) {
-      renderBackups(null);
-      if (status) {
-        status.textContent = `Could not load Discovery backups: ${
-          error.message || error
-        }`;
-      }
-    } finally {
-      if (refresh) refresh.disabled = false;
-    }
-  }
-
-  async function removeBackup(name, button) {
-    const status = el("discoveryBackupStatus");
-    if (!name) return;
-    if (
-      !confirm(
-        `Remove retained Discovery backup ${name}? This removes only that Switch Vision Discovery backup file.`
-      )
-    ) {
-      return;
-    }
-    if (button) button.disabled = true;
-    if (status) status.textContent = "Removing retained Discovery backup…";
-    try {
-      const response = await fetch(
-        endpoint("api/maintenance/discovery-backups/remove"),
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        }
-      );
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Discovery backup removal failed");
-      }
-      renderBackups(data);
-      if (status) status.textContent = `Removed ${name}.`;
-    } catch (error) {
-      if (status) {
-        status.textContent = `Could not remove Discovery backup: ${
-          error.message || error
-        }`;
-      }
-      if (button) button.disabled = false;
-    }
   }
 
   function renderPlan(data) {
@@ -659,20 +474,14 @@
     open.addEventListener("click", () => {
       setView("maintenance");
       loadInstallerBackups();
-      loadBackups();
       scan();
     });
   }
   el("refreshInstallerBackupsButton")?.addEventListener("click", () => loadInstallerBackups());
-  el("saveInstallerBackupPolicyButton")?.addEventListener("click", saveInstallerBackupPolicy);
+  el("installerBackupAutomaticRetention")?.addEventListener("click", toggleInstallerBackupRetention);
   el("createInstallerBackupButton")?.addEventListener("click", () =>
     runInstallerBackupAction("create_backup", {}, el("createInstallerBackupButton"))
   );
-  el("applyInstallerBackupRetentionButton")?.addEventListener(
-    "click",
-    applyInstallerBackupRetention
-  );
-  el("refreshDiscoveryBackupsButton")?.addEventListener("click", loadBackups);
   el("scanMqttEntitiesButton")?.addEventListener("click", scan);
   el("repairMqttEntitiesButton")?.addEventListener("click", repair);
   el("exportMqttResultsButton")?.addEventListener("click", exportResults);
@@ -682,17 +491,13 @@
   ) {
     setView("maintenance");
     loadInstallerBackups();
-    loadBackups();
     scan();
   }
 
   window.SwitchVisionMaintenance = {
     loadInstallerBackups,
     runInstallerBackupAction,
-    saveInstallerBackupPolicy,
-    applyInstallerBackupRetention,
-    loadBackups,
-    removeBackup,
+    toggleInstallerBackupRetention,
     scan,
     repair,
     exportResults,
