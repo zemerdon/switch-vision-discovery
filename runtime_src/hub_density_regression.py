@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Permanent Discovery 2.3.9 Hub density/consistency regression."""
+"""Permanent Discovery 2.3.10 Hub hierarchy/maintenance regression."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,6 +8,7 @@ import support_web
 
 ROOT = Path(__file__).resolve().parent
 SOURCE = (ROOT / "support_web.py").read_text(encoding="utf-8")
+MAINTENANCE = (ROOT / "maintenance.js").read_text(encoding="utf-8")
 
 # Shared numeric font-size contract. Discovery must remain usable while reading
 # ui-preferences produced by pre-2.6.3 Core as well as the new numeric contract.
@@ -83,4 +84,39 @@ assert "hashlib.sha256" in SOURCE
 assert '"SHA-256"' not in SOURCE
 assert ">SHA-256<" not in SOURCE
 
-print("Switch Vision Discovery 2.3.9 Hub density/consistency: PASS")
+# v2.3.10: field/option labels use a theme-owned secondary hierarchy colour
+# while section headings keep their stronger theme accent and controls keep
+# ordinary content text.
+for marker in (
+    "--field-label:#b8c7d9",
+    "--field-label:#c1ced6",
+    "--field-label:#b7c8d2",
+    "--field-label:#4f6077",
+    ".option>span,.option>span>b{font-weight:400;color:var(--field-label)}",
+    ".field>span,.field>span>b{color:var(--field-label)}",
+):
+    assert marker in SOURCE, marker
+
+# v2.3.10: Maintenance has one Installer recovery-backup manager only. The
+# retention control is a button, the configurable retained-limit field and
+# redundant Discovery backup UI are gone, and the visible count is rendered
+# directly from the same backups array as the rows.
+for removed in (
+    'id="installerBackupRetentionCount"',
+    'id="saveInstallerBackupPolicyButton"',
+    'id="applyInstallerBackupRetentionButton"',
+    '<h3>Discovery Configuration Backups</h3>',
+    'id="discoveryBackupSummary"',
+    'id="refreshDiscoveryBackupsButton"',
+):
+    assert removed not in SOURCE, removed
+assert 'id="installerBackupAutomaticRetention" type="button" aria-pressed="false"' in SOURCE
+assert 'class="installer-backup-summary muted">0 retained backups<' in SOURCE
+assert ".installer-backup-row{display:grid;grid-template-columns:minmax(0,1fr) auto" in SOURCE
+assert "function toggleInstallerBackupRetention()" in MAINTENANCE
+assert 'summary.textContent = `${backups.length} retained backup${backups.length === 1 ? "" : "s"}`;' in MAINTENANCE
+assert 'automatic.classList.toggle("primary", retentionEnabled);' in MAINTENANCE
+assert "loadBackups();" not in MAINTENANCE
+assert 'endpoint("api/maintenance/discovery-backups")' not in MAINTENANCE
+
+print("Switch Vision Discovery 2.3.10 Hub hierarchy/maintenance: PASS")
