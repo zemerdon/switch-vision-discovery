@@ -82,12 +82,13 @@
         display:flex;
         align-items:center;
         gap:8px;
-        flex-wrap:wrap;
+        flex-wrap:nowrap;
         margin:0 0 10px;
-        padding:9px 10px;
+        padding:7px 8px;
         border:1px solid var(--line-soft);
         border-radius:10px;
-        background:var(--surface-inset)
+        background:var(--surface-inset);
+        overflow-x:auto
       }
 
       .sv-profiles-stats{
@@ -101,6 +102,22 @@
       }
 
       .sv-profiles-separator{opacity:.65}
+
+      .sv-profiles-toolbar-actions{
+        display:flex;
+        align-items:center;
+        justify-content:flex-end;
+        gap:6px;
+        flex:0 0 auto;
+        margin-left:auto;
+        white-space:nowrap
+      }
+
+      .sv-profiles-toolbar button,
+      .sv-profile-actions button{
+        min-height:32px;
+        padding:4px 8px
+      }
 
       .sv-profiles-list{
         display:grid;
@@ -202,8 +219,10 @@
         justify-content:flex-end;
         align-items:center;
         gap:6px;
-        flex-wrap:wrap;
-        margin:0
+        flex-wrap:nowrap;
+        margin:0;
+        max-width:100%;
+        overflow-x:auto
       }
 
       .sv-profile-actions select{
@@ -219,7 +238,7 @@
             "title"
             "summary"
         }
-        .sv-profile-actions{justify-content:flex-start;width:100%}
+        .sv-profile-actions{justify-content:flex-end;width:100%;overflow-x:auto}
       }
 
       .sv-profile-empty{
@@ -260,6 +279,7 @@
           </span>
         </div>
 
+        <div class="sv-profiles-toolbar-actions">
         <button
           id="svProfilesRefresh"
           type="button"
@@ -297,6 +317,7 @@
         >
           Delete Selected
         </button>
+        </div>
       </div>
 
       <div id="svProfilesMessage"></div>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Permanent Discovery 2.3.13 compact Hub UI regression."""
+"""Permanent Discovery 2.3.14 Hub header/profile polish regression."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -79,12 +79,14 @@ assert "$('openSnmp2mqttSettingsButton').addEventListener" not in SOURCE
 assert "g.className='grid hub-grid-dense'" in SOURCE
 assert "grid-template-columns:repeat(4,minmax(0,1fr))" in SOURCE
 
-# v2.3.13: page headers, Calibration Profiles and Hub Settings stay compact
-# without exposing internal profile identifiers or weakening existing controls.
-assert '<p id="pageLead" class="lead topbar-lead hidden"></p>' in SOURCE
+# v2.3.14: restore the established Hub header/card framing while keeping the
+# compact profile/settings improvements and hidden internal profile identifiers.
+assert '<p id="pageLead" class="lead hidden"></p>' in SOURCE
+assert 'class="lead topbar-lead hidden"' not in SOURCE
 assert "settings:['Switch Vision Hub Settings','Configure how Switch Vision Hub appears and behaves.']" in SOURCE
-assert '<section id="calibrationProfilesCard" class="hidden hub-profiles-page">' in SOURCE
-assert '<h2>Calibration Profiles</h2>' not in SOURCE
+assert '<section id="calibrationProfilesCard" class="card hidden">' in SOURCE
+assert '<h2>Calibration Profiles</h2>' in SOURCE
+assert '<p class="lead">Manage saved Switch Vision faceplate calibration profiles.</p>' in SOURCE
 assert '<h2>Switch Vision Settings</h2>' not in SOURCE
 assert ".hub-settings-actions{position:sticky;bottom:6px" in SOURCE
 assert ".hub-component{border:1px solid var(--line-soft);border-radius:12px;padding:10px;margin:10px 0" in SOURCE
@@ -92,6 +94,10 @@ assert ".hub-component{border:1px solid var(--line-soft);border-radius:12px;padd
 for marker in (
     ".sv-profiles-toolbar{",
     ".sv-profiles-stats{",
+    ".sv-profiles-toolbar-actions{",
+    "flex-wrap:nowrap;",
+    "min-height:32px;",
+    "padding:4px 8px",
     'id="svProfilesSummary"',
     'id="svProfilesSelectionSummary"',
     'id="svProfilesRefresh"',
@@ -103,6 +109,8 @@ for marker in (
 ):
     assert marker in PROFILES, marker
 assert ".sv-profile-internal" not in PROFILES
+assert ".sv-profile-actions{justify-content:flex-start" not in PROFILES
+assert ".sv-profile-actions{justify-content:flex-end;width:100%;overflow-x:auto}" in PROFILES
 
 # SHA-256 remains an internal integrity primitive. Do not surface an integrity
 # key as a normal Last-bundle/Support My Switch summary tile.
@@ -145,4 +153,4 @@ assert 'automatic.classList.toggle("primary", retentionEnabled);' in MAINTENANCE
 assert "loadBackups();" not in MAINTENANCE
 assert 'endpoint("api/maintenance/discovery-backups")' not in MAINTENANCE
 
-print("Switch Vision Discovery 2.3.13 compact Hub UI: PASS")
+print("Switch Vision Discovery 2.3.14 Hub header/profile polish: PASS")
