@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.14
+
+- Restore the shared Hub header to the pre-2.3.13 structure, keeping Back/title/theme/sponsor in the top bar and returning contextual page text to its own line below.
+- Return Calibration Profiles to a normal Hub card with its section heading and description while keeping the compact profile content inside the card.
+- Keep the five Calibration Profiles management actions on one horizontal line at the right, with horizontal scrolling rather than wrapping on narrow screens.
+- Keep per-profile actions right-aligned at narrow widths and tighten only Calibration Profiles button padding so the controls remain compact without changing button sizing elsewhere in the Hub.
+- Preserve the 2.3.13 settings-card cleanup, hidden internal profile IDs, settings ownership, privacy handling, device mappings and generated configuration behavior.
+
 ## 2.3.13
 
 - Compact the Hub page header so Back, title, contextual description, Theme and Sponsor share the top bar instead of consuming separate vertical rows.
