@@ -65,9 +65,12 @@ grep -Fq 'hp_3500yl_model="HP J8693A Switch 3500yl-48G"' "$BASE_DIR/discovery_jo
 grep -Fq 'model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/' "$BASE_DIR/discovery_job.sh"
 echo 'Switch Vision Discovery v2.3.11 HP 3500yl numeric interface contract: PASS'
 
-# v2.3.8 compact calibration-profile card regression
+# v2.3.13 compact calibration-profile card regression
 grep -Fq 'class="sv-profile-meta-actions"' "$BASE_DIR/calibration_profiles.js"
-grep -Fq 'class="sv-profile-internal"' "$BASE_DIR/calibration_profiles.js"
+! grep -Fq 'class="sv-profile-internal"' "$BASE_DIR/calibration_profiles.js"
+! grep -Fq 'Internal profile:' "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'class="sv-profiles-stats"' "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'grid-area:actions' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'data-profile-export=' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'data-profile-import=' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'data-profile-copy=' "$BASE_DIR/calibration_profiles.js"
@@ -77,8 +80,8 @@ grep -Fq 'data-profile-delete=' "$BASE_DIR/calibration_profiles.js"
 ! grep -Fq '<b>SHA-256:</b>' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'duplicate_faceplate_content' "$BASE_DIR/calibration_profiles.js"
 grep -Fq '.hub-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(240px,300px));column-gap:10px;justify-content:start;align-items:start}' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-settings-actions{position:sticky;bottom:0;display:flex;gap:6px' "$BASE_DIR/support_web.py"
-grep -Fq 'padding:3px 6px;margin:10px -6px -4px' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-settings-actions{position:sticky;bottom:6px;display:flex;gap:8px' "$BASE_DIR/support_web.py"
+grep -Fq 'border:1px solid var(--line-soft);padding:8px 10px;margin:10px 0 0' "$BASE_DIR/support_web.py"
 grep -Fq '.hub-settings-status{margin:0 0 0 auto;line-height:1.2}' "$BASE_DIR/support_web.py"
 grep -Fq "className='device-meta-line'" "$BASE_DIR/support_web.py"
 grep -Fq "['Registry',d.registry_match?'Yes':'No']" "$BASE_DIR/support_web.py"
