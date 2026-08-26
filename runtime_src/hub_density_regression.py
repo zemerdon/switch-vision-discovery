@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Permanent Discovery 2.3.15 Calibration Profiles compact-row regression."""
+"""Permanent Discovery 2.3.16 Calibration Profiles single-line summary regression."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -79,8 +79,8 @@ assert "$('openSnmp2mqttSettingsButton').addEventListener" not in SOURCE
 assert "g.className='grid hub-grid-dense'" in SOURCE
 assert "grid-template-columns:repeat(4,minmax(0,1fr))" in SOURCE
 
-# v2.3.15: keep the established Hub header/card framing while tightening the
-# profile rows and preserving hidden internal profile identifiers.
+# v2.3.16: keep the established Hub header/card framing while tightening the
+# profile rows, preserving hidden internal IDs, and keeping summaries single-line.
 assert '<p id="pageLead" class="lead hidden"></p>' in SOURCE
 assert 'class="lead topbar-lead hidden"' not in SOURCE
 assert "settings:['Switch Vision Hub Settings','Configure how Switch Vision Hub appears and behaves.']" in SOURCE
@@ -115,6 +115,11 @@ assert ".sv-profile-actions{justify-content:flex-start" not in PROFILES
 assert ".sv-profile-actions{justify-content:flex-end;width:100%;overflow-x:auto}" in PROFILES
 assert "Active — Protected" not in PROFILES
 assert "Factory — Protected" not in PROFILES
+assert ".sv-profile-summary-line{" in PROFILES
+assert "flex:1 1 auto;" in PROFILES
+assert "overflow:hidden;" in PROFILES
+assert "text-overflow:ellipsis;" in PROFILES
+assert "white-space:nowrap" in PROFILES
 
 # SHA-256 remains an internal integrity primitive. Do not surface an integrity
 # key as a normal Last-bundle/Support My Switch summary tile.
@@ -157,4 +162,4 @@ assert 'automatic.classList.toggle("primary", retentionEnabled);' in MAINTENANCE
 assert "loadBackups();" not in MAINTENANCE
 assert 'endpoint("api/maintenance/discovery-backups")' not in MAINTENANCE
 
-print("Switch Vision Discovery 2.3.15 Calibration Profiles compact-row contract: PASS")
+print("Switch Vision Discovery 2.3.16 Calibration Profiles single-line summary contract: PASS")

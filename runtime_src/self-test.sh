@@ -65,7 +65,7 @@ grep -Fq 'hp_3500yl_model="HP J8693A Switch 3500yl-48G"' "$BASE_DIR/discovery_jo
 grep -Fq 'model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/' "$BASE_DIR/discovery_job.sh"
 echo 'Switch Vision Discovery v2.3.11 HP 3500yl numeric interface contract: PASS'
 
-# v2.3.15 Hub header / calibration-profile compact-row regression
+# v2.3.16 Hub header / calibration-profile single-line summary regression
 grep -Fq 'class="sv-profile-meta-actions"' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'class="sv-profile-top-meta"' "$BASE_DIR/calibration_profiles.js"
 ! grep -Fq 'class="sv-profile-internal"' "$BASE_DIR/calibration_profiles.js"
@@ -77,6 +77,8 @@ grep -Fq 'data-profile-copy=' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'data-profile-delete=' "$BASE_DIR/calibration_profiles.js"
 ! grep -Fq 'Active — Protected' "$BASE_DIR/calibration_profiles.js"
 ! grep -Fq 'Factory — Protected' "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'text-overflow:ellipsis' "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'white-space:nowrap' "$BASE_DIR/calibration_profiles.js"
 ! grep -Fq '<b>Base profile:</b>' "$BASE_DIR/calibration_profiles.js"
 ! grep -Fq '<b>Faceplate exists:</b>' "$BASE_DIR/calibration_profiles.js"
 ! grep -Fq '<b>SHA-256:</b>' "$BASE_DIR/calibration_profiles.js"
@@ -1538,8 +1540,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.15"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.15"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.16"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.16"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
