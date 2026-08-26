@@ -126,11 +126,10 @@
 
       .sv-profile-card{
         display:grid;
-        grid-template-columns:minmax(0,1fr) auto;
+        grid-template-columns:auto minmax(0,1fr);
         grid-template-areas:
-          "select actions"
-          "title title"
-          "summary summary";
+          "select meta"
+          "title actions";
         column-gap:12px;
         row-gap:6px;
         border:1px solid var(--line-soft);
@@ -158,7 +157,8 @@
         gap:7px;
         margin:0;
         color:var(--muted);
-        font-size:var(--sv-font-small)
+        font-size:var(--sv-font-small);
+        white-space:nowrap
       }
 
       .sv-profile-title{
@@ -166,14 +166,27 @@
         display:flex;
         align-items:center;
         gap:8px;
-        flex-wrap:wrap;
+        min-width:0;
         font-weight:700
+      }
+
+      .sv-profile-top-meta{
+        grid-area:meta;
+        display:flex;
+        align-items:center;
+        justify-content:flex-end;
+        gap:8px;
+        min-width:0;
+        overflow-x:auto;
+        white-space:nowrap
       }
 
       .sv-profile-badges{
         display:flex;
+        align-items:center;
         gap:6px;
-        flex-wrap:wrap
+        flex:0 0 auto;
+        flex-wrap:nowrap
       }
 
       .sv-profile-badge{
@@ -201,16 +214,17 @@
       }
 
       .sv-profile-summary-line{
-        grid-area:summary;
         margin:0;
         color:var(--muted);
-        font-size:var(--sv-font-small)
+        font-size:var(--sv-font-small);
+        white-space:nowrap
       }
 
       .sv-profile-meta-actions{
         grid-area:actions;
         display:block;
         margin:0;
+        min-width:0;
         align-self:start
       }
 
@@ -230,14 +244,8 @@
       }
 
       @media(max-width:900px){
-        .sv-profile-card{
-          grid-template-columns:1fr;
-          grid-template-areas:
-            "select"
-            "actions"
-            "title"
-            "summary"
-        }
+        .sv-profile-card{column-gap:8px;padding:10px}
+        .sv-profile-top-meta{justify-content:flex-end;overflow-x:auto}
         .sv-profile-actions{justify-content:flex-end;width:100%;overflow-x:auto}
       }
 
@@ -638,19 +646,21 @@
               }
             </label>
 
-            <div class="sv-profile-title">
-              <span>${esc(base || profile)}</span>
-
+            <div class="sv-profile-top-meta">
               <span class="sv-profile-badges">
                 ${badges.join("")}
               </span>
+
+              <span class="sv-profile-summary-line">
+                ${esc(model)}
+                · ${Number(item.port_count || 0)} RJ45
+                · ${Number(item.sfp_count || 0)} SFP/uplink
+                · Faceplate: ${esc(faceplate)}
+              </span>
             </div>
 
-            <div class="sv-profile-summary-line">
-              ${esc(model)}
-              · ${Number(item.port_count || 0)} RJ45
-              · ${Number(item.sfp_count || 0)} SFP/uplink
-              · Faceplate: ${esc(faceplate)}
+            <div class="sv-profile-title">
+              <span>${esc(base || profile)}</span>
             </div>
 
             <div class="sv-profile-meta-actions">
@@ -705,20 +715,19 @@
                     : ""
                 }
 
-                <button
-                  type="button"
-                  class="danger"
-                  data-profile-delete="${index}"
-                  ${protectedProfile ? "disabled" : ""}
-                >
-                  ${
-                    scope === "factory"
-                      ? "Factory — Protected"
-                      : item.active === true
-                        ? "Active — Protected"
-                        : "Delete Profile"
-                  }
-                </button>
+                ${
+                  protectedProfile
+                    ? ""
+                    : `
+                      <button
+                        type="button"
+                        class="danger"
+                        data-profile-delete="${index}"
+                      >
+                        Delete Profile
+                      </button>
+                    `
+                }
               </div>
             </div>
           </article>
