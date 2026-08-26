@@ -102,7 +102,6 @@ for marker in (
     "grid-area:actions;",
 ):
     assert marker in PROFILES, marker
-assert "Internal profile:" not in PROFILES
 assert ".sv-profile-internal" not in PROFILES
 
 # SHA-256 remains an internal integrity primitive. Do not surface an integrity

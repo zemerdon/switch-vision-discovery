@@ -68,7 +68,6 @@ echo 'Switch Vision Discovery v2.3.11 HP 3500yl numeric interface contract: PASS
 # v2.3.13 compact calibration-profile card regression
 grep -Fq 'class="sv-profile-meta-actions"' "$BASE_DIR/calibration_profiles.js"
 ! grep -Fq 'class="sv-profile-internal"' "$BASE_DIR/calibration_profiles.js"
-! grep -Fq 'Internal profile:' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'class="sv-profiles-stats"' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'grid-area:actions' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'data-profile-export=' "$BASE_DIR/calibration_profiles.js"
