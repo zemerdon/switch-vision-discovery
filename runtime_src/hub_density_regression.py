@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Permanent Discovery 2.3.10 Hub hierarchy/maintenance regression."""
+"""Permanent Discovery 2.3.13 compact Hub UI regression."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,6 +9,7 @@ import support_web
 ROOT = Path(__file__).resolve().parent
 SOURCE = (ROOT / "support_web.py").read_text(encoding="utf-8")
 MAINTENANCE = (ROOT / "maintenance.js").read_text(encoding="utf-8")
+PROFILES = (ROOT / "calibration_profiles.js").read_text(encoding="utf-8")
 
 # Shared numeric font-size contract. Discovery must remain usable while reading
 # ui-preferences produced by pre-2.6.3 Core as well as the new numeric contract.
@@ -62,7 +63,7 @@ assert "createElement('b')" not in toggle_source
 assert "headerLayout.className='hub-header-layout'" in SOURCE
 assert "headerLayout.append(headerTog,box)" in SOURCE
 assert "grid-template-columns:minmax(0,1fr) minmax(320px,420px)" in SOURCE
-assert "padding-top:10px;margin-top:11px" in SOURCE
+assert "border:1px solid var(--line-soft);border-radius:10px;padding:12px;margin:10px 0;background:var(--surface-inset)" in SOURCE
 
 # The Hub homepage has one consolidated Switch Vision Settings entry. Discovery
 # and SNMP2MQTT remain first-class settings sections, but no longer duplicate
@@ -77,6 +78,32 @@ assert "$('openSnmp2mqttSettingsButton').addEventListener" not in SOURCE
 # geometry, never a separate control size system.
 assert "g.className='grid hub-grid-dense'" in SOURCE
 assert "grid-template-columns:repeat(4,minmax(0,1fr))" in SOURCE
+
+# v2.3.13: page headers, Calibration Profiles and Hub Settings stay compact
+# without exposing internal profile identifiers or weakening existing controls.
+assert '<p id="pageLead" class="lead topbar-lead hidden"></p>' in SOURCE
+assert "settings:['Switch Vision Hub Settings','Configure how Switch Vision Hub appears and behaves.']" in SOURCE
+assert '<section id="calibrationProfilesCard" class="hidden hub-profiles-page">' in SOURCE
+assert '<h2>Calibration Profiles</h2>' not in SOURCE
+assert '<h2>Switch Vision Settings</h2>' not in SOURCE
+assert ".hub-settings-actions{position:sticky;bottom:6px" in SOURCE
+assert ".hub-component{border:1px solid var(--line-soft);border-radius:12px;padding:10px;margin:10px 0" in SOURCE
+
+for marker in (
+    ".sv-profiles-toolbar{",
+    ".sv-profiles-stats{",
+    'id="svProfilesSummary"',
+    'id="svProfilesSelectionSummary"',
+    'id="svProfilesRefresh"',
+    ".sv-profile-card{",
+    "grid-template-areas:",
+    '"select actions"',
+    ".sv-profile-meta-actions{",
+    "grid-area:actions;",
+):
+    assert marker in PROFILES, marker
+assert "Internal profile:" not in PROFILES
+assert ".sv-profile-internal" not in PROFILES
 
 # SHA-256 remains an internal integrity primitive. Do not surface an integrity
 # key as a normal Last-bundle/Support My Switch summary tile.
@@ -119,4 +146,4 @@ assert 'automatic.classList.toggle("primary", retentionEnabled);' in MAINTENANCE
 assert "loadBackups();" not in MAINTENANCE
 assert 'endpoint("api/maintenance/discovery-backups")' not in MAINTENANCE
 
-print("Switch Vision Discovery 2.3.10 Hub hierarchy/maintenance: PASS")
+print("Switch Vision Discovery 2.3.13 compact Hub UI: PASS")

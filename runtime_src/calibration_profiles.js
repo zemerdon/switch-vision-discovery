@@ -78,41 +78,47 @@
 
     style.id = "svCalibrationProfileStyles";
     style.textContent = `
-      .sv-profiles-head{
-        display:flex;
-        align-items:center;
-        gap:10px;
-        margin-bottom:12px
-      }
-
-      .sv-profiles-summary{
-        flex:1;
-        color:var(--muted)
-      }
-
       .sv-profiles-toolbar{
         display:flex;
         align-items:center;
         gap:8px;
         flex-wrap:wrap;
-        margin:12px 0
+        margin:0 0 10px;
+        padding:9px 10px;
+        border:1px solid var(--line-soft);
+        border-radius:10px;
+        background:var(--surface-inset)
       }
 
-      .sv-selection-summary{
+      .sv-profiles-stats{
+        display:flex;
+        align-items:center;
+        gap:7px;
         margin-right:auto;
         color:var(--muted);
-        font-size:var(--sv-font-small)
+        font-size:var(--sv-font-small);
+        white-space:nowrap
       }
+
+      .sv-profiles-separator{opacity:.65}
 
       .sv-profiles-list{
         display:grid;
-        gap:10px
+        gap:8px
       }
 
       .sv-profile-card{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        grid-template-areas:
+          "select actions"
+          "title title"
+          "summary summary";
+        column-gap:12px;
+        row-gap:6px;
         border:1px solid var(--line-soft);
         border-radius:10px;
-        padding:14px;
+        padding:12px;
         background:var(--surface-inset)
       }
 
@@ -129,15 +135,17 @@
       }
 
       .sv-profile-select{
+        grid-area:select;
         display:flex;
         align-items:center;
         gap:7px;
-        margin-bottom:8px;
+        margin:0;
         color:var(--muted);
         font-size:var(--sv-font-small)
       }
 
       .sv-profile-title{
+        grid-area:title;
         display:flex;
         align-items:center;
         gap:8px;
@@ -176,31 +184,17 @@
       }
 
       .sv-profile-summary-line{
-        margin-top:7px;
+        grid-area:summary;
+        margin:0;
         color:var(--muted);
         font-size:var(--sv-font-small)
       }
 
       .sv-profile-meta-actions{
-        display:flex;
-        align-items:center;
-        gap:8px;
-        flex-wrap:wrap;
-        margin-top:9px;
-        font-size:var(--sv-font-small)
-      }
-
-      .sv-profile-internal{
-        display:flex;
-        align-items:baseline;
-        gap:5px;
-        min-width:0;
-        flex:1 1 260px;
-        line-height:1.4
-      }
-
-      .sv-profile-internal code{
-        word-break:break-all
+        grid-area:actions;
+        display:block;
+        margin:0;
+        align-self:start
       }
 
       .sv-profile-actions{
@@ -208,7 +202,6 @@
         justify-content:flex-end;
         align-items:center;
         gap:6px;
-        flex:0 1 auto;
         flex-wrap:wrap;
         margin:0
       }
@@ -217,8 +210,15 @@
         max-width:220px
       }
 
-      @media(max-width:720px){
-        .sv-profile-internal{flex-basis:100%}
+      @media(max-width:900px){
+        .sv-profile-card{
+          grid-template-columns:1fr;
+          grid-template-areas:
+            "select"
+            "actions"
+            "title"
+            "summary"
+        }
         .sv-profile-actions{justify-content:flex-start;width:100%}
       }
 
@@ -243,12 +243,21 @@
     root.dataset.ready = "true";
 
     root.innerHTML = `
-      <div class="sv-profiles-head">
-        <div
-          id="svProfilesSummary"
-          class="sv-profiles-summary"
-        >
-          Calibration profiles have not been loaded yet.
+      <div class="sv-profiles-toolbar">
+        <div class="sv-profiles-stats">
+          <span
+            id="svProfilesSummary"
+            class="sv-profiles-summary"
+          >
+            Calibration profiles have not been loaded yet.
+          </span>
+          <span class="sv-profiles-separator" aria-hidden="true">·</span>
+          <span
+            id="svProfilesSelectionSummary"
+            class="sv-selection-summary"
+          >
+            0 selected
+          </span>
         </div>
 
         <button
@@ -257,17 +266,6 @@
         >
           Refresh Profiles
         </button>
-      </div>
-
-      <div id="svProfilesMessage"></div>
-
-      <div class="sv-profiles-toolbar">
-        <span
-          id="svProfilesSelectionSummary"
-          class="sv-selection-summary"
-        >
-          0 selected
-        </span>
 
         <button
           id="svProfilesSelectStale"
@@ -300,6 +298,8 @@
           Delete Selected
         </button>
       </div>
+
+      <div id="svProfilesMessage"></div>
 
       <div
         id="svProfilesList"
@@ -633,11 +633,6 @@
             </div>
 
             <div class="sv-profile-meta-actions">
-              <div class="sv-profile-internal">
-                <b>Internal profile:</b>
-                <code>${esc(profile)}</code>
-              </div>
-
               <div class="sv-profile-actions">
                 <button
                   type="button"
