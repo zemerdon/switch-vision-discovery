@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.15
+
+- Move each Calibration Profiles scope/state badge and hardware/faceplate summary onto the top-right row opposite the selection/protection state.
+- Keep the profile name on the next row and keep only real profile actions aligned at the right.
+- Remove the redundant disabled Active/Factory protected pseudo-action buttons; protection remains represented by the selection/protection text and state badge.
+- Preserve profile protection semantics, import/export/copy/delete behavior, hidden internal profile IDs, Hub framing and the compact five-action management toolbar.
+
 ## 2.3.14
 
 - Restore the shared Hub header to the pre-2.3.13 structure, keeping Back/title/theme/sponsor in the top bar and returning contextual page text to its own line below.
