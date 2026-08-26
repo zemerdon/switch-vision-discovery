@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.13
+
+- Compact the Hub page header so Back, title, contextual description, Theme and Sponsor share the top bar instead of consuming separate vertical rows.
+- Rework Calibration Profiles into one compact toolbar showing saved/active/selected state with management actions, remove the duplicate inner page heading and visible internal profile IDs, and align per-profile actions with the profile protection/selection row.
+- Give Core Hub settings clearly bounded section cards for sidebar/navigation, native dashboard header, dashboard presentation and Activity LEDs while preserving the compact shortcut-order layout and shared control geometry.
+- Restyle the sticky Save/Reload/status area as a compact bordered action bar and reduce unnecessary section/component whitespace.
+- Add permanent Hub UI regressions protecting the compact header/profile/settings contracts. This is presentation-only: settings ownership, secret handling, switch mappings, generated configuration, support status and privacy behavior are unchanged.
+
 ## 2.3.12
 
 - Synchronize Discovery's embedded device registry with the authoritative Core 2.6.7 support-status evidence for WS-C2960X-24TS-L and WS-C3560CG-8PC-S.
