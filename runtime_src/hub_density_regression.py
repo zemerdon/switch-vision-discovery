@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Permanent Discovery 2.3.16 Calibration Profiles single-line summary regression."""
+"""Permanent Discovery 2.3.17 grouped Calibration Profiles manager regression."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent
 SOURCE = (ROOT / "support_web.py").read_text(encoding="utf-8")
 MAINTENANCE = (ROOT / "maintenance.js").read_text(encoding="utf-8")
 PROFILES = (ROOT / "calibration_profiles.js").read_text(encoding="utf-8")
+PROFILE_MANAGER = (ROOT / "calibration_profiles_manager.js").read_text(encoding="utf-8")
 
 # Shared numeric font-size contract. Discovery must remain usable while reading
 # ui-preferences produced by pre-2.6.3 Core as well as the new numeric contract.
@@ -121,6 +122,39 @@ assert "overflow:hidden;" in PROFILES
 assert "text-overflow:ellipsis;" in PROFILES
 assert "white-space:nowrap" in PROFILES
 
+# v2.3.17: grouped profile manager presentation remains layered over the
+# established profile-operation implementation so protected actions stay enforced.
+for marker in (
+    "svProfileManagerActions",
+    "svProfileManagerExport",
+    "svProfileManagerImport",
+    "svProfileManagerCopyTarget",
+    "svProfileManagerDelete",
+    "ACTIVE PROFILES",
+    "UNUSED PROFILES",
+    "manager-selected",
+    ".sv-profiles-toolbar-actions{",
+    ".sv-profile-select,",
+    ".sv-profile-meta-actions{",
+    "max-width:clamp(90px,30vw,420px)!important",
+    "max-width:clamp(88px,30vw,210px)!important",
+    "summary.title = text;",
+    "showTooltip(text);",
+    "new MutationObserver",
+    "[data-profile-export]",
+    "[data-profile-import]",
+    "[data-profile-copy]",
+):
+    assert marker in PROFILE_MANAGER, marker
+assert 'subgroup(\n          "CUSTOM"' in PROFILE_MANAGER
+assert 'subgroup(\n          "NATIVE"' in PROFILE_MANAGER
+assert "opacity:.42;" in PROFILE_MANAGER
+assert "filter:saturate(.15);" in PROFILE_MANAGER
+assert "background:var(--accent-soft)" in PROFILE_MANAGER
+assert "display:none!important" in PROFILE_MANAGER
+assert 'elif path in {"/calibration_profiles.js", "/calibration_profiles_manager.js", "/maintenance.js"}:' in SOURCE
+assert '<script src="calibration_profiles_manager.js"></script>' in SOURCE
+
 # SHA-256 remains an internal integrity primitive. Do not surface an integrity
 # key as a normal Last-bundle/Support My Switch summary tile.
 assert "hashlib.sha256" in SOURCE
@@ -162,4 +196,4 @@ assert 'automatic.classList.toggle("primary", retentionEnabled);' in MAINTENANCE
 assert "loadBackups();" not in MAINTENANCE
 assert 'endpoint("api/maintenance/discovery-backups")' not in MAINTENANCE
 
-print("Switch Vision Discovery 2.3.16 Calibration Profiles single-line summary contract: PASS")
+print("Switch Vision Discovery 2.3.17 grouped Calibration Profiles manager contract: PASS")

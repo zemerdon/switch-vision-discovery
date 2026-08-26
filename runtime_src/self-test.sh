@@ -101,6 +101,24 @@ grep -Fq '.validation-item{display:flex;justify-content:space-between;align-item
 ! grep -Fq 'class="yaml-manager generated-card-manager" open' "$BASE_DIR/support_web.py"
 ! grep -Fq 'class="yaml-manager" open' "$BASE_DIR/support_web.py"
 
+# v2.3.17 grouped Calibration Profiles manager regression
+grep -Fq 'svProfileManagerActions' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'svProfileManagerExport' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'svProfileManagerImport' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'svProfileManagerCopyTarget' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'svProfileManagerDelete' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'ACTIVE PROFILES' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'UNUSED PROFILES' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'manager-selected' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'max-width:clamp(90px,30vw,420px)!important' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'max-width:clamp(88px,30vw,210px)!important' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'summary.title = text;' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'showTooltip(text);' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'new MutationObserver' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'opacity:.42;' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'filter:saturate(.15);' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'calibration_profiles_manager.js' "$BASE_DIR/support_web.py"
+
 # v2.3.4 Hub-owned settings UX / authoritative-store / privacy regressions
 grep -Fq 'id="settingsCard"' "$BASE_DIR/support_web.py"
 grep -Fq 'id="hubSettingsSave"' "$BASE_DIR/support_web.py"
@@ -1540,8 +1558,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.16"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.16"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.17"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.17"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
