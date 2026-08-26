@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Permanent Discovery 2.3.14 Hub header/profile polish regression."""
+"""Permanent Discovery 2.3.15 Calibration Profiles compact-row regression."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -79,8 +79,8 @@ assert "$('openSnmp2mqttSettingsButton').addEventListener" not in SOURCE
 assert "g.className='grid hub-grid-dense'" in SOURCE
 assert "grid-template-columns:repeat(4,minmax(0,1fr))" in SOURCE
 
-# v2.3.14: restore the established Hub header/card framing while keeping the
-# compact profile/settings improvements and hidden internal profile identifiers.
+# v2.3.15: keep the established Hub header/card framing while tightening the
+# profile rows and preserving hidden internal profile identifiers.
 assert '<p id="pageLead" class="lead hidden"></p>' in SOURCE
 assert 'class="lead topbar-lead hidden"' not in SOURCE
 assert "settings:['Switch Vision Hub Settings','Configure how Switch Vision Hub appears and behaves.']" in SOURCE
@@ -103,7 +103,9 @@ for marker in (
     'id="svProfilesRefresh"',
     ".sv-profile-card{",
     "grid-template-areas:",
-    '"select actions"',
+    '"select meta"',
+    ".sv-profile-top-meta{",
+    "grid-area:meta;",
     ".sv-profile-meta-actions{",
     "grid-area:actions;",
 ):
@@ -111,6 +113,8 @@ for marker in (
 assert ".sv-profile-internal" not in PROFILES
 assert ".sv-profile-actions{justify-content:flex-start" not in PROFILES
 assert ".sv-profile-actions{justify-content:flex-end;width:100%;overflow-x:auto}" in PROFILES
+assert "Active — Protected" not in PROFILES
+assert "Factory — Protected" not in PROFILES
 
 # SHA-256 remains an internal integrity primitive. Do not surface an integrity
 # key as a normal Last-bundle/Support My Switch summary tile.
@@ -153,4 +157,4 @@ assert 'automatic.classList.toggle("primary", retentionEnabled);' in MAINTENANCE
 assert "loadBackups();" not in MAINTENANCE
 assert 'endpoint("api/maintenance/discovery-backups")' not in MAINTENANCE
 
-print("Switch Vision Discovery 2.3.14 Hub header/profile polish: PASS")
+print("Switch Vision Discovery 2.3.15 Calibration Profiles compact-row contract: PASS")
