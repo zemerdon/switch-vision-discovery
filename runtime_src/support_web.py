@@ -4069,6 +4069,7 @@ $('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.valu
 </script>
 <script src="maintenance.js"></script>
 <script src="calibration_profiles.js"></script>
+<script src="calibration_profiles_manager.js"></script>
 </body></html>"""
 
 
@@ -4200,7 +4201,7 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json(scan_mqtt_entities())
             except (ValueError, RuntimeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-        elif path in {"/calibration_profiles.js", "/maintenance.js"}:
+        elif path in {"/calibration_profiles.js", "/calibration_profiles_manager.js", "/maintenance.js"}:
             script_path = Path("/" + Path(path).name)
 
             if not script_path.is_file():
