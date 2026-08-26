@@ -214,9 +214,13 @@
       }
 
       .sv-profile-summary-line{
+        flex:1 1 auto;
+        min-width:0;
         margin:0;
         color:var(--muted);
         font-size:var(--sv-font-small);
+        overflow:hidden;
+        text-overflow:ellipsis;
         white-space:nowrap
       }
 
