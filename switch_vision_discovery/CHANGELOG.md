@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.16
+
+## 2.3.16 — Keep Calibration Profile summaries on one line
+
+- Keep each profile model / RJ45 / SFP / faceplate summary on one line.
+- Ellipsis-truncate the summary when horizontal space is constrained instead of wrapping it onto a second line.
+- Preserve profile badges, names, actions, protection semantics and the 2.3.15 card organization.
+
 ## 2.3.15
 
 - Move each Calibration Profiles scope/state badge and hardware/faceplate summary onto the top-right row opposite the selection/protection state.
