@@ -879,3 +879,31 @@ profiles:
     - API ports 9-24 are 10G-capable RJ45.
     - API ports 25-26 are 25G SFP28 and may negotiate at lower supported speeds.
     - All 24 RJ45 ports report 802.3bt Type 4 PoE capability on the community-observed hardware.
+  mikrotik-crs328-24p-4splus:
+    status: experimental
+    vendor: MikroTik
+    family: CRS328
+    model_patterns:
+    - CRS328-24P-4S+
+    - CRS328-24P-4S+RM
+    sys_object_ids:
+    - 1.3.6.1.4.1.14988.1
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 0
+      sfp_10g_ports: 4
+    interface_patterns:
+      rj45:
+      - ether{port}
+      sfp_1g: []
+      sfp_10g:
+      - sfp-sfpplus1
+      - sfp-sfpplus2
+      - sfp-sfpplus3
+      - sfp-sfpplus4
+    notes:
+    - Privacy-processed real-hardware evidence confirms RouterOS ifName values ether1 through ether24 as the 24 copper front-panel ports.
+    - The same capture confirms sfp-sfpplus1 through sfp-sfpplus4 as four physical SFP+ cages; live optical-link validation remains pending.
+    - bridge and lo are explicitly non-physical and must never be rendered as front-panel ports.
+    - PoE and environmental telemetry remain Experimental until the new narrow supplemental OIDs are returned and field-validated.

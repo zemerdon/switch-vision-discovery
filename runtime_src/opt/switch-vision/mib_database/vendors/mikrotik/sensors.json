@@ -46,6 +46,29 @@
       "chassisHealth"
     ]
   },
+  "known_oids": [
+    {
+      "oid_prefix": "1.3.6.1.4.1.14988.1.1.15.1.1.4",
+      "category": "poe",
+      "label": "PoE output voltage",
+      "unit": "decivolts",
+      "confidence": "high"
+    },
+    {
+      "oid_prefix": "1.3.6.1.4.1.14988.1.1.15.1.1.5",
+      "category": "poe",
+      "label": "PoE output current",
+      "unit": "mA",
+      "confidence": "high"
+    },
+    {
+      "oid_prefix": "1.3.6.1.4.1.14988.1.1.15.1.1.6",
+      "category": "poe",
+      "label": "PoE output power",
+      "unit": "deciwatts",
+      "confidence": "high"
+    }
+  ],
   "numeric_candidate_policy": {
     "enabled": true,
     "accepted_types": [

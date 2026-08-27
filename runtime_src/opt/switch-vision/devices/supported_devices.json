@@ -2551,6 +2551,63 @@
           "height": 448
         }
       }
+    },
+    {
+      "vendor": "MikroTik",
+      "family": "CRS328",
+      "model": "CRS328-24P-4S+RM",
+      "status": "experimental",
+      "confirmed_since": "2.3.22",
+      "last_validated_version": "2.3.22",
+      "evidence": "privacy_processed_real_hardware_snmp_contribution",
+      "ports": {
+        "rj45": 24,
+        "poe": true,
+        "uplinks": 4,
+        "uplink_type": "4x 10G SFP+",
+        "gigabit_sfp": 0,
+        "ten_gigabit_sfp_plus": 4
+      },
+      "stack_support": false,
+      "discovery_support": true,
+      "dashboard_support": true,
+      "mapping_profile": "mikrotik-crs328-24p-4splus",
+      "calibration_profile": "stock_24rj45_4sfp",
+      "default_faceplate": "faceplates/24rj45-4sfp.png",
+      "optional_faceplates": [],
+      "tested_firmware": [
+        "RouterOS 7.21.5"
+      ],
+      "contributor": {
+        "display_name": "Patrik Kästel",
+        "public_credit": true
+      },
+      "notes": [
+        "A privacy-processed real-hardware SNMP capture reports the local RouterOS model string CRS328-24P-4S+; the registry retains the marketed CRS328-24P-4S+RM SKU only as lookup normalization.",
+        "ifIndex 1-24 map to ether1-ether24 and 25-28 map to sfp-sfpplus1-sfp-sfpplus4; bridge and lo are excluded as non-physical interfaces.",
+        "The contribution proves the complete 24 RJ45 plus 4 SFP+ physical interface topology and standard IF-MIB status, speed and traffic counters.",
+        "The four SFP+ cages were empty in the contributed capture, so live optical link and negotiated-speed validation remains pending.",
+        "PoE capability is hardware-confirmed for the exact model, while Switch Vision PoE and environmental SNMP presentation remains pending the new narrow supplemental telemetry confirmation.",
+        "The neutral 24 RJ45 plus 4 SFP faceplate is a temporary geometry fallback; MikroTik-specific rendered alignment remains pending field confirmation."
+      ],
+      "validation": {
+        "exact_model_detection": "contribution_confirmed_local_routeros_identity",
+        "rj45_mapping": "contribution_confirmed_ether1_through_ether24_pending_rendered_validation",
+        "poe": "exact_hardware_capability_confirmed_snmp_values_pending",
+        "system_sensors": "pending_supplemental_snmp_validation",
+        "uplinks": "contribution_confirmed_four_sfp_plus_positions_live_link_pending",
+        "stack": "not_applicable"
+      },
+      "visuals": {
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
+        "optional_faceplates": [],
+        "calibration_profile": "stock_24rj45_4sfp",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
     }
   ]
 }

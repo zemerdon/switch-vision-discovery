@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.3.21"
+SWITCH_VISION_DISCOVERY_VERSION="2.3.22"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -2084,9 +2084,9 @@ run_live_snmpwalk_current() {
 1.3.6.1.2.1.2.2.1.8
 1.3.6.1.2.1.31.1.1.1
 1.3.6.1.2.1.26
-1.3.6.1.2.1.18.1.4.1.2
-1.3.6.1.2.1.18.7.1.4.3
-1.3.6.1.2.1.18.7.1.4.5.1.1
+1.3.6.1.2.1.17.1.4.1.2
+1.3.6.1.2.1.17.7.1.4.3
+1.3.6.1.2.1.17.7.1.4.5.1.1
 1.3.6.1.4.1.9.9.13.1.3.1
 1.3.6.1.2.1.47.1.1.1.1.2
 1.3.6.1.4.1.9.9.68.1.2.2.1.2
@@ -2150,6 +2150,33 @@ run_live_snmpwalk_current() {
         echo "OK supplemental: $oid" >> "$LIVE_LOG_PATH"
       else
         echo "INFO: Juniper health OID unavailable: $oid" >> "$LIVE_LOG_PATH"
+      fi
+    done
+  fi
+
+  # MikroTik supplemental telemetry is intentionally narrow. Never walk the
+  # complete 14988 enterprise tree because RouterOS exposes unrelated/private
+  # objects there; collect only standard CPU/sensor tables plus known health
+  # and PoE-Out subtrees for review.
+  if grep -Eqi 'MikroTik|RouterOS|CRS328-24P-4S\+' /tmp/switch_vision_snmp_precheck.txt 2>/dev/null; then
+    MIKROTIK_SUPPLEMENTAL_OIDS="
+1.3.6.1.2.1.25.3.3.1.2
+1.3.6.1.2.1.99.1.1.1
+1.3.6.1.4.1.14988.1.1.3
+1.3.6.1.4.1.14988.1.1.15.1.1
+"
+    echo "Running MikroTik supplemental telemetry walks" >> "$LIVE_LOG_PATH"
+    for oid in $MIKROTIK_SUPPLEMENTAL_OIDS; do
+      current_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP $oid"
+      echo "Running supplemental: $current_command" >> "$LIVE_LOG_PATH"
+      {
+        echo ""
+        echo "# --- MikroTik supplemental: $oid ---"
+      } >> "$LIVE_OUTPUT_PATH"
+      if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+        echo "OK supplemental: $oid" >> "$LIVE_LOG_PATH"
+      else
+        echo "INFO: MikroTik supplemental OID unavailable: $oid" >> "$LIVE_LOG_PATH"
       fi
     done
   fi
@@ -2788,7 +2815,7 @@ write_generated_yaml_for_walk() {
       return score
     }
     BEGIN {
-      model="unknown"; manufacturer="Cisco"; maxidx=0; maxcpu=0; maxpoe=0; maxstdpoe=0; maxtemp=0; physical_count=0
+      model="unknown"; manufacturer="Unknown"; maxidx=0; maxcpu=0; maxpoe=0; maxstdpoe=0; maxtemp=0; physical_count=0
       if (member_map != "") {
         split(member_map, mm_items, ",")
         for (mmi in mm_items) {
@@ -3149,7 +3176,7 @@ write_generated_yaml_for_walk() {
           if (!vlan_emitted && model == "XS1930-10" && ifname[idx] ~ /^swp0[0-9]$/) {
             bridge_idx=bridge_for_ifindex[idx]
             if (bridge_idx > 0 && (bridge_idx in qbridge_pvid_idx)) {
-              yaml_sensor("1.3.6.1.2.1.18.7.1.4.5.1.1." bridge_idx, label " VLAN ID")
+              yaml_sensor("1.3.6.1.2.1.17.7.1.4.5.1.1." bridge_idx, label " VLAN ID")
               vlan_emitted=1
               zyxel_vlan_count++
             }
@@ -3164,7 +3191,7 @@ write_generated_yaml_for_walk() {
             logical_idx=juniper_logical_ifindex[juniper_port + 0]
             bridge_idx=bridge_for_ifindex[logical_idx]
             if (logical_idx > 0 && bridge_idx > 0 && (bridge_idx in qbridge_pvid_idx)) {
-              yaml_sensor("1.3.6.1.2.1.18.7.1.4.5.1.1." bridge_idx, label " VLAN ID")
+              yaml_sensor("1.3.6.1.2.1.17.7.1.4.5.1.1." bridge_idx, label " VLAN ID")
               vlan_emitted=1
               juniper_vlan_count++
             }
