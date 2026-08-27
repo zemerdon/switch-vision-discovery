@@ -3,7 +3,7 @@
 # Local model identity extraction. Only inspect OIDs that describe this device;
 # never scan arbitrary walk text because LLDP/CDP neighbour identity can contain
 # exact model strings belonging to a different switch.
-CV_CAP_MODEL_PATTERN='WS-C[0-9A-Za-z][0-9A-Za-z._-]*|SG500X-24|S5735-L8P4X-A1|S5720-12TP-LI-AC|XS1930-10|N2128PX-ON|ex3300-48p|J8693A'
+CV_CAP_MODEL_PATTERN='WS-C[0-9A-Za-z][0-9A-Za-z._-]*|SG500X-24|S5735-L8P4X-A1|S5720-12TP-LI-AC|CRS328-24P-4S\+|XS1930-10|N2128PX-ON|ex3300-48p|J8693A'
 
 cv_cap_model_from_local_scope() {
   walk_file="$1"

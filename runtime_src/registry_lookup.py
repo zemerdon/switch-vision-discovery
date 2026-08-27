@@ -35,6 +35,10 @@ def canonical_model(model: str) -> str:
         if lowered.startswith(vendor_prefix):
             target = target[len(vendor_prefix):].strip()
             break
+    # RouterOS reports this platform without the marketed rackmount suffix.
+    # Preserve the observed evidence string while normalizing only lookup identity.
+    if lowered == "crs328-24p-4s+":
+        target = "CRS328-24P-4S+RM"
     return target.casefold()
 
 

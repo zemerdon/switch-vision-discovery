@@ -40,6 +40,16 @@ cv_known_vendor_identity() {
         ;;
     esac
   fi
+  if [ "$vendor_id" = "mikrotik" ]; then
+    case "${CV_ID_SYS_OBJECT_ID:-}|${CV_ID_SYS_DESCR:-}" in
+      1.3.6.1.4.1.14988.*'|'*CRS328-24P-4S+*|*'|'*CRS328-24P-4S+*)
+        CV_ID_FAMILY="CRS328"
+        CV_ID_MODEL_HINT="CRS328-24P-4S+"
+        CV_ID_PRODUCT_MATCH="crs328-24p-4splus"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
+    esac
+  fi
   if [ "$vendor_id" = "zyxel" ]; then
     case "${CV_ID_SYS_OBJECT_ID:-}|${CV_ID_SYS_DESCR:-}" in
       1.3.6.1.4.1.890.1.15*'|'*XS1930-10*|*'|'*XS1930-10*)

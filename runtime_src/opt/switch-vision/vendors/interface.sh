@@ -76,6 +76,11 @@ cv_cap_set_front_panel_profile() {
       CV_CAP_PLATFORM="hp_3500yl_48g"
       CV_CAP_RJ45_LIMIT="44"
       ;;
+    *CRS328-24P-4S+*)
+      CV_CAP_FRONT_PANEL_AWARE="true"
+      CV_CAP_PLATFORM="mikrotik_crs328_24p_4splus"
+      CV_CAP_RJ45_LIMIT="24"
+      ;;
     *XS1930-10*)
       CV_CAP_FRONT_PANEL_AWARE="true"
       CV_CAP_PLATFORM="zyxel_xs1930_10"
@@ -94,6 +99,18 @@ cv_interface_class_for_name() {
     case "$name" in
       [1-9]|[1-3][0-9]|4[0-4]) printf 'rj45'; return 0 ;;
       4[5-8]) printf 'uplink'; return 0 ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
+
+  # MikroTik CRS328 exposes stable RouterOS front-panel names. Keep the
+  # exact-model rule narrow so generic RouterOS bridge/loopback interfaces
+  # never become physical ports on unrelated models.
+  if [ "${CV_CAP_PLATFORM:-generic}" = "mikrotik_crs328_24p_4splus" ]; then
+    case "$name" in
+      ether[1-9]|ether1[0-9]|ether2[0-4]) printf 'rj45'; return 0 ;;
+      sfp-sfpplus[1-4]) printf 'sfp_plus'; return 0 ;;
+      bridge|lo) printf 'virtual'; return 0 ;;
       *) printf 'other'; return 0 ;;
     esac
   fi

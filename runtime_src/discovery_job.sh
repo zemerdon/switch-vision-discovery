@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.3.21"
+SWITCH_VISION_DISCOVERY_VERSION="2.3.22"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -877,6 +877,7 @@ parser_report() {
       if (model == "S5720-12TP-LI-AC") return "community_validated"
       if (model == "XS1930-10") return "experimental"
       if (model == "N2128PX-ON") return "experimental"
+      if (model == "CRS328-24P-4S+") return "experimental"
       if (model == "Juniper EX3300-48P") return "supported"
       return "unsupported"
     }
@@ -896,7 +897,7 @@ parser_report() {
       if (status == "supported") return "validated"
       if (status == "community_validated") return "real-hardware validated"
       if (is_2960(model)) return "generated from SNMP layout; physical SFP validation pending"
-      if (model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC" || model == "XS1930-10" || model == "N2128PX-ON") return "generated from contribution-backed interface names; contributor/live validation pending"
+      if (model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC" || model == "XS1930-10" || model == "N2128PX-ON" || model == "CRS328-24P-4S+") return "generated from contribution-backed interface names; contributor/live validation pending"
       return "review required"
     }
     function model_rank(value, score) {
@@ -935,6 +936,7 @@ parser_report() {
       if (line ~ /S5735-L8P4X-A1/) huawei_s5735_model = "S5735-L8P4X-A1"
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model = "S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model = "XS1930-10"
+      if (line ~ /CRS328-24P-4S\+/) mikrotik_model = "CRS328-24P-4S+"
       if (tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model = "HP J8693A Switch 3500yl-48G"
       if (line ~ /N2128PX-ON/) dell_model = "N2128PX-ON"
       if (line ~ /N2128PX-ON, [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+,/ && match(line, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
@@ -1041,7 +1043,11 @@ parser_report() {
       if (line ~ /\.3\.6\.1\.2\.1\.17\.7\.1\.4\.5\.1\.1\.[0-9]+ = /) qbridge_pvid_count++
     }
     END {
-      if (zyxel_model != "") {
+      if (mikrotik_model != "") {
+        model = mikrotik_model
+        manufacturer = "MikroTik"
+      }
+      else if (zyxel_model != "") {
         model = zyxel_model
         manufacturer = "Zyxel"
       }
@@ -1174,6 +1180,22 @@ parser_report() {
             } else {
               ten_key[physical_id] = 1; member_ten[1]++
             }
+          }
+          special = 1
+        } else if (model == "CRS328-24P-4S+" && n ~ /^ether([1-9]|1[0-9]|2[0-4])$/) {
+          port = n; sub(/^ether/, "", port)
+          physical_id = "ether" port
+          if (!(physical_id in physical_key)) {
+            physical_key[physical_id] = 1; rj45_key[physical_id] = 1
+            member_key[1] = 1; member_physical[1]++; member_rj45[1]++
+          }
+          special = 1
+        } else if (model == "CRS328-24P-4S+" && n ~ /^sfp-sfpplus[1-4]$/) {
+          port = n; sub(/^sfp-sfpplus/, "", port)
+          physical_id = "sfp-sfpplus" port
+          if (!(physical_id in physical_key)) {
+            physical_key[physical_id] = 1; ten_key[physical_id] = 1
+            member_key[1] = 1; member_physical[1]++; member_ten[1]++
           }
           special = 1
         } else if (model == "HP J8693A Switch 3500yl-48G" && n ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
@@ -1363,6 +1385,9 @@ parser_report() {
       } else if (model == "N2128PX-ON") {
         print "- RJ45 Gi <member>/0/1-28 ports: " rj45
         print "- 10G SFP+ Te <member>/0/1-2 uplinks: " ten
+      } else if (model == "CRS328-24P-4S+") {
+        print "- RJ45 ether1-ether24 ports: " rj45
+        print "- 10G SFP+ sfp-sfpplus1-sfp-sfpplus4 uplinks: " ten
       } else if (model == "HP J8693A Switch 3500yl-48G") {
         print "- Fixed RJ45 logical ports 1-44: " rj45
         print "- Dual-personality copper/SFP logical ports 45-48: " sfp_gi
@@ -1388,6 +1413,7 @@ parser_report() {
       else if (model == "S5720-12TP-LI-AC") profile = "huawei-s5720-12tp-li-ac"
       else if (model == "XS1930-10") profile = "zyxel-xs1930-10"
       else if (model == "N2128PX-ON") profile = "dell-n2128px-on"
+      else if (model == "CRS328-24P-4S+") profile = "mikrotik-crs328-24p-4splus"
       else if (model ~ /^WS-C3650/) profile = "cisco-3650-auto"
       print "- Matched profile: " profile
       print "- Profile status: " profile_status
@@ -1454,6 +1480,16 @@ parser_report() {
           } else {
             mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone 10G SFP+ uplink " ((port + 0) - 7)
           }
+          continue
+        }
+        if (model == "CRS328-24P-4S+" && name ~ /^ether([1-9]|1[0-9]|2[0-4])$/) {
+          port = name; sub(/^ether/, "", port)
+          mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone RJ45 port " (port + 0)
+          continue
+        }
+        if (model == "CRS328-24P-4S+" && name ~ /^sfp-sfpplus[1-4]$/) {
+          port = name; sub(/^sfp-sfpplus/, "", port)
+          mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone 10G SFP+ uplink " (port + 0)
           continue
         }
         if (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
@@ -1555,6 +1591,7 @@ parser_report() {
       else if (model == "S5720-12TP-LI-AC") print "- INFO: Huawei S5720-12TP-LI-AC Community Validated physical mapping loaded with 1G SFP speed safeguards"
       else if (model == "XS1930-10") print "- INFO: Zyxel XS1930-10 Experimental mapping loaded from Support My Switch contribution SV-2026-000004"
       else if (model == "N2128PX-ON") print "- INFO: Dell EMC N2128PX-ON Experimental mapping loaded from contribution evidence dated 2026-08-16"
+      else if (model == "CRS328-24P-4S+") print "- INFO: MikroTik CRS328 Experimental 24 RJ45 + 4 SFP+ mapping loaded from privacy-processed community hardware evidence"
       else print "- WARN: known Switch Vision model not confirmed"
       print (ios != "unknown" ? "- PASS: OS/software version detected" : "- WARN: OS/software version not detected")
       print (if_total > 0 ? "- PASS: usable interface-name table detected" : "- FAIL: neither ifName nor ifDescr interface names detected")
@@ -1564,7 +1601,7 @@ parser_report() {
       else print (trunk_status_count > 0 ? "- PASS: Cisco trunk status OIDs detected" : "- WARN: Cisco trunk status OIDs not detected")
       if (target_ip != "unknown" && target_ip != "") print "- PASS: management target provided: " target_ip
       else print "- WARN: management target not provided; provide a switch_host in the switch list or targets CSV before generator use"
-      ready = (((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48))
+      ready = (((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "CRS328-24P-4S+" && if_total > 0 && rj45 == 24 && ten == 4) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48))
       print "- Ready for SNMP2MQTT generation: " (ready ? "yes, review-only" : "no")
       if (profile_status == "supported") print "- Generator confidence: supported profile; review generated YAML before installing"
       else if (profile_status == "community_validated") print "- Generator confidence: community-validated profile; physical layout verified on real hardware"
@@ -1581,6 +1618,7 @@ parser_report() {
       if (model ~ /^S5720-12TP-LI-AC$/ || model ~ /^S5735-L8P4X-A1$/) print "- Faceplate: generic 48 RJ45 + 4 SFP fallback visual"
       else if (model == "XS1930-10") print "- Faceplate: compact 8 RJ45 + 2 SFP temporary fallback visual"
       else if (model == "N2128PX-ON") print "- Faceplate: generic 48 RJ45 + 4 SFP fallback visual; exact Dell faceplate pending"
+      else if (model == "CRS328-24P-4S+") print "- Faceplate: neutral 24 RJ45 + 4 SFP temporary fallback visual; exact MikroTik alignment pending"
       else print "- Faceplate: registry-selected visual"
       print ""
       print "VLAN / trunk summary:"
@@ -1669,6 +1707,10 @@ parser_report() {
       } else if (model == "N2128PX-ON") {
         print "- Suggested profile: dell-n2128px-on"
         print "- Confidence: experimental; standalone and two-member stack interface topology confirmed by contribution dated 2026-08-16"
+        print "- Support status: experimental / community contribution"
+      } else if (model == "CRS328-24P-4S+") {
+        print "- Suggested profile: mikrotik-crs328-24p-4splus"
+        print "- Confidence: experimental; exact 24 ether + 4 sfp-sfpplus physical topology confirmed by privacy-processed community hardware evidence"
         print "- Support status: experimental / community contribution"
       } else {
         print "- Suggested profile: unknown"
@@ -2084,9 +2126,9 @@ run_live_snmpwalk_current() {
 1.3.6.1.2.1.2.2.1.8
 1.3.6.1.2.1.31.1.1.1
 1.3.6.1.2.1.26
-1.3.6.1.2.1.18.1.4.1.2
-1.3.6.1.2.1.18.7.1.4.3
-1.3.6.1.2.1.18.7.1.4.5.1.1
+1.3.6.1.2.1.17.1.4.1.2
+1.3.6.1.2.1.17.7.1.4.3
+1.3.6.1.2.1.17.7.1.4.5.1.1
 1.3.6.1.4.1.9.9.13.1.3.1
 1.3.6.1.2.1.47.1.1.1.1.2
 1.3.6.1.4.1.9.9.68.1.2.2.1.2
@@ -2150,6 +2192,33 @@ run_live_snmpwalk_current() {
         echo "OK supplemental: $oid" >> "$LIVE_LOG_PATH"
       else
         echo "INFO: Juniper health OID unavailable: $oid" >> "$LIVE_LOG_PATH"
+      fi
+    done
+  fi
+
+  # MikroTik supplemental telemetry is intentionally narrow. Never walk the
+  # complete 14988 enterprise tree because RouterOS exposes unrelated/private
+  # objects there; collect only standard CPU/sensor tables plus known health
+  # and PoE-Out subtrees for review.
+  if grep -Eqi 'MikroTik|RouterOS|CRS328-24P-4S\+' /tmp/switch_vision_snmp_precheck.txt 2>/dev/null; then
+    MIKROTIK_SUPPLEMENTAL_OIDS="
+1.3.6.1.2.1.25.3.3.1.2
+1.3.6.1.2.1.99.1.1.1
+1.3.6.1.4.1.14988.1.1.3
+1.3.6.1.4.1.14988.1.1.15.1.1
+"
+    echo "Running MikroTik supplemental telemetry walks" >> "$LIVE_LOG_PATH"
+    for oid in $MIKROTIK_SUPPLEMENTAL_OIDS; do
+      current_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP $oid"
+      echo "Running supplemental: $current_command" >> "$LIVE_LOG_PATH"
+      {
+        echo ""
+        echo "# --- MikroTik supplemental: $oid ---"
+      } >> "$LIVE_OUTPUT_PATH"
+      if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+        echo "OK supplemental: $oid" >> "$LIVE_LOG_PATH"
+      else
+        echo "INFO: MikroTik supplemental OID unavailable: $oid" >> "$LIVE_LOG_PATH"
       fi
     done
   fi
@@ -2666,6 +2735,14 @@ write_generated_yaml_for_walk() {
         if ((port + 0) <= 7) return prefix " Port " ((port + 0) + 1)
         return prefix " SFP 10G " ((port + 0) - 7)
       }
+      if (model == "CRS328-24P-4S+" && name ~ /^ether([1-9]|1[0-9]|2[0-4])$/) {
+        port = name; sub(/^ether/, "", port)
+        return prefix " Port " (port + 0)
+      }
+      if (model == "CRS328-24P-4S+" && name ~ /^sfp-sfpplus[1-4]$/) {
+        port = name; sub(/^sfp-sfpplus/, "", port)
+        return prefix " SFP 10G " (port + 0)
+      }
       if (name ~ /^ge-0\/0\/[0-9]+$/) {
         port = name
         sub(/^ge-0\/0\//, "", port)
@@ -2788,7 +2865,7 @@ write_generated_yaml_for_walk() {
       return score
     }
     BEGIN {
-      model="unknown"; manufacturer="Cisco"; maxidx=0; maxcpu=0; maxpoe=0; maxstdpoe=0; maxtemp=0; physical_count=0
+      model="unknown"; manufacturer="Unknown"; maxidx=0; maxcpu=0; maxpoe=0; maxstdpoe=0; maxtemp=0; physical_count=0
       if (member_map != "") {
         split(member_map, mm_items, ",")
         for (mmi in mm_items) {
@@ -2807,6 +2884,7 @@ write_generated_yaml_for_walk() {
       if (line ~ /S5735-L8P4X-A1/) huawei_s5735_model="S5735-L8P4X-A1"
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model="S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model="XS1930-10"
+      if (line ~ /CRS328-24P-4S\+/) mikrotik_model="CRS328-24P-4S+"
       if (tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
       if (line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
       if (line ~ /WS-C3750-48P/) c3750_model="WS-C3750-48P"
@@ -2862,6 +2940,9 @@ write_generated_yaml_for_walk() {
           physical_count++
           physical_member[1] = 1
         } else if (zyxel_model != "" && val ~ /^swp0[0-9]$/) {
+          physical_count++
+          physical_member[1] = 1
+        } else if (mikrotik_model != "" && val ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/) {
           physical_count++
           physical_member[1] = 1
         } else if (hp_3500yl_model != "" && val ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
@@ -2987,7 +3068,11 @@ write_generated_yaml_for_walk() {
       }
     }
     END {
-      if (zyxel_model != "") {
+      if (mikrotik_model != "") {
+        model = mikrotik_model
+        manufacturer = "MikroTik"
+      }
+      else if (zyxel_model != "") {
         model = zyxel_model
         manufacturer = "Zyxel"
       }
@@ -3015,11 +3100,11 @@ write_generated_yaml_for_walk() {
         model = dell_model
         manufacturer = "Dell"
       }
-      else if (c3750_model != "") model = c3750_model
-      else if (local_model != "") model = local_model
-      else if (sys_model != "") model = sys_model
-      else if (candidate_model != "") model = candidate_model
-      else if (generic_model != "") model = generic_model
+      else if (c3750_model != "") { model = c3750_model; manufacturer = "Cisco" }
+      else if (local_model != "") { model = local_model; manufacturer = "Cisco" }
+      else if (sys_model != "") { model = sys_model; manufacturer = "Cisco" }
+      else if (candidate_model != "") { model = candidate_model; manufacturer = "Cisco" }
+      else if (generic_model != "") { model = generic_model; manufacturer = "Cisco" }
       print "# Device source: " source_name
       print "# Target host: " host
       print "# Prefix: " prefix
@@ -3040,7 +3125,7 @@ write_generated_yaml_for_walk() {
       phys_n = 0
       for (idx=1; idx<=maxidx; idx++) if (idx in ifname) {
         name=ifname[idx]
-        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/) {
+        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
           if (model == "Juniper EX3300-48P" && name ~ /^(xe|ge)-0\/1\/[0-3]$/) continue
           if (name ~ /^ge-0\/0\/[0-9]+$/) {
             port_no=name
@@ -3149,7 +3234,7 @@ write_generated_yaml_for_walk() {
           if (!vlan_emitted && model == "XS1930-10" && ifname[idx] ~ /^swp0[0-9]$/) {
             bridge_idx=bridge_for_ifindex[idx]
             if (bridge_idx > 0 && (bridge_idx in qbridge_pvid_idx)) {
-              yaml_sensor("1.3.6.1.2.1.18.7.1.4.5.1.1." bridge_idx, label " VLAN ID")
+              yaml_sensor("1.3.6.1.2.1.17.7.1.4.5.1.1." bridge_idx, label " VLAN ID")
               vlan_emitted=1
               zyxel_vlan_count++
             }
@@ -3164,7 +3249,7 @@ write_generated_yaml_for_walk() {
             logical_idx=juniper_logical_ifindex[juniper_port + 0]
             bridge_idx=bridge_for_ifindex[logical_idx]
             if (logical_idx > 0 && bridge_idx > 0 && (bridge_idx in qbridge_pvid_idx)) {
-              yaml_sensor("1.3.6.1.2.1.18.7.1.4.5.1.1." bridge_idx, label " VLAN ID")
+              yaml_sensor("1.3.6.1.2.1.17.7.1.4.5.1.1." bridge_idx, label " VLAN ID")
               vlan_emitted=1
               juniper_vlan_count++
             }
