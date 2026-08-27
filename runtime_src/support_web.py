@@ -3764,11 +3764,11 @@ body.density-dense .step{padding:7px 9px}
 <button id="openDiagnosticsButton" class="nav-card" type="button"><b>Detected Device Information</b><span class="nav-points"><span>Detailed device(s) information</span></span></button>
 <button id="openConfigurationButton" class="nav-card" type="button"><b>Import / Export Configuration</b><span class="nav-points"><span>Import / export Discovery configuration</span></span></button>
 <button id="openMaintenanceButton" class="nav-card" type="button"><b>Maintenance</b><span class="nav-points"><span>Manage backups</span><span>Repair stale MQTT entities</span><span>Reset generated SNMP data</span></span></button>
-<button id="openCreditsButton" class="nav-card" type="button"><b>Credits</b><span class="nav-points"><span>Thank you to all the following contributors who have helped make this integration what it is today. Without you all, it would not be possible.</span></span></button>
 </div>
 <div class="nav-grid" style="margin-top:12px">
 <button id="openIntegrationSettingsButton" class="nav-card" type="button"><b>Switch Vision Settings</b><span class="nav-points"><span>UI Settings</span><span>Discovery Settings</span><span>SNMP2MQTT Settings</span></span></button>
 <button id="openUnifi2mqttSettingsButton" class="nav-card unifi-unavailable" type="button" aria-disabled="true" title="UniFi2MQTT status is being checked."><b>UniFi2MQTT Settings</b><span class="nav-points"><span>UniFi controller API</span><span>MQTT connection</span><span>App &amp; snapshot status</span></span><span id="unifiHomeCardState" class="unifi-card-state">Checking…</span></button>
+<button id="openCreditsButton" class="nav-card" type="button"><b>Credits</b><span class="nav-points"><span>Thank you to all the following contributors who have helped make this integration what it is today. Without you all, it would not be possible.</span></span></button>
 </div>
 </section>
 
