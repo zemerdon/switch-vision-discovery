@@ -2579,8 +2579,8 @@
         "RouterOS 7.21.5"
       ],
       "contributor": {
-        "display_name": "Patrik Kästel",
-        "public_credit": true
+        "display_name": "community contributor",
+        "public_credit": false
       },
       "notes": [
         "A privacy-processed real-hardware SNMP capture reports the local RouterOS model string CRS328-24P-4S+; the registry retains the marketed CRS328-24P-4S+RM SKU only as lookup normalization.",
