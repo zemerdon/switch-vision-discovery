@@ -1,0 +1,21 @@
+{
+  "schema": "switch-vision-product-bundle-v1",
+  "files": [
+    {
+      "path": "switch_vision_discovery/release-fragments/2.3.18.md",
+      "blob_sha": "72f836962c9e6332623b19ba1a11210056afcc04",
+      "sha256": "5446116c11d8e6def8460d554f1367e6100e2de8632425ddcb899c8bc997ad68"
+    }
+  ],
+  "replacements": [
+    {
+      "path": "switch_vision_discovery/config.yaml",
+      "old": "version: \"2.3.17\"",
+      "new": "version: \"2.3.18\"",
+      "count": 1
+    }
+  ],
+  "postprocess": {
+    "kind": "discovery_materialize"
+  }
+}
