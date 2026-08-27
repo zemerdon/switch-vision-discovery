@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.21
+
+# Switch Vision Discovery 2.3.21
+
+- Moves the Hub Credits navigation card to the final position, after Switch Vision Settings and UniFi2MQTT Settings.
+- Keeps the Credits page, animation, fake test entries, privacy boundary, and all Discovery behaviour unchanged.
+- Presentation/navigation-order change only.
+
 ## 2.3.20
 
 # Switch Vision Discovery 2.3.20
