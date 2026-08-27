@@ -145,6 +145,20 @@ with tempfile.TemporaryDirectory() as tmp:
     assert private_submission.exists()
     assert outside.read_text(encoding="utf-8") == "outside stays"
 
+    # Normal Hub settings saves create the same protected pre-mutation snapshot.
+    # This exact reason is used by the Hub settings save handler and must stay
+    # synchronized with the backup validator.
+    hub_save = create_pre_mutation_backup(
+        options,
+        reason="hub_settings_update",
+        directory=backup_dir,
+        now=start + timedelta(minutes=2),
+        nonce="cafebabe",
+    )
+    assert hub_save is not None
+    hub_document = json.loads((backup_dir / hub_save["name"]).read_text(encoding="utf-8"))
+    assert hub_document["reason"] == "hub_settings_update"
+
     # Malicious/hand-edited names and traversal attempts fail closed.
     for invalid_name in (
         "../notes.txt",
