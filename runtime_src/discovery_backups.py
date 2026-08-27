@@ -28,7 +28,7 @@ DEFAULT_RETENTION_ENABLED = True
 DEFAULT_RETENTION_COUNT = 5
 MIN_RETENTION_COUNT = 1
 MAX_RETENTION_COUNT = 10
-_ALLOWED_REASONS = {"configuration_import", "device_state_update"}
+_ALLOWED_REASONS = {"configuration_import", "device_state_update", "hub_settings_update"}
 
 
 class DiscoveryBackupError(RuntimeError):
