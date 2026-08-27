@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.23
+
+## Discovery 2.3.23
+
+- Remove public contributor attribution from the MikroTik CRS328 Experimental registry entry; retain neutral `community contributor` provenance only.
+- No hardware detection, mapping, telemetry, Q-BRIDGE, manufacturer, or support-status behaviour changes from 2.3.22.
+
 ## 2.3.22
 
 # Switch Vision Discovery 2.3.22
