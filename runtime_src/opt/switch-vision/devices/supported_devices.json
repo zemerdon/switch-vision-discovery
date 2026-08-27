@@ -2558,7 +2558,7 @@
       "model": "CRS328-24P-4S+RM",
       "status": "experimental",
       "confirmed_since": "2.3.22",
-      "last_validated_version": "2.3.22",
+      "last_validated_version": "2.3.21",
       "evidence": "privacy_processed_real_hardware_snmp_contribution",
       "ports": {
         "rj45": 24,

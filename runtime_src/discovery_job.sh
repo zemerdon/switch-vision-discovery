@@ -3100,11 +3100,11 @@ write_generated_yaml_for_walk() {
         model = dell_model
         manufacturer = "Dell"
       }
-      else if (c3750_model != "") model = c3750_model
-      else if (local_model != "") model = local_model
-      else if (sys_model != "") model = sys_model
-      else if (candidate_model != "") model = candidate_model
-      else if (generic_model != "") model = generic_model
+      else if (c3750_model != "") { model = c3750_model; manufacturer = "Cisco" }
+      else if (local_model != "") { model = local_model; manufacturer = "Cisco" }
+      else if (sys_model != "") { model = sys_model; manufacturer = "Cisco" }
+      else if (candidate_model != "") { model = candidate_model; manufacturer = "Cisco" }
+      else if (generic_model != "") { model = generic_model; manufacturer = "Cisco" }
       print "# Device source: " source_name
       print "# Target host: " host
       print "# Prefix: " prefix

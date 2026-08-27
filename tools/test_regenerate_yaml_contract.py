@@ -95,6 +95,14 @@ assert "1.3.6.1.2.1.18.7.1.4.5.1.1" not in job_source
 assert 'model="unknown"; manufacturer="Unknown"' in job_source
 assert 'model="unknown"; manufacturer="Cisco"' not in job_source
 assert 'manufacturer = "MikroTik"' in job_source
+for marker in (
+    'else if (c3750_model != "") { model = c3750_model; manufacturer = "Cisco" }',
+    'else if (local_model != "") { model = local_model; manufacturer = "Cisco" }',
+    'else if (sys_model != "") { model = sys_model; manufacturer = "Cisco" }',
+    'else if (candidate_model != "") { model = candidate_model; manufacturer = "Cisco" }',
+    'else if (generic_model != "") { model = generic_model; manufacturer = "Cisco" }',
+):
+    assert marker in job_source, marker
 assert "MIKROTIK_SUPPLEMENTAL_OIDS" in job_source
 assert "1.3.6.1.4.1.14988.1.1.15.1.1" in job_source
 assert "1.3.6.1.4.1.14988\n" not in job_source
