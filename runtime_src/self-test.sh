@@ -21,6 +21,17 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
+# v2.3.20 Credits animation / test-content presentation regression.
+grep -Fq 'id="creditsMatrix"' "$BASE_DIR/support_web.py"
+grep -Fq 'function startCreditsAnimation()' "$BASE_DIR/support_web.py"
+grep -Fq 'credits-matrix-active' "$BASE_DIR/support_web.py"
+grep -Fq 'credits-settled' "$BASE_DIR/support_web.py"
+grep -Fq '@media(prefers-reduced-motion:reduce)' "$BASE_DIR/support_web.py"
+grep -Fq 'TEST ENTRIES — NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
+grep -Fq 'DemoAlias-01' "$BASE_DIR/support_web.py"
+grep -Fq "openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsAnimation()})" "$BASE_DIR/support_web.py"
+echo 'Switch Vision Discovery v2.3.20 Credits animation regression: PASS'
+
 # v2.3.11 HP J8693A / 3500yl numeric-interface regression.
 # Exact hardware contract: 44 fixed copper logical ports plus four
 # dual-personality copper/mini-GBIC logical ports (45-48).  No private
@@ -1558,8 +1569,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.19"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.19"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.20"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.20"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
