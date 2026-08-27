@@ -5,7 +5,8 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNER = "zemerdon"
-ALLOWED = {"", OWNER.casefold(), "community contributor", "anonymous"}
+APPROVED_PUBLIC_CREDITS = {OWNER.casefold(), "patrik kästel"}
+ALLOWED = {"", *APPROVED_PUBLIC_CREDITS, "community contributor", "anonymous"}
 SUBMISSION_ID = re.compile(r"(?i)SV[-_]20\d{2}[-_]\d+")
 CONTRIBUTION_BREADCRUMB = re.compile(
     r"(?i)(?:unifi[-_]contrib|community[-_]validation)[/_-]\d{6}"
@@ -19,8 +20,8 @@ def check_structured(value: object, path: Path) -> None:
             name = str(value.get("display_name") or "").strip()
             if name.casefold() not in ALLOWED:
                 raise SystemExit(f"Non-approved public attribution remains in {path}: {name!r}")
-            if name.casefold() != OWNER.casefold() and value.get("public_credit") is True:
-                raise SystemExit(f"Non-owner public credit remains enabled in {path}")
+            if value.get("public_credit") is True and name.casefold() not in APPROVED_PUBLIC_CREDITS:
+                raise SystemExit(f"Non-approved public credit remains enabled in {path}: {name!r}")
 
         contributions = value.get("contributions")
         if isinstance(contributions, list):
