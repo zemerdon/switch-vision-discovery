@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c4ac044db3a9a09392a601a8c6831e2e7e
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
       - name: Verify public Discovery 2.3.18 image
         shell: bash
         run: |
