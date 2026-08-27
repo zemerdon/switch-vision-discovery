@@ -5,7 +5,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNER = "zemerdon"
-APPROVED_PUBLIC_CREDITS = {OWNER.casefold(), "patrik kästel"}
+APPROVED_PUBLIC_CREDITS = {OWNER.casefold()}
 ALLOWED = {"", *APPROVED_PUBLIC_CREDITS, "community contributor", "anonymous"}
 SUBMISSION_ID = re.compile(r"(?i)SV[-_]20\d{2}[-_]\d+")
 CONTRIBUTION_BREADCRUMB = re.compile(
