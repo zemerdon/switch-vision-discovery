@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.19
+
+# Switch Vision Discovery 2.3.19
+
+- Adds a new **Credits** card to Switch Vision Hub.
+- The Credits card displays the project thank-you message and is ready for future opt-in contributor acknowledgements in the form `Alias — Component(s)`.
+- No contributor names or aliases are included in this release.
+- Credits remains presentation-only and does not read contributor evidence, email, Evidence Vault data, or private recognition records.
+- No Discovery workflow, device mapping, telemetry, settings, generated YAML, or hardware-support behaviour changes.
+
 ## 2.3.18
 
 - Fix Hub settings saves being stopped by the Discovery backup validator with `Discovery backup reason is invalid.`.
