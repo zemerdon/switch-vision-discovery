@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.22
+
+# Switch Vision Discovery 2.3.22
+
+- Adds Experimental MikroTik CRS328-24P-4S+RM discovery from privacy-processed real-hardware evidence, including exact 24 x `ether` RJ45 and 4 x `sfp-sfpplus` SFP+ front-panel classification.
+- Preserves the locally observed RouterOS model string `CRS328-24P-4S+` and normalizes it only for exact registry lookup against the marketed `CRS328-24P-4S+RM` SKU.
+- Corrects BRIDGE/Q-BRIDGE targeted acquisition and generated PVID OIDs from the incorrect `.1.3.6.1.2.1.18` tree to the standard `.1.3.6.1.2.1.17` tree.
+- Fixes generated SNMP2MQTT YAML so an unknown/non-Cisco device can no longer inherit `device_manufacturer: Cisco`; known vendors are assigned explicitly and unknown devices remain `Unknown`.
+- Adds narrow, read-only MikroTik supplemental collection for HOST-RESOURCES CPU, ENTITY-SENSOR, MikroTik health, and MikroTik PoE-Out candidates. These candidates remain walk-aware/review-only and are not installed unless returned and subsequently validated.
+
 ## 2.3.21
 
 # Switch Vision Discovery 2.3.21
