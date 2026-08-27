@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.18
+
+- Fix Hub settings saves being stopped by the Discovery backup validator with `Discovery backup reason is invalid.`.
+- Allow the existing `hub_settings_update` pre-mutation backup reason used by the Hub Save workflow while keeping unknown backup reasons fail-closed.
+- Add permanent regression coverage for the exact Hub settings-save backup reason and verify the recorded backup metadata.
+- Preserve Supervisor as the authoritative configuration store and keep pre-save backup retention, privacy, device mappings, telemetry, generated configuration and hardware-support behavior unchanged.
+
 ## 2.3.17
 
 - Reorganize Calibration Profiles into grouped Active and Unused sections, with active profiles split into Custom and Native groups.
