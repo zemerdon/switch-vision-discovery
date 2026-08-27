@@ -81,4 +81,22 @@ for marker in (
     assert marker in source, marker
 
 assert 'generated_yaml_path"] = "/tmp/' not in source
-print("Discovery stored-walk SNMP2MQTT YAML regeneration contract: PASS")
+
+job_source = (RUNTIME / "discovery_job.sh").read_text(encoding="utf-8")
+for oid in (
+    "1.3.6.1.2.1.17.1.4.1.2",
+    "1.3.6.1.2.1.17.7.1.4.3",
+    "1.3.6.1.2.1.17.7.1.4.5.1.1",
+):
+    assert oid in job_source, oid
+assert "1.3.6.1.2.1.18.1.4.1.2" not in job_source
+assert "1.3.6.1.2.1.18.7.1.4.3" not in job_source
+assert "1.3.6.1.2.1.18.7.1.4.5.1.1" not in job_source
+assert 'model="unknown"; manufacturer="Unknown"' in job_source
+assert 'model="unknown"; manufacturer="Cisco"' not in job_source
+assert 'manufacturer = "MikroTik"' in job_source
+assert "MIKROTIK_SUPPLEMENTAL_OIDS" in job_source
+assert "1.3.6.1.4.1.14988.1.1.15.1.1" in job_source
+assert "1.3.6.1.4.1.14988\n" not in job_source
+
+print("Discovery stored-walk SNMP2MQTT YAML regeneration, Q-BRIDGE, and manufacturer contracts: PASS")
