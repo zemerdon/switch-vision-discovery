@@ -32,6 +32,18 @@ grep -Fq 'DemoAlias-01' "$BASE_DIR/support_web.py"
 grep -Fq "openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsAnimation()})" "$BASE_DIR/support_web.py"
 echo 'Switch Vision Discovery v2.3.20 Credits animation regression: PASS'
 
+# v2.3.21 Credits card home-navigation order regression.
+python3 - "$BASE_DIR/support_web.py" <<'PY_CREDITS_ORDER'
+from pathlib import Path
+import sys
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+settings = text.index('id="openIntegrationSettingsButton"')
+unifi = text.index('id="openUnifi2mqttSettingsButton"')
+credits = text.index('id="openCreditsButton"')
+assert settings < unifi < credits, "Credits must be the final Hub navigation card"
+PY_CREDITS_ORDER
+echo 'Switch Vision Discovery v2.3.21 Credits home-navigation order: PASS'
+
 # v2.3.11 HP J8693A / 3500yl numeric-interface regression.
 # Exact hardware contract: 44 fixed copper logical ports plus four
 # dual-personality copper/mini-GBIC logical ports (45-48).  No private
@@ -1569,8 +1581,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.20"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.20"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.21"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.21"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
