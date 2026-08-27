@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.20
+
+# Switch Vision Discovery 2.3.20
+
+- Adds a Matrix-inspired Credits-page construction animation that resolves into the normal Switch Vision cyan visual language.
+- Adds a settled animated cyan edge glow, periodic energy sweep, faint circuit/particle drift, breathing Credits heading, staggered contributor reveal, and hover shimmer/lift effects.
+- Adds clearly labelled fake test credit rows only; no real contributor identity is published in this release.
+- Respects `prefers-reduced-motion` by skipping the construction sequence and disabling continuous motion.
+- Changes presentation only; Discovery, device support, telemetry, configuration, privacy, contribution evidence, and generated output behaviour are unchanged.
+
 ## 2.3.19
 
 # Switch Vision Discovery 2.3.19
