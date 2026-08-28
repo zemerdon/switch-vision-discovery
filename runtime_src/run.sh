@@ -18,4 +18,4 @@ echo "Support My Switch Web UI: listening on Home Assistant Ingress (port 8099).
 exec python3 /support_web.py \
   --port 8099 \
   --version "$SWITCH_VISION_DISCOVERY_VERSION" \
-  --discovery-script /discovery_job.sh
+  --discovery-script /discovery_contract_entrypoint.py
