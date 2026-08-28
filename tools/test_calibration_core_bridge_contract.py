@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -235,6 +236,7 @@ def test_failed_calibration_attempt_persists_sanitized_snapshot() -> None:
         assert snapshot["stage"] == "token"
         assert snapshot["error_class"] == "TOKEN_MISSING"
         assert snapshot["token_present"] is False
+        assert snapshot["supervisor_auth_available"] is False
         assert snapshot["core_command_registered"] is None
         assert snapshot["core_version"] is None
         assert re.fullmatch(r"SV-CB-[0-9A-F]{12}", snapshot["diagnostic_id"])
@@ -288,6 +290,7 @@ def test_unknown_command_snapshot_pinpoints_unavailable_core_command() -> None:
         assert snapshot["error_class"] == "CORE_COMMAND_UNAVAILABLE"
         assert snapshot["ha_error_code"] == "unknown_command"
         assert snapshot["token_present"] is True
+        assert snapshot["supervisor_auth_available"] is True
         assert snapshot["core_command_registered"] is False
         rendered = json.dumps(snapshot)
         assert "test-token" not in rendered
@@ -330,6 +333,7 @@ def test_success_snapshot_contains_contract_not_profile_contents() -> None:
         assert snapshot["stage"] == "response"
         assert snapshot["error_class"] is None
         assert snapshot["token_present"] is True
+        assert snapshot["supervisor_auth_available"] is True
         assert snapshot["core_command_registered"] is True
         rendered = json.dumps(snapshot)
         assert "PRIVATE_PROFILE_NAME_SHOULD_NOT_BE_SNAPSHOTTED" not in rendered
@@ -342,6 +346,63 @@ def test_support_bundle_carries_diagnostic_via_full_root_copy() -> None:
     assert 'cp -a "$SWITCH_VISION_ROOT/." "$DATA_COPY/"' in script
     assert 'rm -rf "$DATA_COPY/contributions"' in script
     assert 'rm -rf "$DATA_COPY/diagnostics"' not in script
+
+
+def test_support_privacy_processing_preserves_bridge_diagnostic_contract() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "switch_vision"
+        diagnostic_path = root / "diagnostics" / "calibration-core-bridge.json"
+        diagnostic_path.parent.mkdir(parents=True, exist_ok=True)
+        diagnostic_path.write_text(
+            json.dumps(
+                {
+                    "schema": "switch-vision.core-bridge-diagnostic.v1",
+                    "timestamp": "2026-08-28T18:00:00Z",
+                    "diagnostic_id": "SV-CB-ABCDEF123456",
+                    "operation": "switch_vision/list_calibrations",
+                    "route_operation": "calibration_profiles",
+                    "status": "error",
+                    "stage": "response",
+                    "error_class": "CORE_COMMAND_UNAVAILABLE",
+                    "error_type": "core_command",
+                    "ha_error_code": "unknown_command",
+                    "cause_type": None,
+                    "token_present": True,
+                    "supervisor_auth_available": True,
+                    "discovery_version": "2.3.25",
+                    "core_version": None,
+                    "core_command_registered": False,
+                    "message": "Switch Vision Core command failed [unknown_command].",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        report = Path(tmp) / "sanitization-report.json"
+        subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "runtime_src" / "sanitize_support_bundle.py"),
+                str(root),
+                str(report),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        processed = json.loads(diagnostic_path.read_text(encoding="utf-8"))
+        assert processed["schema"] == "switch-vision.core-bridge-diagnostic.v1"
+        assert processed["diagnostic_id"] == "SV-CB-ABCDEF123456"
+        assert processed["operation"] == "switch_vision/list_calibrations"
+        assert processed["route_operation"] == "calibration_profiles"
+        assert processed["stage"] == "response"
+        assert processed["error_class"] == "CORE_COMMAND_UNAVAILABLE"
+        assert processed["ha_error_code"] == "unknown_command"
+        assert processed["supervisor_auth_available"] is True
+        assert processed["core_command_registered"] is False
+        assert report.is_file()
 
 
 def main() -> int:
@@ -365,6 +426,8 @@ def main() -> int:
     print("PASS: Successful bridge snapshot excludes calibration/profile contents")
     test_support_bundle_carries_diagnostic_via_full_root_copy()
     print("PASS: Support My Switch carries the diagnostic through its full-root copy")
+    test_support_privacy_processing_preserves_bridge_diagnostic_contract()
+    print("PASS: Support My Switch privacy processing preserves the safe bridge contract")
     print("Switch Vision Calibration/Core bridge contracts: PASS")
     return 0
 
