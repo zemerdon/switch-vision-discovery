@@ -1,0 +1,53 @@
+name: Discovery 2.3.24 version update
+
+on:
+  push:
+    branches:
+      - contrib/discovery-2.3.24-batch
+    paths:
+      - .github/workflows/version-2.3.24.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out contributor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: contrib/discovery-2.3.24-batch
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Set Discovery 2.3.24 version and release fragment
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/^version: "2\.3\.23"$/version: "2.3.24"/' switch_vision_discovery/config.yaml
+          sed -i 's/^SWITCH_VISION_DISCOVERY_VERSION="2\.3\.23"$/SWITCH_VISION_DISCOVERY_VERSION="2.3.24"/' runtime_src/discovery_job.sh
+          cat > switch_vision_discovery/release-fragments/2.3.24.md <<'EOF'
+          ## Discovery 2.3.24
+
+          - Add evidence-backed exact detection and physical-interface handling for Dell PowerConnect 5548P, Cisco WS-C3750X-48P, Cisco SG350-20, Zyxel GS1900-24E, HP J8693A Switch 3500yl-48G, and Ubiquiti USW Pro HD 24 PoE.
+          - Recognize compact Ubiquiti model identities used by USW Pro HD 24 PoE and USW Pro XG 8 PoE SNMP data without broadening generic `0/N` interface handling.
+          - Fix Catalyst 3750X C3KX network-module alias handling so Gi/Te aliases for the same physical cages are not double-counted as access ports.
+          - Fix HP J8693A generated dashboard cards to bind the four dual-personality positions to the emitted `uplink_*_status` entities instead of the generic `sfp_10g_*_status` template.
+          - Add Experimental UniFi API topology/profile metadata for USW Aggregation, USW Enterprise 24 PoE, USW Flex 2.5G 5, and USW WAN while preserving true observed port counts and connector types.
+          - Add synthetic contributor regressions and privacy-safe public evidence identifiers; raw contribution artifacts and private submission identifiers remain outside the public repository.
+          - No newly added model is promoted beyond Experimental by this release.
+          EOF
+      - name: Commit versioned release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "switch-vision-bot"
+          git config user.email "switch-vision-bot@users.noreply.github.com"
+          git add switch_vision_discovery/config.yaml runtime_src/discovery_job.sh switch_vision_discovery/release-fragments/2.3.24.md
+          if git diff --cached --quiet; then
+            echo "Version files already current."
+            exit 0
+          fi
+          git commit -m "Version Discovery 2.3.24"
+          git push origin HEAD:contrib/discovery-2.3.24-batch
