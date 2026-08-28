@@ -1,9 +1,10 @@
-name: Discovery 2.3.24 functional audit
+name: Discovery functional audit
 
 on:
+  pull_request:
   push:
     branches:
-      - audit/discovery-2.3.24-functional
+      - main
   workflow_dispatch:
 
 permissions:
@@ -13,7 +14,7 @@ jobs:
   functional-audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out audit branch
+      - name: Check out source
         uses: actions/checkout@v4
 
       - name: Set up Python
