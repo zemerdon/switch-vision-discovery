@@ -76,13 +76,39 @@ cat > "$ok/options.json" <<EOF
   "generate_support_my_switch_bundle": "false"
 }
 EOF
-run_entrypoint "$ok" "$ok/options.json" > "$ok/stdout.txt" 2> "$ok/stderr.txt"
-grep -Fq 'Model/platform: PowerConnect 5548P' "$ok/report.txt"
-grep -Fq -- '- Physical switch interfaces detected: 50' "$ok/report.txt"
-grep -Fq -- '- Mapped physical interfaces: 50' "$ok/report.txt"
-[ "$(grep -Ec '^  - oid: 1\.3\.6\.1\.2\.1\.2\.2\.1\.8\.[0-9]+$' "$ok/generated.yaml")" -eq 50 ]
-grep -Fq '# Detected model: PowerConnect 5548P' "$ok/generated.yaml"
-find "$ok/published-capabilities" -name '*-physical-contract.json' -type f | grep -q .
+if ! run_entrypoint "$ok" "$ok/options.json" > "$ok/stdout.txt" 2> "$ok/stderr.txt"; then
+  echo 'FAIL: positive entrypoint path exited non-zero' >&2
+  echo '--- entrypoint stdout ---' >&2
+  cat "$ok/stdout.txt" >&2 || true
+  echo '--- entrypoint stderr ---' >&2
+  cat "$ok/stderr.txt" >&2 || true
+  exit 1
+fi
+for assertion in \
+  'Model/platform: PowerConnect 5548P' \
+  '- Physical switch interfaces detected: 50' \
+  '- Mapped physical interfaces: 50'; do
+  if ! grep -Fq -- "$assertion" "$ok/report.txt"; then
+    echo "FAIL: report missing: $assertion" >&2
+    cat "$ok/report.txt" >&2 || true
+    exit 1
+  fi
+done
+if [ "$(grep -Ec '^  - oid: 1\.3\.6\.1\.2\.1\.2\.2\.1\.8\.[0-9]+$' "$ok/generated.yaml")" -ne 50 ]; then
+  echo 'FAIL: generated YAML does not contain 50 status sensors' >&2
+  sed -n '1,220p' "$ok/generated.yaml" >&2 || true
+  exit 1
+fi
+grep -Fq '# Detected model: PowerConnect 5548P' "$ok/generated.yaml" || {
+  echo 'FAIL: generated YAML model was not patched to exact registry model' >&2
+  sed -n '1,120p' "$ok/generated.yaml" >&2 || true
+  exit 1
+}
+find "$ok/published-capabilities" -name '*-physical-contract.json' -type f | grep -q . || {
+  echo 'FAIL: physical contract was not published' >&2
+  find "$ok" -maxdepth 3 -type f -print >&2 || true
+  exit 1
+}
 
 echo 'entrypoint positive path: PASS'
 
@@ -116,7 +142,12 @@ if run_entrypoint "$conflict" "$conflict/options.json" > "$conflict/stdout.txt" 
   echo 'FAIL: topology conflict unexpectedly succeeded' >&2
   exit 1
 fi
-grep -Fq 'Topology conflict' "$conflict/stdout.txt"
+if ! grep -Fq 'Topology conflict' "$conflict/stdout.txt"; then
+  echo 'FAIL: topology conflict did not surface its status marker' >&2
+  cat "$conflict/stdout.txt" >&2 || true
+  cat "$conflict/stderr.txt" >&2 || true
+  exit 1
+fi
 [ ! -s "$conflict/generated.yaml" ] || {
   echo 'FAIL: topology conflict produced final YAML' >&2
   exit 1
