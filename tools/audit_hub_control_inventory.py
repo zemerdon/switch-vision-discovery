@@ -36,7 +36,6 @@ def attrs(tag: str) -> dict[str, str]:
 
 def main() -> int:
     page = extract_page()
-    support_source = SUPPORT.read_text(encoding="utf-8")
     external_source = "\n".join(path.read_text(encoding="utf-8") for path in EXTERNAL)
     javascript = page + "\n" + external_source
 
@@ -50,7 +49,7 @@ def main() -> int:
         button_id = properties.get("id", "").strip()
         if not button_id:
             # Anonymous buttons are acceptable only when they are form-submit
-            # controls or are generated inside a delegated container.
+            # controls or have an explicit inline action.
             button_type = properties.get("type", "submit").casefold()
             if button_type != "submit" and "onclick" not in properties:
                 warnings.append(f"anonymous non-submit button: <button{raw[:120]}>")
@@ -67,9 +66,6 @@ def main() -> int:
         if "onclick" in properties:
             continue
 
-        # Native submit buttons do not need a click listener when they live in a
-        # form. Still require the control id to be referenced somewhere if it is
-        # type=button, because otherwise it cannot perform an action.
         button_type = properties.get("type", "submit").casefold()
         quoted = re.compile(rf'''["']{re.escape(button_id)}["']''')
         references = len(quoted.findall(javascript))
@@ -77,26 +73,31 @@ def main() -> int:
             failures.append(f"{button_id}: type=button has no JavaScript reference")
             continue
 
-        # For action buttons, accept direct event binding, assignment to a local
-        # variable that is later bound, or a known delegated-action attribute.
         direct_patterns = [
             rf'''(?:getElementById|el)\(\s*["']{re.escape(button_id)}["']\s*\)[^\n;]{{0,180}}addEventListener''',
             rf'''querySelector\(\s*["']#{re.escape(button_id)}["']\s*\)[^\n;]{{0,180}}addEventListener''',
             rf'''["']{re.escape(button_id)}["'][^\n]{{0,220}}addEventListener''',
         ]
         directly_bound = any(re.search(pattern, javascript, flags=re.S) for pattern in direct_patterns)
+
+        # Also recognize the common pattern used by maintenance.js where the
+        # element is assigned to a local variable and the listener is attached
+        # on the following lines:
+        #   const open = el("openMaintenanceButton");
+        #   if (open) open.addEventListener(...)
+        indirect_pattern = re.compile(
+            rf'''(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:(?:document\.)?getElementById|el)\(\s*["']{re.escape(button_id)}["']\s*\)\s*;[\s\S]{{0,320}}?\1\.addEventListener\s*\(''',
+            flags=re.S,
+        )
+        indirectly_bound = bool(indirect_pattern.search(javascript))
         has_action_attr = any(key.startswith("data-") and "action" in key for key in properties)
-        if button_type == "button" and not directly_bound and not has_action_attr:
-            # Some shipped code stores the element in a variable first. If the
-            # id is at least referenced by JS, flag as review warning rather than
-            # a hard failure; the critical actions are separately hard-asserted.
+
+        if button_type == "button" and not directly_bound and not indirectly_bound and not has_action_attr:
             if references > 0:
-                warnings.append(f"{button_id}: referenced by JavaScript but direct listener is indirect")
+                warnings.append(f"{button_id}: referenced by JavaScript but listener pattern needs manual review")
             else:
                 failures.append(f"{button_id}: no action binding found")
 
-    # Every static form input/select/textarea with an id should be referenced by
-    # the page scripts, unless it is a browser-native file field or purely output.
     fields = []
     for match in re.finditer(r"<(input|select|textarea)\b([^>]*)>", page, flags=re.I | re.S):
         kind = match.group(1).casefold()
@@ -125,7 +126,10 @@ def main() -> int:
     if failures:
         print(f"Hub static control inventory audit: FAIL ({len(failures)} issue(s))")
         return 1
-    print("Hub static control inventory audit: PASS")
+    if warnings:
+        print(f"Hub static control inventory audit: PASS with {len(warnings)} review warning(s)")
+        return 0
+    print("Hub static control inventory audit: PASS (0 warnings)")
     return 0
 
 
