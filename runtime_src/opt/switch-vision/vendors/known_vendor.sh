@@ -20,6 +20,7 @@ cv_known_vendor_identity() {
   CV_ID_SUPPORT_STATUS=$(jq -r '.support_status // "vendor-pack"' "$vendor_db" 2>/dev/null)
   CV_ID_MODEL_HINT=""
   CV_ID_PRODUCT_MATCH="enterprise-only"
+
   if [ "$vendor_id" = "juniper" ]; then
     case "${CV_ID_SYS_DESCR:-}" in
       *[Ee][Xx]3300-48[Pp]*)
@@ -30,6 +31,7 @@ cv_known_vendor_identity() {
         ;;
     esac
   fi
+
   if [ "$vendor_id" = "hp_aruba" ]; then
     case "${CV_ID_SYS_DESCR:-}" in
       *J8693A*|*j8693a*|*3500yl-48G*|*3500YL-48G*)
@@ -40,6 +42,18 @@ cv_known_vendor_identity() {
         ;;
     esac
   fi
+
+  if [ "$vendor_id" = "dell" ]; then
+    case "${CV_ID_SYS_DESCR:-}" in
+      *PowerConnect*5548P*|*POWERCONNECT*5548P*)
+        CV_ID_FAMILY="PowerConnect 5500"
+        CV_ID_MODEL_HINT="PowerConnect 5548P"
+        CV_ID_PRODUCT_MATCH="powerconnect-5548p-local-sysdescr"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
+    esac
+  fi
+
   if [ "$vendor_id" = "mikrotik" ]; then
     case "${CV_ID_SYS_OBJECT_ID:-}|${CV_ID_SYS_DESCR:-}" in
       1.3.6.1.4.1.14988.*'|'*CRS328-24P-4S+*|*'|'*CRS328-24P-4S+*)
@@ -50,12 +64,36 @@ cv_known_vendor_identity() {
         ;;
     esac
   fi
+
+  if [ "$vendor_id" = "ubiquiti" ]; then
+    case "${CV_ID_SYS_DESCR:-}" in
+      *USWProHD24PoE*)
+        CV_ID_FAMILY="UniFi Switch Pro HD"
+        CV_ID_MODEL_HINT="USW Pro HD 24 PoE"
+        CV_ID_PRODUCT_MATCH="usw-pro-hd-24-poe-local-sysdescr"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
+      *USWProXG8PoE*)
+        CV_ID_FAMILY="UniFi Switch Pro XG"
+        CV_ID_MODEL_HINT="USW Pro XG 8 PoE"
+        CV_ID_PRODUCT_MATCH="usw-pro-xg-8-poe-local-sysdescr"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
+    esac
+  fi
+
   if [ "$vendor_id" = "zyxel" ]; then
     case "${CV_ID_SYS_OBJECT_ID:-}|${CV_ID_SYS_DESCR:-}" in
       1.3.6.1.4.1.890.1.15*'|'*XS1930-10*|*'|'*XS1930-10*)
         CV_ID_FAMILY="XS1930"
         CV_ID_MODEL_HINT="XS1930-10"
         CV_ID_PRODUCT_MATCH="xs1930-10"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
+      *'|'*GS1900-24E*)
+        CV_ID_FAMILY="GS1900"
+        CV_ID_MODEL_HINT="GS1900-24E"
+        CV_ID_PRODUCT_MATCH="gs1900-24e-local-sysdescr"
         CV_ID_SUPPORT_STATUS="experimental"
         ;;
     esac

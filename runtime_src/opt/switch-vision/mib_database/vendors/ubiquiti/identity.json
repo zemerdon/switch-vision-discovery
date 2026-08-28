@@ -11,7 +11,9 @@
       "EdgeSwitch",
       "EdgeOS",
       "USW-",
-      "UniFi Switch"
+      "UniFi Switch",
+      "USWProHD24PoE",
+      "USWProXG8PoE"
     ]
   },
   "capabilities": [

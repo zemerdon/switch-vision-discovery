@@ -1,0 +1,24 @@
+name: Contributor interface regressions
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contributor-interface-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run synthetic contributor interface regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh tools/test_contributor_interface_batch.sh
