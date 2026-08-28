@@ -86,7 +86,7 @@ cv_detect_vendor_identity "$TMP/gs1900.txt"
 model=$(cv_cap_extract_model_text "$TMP/gs1900.txt")
 [ "$model" = "GS1900-24E" ]
 
-# Mark SV-000006: compact Net-SNMP UniFi model strings and 0/N front-panel names.
+# Anonymous UniFi SNMP evidence: compact model strings and 0/N front-panel names.
 set --
 i=1
 while [ "$i" -le 28 ]; do set -- "$@" "0/$i"; i=$((i + 1)); done
@@ -115,13 +115,13 @@ CV_CAP_FRONT_PANEL_AWARE="false"
 [ "$(cv_interface_class_for_name 'gi1/0/1')" = "other" ]
 [ "$(cv_interface_class_for_name '17')" = "other" ]
 
-# Paul SV-000033: both generated-card branches must bind the J8693A four
+# Anonymous HP evidence: both generated-card branches must bind the J8693A four
 # dual-personality positions to the `uplink_N_status` entities actually emitted
 # by Discovery, rather than the generic sfp_10g template.
 hp_binding='*J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;'
 [ "$(grep -Fc "$hp_binding" "$DISCOVERY_JOB")" -eq 2 ]
 
-# Registry contracts distilled from the contributor evidence. Match model
+# Registry contracts distilled from anonymous contributor evidence. Match model
 # identity canonically because older exact entries legitimately use SKU dashes
 # while newer display names may use spaces. Raw evidence never enters Git.
 jq -e '
@@ -133,13 +133,13 @@ jq -e '
   (dev("SG350-20") | .status == "experimental" and .ports.rj45 == 16 and .ports.uplinks == 4) and
   (dev("HP J8693A Switch 3500yl-48G") | .status == "experimental" and .ports.rj45 == 44 and .ports.uplinks == 4) and
   (dev("USW Pro HD 24 PoE") | .status == "experimental" and .ports.rj45 == 24 and .ports.ten_gigabit_sfp_plus == 4) and
-  (dev("USW Pro XG 8 PoE") | .status == "experimental" and (.contributions | map(.id) | index("sv-2026-000006-snmp")) != null) and
+  (dev("USW Pro XG 8 PoE") | .status == "experimental" and (.contributions | map(.id) | index("evidence-unifi-pro-xg8-snmp-a")) != null) and
   (dev("USW Aggregation") | .status == "experimental" and .unifi_api_port_map.rj45 == [] and .unifi_api_port_map.sfp == [1,2,3,4,5,6,7,8]) and
   (dev("USW Enterprise 24 PoE") | .status == "experimental" and .unifi_api_port_map.rj45 == [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24] and .unifi_api_port_map.sfp == [25,26]) and
   (dev("USW Flex 2.5G 5") | .status == "experimental" and .unifi_api_port_map.rj45 == [1,2,3,4,5]) and
   (dev("USW WAN") | .status == "experimental" and .ports.rj45 == 1 and .ports.ten_gigabit_sfp_plus == 3 and .unifi_api_port_map.rj45 == [4] and .unifi_api_port_map.sfp == [1,2,3]) and
-  (dev("USW Enterprise 8 PoE") | (.contributions | map(.id) | index("sv-2026-000028-enterprise8")) != null) and
-  (dev("USW Flex Mini") | (.contributions | map(.id) | index("sv-2026-000028-flexmini")) != null)
+  (dev("USW Enterprise 8 PoE") | (.contributions | map(.id) | index("evidence-unifi-enterprise8-refresh-a")) != null) and
+  (dev("USW Flex Mini") | (.contributions | map(.id) | index("evidence-unifi-flex-mini-refresh-a")) != null)
 ' "$REGISTRY" >/dev/null
 
 echo 'Switch Vision contributor interface batch regression: PASS'
