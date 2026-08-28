@@ -17,6 +17,8 @@ sys.path.insert(0, str(ROOT / "runtime_src"))
 
 import support_web as hub  # noqa: E402
 
+SOURCE_REGISTRY = ROOT / "runtime_src/opt/switch-vision/devices/supported_devices.json"
+
 
 @contextmanager
 def patched(**values):
@@ -84,6 +86,7 @@ def test_discovery_save_and_write_only_secrets() -> None:
         return {}
 
     with patched(
+        DEFAULT_REGISTRY_FILE=SOURCE_REGISTRY,
         _self_addon_options=get_options,
         _supervisor_json=supervisor,
         create_pre_mutation_backup=lambda _options, *, reason: backups.append(reason),
@@ -96,6 +99,8 @@ def test_discovery_save_and_write_only_secrets() -> None:
         assert row["original_switch_name"] == "SW1"
         assert safe["settings"]["support_contributor_value"] == ""
         assert safe["settings"]["support_contributor_value_configured"] is True
+        assert "PowerConnect 5548P" in safe["models"]
+        assert "WS-C3750X-48P" in safe["models"]
 
         # Rename the switch while leaving the write-only community blank. The
         # original name is the stable lookup key that must preserve the secret.
@@ -141,6 +146,23 @@ def test_discovery_save_and_write_only_secrets() -> None:
             }),
             "Enter the name or username",
         )
+
+
+def test_manual_model_fallback_is_complete() -> None:
+    # If the runtime registry is temporarily unreadable, the fallback must still
+    # accept every manual model allowed by the Supervisor schema.
+    with tempfile.TemporaryDirectory(prefix="sv-empty-registry-") as temp:
+        missing = Path(temp) / "missing.json"
+        with patched(DEFAULT_REGISTRY_FILE=missing):
+            fallback = hub._manual_snmp_override_models()
+    required = {
+        "WS-C3750X-48P",
+        "CRS328-24P-4S+RM",
+        "XS1930-10",
+        "N2128PX-ON",
+        "PowerConnect 5548P",
+    }
+    assert required <= fallback, sorted(required - fallback)
 
 
 def test_core_reset_contract() -> None:
@@ -266,6 +288,8 @@ def test_snmp_reset_boundary() -> None:
 def main() -> int:
     test_discovery_save_and_write_only_secrets()
     print("PASS: Discovery settings save, rename, manual-model and secret preservation contracts")
+    test_manual_model_fallback_is_complete()
+    print("PASS: Degraded registry fallback accepts current manual model set")
     test_core_reset_contract()
     print("PASS: Core Reset button backend contract")
     test_snmp2mqtt_save_password_preservation_and_restart()
