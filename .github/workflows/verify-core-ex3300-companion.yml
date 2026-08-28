@@ -1,0 +1,38 @@
+name: Verify Core EX3300 companion contract
+
+on:
+  push:
+    branches:
+      - audit/discovery-2.3.24-functional
+    paths:
+      - .github/workflows/verify-core-ex3300-companion.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coordinated-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Discovery audit branch
+        uses: actions/checkout@v4
+        with:
+          ref: audit/discovery-2.3.24-functional
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install contract dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML websockets
+
+      - name: Materialize Discovery runtime version contract
+        run: sh tools/materialize_runtime.sh
+
+      - name: Verify Discovery against Core companion branch
+        run: |
+          python3 tools/check_component_contracts.py \
+            --core-registry-url 'https://raw.githubusercontent.com/zemerdon/switch-vision-releases/audit/ex3300-shared-registry-fix/src/devices/supported_devices.json' \
+            --core-settings-url 'https://raw.githubusercontent.com/zemerdon/switch-vision-releases/audit/ex3300-shared-registry-fix/src/custom_components/switch_vision/__init__.py'
