@@ -1,0 +1,39 @@
+name: Contributor batch large-file edit
+
+on:
+  push:
+    branches:
+      - contrib/discovery-2.3.24-batch
+    paths:
+      - tools/apply_contributor_batch_large_edits.py
+      - .github/workflows/contributor-large-edit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-large-edits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out contributor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: contrib/discovery-2.3.24-batch
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Apply evidence-backed large-file edits
+        run: python3 tools/apply_contributor_batch_large_edits.py
+      - name: Commit edited generated-card binding and registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No large-file edits required."
+            exit 0
+          fi
+          git config user.name "switch-vision-bot"
+          git config user.email "switch-vision-bot@users.noreply.github.com"
+          git add runtime_src/discovery_job.sh runtime_src/opt/switch-vision/devices/supported_devices.json
+          git commit -m "Apply contributor registry and HP card binding updates"
+          git push origin HEAD:contrib/discovery-2.3.24-batch
