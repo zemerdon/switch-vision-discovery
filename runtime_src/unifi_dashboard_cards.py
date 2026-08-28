@@ -79,15 +79,17 @@ def visual_geometry_matches(faceplate: str, rj45_count: int, sfp_count: int) -> 
     return bool(name)
 
 
-def generic_visual(rj45_count: int, sfp_count: int) -> tuple[str, str, int, int] | None:
-    """Return the smallest existing generic visual able to contain the device."""
+def generic_visual(rj45_count: int, sfp_count: int) -> tuple[str, str, int, int]:
+    """Return the smallest usable generic visual, with a last-resort dashboard."""
     for max_rj45, max_sfp, profile, faceplate in GENERIC_VISUALS:
         if rj45_count <= max_rj45 and sfp_count <= max_sfp:
             return profile, faceplate, max_rj45, max_sfp
-    # Never force an optical-heavy or otherwise oversized topology onto artwork
-    # that cannot represent it. Such a device remains explicitly pending until
-    # a suitable generic or exact faceplate exists.
-    return None
+
+    # Every normalized switching device must still receive a Switch Vision card.
+    # Until a higher-density optical faceplate exists, use the largest neutral
+    # generic visual as a presentation fallback while preserving the real port
+    # counts and API port map on the generated card.
+    return GENERIC_VISUALS[-1]
 
 
 def render(
@@ -154,7 +156,6 @@ def render(
 
         exact_visual = bool(
             reg
-            and reg.get("dashboard_support") is True
             and profile
             and faceplate
             and visual_geometry_matches(faceplate, len(rj45), len(sfp))
@@ -163,28 +164,18 @@ def render(
 
         if visual_fallback:
             pending_exact += 1
-            generic_choice = generic_visual(len(rj45), len(sfp))
-            if generic_choice is None:
-                if reg and reg.get("dashboard_support") is not True:
-                    lines.append(
-                        f"{pad}# UniFi {json.dumps(model)} detected; dashboard support is pending verified visuals "
-                        f"and no suitable generic faceplate exists for {len(rj45)} RJ45 + {len(sfp)} SFP."
-                    )
-                else:
-                    lines.append(
-                        f"{pad}# UniFi {json.dumps(model)} detected, but no suitable generic faceplate exists for "
-                        f"{len(rj45)} RJ45 + {len(sfp)} SFP; exact support remains pending."
-                    )
-                continue
-
-            profile, faceplate, visual_rj45, visual_sfp = generic_choice
+            profile, faceplate, visual_rj45, visual_sfp = generic_visual(
+                len(rj45), len(sfp)
+            )
             generic += 1
             if not reg:
                 reason = "no exact Switch Vision registry entry exists yet"
-            elif reg.get("dashboard_support") is not True:
-                reason = "exact dashboard visuals are still pending"
+            elif not str(reg.get("default_faceplate") or "").strip():
+                reason = "no exact faceplate is assigned yet"
+            elif not str(reg.get("calibration_profile") or "").strip():
+                reason = "no exact calibration profile is assigned yet"
             else:
-                reason = "the exact visual does not match the observed port geometry"
+                reason = "the assigned visual does not match the observed port geometry"
             lines.append(
                 f"{pad}# UniFi {json.dumps(model)}: {reason}; using generic "
                 f"{visual_rj45} RJ45 + {visual_sfp} SFP faceplate."
