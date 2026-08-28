@@ -46,7 +46,7 @@ run_case() {
   expected_physical=$5
 
   case_dir="$TMP/$case_name"
-  mkdir -p "$case_dir/capabilities" "$case_dir/snmpwalks" "$case_dir/live"
+  mkdir -p "$case_dir/capabilities" "$case_dir/snmpwalks" "$case_dir/live" "$case_dir/share"
   report="$case_dir/report.txt"
   yaml="$case_dir/generated.yaml"
   card="$case_dir/card.yaml"
@@ -79,6 +79,7 @@ EOF
 
   if ! SWITCH_VISION_OPTIONS_FILE="$options" \
        SWITCH_VISION_CAPABILITIES_DIR="$case_dir/capabilities" \
+       SWITCH_VISION_SHARE_DIR="$case_dir/share" \
        sh "$RUNTIME/discovery_job.sh" > "$case_dir/stdout.txt" 2> "$case_dir/stderr.txt"; then
     note_failure "$case_name: discovery_job.sh exited non-zero"
     sed -n '1,120p' "$case_dir/stderr.txt" >&2 || true
