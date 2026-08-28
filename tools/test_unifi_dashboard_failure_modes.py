@@ -121,6 +121,41 @@ def main() -> int:
         assert "faceplate_file: 48rj45-2sfp.png" in pending.stdout
         assert "generic_faceplate: true" in pending.stdout
 
+        # Optical-heavy devices must still emit a card even before dedicated
+        # high-density SFP artwork exists. The largest neutral generic remains
+        # a temporary last-resort visual while the real port count/map is kept.
+        write_json(
+            registry,
+            {"devices": [{
+                "vendor": "Ubiquiti",
+                "model": "USW Pending Optical",
+                "status": "detected",
+                "dashboard_support": False,
+                "mapping_profile": "ubiquiti-optical-pending",
+                "calibration_profile": "",
+                "default_faceplate": "",
+                "unifi_api_port_map": {"rj45": [], "sfp": list(range(1, 33))},
+            }]},
+        )
+        write_json(
+            snapshot,
+            {"schema_version": 1, "devices": [
+                device("pending-optical", "USW Pending Optical", 0, 32)
+            ]},
+        )
+        optical = run(snapshot, registry)
+        assert optical.returncode == 0, optical
+        assert optical.stdout.count("type: custom:switch-vision-3650") == 1
+        assert "switch_model: USW Pending Optical" in optical.stdout
+        assert "calibration_profile: stock_48rj45_4sfp" in optical.stdout
+        assert "faceplate_file: 48rj45-4sfp.png" in optical.stdout
+        assert "sfp_port_count: 32" in optical.stdout
+        assert "generic_faceplate: true" in optical.stdout
+        assert (
+            "UniFi cards emitted: 1; exact cards: 0; generic fallbacks: 1; "
+            "exact support pending: 1; issues: 0"
+        ) in optical.stdout
+
         snapshot.write_text("{not-json", encoding="utf-8")
         invalid_snapshot = run(snapshot, registry)
         assert invalid_snapshot.returncode != 0
