@@ -1,0 +1,39 @@
+name: Contributor provenance sanitize
+
+on:
+  push:
+    branches:
+      - contrib/discovery-2.3.24-batch
+    paths:
+      - tools/sanitize_contributor_registry_provenance.py
+      - .github/workflows/contributor-provenance-sanitize.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out contributor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: contrib/discovery-2.3.24-batch
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Sanitize public contributor provenance
+        run: python3 tools/sanitize_contributor_registry_provenance.py
+      - name: Commit sanitized registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No provenance sanitization required."
+            exit 0
+          fi
+          git config user.name "switch-vision-bot"
+          git config user.email "switch-vision-bot@users.noreply.github.com"
+          git add runtime_src/opt/switch-vision/devices/supported_devices.json
+          git commit -m "Sanitize public contributor provenance"
+          git push origin HEAD:contrib/discovery-2.3.24-batch
