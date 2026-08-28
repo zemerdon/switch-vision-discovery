@@ -1,54 +1,56 @@
 #!/usr/bin/env sh
 set -eu
 
-# v2.1.15 Copy Debug Info regression checks
-SV_COPY_DEBUG_TEST_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-
-grep -Fq 'id="copyDebugButton"' \
-    "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
-
-grep -Fq 'id="copyDebugStatus"' \
-    "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
-
-grep -Fq 'function sanitizeDebugText(text)' \
-    "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
-
-grep -Fq 'async function copyDebugInfo()' \
-    "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
-
-grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
-    "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
-
+# Early Hub regression checks use a diagnostic literal helper so CI identifies
+# the exact missing contract instead of failing silently under set -e.
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SV_COPY_DEBUG_TEST_DIR="$BASE_DIR"
+sv_require_literal() {
+    label=$1
+    literal=$2
+    file=$3
+    if grep -Fq "$literal" "$file"; then
+        printf 'PASS: %s\n' "$label"
+    else
+        printf 'FAIL: %s (missing literal: %s in %s)\n' "$label" "$literal" "$file" >&2
+        exit 1
+    fi
+}
+
+# v2.1.15 Copy Debug Info regression checks.
+sv_require_literal 'Copy Debug button' 'id="copyDebugButton"' "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
+sv_require_literal 'Copy Debug status' 'id="copyDebugStatus"' "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
+sv_require_literal 'Debug sanitizer' 'function sanitizeDebugText(text)' "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
+sv_require_literal 'Copy Debug function' 'async function copyDebugInfo()' "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
+sv_require_literal 'Copy Debug event binding' "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
 
 # Credits presentation continuity. The v2.3.27 v25 block below is the
-# authoritative animation contract; do not retain Matrix-era implementation
-# assertions after the animation has been superseded.
-grep -Fq 'id="creditsMatrix"' "$BASE_DIR/support_web.py"
-grep -Fq 'TEST ENTRIES — NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
-grep -Fq 'DemoAlias-01' "$BASE_DIR/support_web.py"
-grep -Fq 'id="openCreditsButton"' "$BASE_DIR/support_web.py"
+# authoritative animation contract; Matrix-era implementation details are not.
+sv_require_literal 'Credits canvas' 'id="creditsMatrix"' "$BASE_DIR/support_web.py"
+sv_require_literal 'Credits preview disclaimer' 'TEST ENTRIES — NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
+sv_require_literal 'Credits demo row' 'DemoAlias-01' "$BASE_DIR/support_web.py"
+sv_require_literal 'Credits navigation card' 'id="openCreditsButton"' "$BASE_DIR/support_web.py"
 echo 'Switch Vision Discovery Credits presentation continuity: PASS'
 
 # v2.3.27 locked Credits v25 preview-placeholder regression.
-test -f "$BASE_DIR/credits_v25.css"
-test -f "$BASE_DIR/credits_v25.js"
-grep -Fq 'PREVIEW PLACEHOLDER — TEST ENTRIES, NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
-grep -Fq 'credits_v25.css' "$BASE_DIR/support_web.py"
-grep -Fq 'credits_v25.js' "$BASE_DIR/support_web.py"
-grep -Fq 'copyCreditsV25ComputedStylesDeep' "$BASE_DIR/credits_v25.js"
-grep -Fq 'makeCreditsV25SnapshotDataURL' "$BASE_DIR/credits_v25.js"
-grep -Fq 'prepareCreditsV25Pieces' "$BASE_DIR/credits_v25.js"
-grep -Fq 'const tile=4;' "$BASE_DIR/credits_v25.js"
-grep -Fq 'credits-spot-soft' "$BASE_DIR/credits_v25.css"
-grep -Fq 'credits-spot-narrow' "$BASE_DIR/credits_v25.css"
-grep -Fq 'creditsSweepLight' "$BASE_DIR/support_web.py"
-grep -Fq 'creditsProgress' "$BASE_DIR/support_web.py"
-grep -Fq 'DemoAlias-01' "$BASE_DIR/support_web.py"
-grep -Fq 'PixelNomad_TEST' "$BASE_DIR/support_web.py"
-grep -Fq 'SampleAlias42' "$BASE_DIR/support_web.py"
-grep -Fq 'CircuitGhost-DEMO' "$BASE_DIR/support_web.py"
-grep -Fq 'Switch Vision is made better by the people who contribute their time, testing, feedback, and knowledge.' "$BASE_DIR/support_web.py"
+test -f "$BASE_DIR/credits_v25.css" || { echo 'FAIL: credits_v25.css missing' >&2; exit 1; }
+test -f "$BASE_DIR/credits_v25.js" || { echo 'FAIL: credits_v25.js missing' >&2; exit 1; }
+sv_require_literal 'v25 placeholder badge' 'PREVIEW PLACEHOLDER — TEST ENTRIES, NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 stylesheet link' 'credits_v25.css' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 script link' 'credits_v25.js' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 computed-style clone' 'copyCreditsV25ComputedStylesDeep' "$BASE_DIR/credits_v25.js"
+sv_require_literal 'v25 snapshot renderer' 'makeCreditsV25SnapshotDataURL' "$BASE_DIR/credits_v25.js"
+sv_require_literal 'v25 fragment preparation' 'prepareCreditsV25Pieces' "$BASE_DIR/credits_v25.js"
+sv_require_literal 'v25 four-pixel fragments' 'const tile=4;' "$BASE_DIR/credits_v25.js"
+sv_require_literal 'v25 soft spotlight' 'credits-spot-soft' "$BASE_DIR/credits_v25.css"
+sv_require_literal 'v25 narrow spotlight' 'credits-spot-narrow' "$BASE_DIR/credits_v25.css"
+sv_require_literal 'v25 sweep light' 'creditsSweepLight' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 progress bar' 'creditsProgress' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 demo row 1' 'DemoAlias-01' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 demo row 2' 'PixelNomad_TEST' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 demo row 3' 'SampleAlias42' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 demo row 4' 'CircuitGhost-DEMO' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 locked acknowledgement copy' 'Switch Vision is made better by the people who contribute their time, testing, feedback, and knowledge.' "$BASE_DIR/support_web.py"
 if command -v node >/dev/null 2>&1; then
     node --check "$BASE_DIR/credits_v25.js"
 fi
