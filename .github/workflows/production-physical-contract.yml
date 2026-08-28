@@ -22,3 +22,4 @@ jobs:
         run: |
           set -euo pipefail
           sh tools/test_production_physical_contract.sh
+          sh tools/test_discovery_contract_entrypoint.sh
