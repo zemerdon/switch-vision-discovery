@@ -169,7 +169,7 @@ def _recv_json(
         ) from exc
     except HomeAssistantWebSocketError:
         raise
-    except Exception as exc:  # transport/timeout/socket library failures
+    except Exception as exc:
         raise HomeAssistantWebSocketError(
             "Home Assistant WebSocket transport failed.",
             kind="transport",
@@ -243,9 +243,7 @@ def execute_home_assistant_ws(
                 )
 
             try:
-                connection.send(
-                    json.dumps({"type": "auth", "access_token": token})
-                )
+                connection.send(json.dumps({"type": "auth", "access_token": token}))
             except Exception as exc:
                 raise HomeAssistantWebSocketError(
                     "Home Assistant WebSocket transport failed while authenticating.",
@@ -390,6 +388,7 @@ def _diagnostic_snapshot(
         "ha_error_code": exc.ha_error_code if exc is not None else None,
         "cause_type": exc.cause_type if exc is not None else None,
         "token_present": bool(token_present),
+        "supervisor_auth_available": bool(token_present),
         "discovery_version": sanitize_bridge_text(discovery_version, max_length=64) or "unknown",
         "core_version": None,
         "core_command_registered": _core_command_registered(status=status, exc=exc),
@@ -427,9 +426,7 @@ def install(support_web_module: Any) -> None:
         support_web_module._core_bridge_log_sink = print
 
     if not hasattr(support_web_module, "_core_bridge_diagnostic_path"):
-        switch_vision_root = Path(
-            os.environ.get("SWITCH_VISION_ROOT", "/share/switch_vision")
-        )
+        switch_vision_root = Path(os.environ.get("SWITCH_VISION_ROOT", "/share/switch_vision"))
         support_web_module._core_bridge_diagnostic_path = (
             switch_vision_root / "diagnostics" / "calibration-core-bridge.json"
         )
@@ -460,10 +457,7 @@ def install(support_web_module: Any) -> None:
             status=status,
             token_present=token_present,
             diagnostic_id=diagnostic_id,
-            discovery_version=os.environ.get(
-                "SWITCH_VISION_DISCOVERY_VERSION",
-                "unknown",
-            ),
+            discovery_version=os.environ.get("SWITCH_VISION_DISCOVERY_VERSION", "unknown"),
             exc=exc,
         )
         try:
