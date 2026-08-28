@@ -29,6 +29,8 @@ jobs:
         run: |
           python -m py_compile \
             runtime_src/support_web.py \
+            runtime_src/core_bridge.py \
+            runtime_src/support_web_entry.py \
             runtime_src/registry_lookup.py \
             runtime_src/unifi_dashboard_cards.py \
             runtime_src/discovery_backups.py \
