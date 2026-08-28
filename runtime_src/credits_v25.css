@@ -1,0 +1,104 @@
+/* Discovery 2.3.27 — locked Credits v25 preview placeholder. */
+#creditsCard{
+  position:relative;overflow:hidden;isolation:isolate;min-height:520px;padding:0;
+  border:1px solid rgba(69,207,255,.46);border-radius:13px;
+  background:linear-gradient(180deg,rgba(9,27,40,.95),rgba(5,18,29,.97));
+  box-shadow:0 0 18px rgba(46,205,255,.10),0 18px 48px -34px rgba(51,218,255,.9);
+}
+#creditsCard::before{content:none!important}
+#creditsCard::after{
+  content:"";position:absolute;inset:1px;z-index:0;border-radius:inherit;
+  background:
+    linear-gradient(180deg,rgba(4,22,34,.28),rgba(2,13,22,.1)),
+    radial-gradient(circle at 20% 30%,rgba(68,213,255,.06) 0 1px,transparent 1.6px),
+    radial-gradient(circle at 72% 68%,rgba(111,238,255,.05) 0 1px,transparent 1.7px),
+    linear-gradient(90deg,transparent 0 49.7%,rgba(72,213,255,.03) 49.9% 50.1%,transparent 50.3% 100%);
+  background-size:auto,64px 64px,88px 88px,120px 120px;
+  opacity:1;pointer-events:none;animation:credits-v25-circuit-drift 18s linear infinite
+}
+.credits-spot-soft,.credits-spot-narrow,.credits-sweep-light{position:absolute;z-index:1;pointer-events:none;opacity:0}
+.credits-spot-soft{
+  width:620px;height:430px;left:var(--soft-x,52%);top:var(--soft-y,-300px);
+  transform:translateX(-50%);
+  background:radial-gradient(ellipse at center,rgba(117,240,255,.16) 0%,rgba(70,213,255,.09) 26%,rgba(43,161,215,.035) 48%,transparent 72%);
+  filter:blur(24px);
+  transition:left 9.5s cubic-bezier(.42,.03,.24,1),top 9.5s cubic-bezier(.42,.03,.24,1),opacity 1.8s ease
+}
+.credits-spot-narrow{
+  width:150px;height:880px;left:var(--narrow-x,20%);top:-300px;
+  transform:translateX(-50%) rotate(var(--narrow-angle,-10deg));
+  background:linear-gradient(180deg,rgba(214,252,255,.36) 0%,rgba(132,239,255,.23) 16%,rgba(86,219,250,.135) 34%,rgba(51,184,229,.067) 56%,rgba(28,137,188,.026) 73%,transparent 92%);
+  clip-path:polygon(43% 0,57% 0,100% 100%,0 100%);filter:blur(11px);
+  transition:left 7.67s cubic-bezier(.38,.05,.22,1),transform 7.67s cubic-bezier(.38,.05,.22,1),opacity 1s ease
+}
+.credits-sweep-light{
+  position:absolute;inset:-35% -80%;z-index:1;pointer-events:none;opacity:0;
+  background:linear-gradient(var(--sweep-angle,115deg),transparent 42%,rgba(166,236,255,.025) 47%,rgba(194,244,255,.24) 50%,rgba(121,210,255,.035) 53%,transparent 58%);
+  transform:translateX(var(--sweep-start,-52%))
+}
+#creditsCard.credits-settled .credits-spot-soft{opacity:.9}
+#creditsCard.credits-settled .credits-spot-narrow{opacity:.95}
+#creditsCard.credits-settled .credits-sweep-light.sweep-run{animation:credits-v25-sweep-light var(--sweep-duration,3.8s) ease-in-out 1}
+#creditsCard .credits-content{position:relative;z-index:2;padding:34px 34px 52px;opacity:0;transition:opacity 2.05s ease}
+#creditsCard.credits-settled .credits-content{opacity:1}
+#creditsCard .credits-title,#creditsCard .credits-thanks,#creditsCard .credits-test-badge,#creditsCard .credit-entry{
+  opacity:1;transform:none;filter:none
+}
+#creditsCard .credits-title{font-size:2rem;margin:0 0 10px;color:#f2fbff}
+#creditsCard .credits-thanks{font-size:1.03rem;line-height:1.55;margin:0 0 15px;max-width:900px}
+#creditsCard .credits-test-badge{margin:8px 0 12px}
+#creditsList.credits-list-v25{
+  display:grid;gap:10px;position:relative;overflow:hidden;background:rgba(3,17,27,.5);
+  border:1px solid rgba(111,170,204,.17);padding:12px;border-radius:10px
+}
+#creditsCard .credit-entry{
+  display:flex;justify-content:space-between;align-items:center;gap:18px;padding:12px 14px;
+  border:1px solid rgba(112,158,190,.16);border-radius:9px;
+  background:linear-gradient(90deg,rgba(58,205,255,.035),transparent 52%);
+  transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease,background .22s ease
+}
+#creditsCard.credits-settled .credit-entry:hover,#creditsCard.credits-settled .credit-entry:focus-within{
+  transform:translateY(-3px);border-color:rgba(76,220,255,.58);
+  box-shadow:0 7px 24px -15px rgba(57,221,255,.88);
+  background:linear-gradient(90deg,rgba(64,210,255,.09),transparent 68%)
+}
+#creditsCard .credit-name{
+  font-weight:800;color:#f2fbff;
+  background:linear-gradient(100deg,#f2fbff 0 40%,#d7fbff 48%,#f2fbff 56% 100%);
+  background-size:240% 100%;background-position:100% 0;
+  background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent
+}
+#creditsCard.credits-settled .credit-entry:hover .credit-name{animation:credits-v25-name-shimmer 1.15s ease}
+#creditsCard .credit-components{color:#8fa8ba;text-align:right}
+#creditsCard.credits-settled .credits-title{animation:credits-v25-heading-breathe 4.8s ease-in-out 1.2s infinite}
+#creditsMatrix{position:absolute;inset:0;width:100%;height:100%;z-index:6;pointer-events:none;opacity:0;transition:opacity 2.1s ease}
+#creditsCard.credits-matrix-active #creditsMatrix{opacity:1}
+#creditsMatrix.credits-fade-out{opacity:0!important}
+.credits-progress{
+  position:absolute;z-index:8;left:34px;right:34px;bottom:18px;height:5px;border-radius:999px;
+  background:rgba(90,150,180,.12);overflow:hidden;pointer-events:none
+}
+.credits-progress>span{
+  display:block;height:100%;width:0;background:linear-gradient(90deg,#39bde5,#7beaff);
+  box-shadow:0 0 12px rgba(74,220,255,.35)
+}
+@keyframes credits-v25-circuit-drift{0%{background-position:0 0,0 0,0 0,0 0}100%{background-position:0 0,64px 32px,-88px 44px,120px 60px}}
+@keyframes credits-v25-heading-breathe{0%,100%{text-shadow:0 0 0 transparent}50%{text-shadow:0 0 16px rgba(84,226,255,.42)}}
+@keyframes credits-v25-name-shimmer{from{background-position:100% 0}to{background-position:-110% 0}}
+@keyframes credits-v25-sweep-light{
+  0%{transform:translateX(var(--sweep-start,-52%));opacity:0}
+  16%{opacity:.92}
+  78%{transform:translateX(var(--sweep-end,52%));opacity:.28}
+  100%{transform:translateX(var(--sweep-end,52%));opacity:0}
+}
+@media(max-width:700px){
+  #creditsCard .credits-content{padding:22px 22px 42px}
+  #creditsCard .credit-entry{align-items:flex-start;flex-direction:column;gap:3px}
+  #creditsCard .credit-components{text-align:left}
+  .credits-progress{left:22px;right:22px;bottom:14px}
+}
+@media(prefers-reduced-motion:reduce){
+  #creditsCard::after,#creditsCard .credits-spot-soft,#creditsCard .credits-spot-narrow,#creditsCard .credits-sweep-light,
+  #creditsCard .credits-title,#creditsCard .credit-entry:hover .credit-name{animation:none!important;transition:none!important}
+  #creditsMatrix{display:none!important}
+}

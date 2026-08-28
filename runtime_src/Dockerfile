@@ -23,6 +23,8 @@ COPY mqtt_maintenance.py /mqtt_maintenance.py
 COPY mqtt_maintenance_runtime.py /mqtt_maintenance_runtime.py
 COPY supervisor_runtime.py /supervisor_runtime.py
 COPY maintenance.js /maintenance.js
+COPY credits_v25.css /credits_v25.css
+COPY credits_v25.js /credits_v25.js
 COPY migrate_options.py /migrate_options.py
 COPY registry_lookup.py /registry_lookup.py
 COPY standard_sensor_scan.py /standard_sensor_scan.py

@@ -29,8 +29,32 @@ grep -Fq 'credits-settled' "$BASE_DIR/support_web.py"
 grep -Fq '@media(prefers-reduced-motion:reduce)' "$BASE_DIR/support_web.py"
 grep -Fq 'TEST ENTRIES — NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
 grep -Fq 'DemoAlias-01' "$BASE_DIR/support_web.py"
-grep -Fq "openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsAnimation()})" "$BASE_DIR/support_web.py"
+grep -Fq "openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()})" "$BASE_DIR/support_web.py"
 echo 'Switch Vision Discovery v2.3.20 Credits animation regression: PASS'
+
+# v2.3.27 locked Credits v25 preview-placeholder regression.
+test -f "$BASE_DIR/credits_v25.css"
+test -f "$BASE_DIR/credits_v25.js"
+grep -Fq 'PREVIEW PLACEHOLDER — TEST ENTRIES, NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
+grep -Fq 'credits_v25.css' "$BASE_DIR/support_web.py"
+grep -Fq 'credits_v25.js' "$BASE_DIR/support_web.py"
+grep -Fq 'copyCreditsV25ComputedStylesDeep' "$BASE_DIR/credits_v25.js"
+grep -Fq 'makeCreditsV25SnapshotDataURL' "$BASE_DIR/credits_v25.js"
+grep -Fq 'prepareCreditsV25Pieces' "$BASE_DIR/credits_v25.js"
+grep -Fq 'const tile=4;' "$BASE_DIR/credits_v25.js"
+grep -Fq 'credits-spot-soft' "$BASE_DIR/credits_v25.css"
+grep -Fq 'credits-spot-narrow' "$BASE_DIR/credits_v25.css"
+grep -Fq 'creditsSweepLight' "$BASE_DIR/support_web.py"
+grep -Fq 'creditsProgress' "$BASE_DIR/support_web.py"
+grep -Fq 'DemoAlias-01' "$BASE_DIR/support_web.py"
+grep -Fq 'PixelNomad_TEST' "$BASE_DIR/support_web.py"
+grep -Fq 'SampleAlias42' "$BASE_DIR/support_web.py"
+grep -Fq 'CircuitGhost-DEMO' "$BASE_DIR/support_web.py"
+grep -Fq 'Switch Vision is made better by the people who contribute their time, testing, feedback, and knowledge.' "$BASE_DIR/support_web.py"
+if command -v node >/dev/null 2>&1; then
+    node --check "$BASE_DIR/credits_v25.js"
+fi
+echo 'Switch Vision Discovery v2.3.27 Credits v25 preview placeholder: PASS'
 
 # v2.3.21 Credits card home-navigation order regression.
 python3 - "$BASE_DIR/support_web.py" <<'PY_CREDITS_ORDER'
@@ -1581,8 +1605,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.26"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.26"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.27"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.27"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
