@@ -46,7 +46,7 @@ run_case() {
   expected_physical=$5
 
   case_dir="$TMP/$case_name"
-  mkdir -p "$case_dir/capabilities" "$case_dir/snmpwalks"
+  mkdir -p "$case_dir/capabilities" "$case_dir/snmpwalks" "$case_dir/live"
   report="$case_dir/report.txt"
   yaml="$case_dir/generated.yaml"
   card="$case_dir/card.yaml"
@@ -54,6 +54,7 @@ run_case() {
   log="$case_dir/discovery.log"
   targets="$case_dir/targets.csv"
   options="$case_dir/options.json"
+  live_output="$case_dir/live/live-targeted-snmpwalk.txt"
 
   printf '%s,192.0.2.10,%s,readonly,,%s\n' "$(basename "$walk")" "$prefix" "$case_name" > "$targets"
   cat > "$options" <<EOF
@@ -70,6 +71,8 @@ run_case() {
   "generated_yaml_path": "$yaml",
   "generated_card_path": "$card",
   "snmp_log_path": "$log",
+  "live_output_dir": "$case_dir/live",
+  "live_output_path": "$live_output",
   "generate_support_my_switch_bundle": "false"
 }
 EOF
