@@ -639,7 +639,7 @@
       "status": "experimental",
       "confirmed_since": "2.0.19",
       "last_validated_version": "2.0.32",
-      "evidence": "support_my_switch_contribution_community validation_multiple_devices; unifi2mqtt_live_snapshot_2026-08-11; anonymous_real_hardware_unifi2mqtt_2.0.50_refresh",
+      "evidence": "support_my_switch_contribution_community validation_multiple_devices; unifi2mqtt_live_snapshot_2026-08-11",
       "ports": {
         "rj45": 8,
         "poe": true,
@@ -843,7 +843,7 @@
       "status": "experimental",
       "confirmed_since": "2.0.20",
       "last_validated_version": "2.0.32",
-      "evidence": "unifi_integration_api_samples_2026-08-10; unifi2mqtt_live_snapshot_2026-08-11; anonymous_real_hardware_snmp_validation",
+      "evidence": "unifi_integration_api_samples_2026-08-10; unifi2mqtt_live_snapshot_2026-08-11",
       "ports": {
         "rj45": 8,
         "poe": true,
@@ -879,11 +879,11 @@
         "The anonymous anonymous-retained-evidence SNMP capture proves compact sysDescr USWProXG8PoE and physical ifName 0/1..0/10; ports 0/1..0/8 are RJ45 and 0/9..0/10 are 10G SFP+ with a live 10G optical link observed."
       ],
       "validation": {
-        "exact_model_detection": "real_hardware_snmp_confirmed",
-        "rj45_mapping": "real_hardware_snmp_ports_0_1_0_8_confirmed",
+        "exact_model_detection": "api_confirmed",
+        "rj45_mapping": "api_confirmed_port_indices",
         "poe": "api_confirmed_metadata",
         "system_sensors": "api_confirmed_cpu_memory",
-        "uplinks": "real_hardware_snmp_ports_0_9_0_10_confirmed",
+        "uplinks": "api_confirmed_connector_and_speed",
         "stack": "not_applicable"
       },
       "visuals": {
@@ -1650,7 +1650,7 @@
       "status": "experimental",
       "confirmed_since": "2.1.19",
       "last_validated_version": "2.1.19",
-      "evidence": "support_my_switch_community validation_unifi_api; anonymous_real_hardware_unifi2mqtt_2.0.50_refresh",
+      "evidence": "support_my_switch_community validation_unifi_api",
       "ports": {
         "rj45": 5,
         "poe": false,
@@ -2749,7 +2749,7 @@
       "stack_support": false,
       "discovery_support": true,
       "dashboard_support": false,
-      "mapping_profile": "zyxel-gs1900-24e-24p",
+      "mapping_profile": "",
       "calibration_profile": "",
       "default_faceplate": "",
       "optional_faceplates": [],
@@ -2883,7 +2883,7 @@
       "stack_support": false,
       "discovery_support": true,
       "dashboard_support": false,
-      "mapping_profile": "cisco-sg350-20-16p-2combo-2sfp",
+      "mapping_profile": "",
       "calibration_profile": "",
       "default_faceplate": "",
       "optional_faceplates": [],
@@ -2950,7 +2950,7 @@
       "stack_support": false,
       "discovery_support": true,
       "dashboard_support": false,
-      "mapping_profile": "hp-3500yl-j8693a-44p-4combo",
+      "mapping_profile": "",
       "calibration_profile": "",
       "default_faceplate": "",
       "optional_faceplates": [],
