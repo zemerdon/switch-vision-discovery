@@ -9,6 +9,11 @@ PREPARE="$RUNTIME/physical_contract_prepare.sh"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 
+# Dockerfile applies these executable bits in the shipped app image. Reproduce
+# that packaging step in the raw GitHub checkout before exercising the exact
+# runtime entrypoint.
+chmod +x "$PREPARE" "$RUNTIME/discovery_job.sh"
+
 make_dell_walk() {
   path=$1
   ports=$2
