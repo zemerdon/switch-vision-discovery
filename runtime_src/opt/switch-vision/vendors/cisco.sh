@@ -41,5 +41,17 @@ cv_cisco_identity() {
       CV_ID_SUPPORT_STATUS="experimental"
       CV_ID_PRODUCT_MATCH="model-description"
       ;;
+    *WS-C3750X-48P*|*C3750X-48P*)
+      CV_ID_FAMILY="Catalyst 3750X"
+      CV_ID_MODEL_HINT="WS-C3750X-48P"
+      CV_ID_SUPPORT_STATUS="experimental"
+      CV_ID_PRODUCT_MATCH="model-description"
+      ;;
+    *SG350-20*)
+      CV_ID_FAMILY="Cisco Small Business SG350"
+      CV_ID_MODEL_HINT="SG350-20"
+      CV_ID_SUPPORT_STATUS="experimental"
+      CV_ID_PRODUCT_MATCH="model-description"
+      ;;
   esac
 }
