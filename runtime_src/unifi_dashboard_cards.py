@@ -3,7 +3,8 @@
 
 Exact registered hardware topology is authoritative. Normalized UniFi snapshot
 rows are source bindings/evidence, not permission to redefine a known physical
-chassis. Unknown devices may still use observed topology as an inferred generic
+chassis. Unknown devices, and legacy/partial registry records that do not carry
+a physical topology contract, may still use observed topology as an inferred
 contract.
 """
 from __future__ import annotations
@@ -104,6 +105,21 @@ def _observed_ports(ports: list[Any]) -> tuple[list[dict[str, Any]], list[dict[s
     return rj45, sfp
 
 
+def _has_registry_topology(reg: dict[str, Any]) -> bool:
+    ports = reg.get("ports")
+    if not isinstance(ports, dict) or "rj45" not in ports:
+        return False
+    return any(
+        key in ports
+        for key in (
+            "uplinks",
+            "gigabit_sfp",
+            "ten_gigabit_sfp_plus",
+            "twenty_five_gigabit_sfp28",
+        )
+    )
+
+
 def _registry_topology(reg: dict[str, Any]) -> tuple[int, int]:
     ports = reg.get("ports") if isinstance(reg.get("ports"), dict) else {}
     try:
@@ -169,8 +185,13 @@ def resolve_registered_unifi_ports(
     Without one, observed connector counts must exactly match registry topology;
     we refuse to guess which rows are physical when they disagree.
     """
-    expected_rj45, expected_sfp = _registry_topology(reg)
     observed_rj45, observed_sfp = _observed_ports(ports)
+    if not _has_registry_topology(reg):
+        # Compatibility boundary for old test fixtures/partial registries. A
+        # record without physical connector counts is not a topology contract.
+        return observed_rj45, observed_sfp, None
+
+    expected_rj45, expected_sfp = _registry_topology(reg)
     api_port_map = reg.get("unifi_api_port_map")
 
     if isinstance(api_port_map, dict):
