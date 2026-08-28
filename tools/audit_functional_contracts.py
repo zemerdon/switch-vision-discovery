@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Switch Vision Discovery functional consistency audit.
-
-Read-only checks for Hub UI wiring, API route parity, registry/profile/schema
-consistency, vendor identity data, and critical action bindings.
-"""
+"""Read-only functional consistency audit for Switch Vision Discovery/Hub."""
 from __future__ import annotations
 
 import ast
@@ -49,6 +45,16 @@ def canon(value: object) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
 
 
+def optical_count(mapping: dict) -> int:
+    """Count physical optical connectors across SFP/SFP+/SFP28/QSFP fields."""
+    total = 0
+    for key, value in mapping.items():
+        normalized = str(key).casefold()
+        if ("sfp" in normalized or "qsfp" in normalized) and isinstance(value, int) and not isinstance(value, bool):
+            total += value
+    return total
+
+
 def load_page() -> str:
     source = SUPPORT_WEB.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(SUPPORT_WEB))
@@ -56,9 +62,8 @@ def load_page() -> str:
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             if any(isinstance(t, ast.Name) and t.id == "_PAGE" for t in targets):
-                value = node.value
-                if isinstance(value, ast.Constant) and isinstance(value.value, str):
-                    return value.value
+                if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                    return node.value.value
     raise RuntimeError("Could not locate literal _PAGE in support_web.py")
 
 
@@ -67,11 +72,8 @@ def audit_registry_and_profiles() -> None:
     profile_doc = yaml.safe_load(PROFILES.read_text(encoding="utf-8")) or {}
     profiles = profile_doc.get("profiles") or {}
     devices = registry.get("devices") or []
-    if not isinstance(devices, list):
-        fail("supported_devices.json devices must be a list")
-        return
-    if not isinstance(profiles, dict):
-        fail("switch-vision-profiles.yaml profiles must be a mapping")
+    if not isinstance(devices, list) or not isinstance(profiles, dict):
+        fail("Registry/profile documents have invalid top-level structure")
         return
 
     models = [str(d.get("model") or "").strip() for d in devices if isinstance(d, dict)]
@@ -91,31 +93,64 @@ def audit_registry_and_profiles() -> None:
     else:
         ok("Registry has no punctuation/case canonical model collisions")
 
-    profile_errors = []
-    model_pattern_errors = []
+    pattern_owners: dict[str, set[str]] = defaultdict(set)
+    for profile_name, profile in profiles.items():
+        if not isinstance(profile, dict):
+            fail(f"Mapping profile {profile_name} is not an object")
+            continue
+        for pattern in profile.get("model_patterns") or []:
+            key = canon(pattern)
+            if key:
+                pattern_owners[key].add(str(profile_name))
+    ambiguous_patterns = {k: sorted(v) for k, v in pattern_owners.items() if len(v) > 1}
+    if ambiguous_patterns:
+        fail(f"Canonical model patterns are owned by multiple mapping profiles: {ambiguous_patterns}")
+    else:
+        ok("Mapping profile exact model patterns have no cross-profile collisions")
+
+    missing_profiles: list[str] = []
+    pattern_errors: list[str] = []
+    layout_errors: list[str] = []
     for device in devices:
         if not isinstance(device, dict):
             fail("Registry contains a non-object device entry")
             continue
         model = str(device.get("model") or "").strip()
         mapping = str(device.get("mapping_profile") or "").strip()
-        if mapping:
-            if mapping not in profiles:
-                profile_errors.append(f"{model} -> {mapping} (missing)")
-                continue
-            patterns = profiles[mapping].get("model_patterns") or []
-            if model and patterns and canon(model) not in {canon(p) for p in patterns}:
-                model_pattern_errors.append(f"{model} -> {mapping}; patterns={patterns}")
-    if profile_errors:
-        fail("Registry references missing mapping profiles: " + "; ".join(profile_errors))
+        if not mapping:
+            continue
+        profile = profiles.get(mapping)
+        if not isinstance(profile, dict):
+            missing_profiles.append(f"{model} -> {mapping}")
+            continue
+        patterns = profile.get("model_patterns") or []
+        if model and patterns and canon(model) not in {canon(p) for p in patterns}:
+            pattern_errors.append(f"{model} -> {mapping}; patterns={patterns}")
+
+        ports = device.get("ports") if isinstance(device.get("ports"), dict) else {}
+        layout = profile.get("layout") if isinstance(profile.get("layout"), dict) else {}
+        if isinstance(layout.get("rj45_ports"), int) and int(ports.get("rj45") or 0) != int(layout["rj45_ports"]):
+            layout_errors.append(
+                f"{model}: registry RJ45={int(ports.get('rj45') or 0)} profile={layout['rj45_ports']}"
+            )
+        layout_optical = optical_count(layout)
+        registry_optical = optical_count(ports)
+        if layout_optical != registry_optical:
+            layout_errors.append(f"{model}: registry optical={registry_optical} profile={layout_optical}")
+
+    if missing_profiles:
+        fail("Registry references missing mapping profiles: " + "; ".join(missing_profiles))
     else:
         ok("Every registry mapping_profile exists in the shipped profile database")
-    if model_pattern_errors:
-        fail("Registry model not represented by its mapping profile patterns: " + "; ".join(model_pattern_errors))
+    if pattern_errors:
+        fail("Registry model not represented by its mapping profile patterns: " + "; ".join(pattern_errors))
     else:
         ok("Registry model/profile model_patterns agree")
+    if layout_errors:
+        fail("Registry/profile physical layout mismatches: " + "; ".join(layout_errors))
+    else:
+        ok("Registry physical connector counts agree with mapping-profile layouts")
 
-    # Hub settings derives manual SNMP override choices from exactly this rule.
     manual_models = {
         str(d.get("model") or "").strip()
         for d in devices
@@ -125,7 +160,6 @@ def audit_registry_and_profiles() -> None:
         and str(d.get("mapping_profile") or "").strip()
         and str(d.get("model") or "").strip()
     }
-
     config = yaml.safe_load(CONFIG.read_text(encoding="utf-8")) or {}
     switch_schema = (((config.get("schema") or {}).get("switches") or [{}])[0])
     schema_value = str(switch_schema.get("switch_model") or "")
@@ -139,69 +173,63 @@ def audit_registry_and_profiles() -> None:
     missing_from_schema = sorted(manual_models - schema_models)
     stale_in_schema = sorted(schema_models - manual_models)
     if missing_from_schema:
-        fail(
-            "Hub manual-model registry choices are missing from Supervisor config schema: "
-            + ", ".join(missing_from_schema)
-        )
+        fail("Hub manual-model choices missing from Supervisor schema: " + ", ".join(missing_from_schema))
     else:
         ok("Every Hub-selectable manual SNMP model is accepted by Supervisor schema")
     if stale_in_schema:
-        fail(
-            "Supervisor config schema exposes manual models not present in the authoritative Hub registry/profile set: "
-            + ", ".join(stale_in_schema)
-        )
+        fail("Supervisor manual-model enum has stale registry entries: " + ", ".join(stale_in_schema))
     else:
         ok("Supervisor manual-model enum has no stale registry entries")
 
-    # UniFi API maps: exact map positions should match advertised connector counts.
-    unifi_errors = []
+    unifi_errors: list[str] = []
+    mapped_unifi = 0
     for device in devices:
-        if not isinstance(device, dict):
+        if not isinstance(device, dict) or not isinstance(device.get("unifi_api_port_map"), dict):
             continue
-        port_map = device.get("unifi_api_port_map")
-        if not isinstance(port_map, dict):
-            continue
+        mapped_unifi += 1
         model = str(device.get("model") or "unknown")
+        port_map = device["unifi_api_port_map"]
         rj = port_map.get("rj45") or []
         sfp = port_map.get("sfp") or []
+        if not isinstance(rj, list) or not isinstance(sfp, list):
+            unifi_errors.append(f"{model}: API map values must be lists")
+            continue
         if len(rj) != len(set(rj)) or len(sfp) != len(set(sfp)) or set(rj) & set(sfp):
             unifi_errors.append(f"{model}: overlapping/duplicate API port positions")
-        ports = device.get("ports") or {}
-        if isinstance(ports, dict):
-            advertised_rj = int(ports.get("rj45") or 0)
-            advertised_optical = int(ports.get("gigabit_sfp") or 0) + int(ports.get("ten_gigabit_sfp_plus") or 0)
-            if advertised_rj != len(rj):
-                unifi_errors.append(f"{model}: rj45 registry={advertised_rj} map={len(rj)}")
-            if advertised_optical != len(sfp):
-                unifi_errors.append(f"{model}: optical registry={advertised_optical} map={len(sfp)}")
+        ports = device.get("ports") if isinstance(device.get("ports"), dict) else {}
+        if int(ports.get("rj45") or 0) != len(rj):
+            unifi_errors.append(f"{model}: RJ45 registry={int(ports.get('rj45') or 0)} API map={len(rj)}")
+        if optical_count(ports) != len(sfp):
+            unifi_errors.append(f"{model}: optical registry={optical_count(ports)} API map={len(sfp)}")
+        if int(ports.get("uplinks") or 0) != len(sfp):
+            unifi_errors.append(f"{model}: uplinks registry={int(ports.get('uplinks') or 0)} API optical map={len(sfp)}")
     if unifi_errors:
         fail("UniFi API topology map inconsistencies: " + "; ".join(unifi_errors))
     else:
-        ok("UniFi API topology maps match registry connector counts")
+        ok(f"All explicit UniFi API topology maps match registry connector counts ({mapped_unifi} models)")
 
-    # Vendor identity database must be syntactically valid and registry vendors
-    # should be represented by an identity directory or known parser layer.
-    bad_json = []
-    vendor_dirs = set()
-    for path in MIB_VENDOR_ROOT.rglob("*.json"):
+    bad_json: list[str] = []
+    vendor_dirs: set[str] = set()
+    vendor_json_files = list(MIB_VENDOR_ROOT.rglob("*.json"))
+    for path in vendor_json_files:
         vendor_dirs.add(path.parent.name.casefold())
         try:
             json.loads(path.read_text(encoding="utf-8"))
-        except Exception as exc:  # noqa: BLE001 - audit should report every malformed file
+        except Exception as exc:  # noqa: BLE001
             bad_json.append(f"{path.relative_to(ROOT)}: {exc}")
     if bad_json:
         fail("Malformed vendor identity JSON: " + "; ".join(bad_json))
     else:
-        ok(f"All vendor identity JSON files parse ({len(list(MIB_VENDOR_ROOT.rglob('*.json')))} files)")
+        ok(f"All vendor identity JSON files parse ({len(vendor_json_files)} files)")
 
-    registry_vendors = {str(d.get("vendor") or "").strip().casefold() for d in devices if isinstance(d, dict)}
+    registry_vendors = {
+        str(d.get("vendor") or "").strip().casefold()
+        for d in devices if isinstance(d, dict)
+    }
     known_vendor_source = (RUNTIME / "opt" / "switch-vision" / "vendors" / "known_vendor.sh").read_text(encoding="utf-8").casefold()
-    missing_vendor_representation = []
-    for vendor in sorted(v for v in registry_vendors if v):
-        if vendor not in vendor_dirs and vendor not in known_vendor_source:
-            missing_vendor_representation.append(vendor)
-    if missing_vendor_representation:
-        warn("Registry vendors without an obvious MIB identity directory/known_vendor hint: " + ", ".join(missing_vendor_representation))
+    missing_vendor = [v for v in sorted(registry_vendors) if v and v not in vendor_dirs and v not in known_vendor_source]
+    if missing_vendor:
+        warn("Registry vendors without an obvious MIB identity directory/known_vendor hint: " + ", ".join(missing_vendor))
     else:
         ok("Every registry vendor has an identity-database or known-vendor representation")
 
@@ -219,38 +247,34 @@ def audit_hub_ui_and_routes() -> None:
     else:
         ok(f"Static Hub HTML ids are unique ({len(ids)} ids)")
 
-    # Explicit functional controls requested for this audit. Each control must
-    # exist and must have a corresponding binding/handler in the shipped JS.
     critical_bindings = {
-        "hubSettingsSave": ["hubSettingsSave')?.addEventListener('click',save", 'hubSettingsSave\")?.addEventListener(\"click\", save'],
-        "hubSettingsReload": ["hubSettingsReload')?.addEventListener('click',load"],
-        "hubCoreReset": ["hubCoreReset')?.addEventListener('click',resetCore"],
-        "runDiscoveryButton": ["runDiscoveryButton').addEventListener('click',runDiscovery"],
-        "stopDiscoveryButton": ["stopDiscoveryButton').addEventListener('click',stopDiscovery"],
-        "regenerateYamlButton": ["regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml"],
-        "resetSnmpDiscoveryButton": ["resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData"],
-        "saveUnifi2mqttButton": ["saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings"],
-        "importConfigurationButton": ["importConfigurationButton').addEventListener('click',importConfiguration"],
-        "scanMqttEntitiesButton": ['el("scanMqttEntitiesButton")?.addEventListener("click", scan)'],
-        "repairMqttEntitiesButton": ['el("repairMqttEntitiesButton")?.addEventListener("click", repair)'],
-        "exportMqttResultsButton": ['el("exportMqttResultsButton")?.addEventListener("click", exportResults)'],
-        "refreshInstallerBackupsButton": ['el("refreshInstallerBackupsButton")?.addEventListener("click"'],
-        "installerBackupAutomaticRetention": ['el("installerBackupAutomaticRetention")?.addEventListener("click", toggleInstallerBackupRetention)'],
-        "createInstallerBackupButton": ['el("createInstallerBackupButton")?.addEventListener("click"'],
+        "hubSettingsSave": "addEventListener('click',save",
+        "hubSettingsReload": "addEventListener('click',load",
+        "hubCoreReset": "addEventListener('click',resetCore",
+        "runDiscoveryButton": "addEventListener('click',runDiscovery",
+        "stopDiscoveryButton": "addEventListener('click',stopDiscovery",
+        "regenerateYamlButton": "addEventListener('click',regenerateSnmp2mqttYaml",
+        "resetSnmpDiscoveryButton": "addEventListener('click',resetSnmpDiscoveryData",
+        "saveUnifi2mqttButton": "addEventListener('click',saveUnifi2mqttSettings",
+        "importConfigurationButton": "addEventListener('click',importConfiguration",
+        "scanMqttEntitiesButton": 'addEventListener("click", scan)',
+        "repairMqttEntitiesButton": 'addEventListener("click", repair)',
+        "exportMqttResultsButton": 'addEventListener("click", exportResults)',
+        "refreshInstallerBackupsButton": 'addEventListener("click"',
+        "installerBackupAutomaticRetention": 'addEventListener("click", toggleInstallerBackupRetention)',
+        "createInstallerBackupButton": 'addEventListener("click"',
     }
-    binding_errors = []
-    for control, needles in critical_bindings.items():
+    binding_errors: list[str] = []
+    for control, handler in critical_bindings.items():
         if f'id="{control}"' not in page:
             binding_errors.append(f"{control}: HTML control missing")
-        elif not any(needle in all_js for needle in needles):
-            binding_errors.append(f"{control}: click binding not found")
+        elif control not in all_js or handler not in all_js:
+            binding_errors.append(f"{control}: handler binding missing")
     if binding_errors:
         fail("Critical Hub action binding failures: " + "; ".join(binding_errors))
     else:
         ok(f"All {len(critical_bindings)} critical Hub save/reset/run/maintenance controls are wired")
 
-    # Calibration profile base controls are dynamically rendered but must still
-    # be present in both creation and event binding code.
     calibration_source = js_sources["calibration_profiles.js"]
     calibration_controls = {
         "svProfilesRefresh": "load(true)",
@@ -259,52 +283,48 @@ def audit_hub_ui_and_routes() -> None:
         "svProfilesClearSelection": "state.selected.clear()",
         "svProfilesDeleteSelected": "deleteSelected",
     }
-    cal_errors = []
-    for control, handler in calibration_controls.items():
-        if f'id="{control}"' not in calibration_source:
-            cal_errors.append(f"{control}: creation missing")
-        if control not in calibration_source or handler not in calibration_source:
-            cal_errors.append(f"{control}: handler missing")
+    cal_errors = [
+        f"{control}: creation/handler missing"
+        for control, handler in calibration_controls.items()
+        if f'id="{control}"' not in calibration_source or handler not in calibration_source
+    ]
     if cal_errors:
         fail("Calibration profile control wiring failures: " + "; ".join(cal_errors))
     else:
         ok("Calibration profile refresh/select/clean/clear/delete controls are wired")
 
-    # Backend persistence/reset functions must be routed by the HTTP handler.
     backend_contracts = {
         "/api/settings/core": "_save_core_settings(data)",
         "/api/settings/snmp2mqtt": "_save_snmp2mqtt_settings(data)",
         "/api/settings/discovery": "_save_discovery_settings(data)",
         "/api/discovery/reset-snmp": "_reset_snmp_discovery_data()",
-        "/api/discovery/start": "_start_discovery_job",
-        "/api/discovery/stop": "_stop_discovery_job",
-        "/api/discovery/regenerate-yaml": "_start_discovery_regeneration",
+        "/api/discovery/start": "threading.Thread(target=_run_discovery, args=(self.app.discovery_script,), daemon=True)",
+        "/api/discovery/stop": "_request_discovery_stop()",
+        "/api/discovery/regenerate-yaml": 'args=(self.app.discovery_script, "regenerate_yaml")',
     }
-    backend_errors = []
-    for route, handler in backend_contracts.items():
-        if route not in support_source:
-            backend_errors.append(f"{route}: route missing")
-        if handler not in support_source:
-            backend_errors.append(f"{route}: handler {handler} missing")
+    backend_errors = [
+        f"{route}: route/action contract missing"
+        for route, action in backend_contracts.items()
+        if route not in support_source or action not in support_source
+    ]
     if backend_errors:
-        fail("Critical backend route/handler failures: " + "; ".join(backend_errors))
+        fail("Critical backend route/action failures: " + "; ".join(backend_errors))
     else:
-        ok("Critical Hub settings, Discovery run/stop/regenerate/reset routes have backend handlers")
+        ok("Critical settings and Discovery run/stop/regenerate/reset routes have real backend actions")
 
-    # Secret-preservation contract for Hub saves.
     secret_needles = [
         'row["snmp_community"] = ""',
         'row["original_switch_name"] = original_name',
         'previous = current_by_name.get(original_name',
         'support_contributor_value_configured',
+        'merged_mqtt["password"] = "" if clear_password else (password if password else current_mqtt.get("password", ""))',
     ]
     if all(needle in support_source for needle in secret_needles):
-        ok("Discovery Hub save path retains write-only secret preservation logic")
+        ok("Hub save paths retain write-only Discovery and MQTT secret-preservation logic")
     else:
-        fail("Discovery Hub write-only secret preservation contract is incomplete")
+        fail("Hub write-only secret preservation contract is incomplete")
 
-    # Every literal client API endpoint should at least appear in server source.
-    endpoint_literals = set()
+    endpoint_literals: set[str] = set()
     for source in [page, *js_sources.values()]:
         for match in re.finditer(r"endpoint\(\s*['\"]([^'\"]+)['\"]\s*\)", source):
             value = match.group(1)
