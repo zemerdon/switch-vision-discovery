@@ -1,0 +1,41 @@
+name: Apply manual model fallback fix
+
+on:
+  push:
+    branches:
+      - audit/discovery-2.3.24-functional
+    paths:
+      - tools/apply_manual_model_fallback_fix.py
+      - .github/workflows/apply-manual-model-fallback-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out audit branch
+        uses: actions/checkout@v4
+        with:
+          ref: audit/discovery-2.3.24-functional
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply fallback correction
+        run: python3 tools/apply_manual_model_fallback_fix.py
+
+      - name: Commit fallback correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No fallback changes required."
+            exit 0
+          fi
+          git config user.name "switch-vision-bot"
+          git config user.email "switch-vision-bot@users.noreply.github.com"
+          git add runtime_src/support_web.py
+          git commit -m "Synchronize degraded manual model fallback"
+          git push origin HEAD:audit/discovery-2.3.24-functional
