@@ -1,0 +1,41 @@
+name: Apply functional audit mapping fixes
+
+on:
+  push:
+    branches:
+      - audit/discovery-2.3.24-functional
+    paths:
+      - tools/apply_functional_audit_mapping_fixes.py
+      - .github/workflows/apply-functional-audit-mapping-fixes.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out audit branch
+        uses: actions/checkout@v4
+        with:
+          ref: audit/discovery-2.3.24-functional
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply narrow mapping corrections
+        run: python3 tools/apply_functional_audit_mapping_fixes.py
+
+      - name: Commit mapping corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No mapping changes required."
+            exit 0
+          fi
+          git config user.name "switch-vision-bot"
+          git config user.email "switch-vision-bot@users.noreply.github.com"
+          git add runtime_src/profiles/switch-vision-profiles.yaml runtime_src/opt/switch-vision/devices/supported_devices.json
+          git commit -m "Correct audited physical mapping contracts"
+          git push origin HEAD:audit/discovery-2.3.24-functional
