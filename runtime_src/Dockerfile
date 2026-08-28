@@ -7,6 +7,9 @@ RUN apk add --no-cache net-snmp-tools jq zip python3 py3-yaml
 
 COPY run.sh /run.sh
 COPY discovery_job.sh /discovery_job.sh
+COPY discovery_contract_entrypoint.py /discovery_contract_entrypoint.py
+COPY physical_contract.py /physical_contract.py
+COPY physical_contract_prepare.sh /physical_contract_prepare.sh
 COPY support_my_switch.sh /support_my_switch.sh
 COPY sanitize_support_bundle.py /sanitize_support_bundle.py
 COPY ha_entity_snapshot_sanitizer.py /ha_entity_snapshot_sanitizer.py
@@ -29,6 +32,6 @@ COPY unifi_dashboard_cards.py /unifi_dashboard_cards.py
 COPY devices /opt/switch-vision/devices
 COPY mib_database /opt/switch-vision/mib_database
 COPY vendors /opt/switch-vision/vendors
-RUN chmod a+x /run.sh /discovery_job.sh /support_my_switch.sh /sanitize_support_bundle.py /ha_entity_snapshot_sanitizer.py /make_support_email.py /support_web.py /support_web_entry.py /migrate_options.py /registry_lookup.py /standard_sensor_scan.py /vendor_sensor_scan.py /juniper_vlan_modes.py /unifi_dashboard_cards.py
+RUN chmod a+x /run.sh /discovery_job.sh /discovery_contract_entrypoint.py /physical_contract.py /physical_contract_prepare.sh /support_my_switch.sh /sanitize_support_bundle.py /ha_entity_snapshot_sanitizer.py /make_support_email.py /support_web.py /support_web_entry.py /migrate_options.py /registry_lookup.py /standard_sensor_scan.py /vendor_sensor_scan.py /juniper_vlan_modes.py /unifi_dashboard_cards.py
 
 CMD [ "/run.sh" ]
