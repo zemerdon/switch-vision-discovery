@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-CV_VENDOR_LAYER_VERSION="4"
+CV_VENDOR_LAYER_VERSION="5"
 CV_KNOWN_VENDOR_IDS="juniper hp_aruba dell extreme ruckus_brocade mikrotik ubiquiti netgear huawei zyxel"
 
 # interface.sh historically defined model extraction by scanning the complete
@@ -7,6 +7,14 @@ CV_KNOWN_VENDOR_IDS="juniper hp_aruba dell extreme ruckus_brocade mikrotik ubiqu
 # identity from LLDP/CDP can never override the local switch model.
 if [ -f "$CV_VENDOR_DIR/model_identity.sh" ]; then
   . "$CV_VENDOR_DIR/model_identity.sh"
+fi
+
+# Contributor-backed exact-model interface rules are deliberately loaded after
+# the generic parser. They replace only the classifier function and preserve
+# every existing generic/platform rule while adding narrow evidence-backed
+# exceptions for contributed hardware.
+if [ -f "$CV_VENDOR_DIR/contributor_interface_override.sh" ]; then
+  . "$CV_VENDOR_DIR/contributor_interface_override.sh"
 fi
 
 cv_vendor_database_self_test() {
