@@ -15,7 +15,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "runtime_src"))
 
+import core_bridge  # noqa: E402
 import support_web as hub  # noqa: E402
+
+core_bridge.install(hub)
 
 
 @contextmanager
