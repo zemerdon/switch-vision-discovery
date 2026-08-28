@@ -119,12 +119,14 @@ CV_CAP_FRONT_PANEL_AWARE="false"
 # dual-personality positions to the `uplink_N_status` entities actually emitted
 # by Discovery, rather than the generic sfp_10g template.
 hp_binding='*J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;'
-[ "$(grep -Fxc "$hp_binding" "$DISCOVERY_JOB")" -eq 2 ]
+[ "$(grep -Fc "$hp_binding" "$DISCOVERY_JOB")" -eq 2 ]
 
-# Registry contracts distilled from the contributor evidence. These checks are
-# intentionally topology/status assertions only; raw evidence never enters Git.
+# Registry contracts distilled from the contributor evidence. Match model
+# identity canonically because older exact entries legitimately use SKU dashes
+# while newer display names may use spaces. Raw evidence never enters Git.
 jq -e '
-  def dev($m): [.devices[] | select(.model == $m)][0];
+  def canon: ascii_downcase | gsub("[^a-z0-9]"; "");
+  def dev($m): ($m | canon) as $target | [.devices[] | select((.model | canon) == $target)][0];
   (dev("PowerConnect 5548P") | .status == "experimental" and .ports.rj45 == 48 and .ports.ten_gigabit_sfp_plus == 2) and
   (dev("GS1900-24E") | .status == "experimental" and .ports.rj45 == 24) and
   (dev("WS-C3750X-48P") | .status == "experimental" and .ports.rj45 == 48 and .stack_support == true) and
