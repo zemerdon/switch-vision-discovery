@@ -15,7 +15,7 @@ touch /share/switch_vision/discovery-web.log
 
 echo "Switch Vision Discovery service starting in idle/ready mode."
 echo "Support My Switch Web UI: listening on Home Assistant Ingress (port 8099)."
-exec python3 /support_web.py \
+exec python3 /support_web_entry.py \
   --port 8099 \
   --version "$SWITCH_VISION_DISCOVERY_VERSION" \
   --discovery-script /discovery_contract_entrypoint.py
