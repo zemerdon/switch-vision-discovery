@@ -32,6 +32,16 @@ COPY unifi_dashboard_cards.py /unifi_dashboard_cards.py
 COPY devices /opt/switch-vision/devices
 COPY mib_database /opt/switch-vision/mib_database
 COPY vendors /opt/switch-vision/vendors
+
+# Home Assistant's builder passes the app version as BUILD_VERSION. Stamp the
+# two runtime entrypoints from that single authoritative release value so the
+# published image cannot drift from config.yaml while keeping tracked source
+# deterministic between releases.
+RUN test -n "$BUILD_VERSION" \
+    && sed -i "s/^SWITCH_VISION_DISCOVERY_VERSION=\"[^\"]*\"$/SWITCH_VISION_DISCOVERY_VERSION=\"$BUILD_VERSION\"/" /run.sh /discovery_job.sh \
+    && grep -Fqx "SWITCH_VISION_DISCOVERY_VERSION=\"$BUILD_VERSION\"" /run.sh \
+    && grep -Fqx "SWITCH_VISION_DISCOVERY_VERSION=\"$BUILD_VERSION\"" /discovery_job.sh
+
 RUN chmod a+x /run.sh /discovery_job.sh /discovery_contract_entrypoint.py /physical_contract.py /physical_contract_prepare.sh /support_my_switch.sh /sanitize_support_bundle.py /ha_entity_snapshot_sanitizer.py /make_support_email.py /support_web.py /support_web_entry.py /migrate_options.py /registry_lookup.py /standard_sensor_scan.py /vendor_sensor_scan.py /juniper_vlan_modes.py /unifi_dashboard_cards.py
 
 CMD [ "/run.sh" ]
