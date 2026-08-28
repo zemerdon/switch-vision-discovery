@@ -1,0 +1,89 @@
+name: Discovery functional audit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  functional-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install audit/runtime dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML websockets
+
+      - name: Compile Python runtime and audit tools
+        run: |
+          python -m py_compile \
+            runtime_src/support_web.py \
+            runtime_src/registry_lookup.py \
+            runtime_src/unifi_dashboard_cards.py \
+            runtime_src/discovery_backups.py \
+            runtime_src/support_diagnostics.py \
+            runtime_src/mqtt_maintenance.py \
+            runtime_src/mqtt_maintenance_runtime.py \
+            tools/audit_functional_contracts.py \
+            tools/audit_hub_control_inventory.py \
+            tools/test_hub_save_reset_contracts.py \
+            tools/test_registry_roundtrip.py
+
+      - name: Validate external Hub JavaScript syntax
+        run: |
+          node --check runtime_src/maintenance.js
+          node --check runtime_src/calibration_profiles.js
+          node --check runtime_src/calibration_profiles_manager.js
+
+      - name: Validate embedded Hub JavaScript syntax
+        run: |
+          python - <<'PY'
+          import ast, re
+          from pathlib import Path
+          source = Path('runtime_src/support_web.py').read_text(encoding='utf-8')
+          tree = ast.parse(source)
+          page = None
+          for node in tree.body:
+              if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == '_PAGE' for t in node.targets):
+                  if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                      page = node.value.value
+                      break
+          if page is None:
+              raise SystemExit('Could not extract _PAGE')
+          scripts = re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', page, flags=re.S|re.I)
+          out = Path('/tmp/sv-embedded-js')
+          out.mkdir(exist_ok=True)
+          for idx, script in enumerate(scripts, start=1):
+              (out / f'{idx}.js').write_text(script, encoding='utf-8')
+          print(f'extracted {len(scripts)} embedded script blocks')
+          PY
+          for script in /tmp/sv-embedded-js/*.js; do node --check "$script"; done
+
+      - name: Run static functional consistency audit
+        run: python tools/audit_functional_contracts.py
+
+      - name: Audit complete static Hub control inventory
+        run: python tools/audit_hub_control_inventory.py
+
+      - name: Exercise Hub save and reset backend contracts
+        run: python tools/test_hub_save_reset_contracts.py
+
+      - name: Exercise registry lookup round trips
+        run: python tools/test_registry_roundtrip.py
+
+      - name: Run contributor model/interface regression corpus
+        run: sh tools/test_contributor_interface_batch.sh
+
+      - name: Run packaged runtime self-test
+        run: sh runtime_src/self-test.sh

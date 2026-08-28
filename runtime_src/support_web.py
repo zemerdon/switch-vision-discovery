@@ -286,8 +286,10 @@ def _manual_snmp_override_models() -> set[str]:
     return models or {
         "WS-C3650-48PD-E", "WS-C3650-48PD-L", "WS-C2960X-48FPD-L",
         "WS-C2960X-24PS-L", "WS-C2960X-24TS-L", "WS-C2960S-48FPD-L",
-        "WS-C3560CG-8PC-S", "EX3300-48P", "SG500X-24",
-        "S5720-12TP-LI-AC", "S5735-L8P4X-A1",
+        "WS-C3560CG-8PC-S", "WS-C3750-48P", "WS-C3750X-48P",
+        "EX3300-48P", "SG500X-24", "S5720-12TP-LI-AC",
+        "S5735-L8P4X-A1", "CRS328-24P-4S+RM", "XS1930-10",
+        "N2128PX-ON", "PowerConnect 5548P",
     }
 
 
