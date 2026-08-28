@@ -38,6 +38,7 @@ jobs:
             tools/audit_functional_contracts.py \
             tools/audit_hub_control_inventory.py \
             tools/test_hub_save_reset_contracts.py \
+            tools/test_calibration_core_bridge_contract.py \
             tools/test_registry_roundtrip.py
 
       - name: Validate external Hub JavaScript syntax
@@ -78,6 +79,9 @@ jobs:
 
       - name: Exercise Hub save and reset backend contracts
         run: python tools/test_hub_save_reset_contracts.py
+
+      - name: Exercise Calibration/Core bridge error contracts
+        run: python tools/test_calibration_core_bridge_contract.py
 
       - name: Exercise registry lookup round trips
         run: python tools/test_registry_roundtrip.py
