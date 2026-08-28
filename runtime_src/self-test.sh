@@ -21,16 +21,14 @@ grep -Fq "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" \
 
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-# v2.3.20 Credits animation / test-content presentation regression.
+# Credits presentation continuity. The v2.3.27 v25 block below is the
+# authoritative animation contract; do not retain Matrix-era implementation
+# assertions after the animation has been superseded.
 grep -Fq 'id="creditsMatrix"' "$BASE_DIR/support_web.py"
-grep -Fq 'function startCreditsAnimation()' "$BASE_DIR/support_web.py"
-grep -Fq 'credits-matrix-active' "$BASE_DIR/support_web.py"
-grep -Fq 'credits-settled' "$BASE_DIR/support_web.py"
-grep -Fq '@media(prefers-reduced-motion:reduce)' "$BASE_DIR/support_web.py"
 grep -Fq 'TEST ENTRIES — NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
 grep -Fq 'DemoAlias-01' "$BASE_DIR/support_web.py"
-grep -Fq "openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()})" "$BASE_DIR/support_web.py"
-echo 'Switch Vision Discovery v2.3.20 Credits animation regression: PASS'
+grep -Fq 'id="openCreditsButton"' "$BASE_DIR/support_web.py"
+echo 'Switch Vision Discovery Credits presentation continuity: PASS'
 
 # v2.3.27 locked Credits v25 preview-placeholder regression.
 test -f "$BASE_DIR/credits_v25.css"
