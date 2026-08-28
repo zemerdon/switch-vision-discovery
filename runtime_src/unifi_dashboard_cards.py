@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Emit Switch Vision card YAML for normalized UniFi2MQTT devices."""
+"""Emit Switch Vision card YAML for normalized UniFi2MQTT devices.
+
+Exact registered hardware topology is authoritative. Normalized UniFi snapshot
+rows are source bindings/evidence, not permission to redefine a known physical
+chassis. Unknown devices may still use observed topology as an inferred generic
+contract.
+"""
 from __future__ import annotations
 
 import argparse
@@ -10,17 +16,16 @@ from typing import Any
 
 import yaml
 
-# Existing generic Switch Vision faceplates for UniFi devices. Prefer the
-# purpose-built UniFi 24 RJ45 + 2 SFP generic whenever the observed topology
-# fits it. Neutral stock generics remain available for larger/different layouts
-# where no UniFi-specific generic artwork exists yet. The real observed counts
-# are still emitted on the card, so unused generic sockets remain inactive.
+# Existing generic Switch Vision faceplates for UniFi devices. These are visual
+# containers only; choosing an oversized temporary visual never changes the
+# physical port_count/sfp_port_count contract emitted on the card.
 GENERIC_VISUALS: tuple[tuple[int, int, str, str], ...] = (
     (24, 2, "unifi_24p_rj45_2sfp", "faceplates/unifi-24p-rj45-2sfp.png"),
     (24, 4, "stock_24rj45_4sfp", "faceplates/24rj45-4sfp.png"),
     (48, 2, "stock_48rj45_2sfp", "faceplates/48rj45-2sfp.png"),
     (48, 4, "stock_48rj45_4sfp", "faceplates/48rj45-4sfp.png"),
 )
+OPTICAL_CONNECTORS = {"SFP", "SFPPLUS", "SFP+", "SFP28"}
 
 
 class JsonInputError(RuntimeError):
@@ -85,9 +90,124 @@ def generic_visual(rj45_count: int, sfp_count: int) -> tuple[str, str, int, int]
         if rj45_count <= max_rj45 and sfp_count <= max_sfp:
             return profile, faceplate, max_rj45, max_sfp
     # Never force an optical-heavy or otherwise oversized topology onto artwork
-    # that cannot represent it. Such a device remains explicitly pending until
-    # a suitable generic or exact faceplate exists.
+    # that cannot represent it.
     return None
+
+
+def _connector(port: dict[str, Any]) -> str:
+    return str(port.get("connector") or "").upper()
+
+
+def _observed_ports(ports: list[Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    rj45 = [p for p in ports if isinstance(p, dict) and _connector(p) == "RJ45"]
+    sfp = [p for p in ports if isinstance(p, dict) and _connector(p) in OPTICAL_CONNECTORS]
+    return rj45, sfp
+
+
+def _registry_topology(reg: dict[str, Any]) -> tuple[int, int]:
+    ports = reg.get("ports") if isinstance(reg.get("ports"), dict) else {}
+    try:
+        rj45 = int(ports.get("rj45") or 0)
+    except (TypeError, ValueError):
+        rj45 = 0
+    uplinks_raw = ports.get("uplinks")
+    if uplinks_raw is None:
+        uplinks_raw = (
+            (ports.get("gigabit_sfp") or 0)
+            + (ports.get("ten_gigabit_sfp_plus") or 0)
+            + (ports.get("twenty_five_gigabit_sfp28") or 0)
+        )
+    try:
+        sfp = int(uplinks_raw or 0)
+    except (TypeError, ValueError):
+        sfp = 0
+    return max(0, rj45), max(0, sfp)
+
+
+def _normalise_port_map(value: Any) -> list[int] | None:
+    if not isinstance(value, list):
+        return None
+    result: list[int] = []
+    for raw in value:
+        if isinstance(raw, bool):
+            return None
+        try:
+            idx = int(raw)
+        except (TypeError, ValueError):
+            return None
+        if idx <= 0 or idx in result:
+            return None
+        result.append(idx)
+    return result
+
+
+def _ports_by_idx(ports: list[Any]) -> tuple[dict[int, dict[str, Any]], set[int]]:
+    by_idx: dict[int, dict[str, Any]] = {}
+    duplicates: set[int] = set()
+    for port in ports:
+        if not isinstance(port, dict) or isinstance(port.get("idx"), bool):
+            continue
+        try:
+            idx = int(port.get("idx"))
+        except (TypeError, ValueError):
+            continue
+        if idx <= 0:
+            continue
+        if idx in by_idx:
+            duplicates.add(idx)
+        else:
+            by_idx[idx] = port
+    return by_idx, duplicates
+
+
+def resolve_registered_unifi_ports(
+    reg: dict[str, Any], ports: list[Any]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str | None]:
+    """Bind normalized UniFi rows to an exact registered physical topology.
+
+    A registry API-port map, when present, is the strongest source binding.
+    Without one, observed connector counts must exactly match registry topology;
+    we refuse to guess which rows are physical when they disagree.
+    """
+    expected_rj45, expected_sfp = _registry_topology(reg)
+    observed_rj45, observed_sfp = _observed_ports(ports)
+    api_port_map = reg.get("unifi_api_port_map")
+
+    if isinstance(api_port_map, dict):
+        rj45_map = _normalise_port_map(api_port_map.get("rj45"))
+        sfp_map = _normalise_port_map(api_port_map.get("sfp"))
+        if rj45_map is None or sfp_map is None:
+            return [], [], "registry API port map is malformed"
+        if len(rj45_map) != expected_rj45 or len(sfp_map) != expected_sfp:
+            return [], [], (
+                "registry API port map geometry does not match registry topology "
+                f"({len(rj45_map)} RJ45 + {len(sfp_map)} SFP map vs "
+                f"{expected_rj45} RJ45 + {expected_sfp} SFP topology)"
+            )
+        by_idx, duplicates = _ports_by_idx(ports)
+        mapped_indexes = set(rj45_map) | set(sfp_map)
+        duplicate_mapped = sorted(mapped_indexes & duplicates)
+        if duplicate_mapped:
+            return [], [], f"API port map references duplicate snapshot idx {duplicate_mapped[0]}"
+        missing = [idx for idx in [*rj45_map, *sfp_map] if idx not in by_idx]
+        if missing:
+            return [], [], f"API port map references missing snapshot idx {missing[0]}"
+        mapped_rj45 = [by_idx[idx] for idx in rj45_map]
+        mapped_sfp = [by_idx[idx] for idx in sfp_map]
+        bad_rj45 = next((idx for idx, row in zip(rj45_map, mapped_rj45) if _connector(row) != "RJ45"), None)
+        if bad_rj45 is not None:
+            return [], [], f"API port map RJ45 idx {bad_rj45} is reported as {_connector(by_idx[bad_rj45]) or 'UNKNOWN'}"
+        bad_sfp = next((idx for idx, row in zip(sfp_map, mapped_sfp) if _connector(row) not in OPTICAL_CONNECTORS), None)
+        if bad_sfp is not None:
+            return [], [], f"API port map SFP idx {bad_sfp} is reported as {_connector(by_idx[bad_sfp]) or 'UNKNOWN'}"
+        return mapped_rj45, mapped_sfp, None
+
+    if len(observed_rj45) != expected_rj45 or len(observed_sfp) != expected_sfp:
+        return [], [], (
+            f"registry expects {expected_rj45} RJ45 + {expected_sfp} SFP but snapshot reports "
+            f"{len(observed_rj45)} RJ45 + {len(observed_sfp)} SFP"
+        )
+    return observed_rj45, observed_sfp, None
 
 
 def render(
@@ -124,17 +244,23 @@ def render(
             continue
 
         ports = device.get("ports") if isinstance(device.get("ports"), list) else []
-        rj45 = [
-            p
-            for p in ports
-            if isinstance(p, dict) and str(p.get("connector") or "").upper() == "RJ45"
-        ]
-        sfp = [
-            p
-            for p in ports
-            if isinstance(p, dict)
-            and str(p.get("connector") or "").upper() in {"SFP", "SFPPLUS", "SFP+", "SFP28"}
-        ]
+        observed_rj45, observed_sfp = _observed_ports(ports)
+        reg = registry_match(reg_devices, model)
+
+        if reg:
+            rj45, sfp, conflict = resolve_registered_unifi_ports(reg, ports)
+            if conflict:
+                expected_rj45, expected_sfp = _registry_topology(reg)
+                lines.append(
+                    f"{pad}# TOPOLOGY_CONFLICT: UniFi {json.dumps(model)} {conflict}; "
+                    f"exact {expected_rj45} RJ45 + {expected_sfp} SFP card withheld."
+                )
+                pending_exact += 1
+                invalid += 1
+                continue
+        else:
+            rj45, sfp = observed_rj45, observed_sfp
+
         if not rj45 and not sfp:
             lines.append(
                 f"{pad}# UniFi {json.dumps(model)} skipped because no usable RJ45/SFP physical ports were reported."
@@ -142,7 +268,8 @@ def render(
             invalid += 1
             continue
 
-        reg = registry_match(reg_devices, model)
+        physical_rj45 = len(rj45)
+        physical_sfp = len(sfp)
         profile = str((reg or {}).get("calibration_profile") or "").strip()
         faceplate = str((reg or {}).get("default_faceplate") or "").strip()
         status = str((reg or {}).get("status") or "detected")
@@ -157,23 +284,23 @@ def render(
             and reg.get("dashboard_support") is True
             and profile
             and faceplate
-            and visual_geometry_matches(faceplate, len(rj45), len(sfp))
+            and visual_geometry_matches(faceplate, physical_rj45, physical_sfp)
         )
         visual_fallback = not exact_visual
 
         if visual_fallback:
             pending_exact += 1
-            generic_choice = generic_visual(len(rj45), len(sfp))
+            generic_choice = generic_visual(physical_rj45, physical_sfp)
             if generic_choice is None:
                 if reg and reg.get("dashboard_support") is not True:
                     lines.append(
                         f"{pad}# UniFi {json.dumps(model)} detected; dashboard support is pending verified visuals "
-                        f"and no suitable generic faceplate exists for {len(rj45)} RJ45 + {len(sfp)} SFP."
+                        f"and no suitable generic faceplate exists for {physical_rj45} RJ45 + {physical_sfp} SFP."
                     )
                 else:
                     lines.append(
                         f"{pad}# UniFi {json.dumps(model)} detected, but no suitable generic faceplate exists for "
-                        f"{len(rj45)} RJ45 + {len(sfp)} SFP; exact support remains pending."
+                        f"{physical_rj45} RJ45 + {physical_sfp} SFP; exact support remains pending."
                     )
                 continue
 
@@ -184,10 +311,11 @@ def render(
             elif reg.get("dashboard_support") is not True:
                 reason = "exact dashboard visuals are still pending"
             else:
-                reason = "the exact visual does not match the observed port geometry"
+                reason = "the exact visual does not match the registered physical geometry"
             lines.append(
                 f"{pad}# UniFi {json.dumps(model)}: {reason}; using generic "
-                f"{visual_rj45} RJ45 + {visual_sfp} SFP faceplate."
+                f"{visual_rj45} RJ45 + {visual_sfp} SFP faceplate while preserving "
+                f"the {physical_rj45} RJ45 + {physical_sfp} SFP physical contract."
             )
         else:
             exact += 1
@@ -208,10 +336,10 @@ def render(
             "vendor": "Ubiquiti",
             "data_source": "unifi_api",
             "unifi_device_id": device_id,
-            "unifi_rj45_ports": len(rj45),
-            "unifi_sfp_port_offset": len(rj45),
-            "port_count": len(rj45),
-            "sfp_port_count": len(sfp),
+            "unifi_rj45_ports": physical_rj45,
+            "unifi_sfp_port_offset": physical_rj45,
+            "port_count": physical_rj45,
+            "sfp_port_count": physical_sfp,
             "unifi_port_detail": bool(capabilities.get("port_detail")),
             "unifi_per_port_traffic": bool(capabilities.get("per_port_traffic")),
             "calibration_profile": profile,
@@ -274,9 +402,6 @@ def main() -> int:
             f"generic fallbacks: {generic}; exact support pending: {pending_exact}; "
             f"issues: {issues}"
         )
-        # Keep the previous concise summary as a compatibility breadcrumb for
-        # existing diagnostics/tests while the detailed counters above become
-        # the primary format.
         print(
             f"# UniFi cards emitted: {emitted}; waiting for visuals/registry: {pending_exact}"
         )
