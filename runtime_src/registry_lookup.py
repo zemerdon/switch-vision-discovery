@@ -44,18 +44,32 @@ def canonical_model(model: str) -> str:
 
 def lookup(data: dict, model: str) -> dict | None:
     target = canonical_model(model)
-    for device in data.get('devices', []):
+    devices = [device for device in data.get('devices', []) if isinstance(device, dict)]
+
+    # Pass 1: exact normalized identity across the complete registry. Do not let
+    # an earlier short SKU such as "USW Flex" shadow a later exact model such as
+    # "USW Flex Mini" or "USW Flex 2.5G 5".
+    for device in devices:
         candidate = canonical_model(str(device.get('model', '')))
         if candidate == target:
             return device
-        # Some vendors return the exact SKU followed by descriptive sysDescr text.
-        # Only accept a description suffix after an exact registry SKU boundary.
+
+    # Pass 2: some vendors append descriptive sysDescr text after the exact SKU.
+    # Gather all safe SKU-boundary matches and choose the longest candidate so a
+    # specific model wins over a shorter family-like model regardless of registry
+    # ordering (for example UDM Pro Max over UDM Pro).
+    suffix_matches: list[tuple[int, dict]] = []
+    for device in devices:
+        candidate = canonical_model(str(device.get('model', '')))
         if candidate and (
             target.startswith(candidate + " ")
             or target.startswith(candidate + ",")
             or target.startswith(candidate + ";")
         ):
-            return device
+            suffix_matches.append((len(candidate), device))
+    if suffix_matches:
+        suffix_matches.sort(key=lambda item: item[0], reverse=True)
+        return suffix_matches[0][1]
     return None
 
 
