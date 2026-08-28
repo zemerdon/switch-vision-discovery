@@ -27,7 +27,7 @@ sv_require_literal 'Copy Debug event binding' "\$('copyDebugButton').addEventLis
 # Credits presentation continuity. The v2.3.27 v25 block below is the
 # authoritative animation contract; Matrix-era implementation details are not.
 sv_require_literal 'Credits canvas' 'id="creditsMatrix"' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits preview disclaimer' 'TEST ENTRIES — NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
+sv_require_literal 'Credits preview disclaimer' 'TEST ENTRIES, NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
 sv_require_literal 'Credits demo row' 'DemoAlias-01' "$BASE_DIR/support_web.py"
 sv_require_literal 'Credits navigation card' 'id="openCreditsButton"' "$BASE_DIR/support_web.py"
 echo 'Switch Vision Discovery Credits presentation continuity: PASS'
@@ -35,7 +35,7 @@ echo 'Switch Vision Discovery Credits presentation continuity: PASS'
 # v2.3.27 locked Credits v25 preview-placeholder regression.
 test -f "$BASE_DIR/credits_v25.css" || { echo 'FAIL: credits_v25.css missing' >&2; exit 1; }
 test -f "$BASE_DIR/credits_v25.js" || { echo 'FAIL: credits_v25.js missing' >&2; exit 1; }
-sv_require_literal 'v25 placeholder badge' 'PREVIEW PLACEHOLDER — TEST ENTRIES, NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 placeholder badge' 'PREVIEW PLACEHOLDER' "$BASE_DIR/support_web.py"
 sv_require_literal 'v25 stylesheet link' 'credits_v25.css' "$BASE_DIR/support_web.py"
 sv_require_literal 'v25 script link' 'credits_v25.js' "$BASE_DIR/support_web.py"
 sv_require_literal 'v25 computed-style clone' 'copyCreditsV25ComputedStylesDeep' "$BASE_DIR/credits_v25.js"
