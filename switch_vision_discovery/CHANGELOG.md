@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.3.24
+
+## Discovery 2.3.24
+
+- Add evidence-backed exact detection and physical-interface handling for Dell PowerConnect 5548P, Cisco WS-C3750X-48P, Cisco SG350-20, Zyxel GS1900-24E, HP J8693A Switch 3500yl-48G, and Ubiquiti USW Pro HD 24 PoE.
+- Recognize compact Ubiquiti model identities used by USW Pro HD 24 PoE and USW Pro XG 8 PoE SNMP data without broadening generic `0/N` interface handling.
+- Fix Catalyst 3750X C3KX network-module alias handling so Gi/Te aliases for the same physical cages are not double-counted as access ports.
+- Fix HP J8693A generated dashboard cards to bind the four dual-personality positions to the emitted `uplink_*_status` entities instead of the generic `sfp_10g_*_status` template.
+- Add Experimental UniFi API topology/profile metadata for USW Aggregation, USW Enterprise 24 PoE, USW Flex 2.5G 5, and USW WAN while preserving true observed port counts and connector types.
+- Add synthetic contributor regressions and privacy-safe public evidence identifiers; raw contribution artifacts and private submission identifiers remain outside the public repository.
+- No newly added model is promoted beyond Experimental by this release.
+
 ## 2.3.23
 
 ## Discovery 2.3.23
