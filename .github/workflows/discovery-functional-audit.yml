@@ -33,7 +33,9 @@ jobs:
             runtime_src/discovery_backups.py \
             runtime_src/support_diagnostics.py \
             runtime_src/mqtt_maintenance.py \
-            runtime_src/mqtt_maintenance_runtime.py
+            runtime_src/mqtt_maintenance_runtime.py \
+            tools/audit_functional_contracts.py \
+            tools/test_hub_save_reset_contracts.py
 
       - name: Validate external Hub JavaScript syntax
         run: |
@@ -67,6 +69,9 @@ jobs:
 
       - name: Run static functional consistency audit
         run: python tools/audit_functional_contracts.py
+
+      - name: Exercise Hub save and reset backend contracts
+        run: python tools/test_hub_save_reset_contracts.py
 
       - name: Run contributor model/interface regression corpus
         run: sh tools/test_contributor_interface_batch.sh
