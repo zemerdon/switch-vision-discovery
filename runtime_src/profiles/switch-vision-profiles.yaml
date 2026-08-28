@@ -52,18 +52,19 @@ profiles:
     layout:
       members: auto
       rj45_ports: 48
-      sfp_1g_ports: 2
+      sfp_1g_ports: 0
       sfp_10g_ports: 2
     interface_patterns:
       rj45:
       - Gi{member}/0/{port}
       - GigabitEthernet{member}/0/{port}
-      sfp_1g:
-      - Gi{member}/0/{port}
-      - GigabitEthernet{member}/0/{port}
+      sfp_1g: []
       sfp_10g:
       - Te{member}/0/{port}
       - TenGigabitEthernet{member}/0/{port}
+    notes:
+    - Exact WS-C2960X-48FPD-L physical contract is 48 copper ports plus two 10G SFP+ uplinks.
+    - Do not treat Gi{member}/0/* access-port aliases as separate 1G SFP cages.
   cisco-2960x-24ps-24p-4sfp:
     status: experimental
     vendor: Cisco
@@ -92,18 +93,19 @@ profiles:
     layout:
       members: auto
       rj45_ports: 48
-      sfp_1g_ports: 2
+      sfp_1g_ports: 0
       sfp_10g_ports: 2
     interface_patterns:
       rj45:
       - Gi{member}/0/{port}
       - GigabitEthernet{member}/0/{port}
-      sfp_1g:
-      - Gi{member}/0/{port}
-      - GigabitEthernet{member}/0/{port}
+      sfp_1g: []
       sfp_10g:
       - Te{member}/0/{port}
       - TenGigabitEthernet{member}/0/{port}
+    notes:
+    - Exact WS-C2960S-48FPD-L physical contract is 48 copper ports plus two 10G SFP+ uplinks.
+    - Do not treat Gi{member}/0/* access-port aliases as separate 1G SFP cages.
   juniper-ex3300-48p:
     status: supported
     vendor: Juniper
