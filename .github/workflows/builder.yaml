@@ -159,7 +159,7 @@ jobs:
 
   build_publish:
     name: Publish build ${{ matrix.arch }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[runtime-packager]')
     needs: prepare
     runs-on: ${{ matrix.os }}
     permissions:
@@ -202,7 +202,7 @@ jobs:
     needs:
       - prepare
       - build_publish
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[runtime-packager]')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
