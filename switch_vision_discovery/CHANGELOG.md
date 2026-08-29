@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.30
+
+- Add Switch Vision Hub compatibility for UniFi2MQTT 3.0.0 multi-controller / multi-site mode while preserving existing single-controller Hub behavior unchanged.
+- Recognize a non-empty UniFi2MQTT `controllers` list as the authoritative multi-controller configuration and report only privacy-safe readiness metadata such as enabled state, controller count, and credential completeness.
+- Keep the nested controller list completely out of Hub browser responses so per-controller API keys, controller URLs, site selectors, and operator controller labels are never exposed by the Hub settings endpoint.
+- Preserve the complete stored controller list unchanged when the Hub saves global UniFi2MQTT polling or MQTT settings, and reject attempts to mutate controller entries through the Hub.
+- Keep controller creation, controller URLs, site selection, and per-controller API keys owned by Home Assistant App configuration; the Hub disables legacy controller/API-key fields while multi-controller mode is active and directs configuration there.
+- Allow a valid multi-controller installation to be considered configured without requiring a legacy top-level API key.
+- Add permanent backend and patched-JavaScript regressions for nested-secret redaction, controller-list preservation, browser mutation rejection, credential completeness, multi-controller readiness rendering, and fail-closed page-patch drift.
+
 ## 2.3.29
 
 - Fixes the physical-contract normalized generation hand-off so successful current-run SNMP walks remain eligible for SNMP2MQTT/dashboard generation when the user keeps `parse_all_walks` disabled.
