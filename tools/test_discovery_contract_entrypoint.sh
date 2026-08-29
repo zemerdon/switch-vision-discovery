@@ -9,11 +9,6 @@ PREPARE="$RUNTIME/physical_contract_prepare.sh"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 
-# Dockerfile applies these executable bits in the shipped app image. Reproduce
-# that packaging step in the raw GitHub checkout before exercising the exact
-# runtime entrypoint.
-chmod +x "$PREPARE" "$RUNTIME/discovery_job.sh"
-
 make_dell_walk() {
   path=$1
   ports=$2
@@ -48,7 +43,7 @@ run_entrypoint() {
   SWITCH_VISION_CAPABILITIES_DIR="$case_dir/published-capabilities" \
   SWITCH_VISION_SHARE_DIR="$case_dir/share" \
   SWITCH_VISION_RUNTIME_DIR="$RUNTIME" \
-  python3 "$ENTRYPOINT"
+  "$ENTRYPOINT"
 }
 
 # Positive path: the exact Web-UI entrypoint must repair the production parser
