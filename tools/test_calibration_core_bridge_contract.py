@@ -405,6 +405,37 @@ def test_support_privacy_processing_preserves_bridge_diagnostic_contract() -> No
         assert report.is_file()
 
 
+def test_calibration_profiles_http_and_frontend_expose_typed_diagnostic() -> None:
+    exc = hub.HomeAssistantWebSocketError(
+        "Switch Vision Core command failed [unknown_command].",
+        kind="core_command",
+        ha_error_code="unknown_command",
+        stage="response",
+        diagnostic_id="SV-CB-ABCDEF123456",
+        error_class="CORE_COMMAND_UNAVAILABLE",
+    )
+    payload = hub._calibration_core_bridge_http_error(exc)
+    assert payload["error_class"] == "CORE_COMMAND_UNAVAILABLE"
+    assert payload["ha_error_code"] == "unknown_command"
+    assert payload["stage"] == "response"
+    assert payload["diagnostic_id"] == "SV-CB-ABCDEF123456"
+    assert hub._calibration_core_bridge_http_error(RuntimeError("plain failure")) == {
+        "error": "plain failure"
+    }
+
+    backend = (ROOT / "runtime_src" / "support_web.py").read_text(encoding="utf-8")
+    frontend = (ROOT / "runtime_src" / "calibration_profiles.js").read_text(encoding="utf-8")
+    assert "_calibration_core_bridge_http_error(exc)" in backend
+    for token in (
+        "CORE_COMMAND_UNAVAILABLE",
+        "Restart Home Assistant Core",
+        "diagnostic_id",
+        "ha_error_code",
+        "stage",
+    ):
+        assert token in frontend, token
+
+
 def main() -> int:
     test_successful_calibration_list_round_trip()
     print("PASS: Calibration/Core WebSocket success round trip")
@@ -418,6 +449,8 @@ def main() -> int:
     print("PASS: Core command failure preserves Home Assistant error code")
     test_calibration_error_payload_and_log_are_safe()
     print("PASS: Calibration bridge browser/log diagnostics are structured and sanitized")
+    test_calibration_profiles_http_and_frontend_expose_typed_diagnostic()
+    print("PASS: Calibration Profiles HTTP/UI exposes the typed Core-bridge diagnostic")
     test_failed_calibration_attempt_persists_sanitized_snapshot()
     print("PASS: Calibration bridge failure persists a sanitized diagnostic snapshot")
     test_unknown_command_snapshot_pinpoints_unavailable_core_command()
