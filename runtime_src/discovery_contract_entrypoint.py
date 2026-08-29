@@ -190,7 +190,9 @@ def _read_current_run_records() -> list[dict[str, str]]:
 
     metadata: dict[str, dict[str, str]] = {}
     if CURRENT_RUN_TARGETS.is_file():
-        for raw in CURRENT_RUN_TARGETS.read_text(encoding="utf-8", errors="replace").splitlines():
+        # The manifest uses ASCII FS (0x1c) as its field separator. Python's
+        # splitlines() also treats FS as a line boundary, so split only on LF.
+        for raw in CURRENT_RUN_TARGETS.read_text(encoding="utf-8", errors="replace").split("\n"):
             parts = raw.split(CURRENT_RUN_SEPARATOR)
             if len(parts) != 5:
                 continue
