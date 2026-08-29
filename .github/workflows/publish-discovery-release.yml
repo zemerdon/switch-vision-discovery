@@ -147,9 +147,10 @@ jobs:
         env:
           VERSION: ${{ steps.request.outputs.version }}
           REGISTRY_PREFIX: ${{ steps.normalize.outputs.registry_prefix }}
+          IMAGE_NAME: ${{ steps.normalize.outputs.image_name }}
         run: |
           set -euo pipefail
-          if docker buildx imagetools inspect "$REGISTRY_PREFIX:$VERSION" >/dev/null 2>&1; then
+          if docker buildx imagetools inspect "$REGISTRY_PREFIX/$IMAGE_NAME:$VERSION" >/dev/null 2>&1; then
             echo "ERROR: Discovery image tag $VERSION already exists; semantic release tags are immutable"
             exit 1
           fi
@@ -159,7 +160,7 @@ jobs:
         uses: home-assistant/builder/actions/prepare-multi-arch-matrix@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
         with:
           architectures: ${{ steps.info.outputs.architectures }}
-          image-name: ${{ steps.normalize.outputs.image_name }}
+          image-name: ${{ steps.normalize.outputs.imae_name }}
           registry-prefix: ${{ steps.normalize.outputs.registry_prefix }}
 
       - name: Dry-run complete
@@ -279,13 +280,14 @@ jobs:
       VERSION: ${{ needs.preflight.outputs.version }}
       TARGET_SHA: ${{ needs.preflight.outputs.target_sha }}
       REGISTRY_PREFIX: ${{ needs.preflight.outputs.registry_prefix }}
+      IMAGE_NAME: ${{ needs.preflight.outputs.image_name }}
     steps:
       - name: Verify public manifests and target revision
         shell: bash
         run: |
           set -euo pipefail
-          version_ref="$REGISTRY_PREFIX:$VERSION"
-          latest_ref="$REGISTRY_PREFIX:latest"
+          version_ref="$REGISTRY_PREFIX/$IMAGE_NAME:$VERSION"
+          latest_ref="$REGISTRY_PREFIX/$IMAGE_NAME:latest"
 
           for attempt in $(seq 1 12); do
             if docker buildx imagetools inspect "$version_ref" >/tmp/version.inspect 2>/dev/null && \
@@ -319,6 +321,6 @@ jobs:
           revision="$(docker image inspect "$version_ref" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
           test "$revision" = "$TARGET_SHA"
 
-          echo "Discovery release publication for $VERSION: PASS"
+          echo "Discovery release publication for $VERSIOn: PASS"
           echo "target=$TARGET_SHA"
           echo "digest=$version_digest"

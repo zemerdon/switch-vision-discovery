@@ -50,3 +50,16 @@ jobs:
         run: python3 tools/test_c3750_48p_contract.py
       - name: Check Catalyst 3750 live 48+4 mapping
         run: python3 tools/test_c3750_48p_live_mapping.py
+      - name: Check Discovery release image-reference contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow=.github/workflows/publish-discovery-release.yml
+          grep -F 'IMAGE_NAME: ${{ steps.normalize.outputs.image_name }}' "$workflow"
+          grep -F 'imagetools inspect "$REGISTRY_PREFIX/$IMAGE_NAME:$VERSION"' "$workflow"
+          grep -F 'IMAGE_NAME: ${{ needs.preflight.outputs.image_name }}' "$workflow"
+          grep -F 'version_ref="$REGISTRY_PREFIX/$IMAGE_NAME:$VERSION"' "$workflow"
+          grep -F 'latest_ref="$REGISTRY_PREFIX/$IMAGE_NAME:latest"' "$workflow"
+          ! grep -F 'imagetools inspect "$REGISTRY_PREFIX:$VERSION"' "$workflow"
+          ! grep -F 'version_ref="$REGISTRY_PREFIX:$VERSION"' "$workflow"
+          ! grep -F 'latest_ref="$REGISTRY_PREFIX:latest"' "$workflow"
