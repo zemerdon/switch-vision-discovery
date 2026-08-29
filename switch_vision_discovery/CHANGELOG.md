@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.29
+
+- Fixes the physical-contract normalized generation hand-off so successful current-run SNMP walks remain eligible for SNMP2MQTT/dashboard generation when the user keeps `parse_all_walks` disabled.
+- The normalized compatibility pass now stages only the exact walks admitted by the current-run manifest. Historical/full walk files are not copied into that internal current-run view, preserving the existing opt-in rule for stored-walk reuse.
+- Adds permanent regression coverage for anonymous contributor-proven UniFi `0/<n>` IF-MIB layouts: 24 RJ45 + 4 SFP+ and 8 RJ45 + 2 SFP+. The test includes stale full-walk decoys and requires generation to remain scoped to the two current targeted walks.
+- Original SNMP evidence remains immutable; only temporary compatibility copies are normalized for the legacy parser/generator.
+
 ## 2.3.28
 
 ## Discovery 2.3.28
