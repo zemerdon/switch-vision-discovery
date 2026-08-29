@@ -4168,6 +4168,19 @@ $('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.valu
 </body></html>"""
 
 
+def _calibration_core_bridge_http_error(exc: Exception) -> dict[str, Any]:
+    """Return the typed Core-bridge diagnostic when one is available."""
+    builder = globals().get("_core_bridge_error_payload")
+    if callable(builder) and getattr(exc, "kind", None):
+        try:
+            payload = builder(exc, operation="calibration_profiles")
+        except Exception:
+            payload = None
+        if isinstance(payload, dict):
+            return payload
+    return {"error": str(exc)}
+
+
 class SupportHandler(BaseHTTPRequestHandler):
     server_version = "SwitchVisionSupport/1.0"
 
@@ -4348,7 +4361,7 @@ class SupportHandler(BaseHTTPRequestHandler):
                 RuntimeError,
             ) as exc:
                 self._json(
-                    {"error": str(exc)},
+                    _calibration_core_bridge_http_error(exc),
                     HTTPStatus.BAD_GATEWAY,
                 )
         elif path == "/api/unifi2mqtt/settings":

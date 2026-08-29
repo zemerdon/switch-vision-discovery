@@ -53,9 +53,34 @@
     }
 
     if (!response.ok) {
-      throw new Error(
-        data.error || `Request failed with HTTP ${response.status}`
-      );
+      let detail =
+        data.error || `Request failed with HTTP ${response.status}`;
+
+      const diagnostics = [];
+
+      if (data.error_class) {
+        diagnostics.push(String(data.error_class));
+      }
+      if (data.ha_error_code) {
+        diagnostics.push(`HA ${data.ha_error_code}`);
+      }
+      if (data.stage) {
+        diagnostics.push(`stage ${data.stage}`);
+      }
+      if (data.diagnostic_id) {
+        diagnostics.push(String(data.diagnostic_id));
+      }
+
+      if (data.error_class === "CORE_COMMAND_UNAVAILABLE") {
+        detail +=
+          " Restart Home Assistant Core after updating Switch Vision Core, then retry Calibration Profiles.";
+      }
+
+      if (diagnostics.length) {
+        detail += ` [${diagnostics.join(" · ")}]`;
+      }
+
+      throw new Error(detail);
     }
 
     return data;
