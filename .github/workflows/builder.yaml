@@ -56,13 +56,19 @@ jobs:
           set -euo pipefail
           python - <<'PY_RELEASE'
           from pathlib import Path
+          import re
 
           builder = Path('.github/workflows/builder.yaml').read_text(encoding='utf-8')
           publisher = Path('.github/workflows/publish-discovery-release.yml').read_text(encoding='utf-8')
 
-          for forbidden in ('packages: write', 'push: true', 'Publish multi-arch manifest'):
-              if forbidden in builder:
-                  raise SystemExit(f'automatic publication capability remains in builder.yaml: {forbidden}')
+          forbidden = (
+              (r'^\s+packages:\s*write\s*$', 'packages: write'),
+              (r'^\s+push:\s*true\s*$', 'push: true'),
+              (r'^\s+name:\s*Publish multi-arch manifest\s*$', 'Publish multi-arch manifest'),
+          )
+          for pattern, label in forbidden:
+              if re.search(pattern, builder, re.MULTILINE):
+                  raise SystemExit(f'automatic publication capability remains in builder.yaml: {label}')
 
           required = (
               "startsWith(github.event.pull_request.head.ref, 'release/discovery-')",
