@@ -57,9 +57,13 @@ jobs:
           workflow=.github/workflows/publish-discovery-release.yml
           grep -F 'IMAGE_NAME: ${{ steps.normalize.outputs.image_name }}' "$workflow"
           grep -F 'imagetools inspect "$REGISTRY_PREFIX/$IMAGE_NAME:$VERSION"' "$workflow"
+          grep -F 'image-name: ${{ steps.normalize.outputs.image_name }}' "$workflow"
           grep -F 'IMAGE_NAME: ${{ needs.preflight.outputs.image_name }}' "$workflow"
           grep -F 'version_ref="$REGISTRY_PREFIX/$IMAGE_NAME:$VERSION"' "$workflow"
           grep -F 'latest_ref="$REGISTRY_PREFIX/$IMAGE_NAME:latest"' "$workflow"
+          grep -F 'echo "Discovery release publication for $VERSION: PASS"' "$workflow"
+          ! grep -F 'steps.normalize.outputs.imae_name' "$workflow"
+          ! grep -F '$VERSIOn' "$workflow"
           ! grep -F 'imagetools inspect "$REGISTRY_PREFIX:$VERSION"' "$workflow"
           ! grep -F 'version_ref="$REGISTRY_PREFIX:$VERSION"' "$workflow"
           ! grep -F 'latest_ref="$REGISTRY_PREFIX:latest"' "$workflow"

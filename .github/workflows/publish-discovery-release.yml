@@ -160,7 +160,7 @@ jobs:
         uses: home-assistant/builder/actions/prepare-multi-arch-matrix@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
         with:
           architectures: ${{ steps.info.outputs.architectures }}
-          image-name: ${{ steps.normalize.outputs.imae_name }}
+          image-name: ${{ steps.normalize.outputs.image_name }}
           registry-prefix: ${{ steps.normalize.outputs.registry_prefix }}
 
       - name: Dry-run complete
@@ -321,6 +321,6 @@ jobs:
           revision="$(docker image inspect "$version_ref" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
           test "$revision" = "$TARGET_SHA"
 
-          echo "Discovery release publication for $VERSIOn: PASS"
+          echo "Discovery release publication for $VERSION: PASS"
           echo "target=$TARGET_SHA"
           echo "digest=$version_digest"
