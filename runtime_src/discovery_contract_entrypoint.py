@@ -12,6 +12,7 @@ closed instead of silently changing the dashboard geometry.
 from __future__ import annotations
 
 import copy
+import csv
 import json
 import os
 from pathlib import Path
@@ -28,6 +29,9 @@ REGISTRY = Path(os.environ.get("SWITCH_VISION_DEVICE_REGISTRY", "/opt/switch-vis
 DEFAULT_OPTIONS = Path(os.environ.get("SWITCH_VISION_OPTIONS_FILE", "/data/options.json"))
 DEFAULT_CAPABILITIES = Path(os.environ.get("SWITCH_VISION_CAPABILITIES_DIR", "/share/switch_vision/capabilities"))
 DEFAULT_WALK_ROOT = Path("/share/switch_vision/snmpwalks")
+CURRENT_RUN_WALKS = Path("/tmp/switch_vision_current_run_walks.txt")
+CURRENT_RUN_TARGETS = Path("/tmp/switch_vision_current_run_targets.txt")
+CURRENT_RUN_SEPARATOR = "\x1c"
 
 
 def _bool(value: Any, default: bool = False) -> bool:
@@ -180,11 +184,132 @@ def _staged_path_for(path: Path, source_root: Path, staged_root: Path) -> Path |
         return None
 
 
-def _stage_options(options: dict[str, Any], work: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def _read_current_run_records() -> list[dict[str, str]]:
+    if not CURRENT_RUN_WALKS.is_file() or not CURRENT_RUN_WALKS.stat().st_size:
+        return []
+
+    metadata: dict[str, dict[str, str]] = {}
+    if CURRENT_RUN_TARGETS.is_file():
+        # The manifest uses ASCII FS (0x1c) as its field separator. Python's
+        # splitlines() also treats FS as a line boundary, so split only on LF.
+        for raw in CURRENT_RUN_TARGETS.read_text(encoding="utf-8", errors="replace").split("\n"):
+            parts = raw.split(CURRENT_RUN_SEPARATOR)
+            if len(parts) != 5:
+                continue
+            walk, switch, host, prefix, community = parts
+            if not walk:
+                continue
+            metadata[str(Path(walk).resolve())] = {
+                "switch": switch,
+                "host": host,
+                "prefix": prefix,
+                "community": community,
+            }
+
+    records: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in CURRENT_RUN_WALKS.read_text(encoding="utf-8", errors="replace").splitlines():
+        raw = raw.strip()
+        if not raw:
+            continue
+        source = Path(raw)
+        resolved = str(source.resolve())
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        target = metadata.get(resolved)
+        if target is None:
+            raise RuntimeError("Current-run SNMP walk is missing authoritative target metadata.")
+        if not source.is_file():
+            raise RuntimeError("Current-run SNMP walk disappeared before physical-contract staging.")
+        records.append({"walk": str(source), **target})
+    return records
+
+
+def _write_current_run_targets_csv(path: Path, records: list[dict[str, str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        for record in records:
+            staged_path = Path(record["staged_walk"])
+            switch = record.get("switch") or staged_path.parent.name
+            writer.writerow([
+                switch,
+                record.get("host", ""),
+                record.get("prefix", ""),
+                record.get("community", ""),
+                str(staged_path.parent),
+                switch,
+            ])
+
+
+def _stage_current_run_options(
+    options: dict[str, Any],
+    staged: dict[str, Any],
+    work: Path,
+    current_run: list[dict[str, str]],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    staged_root = work / "snmpwalks"
+    staged_root.mkdir(parents=True, exist_ok=True)
+    ordered: list[dict[str, Any]] = []
+    staged_records: list[dict[str, str]] = []
+    by_source: dict[Path, Path] = {}
+
+    for record in current_run:
+        source = Path(record["walk"])
+        switch = _safe(record.get("switch") or source.parent.name)
+        destination = staged_root / switch / source.name
+        info = _prepare_walk(source, destination, work)
+        if info is None:
+            raise RuntimeError("Current-run SNMP walk could not produce a resolved physical contract.")
+        ordered.append(info)
+        by_source[source.resolve()] = destination
+        staged_records.append({**record, "staged_walk": str(destination)})
+
+    # The compatibility tree contains only this run's successful walks, so
+    # parse_all_walks is safe internally even when the user's stored-walk
+    # preference is false. Historical files are never copied into this tree.
+    staged["snmpwalks_dir"] = str(staged_root)
+    staged["parse_all_walks"] = "true"
+
+    rows = staged.get("switches")
+    if not isinstance(rows, list):
+        rows = staged.get("multi_switch_walks")
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("switch_name") or row.get("switch") or row.get("selected_switch") or row.get("name") or "").strip()
+            row["output_dir"] = str(staged_root / _safe(name))
+
+    input_value = str(options.get("input_path") or "").strip()
+    if input_value:
+        mapped = by_source.get(Path(input_value).resolve())
+        if mapped is not None:
+            staged["input_path"] = str(mapped)
+        elif ordered:
+            staged["input_path"] = str(ordered[0]["destination"])
+    elif ordered:
+        staged["input_path"] = str(ordered[0]["destination"])
+
+    target_csv = work / "current-run-targets.csv"
+    _write_current_run_targets_csv(target_csv, staged_records)
+    staged["targets_csv"] = str(target_csv)
+    return staged, ordered
+
+
+def _stage_options(
+    options: dict[str, Any],
+    work: Path,
+    current_run: list[dict[str, str]] | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     staged = copy.deepcopy(options)
     staged["run_snmp_walks"] = "false"
     staged["run_live_snmpwalk"] = "false"
     staged["clean_output_before_walk"] = "false"
+
+    if current_run:
+        return _stage_current_run_options(options, staged, work, current_run)
 
     source_root = Path(str(options.get("snmpwalks_dir") or DEFAULT_WALK_ROOT))
     staged_root = work / "snmpwalks"
@@ -301,9 +426,9 @@ def _publish_contracts(ordered: list[dict[str, Any]], destination: Path) -> None
         shutil.copy2(info["contract_path"], destination / f"{safe_parent}-physical-contract.json")
 
 
-def _stage_live_collection(options: dict[str, Any], work: Path) -> None:
+def _stage_live_collection(options: dict[str, Any], work: Path) -> list[dict[str, str]]:
     if not _bool(options.get("run_snmp_walks", options.get("run_live_snmpwalk", False))):
-        return
+        return []
     stage = copy.deepcopy(options)
     stage["generate_snmp2mqtt"] = "false"
     stage["generate_support_my_switch_bundle"] = "false"
@@ -316,6 +441,7 @@ def _stage_live_collection(options: dict[str, Any], work: Path) -> None:
     return_code = _stream_legacy(stage_path, capabilities_dir=work / "live_collection_capabilities")
     if return_code != 0:
         raise RuntimeError(f"Live SNMP collection exited with code {return_code}.")
+    return _read_current_run_records()
 
 
 def main() -> int:
@@ -325,8 +451,8 @@ def main() -> int:
     options = _read_options(DEFAULT_OPTIONS)
     with tempfile.TemporaryDirectory(prefix="switch_vision_physical_contract_") as tmp:
         work = Path(tmp)
-        _stage_live_collection(options, work)
-        staged, ordered = _stage_options(options, work)
+        current_run = _stage_live_collection(options, work)
+        staged, ordered = _stage_options(options, work, current_run)
         stage_path = work / "resolved_options.json"
         _write_options(stage_path, staged)
         return_code = _stream_legacy(stage_path, capabilities_dir=work / "runtime_capabilities")
@@ -338,6 +464,8 @@ def main() -> int:
         _patch_report(report, ordered)
         _patch_yaml(generated_yaml, ordered)
         _publish_contracts(ordered, DEFAULT_CAPABILITIES)
+        if current_run:
+            print(f"SV_DEBUG|Physical contract authority: preserved {len(current_run)} current-run walk(s) through normalized generation")
         print(f"SV_DEBUG|Physical contract authority: resolved {len(ordered)} registered device walk(s)")
         return 0
 
