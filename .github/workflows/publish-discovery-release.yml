@@ -1,0 +1,324 @@
+name: Publish Discovery Release
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'release/discovery-')
+    name: Discovery release preflight
+    runs-on: ubuntu-latest
+    outputs:
+      architectures: ${{ steps.info.outputs.architectures }}
+      build_matrix: ${{ steps.matrix.outputs.matrix }}
+      image_name: ${{ steps.normalize.outputs.image_name }}
+      registry_prefix: ${{ steps.normalize.outputs.registry_prefix }}
+      version: ${{ steps.request.outputs.version }}
+      target_sha: ${{ steps.request.outputs.target_sha }}
+      publish: ${{ steps.request.outputs.publish }}
+      name: ${{ steps.normalize.outputs.name }}
+      description: ${{ steps.normalize.outputs.description }}
+      url: ${{ steps.normalize.outputs.url }}
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+
+    steps:
+      - name: Checkout release request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate release request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .sv-release-request.json
+
+          git fetch origin main
+          mapfile -t changed < <(git diff --name-only "$BASE_SHA...HEAD")
+          if [ "${#changed[@]}" -ne 1 ] || [ "${changed[0]}" != ".sv-release-request.json" ]; then
+            echo 'ERROR: Discovery release-request PR must change only .sv-release-request.json'
+            printf 'Changed: %s\n' "${changed[@]}"
+            exit 1
+          fi
+
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import re
+          from pathlib import Path
+
+          data = json.loads(Path('.sv-release-request.json').read_text(encoding='utf-8'))
+          version = str(data.get('version') or '').strip().lstrip('v')
+          target = str(data.get('target_sha') or '').strip()
+          publish = data.get('publish', False)
+
+          if not re.fullmatch(r'\d+\.\d+\.\d+', version):
+              raise SystemExit('ERROR: request.version must be an exact semantic version')
+          if not re.fullmatch(r'[0-9a-f]{40}', target):
+              raise SystemExit('ERROR: request.target_sha must be a full 40-character commit SHA')
+          if not isinstance(publish, bool):
+              raise SystemExit('ERROR: request.publish must be true or false')
+
+          print(f'version={version}')
+          print(f'target_sha={target}')
+          print(f'publish={str(publish).lower()}')
+          PY
+
+          TARGET_SHA="$(python3 -c 'import json; print(json.load(open(".sv-release-request.json"))["target_sha"])')"
+          git cat-file -e "$TARGET_SHA^{commit}"
+          git merge-base --is-ancestor "$TARGET_SHA" "$BASE_SHA"
+
+          PUBLISH="$(python3 -c 'import json; print(str(bool(json.load(open(".sv-release-request.json")).get("publish", False))).lower())')"
+          if [ "$PUBLISH" = true ] && [ "$TARGET_SHA" != "$BASE_SHA" ]; then
+            echo 'ERROR: publish requests must target the exact main SHA used as the PR base'
+            echo "target=$TARGET_SHA base=$BASE_SHA"
+            exit 1
+          fi
+
+      - name: Checkout exact release target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.request.outputs.target_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime test dependency
+        run: python -m pip install --disable-pip-version-check pyyaml websockets
+
+      - name: Materialize and validate exact runtime target
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh tools/materialize_runtime.sh
+          python tools/check_runtime_parity.py
+          runtime_dir="$RUNNER_TEMP/switch-vision-discovery-runtime"
+          rm -rf "$runtime_dir"
+          mkdir -p "$runtime_dir"
+          tar -xzf ./switch_vision_discovery/runtime.tar.gz -C "$runtime_dir"
+          test -x "$runtime_dir/discovery_contract_entrypoint.py"
+          test -x "$runtime_dir/physical_contract_prepare.sh"
+          sh "$runtime_dir/self-test.sh"
+          git diff --exit-code
+
+      - name: Get app information
+        id: info
+        uses: home-assistant/actions/helpers/info@a7c616ce81ccda50150bf1595786c71b1883fabb
+        with:
+          path: ./switch_vision_discovery
+
+      - name: Normalize and verify release metadata
+        id: normalize
+        shell: bash
+        env:
+          REQUEST_VERSION: ${{ steps.request.outputs.version }}
+        run: |
+          set -euo pipefail
+          image=${{ steps.info.outputs.image }}
+          version=${{ steps.info.outputs.version }}
+          test "$version" = "$REQUEST_VERSION"
+          echo "image_name=${image##*/}" >> "$GITHUB_OUTPUT"
+          echo "registry_prefix=${image%/*}" >> "$GITHUB_OUTPUT"
+          echo "name=${{ steps.info.outputs.name }}" >> "$GITHUB_OUTPUT"
+          echo "description=${{ steps.info.outputs.description }}" >> "$GITHUB_OUTPUT"
+          echo "url=${{ steps.info.outputs.url }}" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse an existing semantic version tag
+        if: ${{ steps.request.outputs.publish == 'true' }}
+        shell: bash
+        env:
+          VERSION: ${{ steps.request.outputs.version }}
+          REGISTRY_PREFIX: ${{ steps.normalize.outputs.registry_prefix }}
+        run: |
+          set -euo pipefail
+          if docker buildx imagetools inspect "$REGISTRY_PREFIX:$VERSION" >/dev/null 2>&1; then
+            echo "ERROR: Discovery image tag $VERSION already exists; semantic release tags are immutable"
+            exit 1
+          fi
+
+      - name: Prepare build matrix
+        id: matrix
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
+        with:
+          architectures: ${{ steps.info.outputs.architectures }}
+          image-name: ${{ steps.normalize.outputs.image_name }}
+          registry-prefix: ${{ steps.normalize.outputs.registry_prefix }}
+
+      - name: Dry-run complete
+        if: ${{ steps.request.outputs.publish != 'true' }}
+        run: |
+          echo 'Discovery release workflow DRY RUN: PASS'
+          echo 'version=${{ steps.request.outputs.version }}'
+          echo 'target=${{ steps.request.outputs.target_sha }}'
+
+  build_validate:
+    name: Validate exact release build ${{ matrix.arch }}
+    needs: preflight
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.preflight.outputs.build_matrix) }}
+    steps:
+      - name: Checkout exact release target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.target_sha }}
+          persist-credentials: false
+      - name: Materialize runtime archive
+        run: sh tools/materialize_runtime.sh
+      - name: Build exact target without publishing
+        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
+        with:
+          arch: ${{ matrix.arch }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          context: ./switch_vision_discovery
+          image: ${{ matrix.image }}
+          image-tags: |
+            ${{ needs.preflight.outputs.version }}
+            latest
+          labels: |
+            io.hass.type=app
+            io.hass.name=${{ needs.preflight.outputs.name }}
+            io.hass.description=${{ needs.preflight.outputs.description }}
+            io.hass.url=${{ needs.preflight.outputs.url }}
+            org.opencontainers.image.revision=${{ needs.preflight.outputs.target_sha }}
+          push: false
+          version: ${{ needs.preflight.outputs.version }}
+
+  publish:
+    name: Publish exact release build ${{ matrix.arch }}
+    needs:
+      - preflight
+      - build_validate
+    if: needs.preflight.outputs.publish == 'true'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.preflight.outputs.build_matrix) }}
+    steps:
+      - name: Checkout exact release target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.target_sha }}
+          persist-credentials: false
+      - name: Materialize runtime archive
+        run: sh tools/materialize_runtime.sh
+      - name: Build and publish exact target
+        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
+        with:
+          arch: ${{ matrix.arch }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          context: ./switch_vision_discovery
+          image: ${{ matrix.image }}
+          image-tags: |
+            ${{ needs.preflight.outputs.version }}
+            latest
+          labels: |
+            io.hass.type=app
+            io.hass.name=${{ needs.preflight.outputs.name }}
+            io.hass.description=${{ needs.preflight.outputs.description }}
+            io.hass.url=${{ needs.preflight.outputs.url }}
+            org.opencontainers.image.revision=${{ needs.preflight.outputs.target_sha }}
+          push: true
+          version: ${{ needs.preflight.outputs.version }}
+
+  manifest:
+    name: Publish Discovery multi-arch manifest
+    needs:
+      - preflight
+      - publish
+    if: needs.preflight.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      packages: write
+    steps:
+      - name: Publish multi-arch manifest
+        uses: home-assistant/builder/actions/publish-multi-arch-manifest@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
+        with:
+          architectures: ${{ needs.preflight.outputs.architectures }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          image-name: ${{ needs.preflight.outputs.image_name }}
+          image-tags: |
+            ${{ needs.preflight.outputs.version }}
+            latest
+          registry-prefix: ${{ needs.preflight.outputs.registry_prefix }}
+
+  verify:
+    name: Verify Discovery publication
+    needs:
+      - preflight
+      - manifest
+    if: needs.preflight.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      TARGET_SHA: ${{ needs.preflight.outputs.target_sha }}
+      REGISTRY_PREFIX: ${{ needs.preflight.outputs.registry_prefix }}
+    steps:
+      - name: Verify public manifests and target revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_ref="$REGISTRY_PREFIX:$VERSION"
+          latest_ref="$REGISTRY_PREFIX:latest"
+
+          for attempt in $(seq 1 12); do
+            if docker buildx imagetools inspect "$version_ref" >/tmp/version.inspect 2>/dev/null && \
+               docker buildx imagetools inspect "$latest_ref" >/tmp/latest.inspect 2>/dev/null; then
+              break
+            fi
+            sleep 5
+          done
+
+          version_digest="$(awk '/^Digest:/ {print $2; exit}' /tmp/version.inspect)"
+          latest_digest="$(awk '/^Digest:/ {print $2; exit}' /tmp/latest.inspect)"
+          test -n "$version_digest"
+          test "$version_digest" = "$latest_digest"
+
+          docker buildx imagetools inspect "$version_ref" --raw >/tmp/manifest.json
+          python3 - <<'PY'
+          import json
+          data = json.load(open('/tmp/manifest.json', encoding='utf-8'))
+          arches = {
+              item.get('platform', {}).get('architecture')
+              for item in data.get('manifests', [])
+              if isinstance(item, dict)
+          }
+          missing = {'amd64', 'arm64'} - arches
+          if missing:
+              raise SystemExit(f'missing required Discovery architectures: {sorted(missing)}')
+          print('Discovery public manifest architectures: PASS')
+          PY
+
+          docker pull --quiet --platform linux/amd64 "$version_ref" >/dev/null
+          revision="$(docker image inspect "$version_ref" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+          test "$revision" = "$TARGET_SHA"
+
+          echo "Discovery release publication for $VERSION: PASS"
+          echo "target=$TARGET_SHA"
+          echo "digest=$version_digest"
