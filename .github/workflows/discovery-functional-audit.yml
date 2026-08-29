@@ -30,6 +30,7 @@ jobs:
           python -m py_compile \
             runtime_src/support_web.py \
             runtime_src/core_bridge.py \
+            runtime_src/unifi_multi_controller_bridge.py \
             runtime_src/support_web_entry.py \
             runtime_src/registry_lookup.py \
             runtime_src/unifi_dashboard_cards.py \
@@ -40,6 +41,7 @@ jobs:
             tools/audit_functional_contracts.py \
             tools/audit_hub_control_inventory.py \
             tools/test_hub_save_reset_contracts.py \
+            tools/test_unifi_multi_controller_hub.py \
             tools/test_calibration_core_bridge_contract.py \
             tools/test_registry_roundtrip.py
 
@@ -73,6 +75,23 @@ jobs:
           PY
           for script in /tmp/sv-embedded-js/*.js; do node --check "$script"; done
 
+      - name: Validate patched multi-controller Hub JavaScript syntax
+        run: |
+          PYTHONPATH=runtime_src python - <<'PY'
+          import re
+          from pathlib import Path
+          import support_web
+          import unifi_multi_controller_bridge
+          page = unifi_multi_controller_bridge._patch_page(support_web._PAGE)
+          scripts = re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', page, flags=re.S|re.I)
+          out = Path('/tmp/sv-multi-controller-js')
+          out.mkdir(exist_ok=True)
+          for idx, script in enumerate(scripts, start=1):
+              (out / f'{idx}.js').write_text(script, encoding='utf-8')
+          print(f'extracted {len(scripts)} patched script blocks')
+          PY
+          for script in /tmp/sv-multi-controller-js/*.js; do node --check "$script"; done
+
       - name: Run static functional consistency audit
         run: python tools/audit_functional_contracts.py
 
@@ -81,6 +100,9 @@ jobs:
 
       - name: Exercise Hub save and reset backend contracts
         run: python tools/test_hub_save_reset_contracts.py
+
+      - name: Exercise UniFi multi-controller Hub contracts
+        run: python tools/test_unifi_multi_controller_hub.py
 
       - name: Exercise Calibration/Core bridge error contracts
         run: python tools/test_calibration_core_bridge_contract.py
