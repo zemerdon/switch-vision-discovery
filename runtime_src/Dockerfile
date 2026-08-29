@@ -18,6 +18,7 @@ COPY walk_correlation.py /walk_correlation.py
 COPY make_support_email.py /make_support_email.py
 COPY support_web.py /support_web.py
 COPY core_bridge.py /core_bridge.py
+COPY unifi_multi_controller_bridge.py /unifi_multi_controller_bridge.py
 COPY support_web_entry.py /support_web_entry.py
 COPY mqtt_maintenance.py /mqtt_maintenance.py
 COPY mqtt_maintenance_runtime.py /mqtt_maintenance_runtime.py
