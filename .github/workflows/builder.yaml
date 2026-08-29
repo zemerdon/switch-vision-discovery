@@ -87,6 +87,8 @@ jobs:
           test -f "$runtime_dir/opt/switch-vision/devices/supported_devices.json"
           test -d "$runtime_dir/opt/switch-vision/mib_database"
           test -d "$runtime_dir/opt/switch-vision/vendors"
+          test -x "$runtime_dir/discovery_contract_entrypoint.py"
+          test -x "$runtime_dir/physical_contract_prepare.sh"
           python -m py_compile \
             "$runtime_dir/support_web.py" \
             "$runtime_dir/registry_lookup.py" \
@@ -157,7 +159,7 @@ jobs:
 
   build_publish:
     name: Publish build ${{ matrix.arch }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[runtime-packager]')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: prepare
     runs-on: ${{ matrix.os }}
     permissions:
@@ -200,7 +202,7 @@ jobs:
     needs:
       - prepare
       - build_publish
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[runtime-packager]')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
