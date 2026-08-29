@@ -10,6 +10,8 @@ ADD runtime.tar.gz /
 RUN chmod a+x \
     /run.sh \
     /discovery_job.sh \
+    /discovery_contract_entrypoint.py \
+    /physical_contract_prepare.sh \
     /support_my_switch.sh \
     /sanitize_support_bundle.py \
     /ha_entity_snapshot_sanitizer.py \
