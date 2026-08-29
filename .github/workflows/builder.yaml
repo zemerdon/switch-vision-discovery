@@ -87,6 +87,8 @@ jobs:
           test -f "$runtime_dir/opt/switch-vision/devices/supported_devices.json"
           test -d "$runtime_dir/opt/switch-vision/mib_database"
           test -d "$runtime_dir/opt/switch-vision/vendors"
+          test -x "$runtime_dir/discovery_contract_entrypoint.py"
+          test -x "$runtime_dir/physical_contract_prepare.sh"
           python -m py_compile \
             "$runtime_dir/support_web.py" \
             "$runtime_dir/registry_lookup.py" \
