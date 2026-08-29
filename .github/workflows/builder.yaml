@@ -50,6 +50,34 @@ jobs:
         run: |
           set -euo pipefail
           python tools/check_runtime_parity.py
+      - name: Validate release transport contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY_RELEASE'
+          from pathlib import Path
+
+          builder = Path('.github/workflows/builder.yaml').read_text(encoding='utf-8')
+          publisher = Path('.github/workflows/publish-discovery-release.yml').read_text(encoding='utf-8')
+
+          for forbidden in ('packages: write', 'push: true', 'Publish multi-arch manifest'):
+              if forbidden in builder:
+                  raise SystemExit(f'automatic publication capability remains in builder.yaml: {forbidden}')
+
+          required = (
+              "startsWith(github.event.pull_request.head.ref, 'release/discovery-')",
+              '.sv-release-request.json',
+              'TARGET_SHA',
+              'BASE_SHA',
+              'packages: write',
+              'push: true',
+              'Publish multi-arch manifest',
+          )
+          for token in required:
+              if token not in publisher:
+                  raise SystemExit(f'Discovery release transport contract missing: {token}')
+          print('Discovery release transport static contract: PASS')
+          PY_RELEASE
 
       - name: Validate runtime archive hygiene
         shell: bash
@@ -121,7 +149,6 @@ jobs:
 
   build_validate:
     name: Validate build ${{ matrix.arch }}
-    if: github.event_name != 'push' || github.ref != 'refs/heads/main'
     needs: prepare
     runs-on: ${{ matrix.os }}
     permissions:
@@ -157,79 +184,17 @@ jobs:
           push: false
           version: ${{ needs.prepare.outputs.version }}
 
-  build_publish:
-    name: Publish build ${{ matrix.arch }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[runtime-packager]')
-    needs: prepare
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.prepare.outputs.build_matrix) }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Materialize runtime archive from tracked source
-        shell: bash
-        run: |
-          set -euo pipefail
-          sh tools/materialize_runtime.sh
-      - name: Build and publish image
-        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
-        with:
-          arch: ${{ matrix.arch }}
-          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
-          context: ./switch_vision_discovery
-          image: ${{ matrix.image }}
-          image-tags: |
-            ${{ needs.prepare.outputs.version }}
-            latest
-          labels: |
-            io.hass.type=app
-            io.hass.name=${{ needs.prepare.outputs.name }}
-            io.hass.description=${{ needs.prepare.outputs.description }}
-            io.hass.url=${{ needs.prepare.outputs.url }}
-          push: true
-          version: ${{ needs.prepare.outputs.version }}
-
-  manifest:
-    name: Publish multi-arch manifest
-    needs:
-      - prepare
-      - build_publish
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[runtime-packager]')
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      packages: write
-    steps:
-      - name: Publish multi-arch manifest
-        uses: home-assistant/builder/actions/publish-multi-arch-manifest@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
-        with:
-          architectures: ${{ needs.prepare.outputs.architectures }}
-          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
-          image-name: ${{ needs.prepare.outputs.image_name }}
-          image-tags: |
-            ${{ needs.prepare.outputs.version }}
-            latest
-          registry-prefix: ${{ needs.prepare.outputs.registry_prefix }}
-
   synchronize_runtime:
     name: Synchronize generated runtime archive
     needs:
       - prepare
-      - manifest
+      - build_validate
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[runtime-packager]')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Check out triggering publication commit
+      - name: Check out triggering validated commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
