@@ -56,7 +56,7 @@ HOST_LABEL_RE = re.compile(
     r"(?im)^(?P<prefix>\s*(?:[-*]\s*)?(?:host(?:name)?|system\s+name|sysname|device\s+name|domain(?:\s+name)?)\s*[:=]\s*)(?P<value>.*)$"
 )
 VLAN_VALUE_LINE_RE = re.compile(
-    r"(?im)^(?P<prefix>.*(?:vlanName|vmVlanName|vlan_name|VLAN name).*?(?:STRING:|[:=])\s*)(?P<value>.*)$"
+    r"(?im)^(?P<prefix>.*(?<![A-Za-z0-9_])(?:vlanName|vmVlanName|vlan_name|VLAN name)(?![A-Za-z0-9_]).*?(?:STRING:|[:=])\s*)(?P<value>.*)$"
 )
 VLAN_TOKEN_RE = re.compile(r"(?i)(?<!masked-)\bVLAN(?:[-_ ]?)(?P<id>\d+)\b")
 ALIAS_WALK_RE = re.compile(
@@ -879,7 +879,7 @@ def main() -> int:
     }
     processing_complete = issue_count == 0
     report = {
-        "sanitization_version": 13,
+        "sanitization_version": 14,
         "secrets_always_removed": True,
         "serial_numbers_always_masked": True,
         "options": options,
