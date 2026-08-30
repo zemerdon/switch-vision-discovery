@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.31
+
+- Replace the Credits v25 preview placeholder entries with the first owner-approved public community credit: **Finni** — UniFi multi-controller, field testing, port telemetry and UI feedback.
+- Remove the preview/test warning badge and all four synthetic contributor aliases from the Credits view.
+- Preserve the existing Credits v25 opening tile-build scene, progress transition, settled card, spotlights, sweep lighting, navigation placement and acknowledgement copy unchanged.
+- Keep contributor evidence/provenance separate from the public Credits display; no contribution IDs, email addresses, raw evidence identifiers or private attribution are published.
+- Update the packaged-runtime self-test so the approved Finni credit is required and the retired placeholder aliases/badge remain forbidden.
+
 ## 2.3.30
 
 - Add Switch Vision Hub compatibility for UniFi2MQTT 3.0.0 multi-controller / multi-site mode while preserving existing single-controller Hub behavior unchanged.

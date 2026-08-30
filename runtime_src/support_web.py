@@ -3783,12 +3783,8 @@ body.density-dense .step{padding:7px 9px}
 <div id="creditsContent" class="credits-content">
 <h2 class="credits-title">Credits</h2>
 <p class="credits-thanks">Switch Vision is made better by the people who contribute their time, testing, feedback, and knowledge. Thank you to everyone below for helping shape what it is today.</p>
-<div class="credits-test-badge">PREVIEW PLACEHOLDER — TEST ENTRIES, NOT REAL CONTRIBUTORS</div>
 <div id="creditsList" class="credits-list-v25">
-<div class="credit-entry" style="--credit-index:0"><span class="credit-name">DemoAlias-01</span><span class="credit-components">Core / Discovery</span></div>
-<div class="credit-entry" style="--credit-index:1"><span class="credit-name">PixelNomad_TEST</span><span class="credit-components">Core / UniFi2MQTT</span></div>
-<div class="credit-entry" style="--credit-index:2"><span class="credit-name">SampleAlias42</span><span class="credit-components">SNMP2MQTT</span></div>
-<div class="credit-entry" style="--credit-index:3"><span class="credit-name">CircuitGhost-DEMO</span><span class="credit-components">Discovery / Installer</span></div>
+<div class="credit-entry" style="--credit-index:0"><span class="credit-name">Finni</span><span class="credit-components">UniFi multi-controller, field testing, port telemetry and UI feedback</span></div>
 </div>
 </div>
 <div class="credits-progress" aria-hidden="true"><span id="creditsProgress"></span></div>

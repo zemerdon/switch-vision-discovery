@@ -24,18 +24,25 @@ sv_require_literal 'Debug sanitizer' 'function sanitizeDebugText(text)' "$SV_COP
 sv_require_literal 'Copy Debug function' 'async function copyDebugInfo()' "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
 sv_require_literal 'Copy Debug event binding' "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
 
-# Credits presentation continuity. The v2.3.27 v25 block below is the
-# authoritative animation contract; Matrix-era implementation details are not.
+# Credits presentation continuity. Credits v25 remains the authoritative
+# animation contract; only the reviewed public contributor content changes.
 sv_require_literal 'Credits canvas' 'id="creditsMatrix"' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits preview disclaimer' 'TEST ENTRIES, NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits demo row' 'DemoAlias-01' "$BASE_DIR/support_web.py"
+sv_require_literal 'Credits approved contributor' '<span class="credit-name">Finni</span>' "$BASE_DIR/support_web.py"
+sv_require_literal 'Credits approved contribution scope' 'UniFi multi-controller, field testing, port telemetry and UI feedback' "$BASE_DIR/support_web.py"
 sv_require_literal 'Credits navigation card' 'id="openCreditsButton"' "$BASE_DIR/support_web.py"
-echo 'Switch Vision Discovery Credits presentation continuity: PASS'
+! grep -Fq 'PREVIEW PLACEHOLDER' "$BASE_DIR/support_web.py"
+! grep -Fq 'TEST ENTRIES, NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
+! grep -Fq 'DemoAlias-01' "$BASE_DIR/support_web.py"
+! grep -Fq 'PixelNomad_TEST' "$BASE_DIR/support_web.py"
+! grep -Fq 'SampleAlias42' "$BASE_DIR/support_web.py"
+! grep -Fq 'CircuitGhost-DEMO' "$BASE_DIR/support_web.py"
+! grep -Fiq 'KC1KOC' "$BASE_DIR/support_web.py"
+echo 'Switch Vision Discovery Credits public content: PASS'
 
-# v2.3.27 locked Credits v25 preview-placeholder regression.
+# Credits v25 animation regression. The public content is owner-reviewed, but
+# scene construction and lighting remain unchanged.
 test -f "$BASE_DIR/credits_v25.css" || { echo 'FAIL: credits_v25.css missing' >&2; exit 1; }
 test -f "$BASE_DIR/credits_v25.js" || { echo 'FAIL: credits_v25.js missing' >&2; exit 1; }
-sv_require_literal 'v25 placeholder badge' 'PREVIEW PLACEHOLDER' "$BASE_DIR/support_web.py"
 sv_require_literal 'v25 stylesheet link' 'credits_v25.css' "$BASE_DIR/support_web.py"
 sv_require_literal 'v25 script link' 'credits_v25.js' "$BASE_DIR/support_web.py"
 sv_require_literal 'v25 computed-style clone' 'copyCreditsV25ComputedStylesDeep' "$BASE_DIR/credits_v25.js"
@@ -46,15 +53,12 @@ sv_require_literal 'v25 soft spotlight' 'credits-spot-soft' "$BASE_DIR/credits_v
 sv_require_literal 'v25 narrow spotlight' 'credits-spot-narrow' "$BASE_DIR/credits_v25.css"
 sv_require_literal 'v25 sweep light' 'creditsSweepLight' "$BASE_DIR/support_web.py"
 sv_require_literal 'v25 progress bar' 'creditsProgress' "$BASE_DIR/support_web.py"
-sv_require_literal 'v25 demo row 1' 'DemoAlias-01' "$BASE_DIR/support_web.py"
-sv_require_literal 'v25 demo row 2' 'PixelNomad_TEST' "$BASE_DIR/support_web.py"
-sv_require_literal 'v25 demo row 3' 'SampleAlias42' "$BASE_DIR/support_web.py"
-sv_require_literal 'v25 demo row 4' 'CircuitGhost-DEMO' "$BASE_DIR/support_web.py"
+sv_require_literal 'v25 approved row' '<span class="credit-name">Finni</span>' "$BASE_DIR/support_web.py"
 sv_require_literal 'v25 locked acknowledgement copy' 'Switch Vision is made better by the people who contribute their time, testing, feedback, and knowledge.' "$BASE_DIR/support_web.py"
 if command -v node >/dev/null 2>&1; then
     node --check "$BASE_DIR/credits_v25.js"
 fi
-echo 'Switch Vision Discovery v2.3.27 Credits v25 preview placeholder: PASS'
+echo 'Switch Vision Discovery Credits v25 approved public content: PASS'
 
 # v2.3.21 Credits card home-navigation order regression.
 python3 - "$BASE_DIR/support_web.py" <<'PY_CREDITS_ORDER'
@@ -1605,8 +1609,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.30"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.30"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.31"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.31"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
