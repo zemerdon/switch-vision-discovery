@@ -1450,6 +1450,114 @@
     },
     {
       "vendor": "Ubiquiti",
+      "family": "UniFi Switch 8 150W",
+      "model": "US-8-150W",
+      "status": "experimental",
+      "confirmed_since": "2.3.32",
+      "last_validated_version": "2.3.31",
+      "evidence": "privacy_processed_real_hardware_snmp_contribution",
+      "ports": {
+        "rj45": 8,
+        "poe": true,
+        "uplinks": 2,
+        "uplink_type": "2x 1G SFP",
+        "gigabit_sfp": 2,
+        "ten_gigabit_sfp_plus": 0
+      },
+      "stack_support": false,
+      "discovery_support": true,
+      "dashboard_support": true,
+      "mapping_profile": "ubiquiti-us-8-150w-snmp",
+      "calibration_profile": "stock_24rj45_2sfp",
+      "default_faceplate": "faceplates/24rj45-2sfp.png",
+      "optional_faceplates": [],
+      "tested_firmware": [
+        "7.5.15.17146"
+      ],
+      "contributor": {
+        "display_name": "community contributor",
+        "public_credit": false
+      },
+      "notes": [
+        "Privacy-processed real-hardware SNMP evidence confirms exact US-8-150W identity and interfaces 0/1 through 0/10.",
+        "Ports 0/1 through 0/8 are RJ45 and 0/9 through 0/10 are 1G SFP positions.",
+        "PoE hardware capability is retained as Experimental; detailed Switch Vision PoE presentation remains pending a focused current-build confirmation."
+      ],
+      "validation": {
+        "exact_model_detection": "real_hardware_snmp_confirmed",
+        "rj45_mapping": "real_hardware_snmp_ports_0_1_0_8_confirmed",
+        "poe": "platform_capability_confirmed_telemetry_pending",
+        "system_sensors": "pending",
+        "uplinks": "real_hardware_snmp_ports_0_9_0_10_1g_sfp_confirmed",
+        "stack": "not_applicable"
+      },
+      "visuals": {
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
+        "optional_faceplates": [],
+        "calibration_profile": "stock_24rj45_2sfp",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
+    },
+    {
+      "vendor": "Ubiquiti",
+      "family": "UniFi Switch 24 250W",
+      "model": "US-24-250W",
+      "status": "experimental",
+      "confirmed_since": "2.3.32",
+      "last_validated_version": "2.3.31",
+      "evidence": "privacy_processed_real_hardware_snmp_contribution",
+      "ports": {
+        "rj45": 24,
+        "poe": true,
+        "uplinks": 2,
+        "uplink_type": "2x 1G SFP",
+        "gigabit_sfp": 2,
+        "ten_gigabit_sfp_plus": 0
+      },
+      "stack_support": false,
+      "discovery_support": true,
+      "dashboard_support": true,
+      "mapping_profile": "ubiquiti-us-24-250w-snmp",
+      "calibration_profile": "unifi_24p_rj45_2sfp",
+      "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+      "optional_faceplates": [],
+      "tested_firmware": [
+        "7.5.15.17146"
+      ],
+      "contributor": {
+        "display_name": "community contributor",
+        "public_credit": false
+      },
+      "notes": [
+        "Privacy-processed real-hardware SNMP evidence confirms exact US-24-250W identity and interfaces 0/1 through 0/26.",
+        "Ports 0/1 through 0/24 are RJ45 and 0/25 through 0/26 are 1G SFP positions.",
+        "PoE hardware capability is retained as Experimental; detailed Switch Vision PoE presentation remains pending a focused current-build confirmation."
+      ],
+      "validation": {
+        "exact_model_detection": "real_hardware_snmp_confirmed",
+        "rj45_mapping": "real_hardware_snmp_ports_0_1_0_24_confirmed",
+        "poe": "platform_capability_confirmed_telemetry_pending",
+        "system_sensors": "pending",
+        "uplinks": "real_hardware_snmp_ports_0_25_0_26_1g_sfp_confirmed",
+        "stack": "not_applicable"
+      },
+      "visuals": {
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+        "optional_faceplates": [],
+        "calibration_profile": "unifi_24p_rj45_2sfp",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
+    },
+    {
+      "vendor": "Ubiquiti",
       "family": "UniFi Switch 8 60W",
       "model": "US 8 60W",
       "status": "experimental",
