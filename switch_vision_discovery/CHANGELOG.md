@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.33
+
+- Fix Support My Switch VLAN-name masking so privacy option keys such as `mask_vlan_names` and `support_mask_vlan_names` are never mistaken for VLAN labels.
+- Preserve valid JSON scalar types while masking actual `vlan_name` / `vmVlanName` values and numbered VLAN tokens.
+- Add a packaged-runtime regression covering JSON validity, boolean option preservation, and real VLAN-name redaction.
+
 ## 2.3.32
 
 # Discovery 2.3.32
