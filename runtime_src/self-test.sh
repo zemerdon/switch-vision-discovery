@@ -2967,11 +2967,11 @@ assert agg["unifi_api_port_map"]["sfp"] == list(range(1, 33))
 
 p48 = profiles["ubiquiti-us-48-api"]
 assert p48["layout"] == {"members": 1, "rj45_ports": 48, "sfp_1g_ports": 2, "sfp_10g_ports": 2}
-assert p48["interface_patterns"]["sfp_10g"] == ["api-port-49", "api-port-50"]
-assert p48["interface_patterns"]["sfp_1g"] == ["api-port-51", "api-port-52"]
+assert p48["interface_patterns"]["sfp_10g"] == ["api-port-49", "api-port-50", "0/49", "0/50"]
+assert p48["interface_patterns"]["sfp_1g"] == ["api-port-51", "api-port-52", "0/51", "0/52"]
 pxg = profiles["ubiquiti-us-xg-16-api"]
-assert pxg["interface_patterns"]["rj45"] == ["api-port-13", "api-port-14", "api-port-15", "api-port-16"]
-assert pxg["interface_patterns"]["sfp_10g"] == [f"api-port-{n}" for n in range(1, 13)]
+assert pxg["interface_patterns"]["rj45"] == ["api-port-13", "api-port-14", "api-port-15", "api-port-16", "0/13", "0/14", "0/15", "0/16"]
+assert pxg["interface_patterns"]["sfp_10g"] == [f"api-port-{n}" for n in range(1, 13)] + [f"0/{n}" for n in range(1, 13)]
 pagg = profiles["ubiquiti-usw-pro-aggregation-api"]
 assert pagg["layout"]["rj45_ports"] == 0
 assert pagg["layout"]["sfp_10g_ports"] == 28
