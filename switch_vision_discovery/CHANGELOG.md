@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.32
+
+# Discovery 2.3.32
+
+- Fix local exact-model extraction for privacy-processed legacy UniFi SNMP evidence without scanning LLDP/CDP neighbour identity.
+- Add model-scoped IF-MIB classification for UDM Pro, US 8 60W, US-8-150W, US XG 16, US-24-250W, and US 48 legacy SNMP identities.
+- Add Experimental US-8-150W and US-24-250W physical profiles from privacy-processed real-hardware evidence.
+- Recognize the existing US XG 16 4-RJ45 + 12-SFP+ topology while keeping dashboard generation disabled until verified exact visual geometry exists.
+- Keep generic UBNT/Linux and access-point walks fail-closed.
+
 ## 2.3.31
 
 - Replace the Credits v25 preview placeholder entries with the first owner-approved public community credit: **Finni** — UniFi multi-controller, field testing, port telemetry and UI feedback.
