@@ -865,6 +865,7 @@ parser_report() {
       # model match exists; legacy parser tables remain fallback only.
       if (registry_status == "confirmed") return "supported"
       if (registry_status == "experimental") return "experimental"
+      if (registry_status == "detected") return "detected"
       if (model ~ /^WS-C3650-48/) return "supported"
       if (model ~ /^WS-C3650/) return "untested"
       if (model ~ /^WS-C2960X-24TS/) return "community_validated"
@@ -1414,6 +1415,12 @@ parser_report() {
       else if (model == "XS1930-10") profile = "zyxel-xs1930-10"
       else if (model == "N2128PX-ON") profile = "dell-n2128px-on"
       else if (model == "CRS328-24P-4S+") profile = "mikrotik-crs328-24p-4splus"
+      else if (model == "UDM Pro") profile = "ubiquiti-udm-pro-api"
+      else if (model == "US 8 60W") profile = "ubiquiti-us-8-60w-api"
+      else if (model == "US-8-150W") profile = "ubiquiti-us-8-150w-snmp"
+      else if (model == "US XG 16") profile = "ubiquiti-us-xg-16-api"
+      else if (model == "US-24-250W") profile = "ubiquiti-us-24-250w-snmp"
+      else if (model == "US 48") profile = "ubiquiti-us-48-api"
       else if (model ~ /^WS-C3650/) profile = "cisco-3650-auto"
       print "- Matched profile: " profile
       print "- Profile status: " profile_status
@@ -1601,11 +1608,12 @@ parser_report() {
       else print (trunk_status_count > 0 ? "- PASS: Cisco trunk status OIDs detected" : "- WARN: Cisco trunk status OIDs not detected")
       if (target_ip != "unknown" && target_ip != "") print "- PASS: management target provided: " target_ip
       else print "- WARN: management target not provided; provide a switch_host in the switch list or targets CSV before generator use"
-      ready = (((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "CRS328-24P-4S+" && if_total > 0 && rj45 == 24 && ten == 4) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48))
+      ready = (((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "CRS328-24P-4S+" && if_total > 0 && rj45 == 24 && ten == 4) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48) || (model == "UDM Pro" && if_total > 0 && rj45 == 9 && ten == 2) || (model == "US 8 60W" && if_total > 0 && rj45 == 8) || (model == "US-8-150W" && if_total > 0 && rj45 == 8 && sfp_gi == 2) || (model == "US-24-250W" && if_total > 0 && rj45 == 24 && sfp_gi == 2) || (model == "US 48" && if_total > 0 && rj45 == 48 && ten == 2 && sfp_gi == 2))
       print "- Ready for SNMP2MQTT generation: " (ready ? "yes, review-only" : "no")
       if (profile_status == "supported") print "- Generator confidence: supported profile; review generated YAML before installing"
       else if (profile_status == "community_validated") print "- Generator confidence: community-validated profile; physical layout verified on real hardware"
       else if (profile_status == "experimental") print "- Generator confidence: experimental profile; review mapping/YAML before use"
+      else if (profile_status == "detected") print "- Generator confidence: exact topology detected; dashboard/profile generation remains disabled pending verified visual support"
       else if (profile_status == "untested") print "- Generator confidence: untested profile; use for lab review only"
       else print "- Generator confidence: unsupported; generator output should not be used"
       print "- SNMP2MQTT generator status: " (generator_enabled == "true" ? "enabled" : "disabled")
