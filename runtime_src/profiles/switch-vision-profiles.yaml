@@ -287,6 +287,46 @@ profiles:
     notes:
     - Profile derived from two matching community-contributed devices.
     - XGigabitEthernet0/0/1-4 are treated as high-speed uplink interfaces.
+  ubiquiti-us-8-150w-snmp:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch 8 150W
+    model_patterns:
+    - US-8-150W
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - 0/{port}
+      sfp_1g:
+      - 0/9
+      - 0/10
+      sfp_10g: []
+    notes:
+    - Privacy-processed real-hardware SNMP evidence confirms 8 RJ45 plus 2 1G SFP physical interfaces.
+  ubiquiti-us-24-250w-snmp:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Switch 24 250W
+    model_patterns:
+    - US-24-250W
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - 0/{port}
+      sfp_1g:
+      - 0/25
+      - 0/26
+      sfp_10g: []
+    notes:
+    - Privacy-processed real-hardware SNMP evidence confirms 24 RJ45 plus 2 1G SFP physical interfaces.
   ubiquiti-udm-pro-api:
     status: experimental
     vendor: Ubiquiti
@@ -302,10 +342,13 @@ profiles:
     interface_patterns:
       rj45:
       - api-port-{port}
+      - eth{port_zero_based}
       sfp_1g: []
       sfp_10g:
       - api-port-10
       - api-port-11
+      - eth9
+      - eth10
   ubiquiti-usw-24-poe-api:
     status: experimental
     vendor: Ubiquiti
@@ -518,6 +561,7 @@ profiles:
     interface_patterns:
       rj45:
       - api-port-{port}
+      - 0/{port}
       sfp_1g: []
       sfp_10g: []
     notes:
@@ -592,12 +636,17 @@ profiles:
     interface_patterns:
       rj45:
       - api-port-{port}
+      - 0/{port}
       sfp_1g:
       - api-port-51
       - api-port-52
+      - 0/51
+      - 0/52
       sfp_10g:
       - api-port-49
       - api-port-50
+      - 0/49
+      - 0/50
     notes:
     - Community hardware evidence confirms the legacy sequential API path: RJ45 1-48, 10G SFP+
         49-50, 1G SFP 51-52.
@@ -618,6 +667,10 @@ profiles:
       - api-port-14
       - api-port-15
       - api-port-16
+      - 0/13
+      - 0/14
+      - 0/15
+      - 0/16
       sfp_1g: []
       sfp_10g:
       - api-port-1
@@ -632,6 +685,18 @@ profiles:
       - api-port-10
       - api-port-11
       - api-port-12
+      - 0/1
+      - 0/2
+      - 0/3
+      - 0/4
+      - 0/5
+      - 0/6
+      - 0/7
+      - 0/8
+      - 0/9
+      - 0/10
+      - 0/11
+      - 0/12
     notes:
     - Community hardware evidence confirms optical-first API numbering; do not replace this with
       a copper-first offset.
