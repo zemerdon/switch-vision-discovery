@@ -152,6 +152,56 @@ cv_interface_class_for_name() {
     esac
   fi
 
+  # Legacy UniFi SNMP identities from privacy-processed real-hardware evidence.
+  # Keep each 0/N or ethN rule exact-model scoped; generic UBNT/Linux remains non-physical.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "UDM Pro" ]; then
+    case "$name" in
+      eth[0-8]) printf 'rj45'; return 0 ;;
+      eth9|eth10) printf 'sfp_plus'; return 0 ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
+
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "US 8 60W" ]; then
+    case "$name" in
+      0/[1-8]) printf 'rj45'; return 0 ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
+
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "US-8-150W" ]; then
+    case "$name" in
+      0/[1-8]) printf 'rj45'; return 0 ;;
+      0/9|0/10) printf 'sfp'; return 0 ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
+
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "US XG 16" ]; then
+    case "$name" in
+      0/[1-9]|0/1[0-2]) printf 'sfp_plus'; return 0 ;;
+      0/1[3-6]) printf 'rj45'; return 0 ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
+
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "US-24-250W" ]; then
+    case "$name" in
+      0/[1-9]|0/1[0-9]|0/2[0-4]) printf 'rj45'; return 0 ;;
+      0/25|0/26) printf 'sfp'; return 0 ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
+
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "US 48" ]; then
+    case "$name" in
+      0/[1-9]|0/[1-3][0-9]|0/4[0-8]) printf 'rj45'; return 0 ;;
+      0/49|0/50) printf 'sfp_plus'; return 0 ;;
+      0/51|0/52) printf 'sfp'; return 0 ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
+
   # HP J8693A / 3500yl-48G exposes its physical logical ports as
   # numeric ifName values. Keep this exact-model exception ahead of the
   # generic name parser so numeric interfaces on other vendors stay excluded.
