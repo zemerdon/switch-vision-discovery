@@ -142,4 +142,49 @@ jq -e '
   (dev("USW Flex Mini") | (.contributions | map(.id) | index("evidence-unifi-flex-mini-refresh-a")) != null)
 ' "$REGISTRY" >/dev/null
 
+# Ian legacy-UniFi SNMP regression: exact local identities only.
+set --
+i=0
+while [ "$i" -le 10 ]; do set -- "$@" "eth$i"; i=$((i + 1)); done
+make_ifname_walk "$TMP/udm-pro.txt" "Ubiquiti UniFi UDM-Pro 5.1.31 Linux" "1.3.6.1.4.1.8072.3.2.10" "$@"
+cv_detect_vendor_identity "$TMP/udm-pro.txt"
+cv_write_capabilities_json "$TMP/udm-pro.txt" "$TMP/udm-pro.json" ""
+jq -e '(.device.model_text == "UDM Pro") and (.summary.physical_count == 11) and (.summary.rj45_count == 9) and (.summary.sfp_plus_count == 2)' "$TMP/udm-pro.json" >/dev/null
+
+for spec in "US-8-60W:8:0:0" "US-8-150W:8:2:0" "US-16-XG:4:0:12" "US-24-250W:24:2:0" "US-48-G1:48:2:2"; do
+  sku=${spec%%:*}; rest=${spec#*:}; want_rj=${rest%%:*}; rest=${rest#*:}; want_sfp=${rest%%:*}; want_ten=${rest##*:}
+  set --
+  case "$sku" in
+    US-8-60W) limit=8 ;;
+    US-8-150W) limit=10 ;;
+    US-16-XG) limit=16 ;;
+    US-24-250W) limit=26 ;;
+    US-48-G1) limit=52 ;;
+  esac
+  i=1
+  while [ "$i" -le "$limit" ]; do set -- "$@" "0/$i"; i=$((i + 1)); done
+  make_ifname_walk "$TMP/$sku.txt" "$sku, 7.5.15.17146, Linux" "1.3.6.1.4.1.8072.3.2.10" "$@"
+  cv_detect_vendor_identity "$TMP/$sku.txt"
+  cv_write_capabilities_json "$TMP/$sku.txt" "$TMP/$sku.json" ""
+  jq -e --argjson r "$want_rj" --argjson s "$want_sfp" --argjson t "$want_ten" '(.summary.rj45_count == $r) and (.summary.sfp_count == $s) and (.summary.sfp_plus_count == $t)' "$TMP/$sku.json" >/dev/null
+done
+
+# Generic UBNT/Linux with 0/N interfaces must remain fail-closed.
+set -- "0/1" "0/2" "0/3" "0/4"
+make_ifname_walk "$TMP/generic-ubnt.txt" "Linux UBNT 3.18.24" "1.3.6.1.4.1.8072.3.2.10" "$@"
+cv_detect_vendor_identity "$TMP/generic-ubnt.txt"
+cv_write_capabilities_json "$TMP/generic-ubnt.txt" "$TMP/generic-ubnt.json" ""
+jq -e '(.summary.physical_count == 0)' "$TMP/generic-ubnt.json" >/dev/null
+
+jq -e '
+  def canon: ascii_downcase | gsub("[^a-z0-9]"; "");
+  def dev($m): ($m | canon) as $target | [.devices[] | select((.model | canon) == $target)][0];
+  (dev("UDM Pro") | .status == "experimental" and .ports.rj45 == 9 and .ports.ten_gigabit_sfp_plus == 2) and
+  (dev("US 8 60W") | .status == "experimental" and .ports.rj45 == 8) and
+  (dev("US-8-150W") | .status == "experimental" and .ports.rj45 == 8 and .ports.gigabit_sfp == 2) and
+  (dev("US XG 16") | .status == "detected" and .dashboard_support == false and .ports.rj45 == 4 and .ports.ten_gigabit_sfp_plus == 12) and
+  (dev("US-24-250W") | .status == "experimental" and .ports.rj45 == 24 and .ports.gigabit_sfp == 2) and
+  (dev("US 48") | .status == "experimental" and .ports.rj45 == 48 and .ports.gigabit_sfp == 2 and .ports.ten_gigabit_sfp_plus == 2)
+' "$REGISTRY" >/dev/null
+
 echo 'Switch Vision contributor interface batch regression: PASS'
