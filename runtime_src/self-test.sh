@@ -1442,6 +1442,46 @@ assert report["counts"]["serial_numbers_masked"] >= 2, report
 assert report["counts"]["mac_addresses_masked"] >= 3, report
 PYTEST
 
+# v2.3.33: VLAN-name masking must never corrupt privacy-control JSON keys.
+privacy_vlan_root="$privacy_hard_root/vlan-json"
+mkdir -p "$privacy_vlan_root"
+cat > "$privacy_vlan_root/options.json" <<'JSON'
+{
+  "mask_vlan_names": true,
+  "support_mask_vlan_names": true,
+  "vlan_name": "Office",
+  "nested": {
+    "vmVlanName": "Guest",
+    "keep_boolean": false
+  },
+  "label": "VLAN20"
+}
+JSON
+python3 "$BASE_DIR/sanitize_support_bundle.py" \
+  "$privacy_vlan_root" \
+  "$privacy_vlan_root/report.json" \
+  --mask-vlan-names true >/dev/null
+python3 - "$privacy_vlan_root/options.json" "$privacy_vlan_root/report.json" <<'PY_VLAN_JSON'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    document = json.load(handle)
+assert document["mask_vlan_names"] is True, document
+assert document["support_mask_vlan_names"] is True, document
+assert document["vlan_name"] == "masked-vlan", document
+assert document["nested"]["vmVlanName"] == "masked-vlan", document
+assert document["nested"]["keep_boolean"] is False, document
+assert document["label"] == "masked-vlan-20", document
+
+with open(sys.argv[2], encoding="utf-8") as handle:
+    report = json.load(handle)
+assert report["sanitization_version"] >= 14, report
+assert report["enabled_category_leaks_found"] is False, report
+assert report["counts"]["vlan_names_masked"] >= 3, report
+PY_VLAN_JSON
+printf '%s\n' "Switch Vision Discovery v2.3.33 Support My Switch JSON VLAN sanitizer regression: PASS"
+
 printf '%s\n' "Switch Vision privacy hardening regression: PASS"
 
 python3 - "$BASE_DIR" <<'PYTEST'
@@ -1609,8 +1649,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.32"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.32"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.33"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.33"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
