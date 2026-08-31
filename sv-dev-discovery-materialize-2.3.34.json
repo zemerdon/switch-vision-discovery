@@ -1,0 +1,8 @@
+{
+  "schema": "switch-vision-product-bundle-v1",
+  "files": [],
+  "replacements": [],
+  "postprocess": {
+    "kind": "discovery_materialize"
+  }
+}
