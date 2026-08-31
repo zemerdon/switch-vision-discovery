@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.34
+
+- Fix Support My Switch metadata so the combined sanitization report and manifest inherit the sanitizer schema version instead of hard-coding an older value.
+- Fail closed when stored-walk SNMP2MQTT regeneration produces only unconditional uptime data, and refuse duplicate uptime-only groups that indicate stale or duplicate walk input.
+- Add regressions reproducing the privacy-processed field evidence while preserving normal status-plus-uptime generation.
+
 ## 2.3.33
 
 - Fix Support My Switch VLAN-name masking so privacy option keys such as `mask_vlan_names` and `support_mask_vlan_names` are never mistaken for VLAN labels.
