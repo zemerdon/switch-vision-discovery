@@ -59,25 +59,22 @@ def validate(path: Path) -> tuple[bool, str]:
             for oid in (_sensor_oid(sensor) for sensor in (sensors or []))
             if oid
         }
-        evidence = host_evidence.setdefault(
-            host,
-            {"meaningful_sensor_groups": 0, "uptime_only_groups": 0},
-        )
-        if any(oid != UPTIME_OID for oid in sensor_oids):
-            evidence["meaningful_sensor_groups"] += 1
-        elif UPTIME_OID in sensor_oids:
-            evidence["uptime_only_groups"] += 1
-
-    # A failed/insufficient stored walk can still reach the historical-walk
-    # generator with a mapped host. The legacy generator then emits only the
-    # unconditional sysUpTime sensor, which is not enough evidence to publish
-    # a usable Switch Vision target. Refuse that candidate atomically.
-    for host, evidence in host_evidence.items():
-        if evidence["meaningful_sensor_groups"] == 0:
+        model = str(target.get("device_model") or "").strip().casefold()
+        uptime_only = sensor_oids == {UPTIME_OID}
+        if uptime_only and model == "unknown":
             return (
                 False,
-                f"host {host} has no usable sensors beyond uptime; failed/insufficient walk suspected",
+                f"target {index} has unknown model with only uptime; failed/insufficient walk suspected",
             )
+
+        evidence = host_evidence.setdefault(host, {"uptime_only_groups": 0})
+        if uptime_only:
+            evidence["uptime_only_groups"] += 1
+
+    # A valid generated device normally has one slow-system group containing
+    # sysUpTime. More than one uptime-only group for the same host indicates
+    # duplicate/stale stored-walk input and must not be published atomically.
+    for host, evidence in host_evidence.items():
         if evidence["uptime_only_groups"] > 1:
             return (
                 False,
