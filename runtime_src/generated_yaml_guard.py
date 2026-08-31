@@ -11,6 +11,13 @@ import yaml
 
 HEADER = "# Switch Vision generated SNMP2MQTT YAML"
 SOURCE_HEADER = "# Source: Switch Vision Discovery"
+UPTIME_OID = "1.3.6.1.2.1.1.3.0"
+
+
+def _sensor_oid(sensor: object) -> str:
+    if not isinstance(sensor, dict):
+        return ""
+    return str(sensor.get("oid") or "").strip().lstrip(".")
 
 
 def validate(path: Path) -> tuple[bool, str]:
@@ -35,6 +42,8 @@ def validate(path: Path) -> tuple[bool, str]:
     targets = document.get("targets")
     if not isinstance(targets, list) or not targets:
         return False, "generated YAML does not contain a non-empty targets list"
+
+    host_evidence: dict[str, dict[str, int]] = {}
     for index, target in enumerate(targets, start=1):
         if not isinstance(target, dict):
             return False, f"target {index} is not a mapping"
@@ -44,6 +53,37 @@ def validate(path: Path) -> tuple[bool, str]:
         sensors = target.get("sensors")
         if sensors is not None and not isinstance(sensors, list):
             return False, f"target {index} sensors is not a list"
+
+        sensor_oids = {
+            oid
+            for oid in (_sensor_oid(sensor) for sensor in (sensors or []))
+            if oid
+        }
+        evidence = host_evidence.setdefault(
+            host,
+            {"meaningful_sensor_groups": 0, "uptime_only_groups": 0},
+        )
+        if any(oid != UPTIME_OID for oid in sensor_oids):
+            evidence["meaningful_sensor_groups"] += 1
+        elif UPTIME_OID in sensor_oids:
+            evidence["uptime_only_groups"] += 1
+
+    # A failed/insufficient stored walk can still reach the historical-walk
+    # generator with a mapped host. The legacy generator then emits only the
+    # unconditional sysUpTime sensor, which is not enough evidence to publish
+    # a usable Switch Vision target. Refuse that candidate atomically.
+    for host, evidence in host_evidence.items():
+        if evidence["meaningful_sensor_groups"] == 0:
+            return (
+                False,
+                f"host {host} has no usable sensors beyond uptime; failed/insufficient walk suspected",
+            )
+        if evidence["uptime_only_groups"] > 1:
+            return (
+                False,
+                f"host {host} has duplicate uptime-only groups; stale/duplicate walk source suspected",
+            )
+
     return True, "valid"
 
 
