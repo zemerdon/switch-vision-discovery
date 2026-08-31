@@ -116,9 +116,9 @@ assert "1.3.6.1.4.1.14988.1.1.15.1.1" in job_source
 assert "1.3.6.1.4.1.14988\n" not in job_source
 
 # Field regression from Support My Switch evidence: a failed/insufficient stored
-# walk could retain a mapped host and produce only the unconditional uptime
-# sensor. Such a candidate is not usable Switch Vision data and must never be
-# atomically published as generated SNMP2MQTT YAML.
+# walk could retain a mapped host, report an unknown model, and produce only the
+# unconditional uptime sensor. That exact generated signature must never be
+# atomically published as SNMP2MQTT YAML.
 with tempfile.TemporaryDirectory() as temp_dir:
     temp = Path(temp_dir)
     failed_candidate = temp / "failed-only.yaml"
@@ -140,7 +140,7 @@ targets:
     )
     valid, reason = guard.validate(failed_candidate)
     assert valid is False, reason
-    assert "no usable sensors beyond uptime" in reason, reason
+    assert "unknown model with only uptime" in reason, reason
 
     valid_candidate = temp / "valid.yaml"
     valid_candidate.write_text(
@@ -198,8 +198,8 @@ targets:
   name: Switch Vision SW1 Slow System B
   version: 2c
   community: readonly
-  device_manufacturer: unknown
-  device_model: unknown
+  device_manufacturer: Cisco
+  device_model: WS-C3650-48PD-E
   sensors:
   - oid: 1.3.6.1.2.1.1.3.0
     name: SW1 Uptime
