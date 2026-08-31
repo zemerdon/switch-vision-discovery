@@ -330,7 +330,7 @@ jq -s '
   .[0] as $a | .[1] as $b |
   (addcounts($a.counts; $b.counts)) as $counts |
   {
-    sanitization_version: 13,
+    sanitization_version: ([$a.sanitization_version // 0, $b.sanitization_version // 0] | max),
     secrets_always_removed: true,
     serial_numbers_always_masked: true,
     options: $b.options,
@@ -353,6 +353,18 @@ jq -s '
   }
 ' "$DATA_SANITIZATION_JSON" "$FINAL_SANITIZATION_JSON" > "$COMBINED_SANITIZATION_JSON"
 cp "$COMBINED_SANITIZATION_JSON" "$BUNDLE_ROOT/SANITIZATION_REPORT.json"
+
+SANITIZATION_VERSION=$(jq -r '.sanitization_version // 0' "$COMBINED_SANITIZATION_JSON")
+case "$SANITIZATION_VERSION" in
+  ''|*[!0-9]*)
+    log "ERROR: Combined sanitization schema version is invalid."
+    exit 1
+    ;;
+esac
+if [ "$SANITIZATION_VERSION" -lt 1 ]; then
+  log "ERROR: Combined sanitization schema version is missing."
+  exit 1
+fi
 
 SECRETS_REMOVED=$(jq -r '.counts.secrets_removed + .counts.url_credentials_removed + .counts.cli_credentials_removed + .counts.authorization_headers_removed + .counts.entity_logical_communities_removed + .counts.csv_community_values_removed' "$COMBINED_SANITIZATION_JSON")
 SERIALS_MASKED=$(jq -r '.counts.serial_numbers_masked // 0' "$COMBINED_SANITIZATION_JSON")
@@ -577,7 +589,7 @@ cat > "$BUNDLE_ROOT/MANIFEST.json" <<EOF_MANIFEST
     "files_changed": $FILES_CHANGED
   },
   "sanitization_processing": {
-    "version": 13,
+    "version": $SANITIZATION_VERSION,
     "complete": $PROCESSING_COMPLETE,
     "issue_count": $PROCESSING_ISSUE_COUNT,
     "binary_files_skipped": $BINARY_FILES_SKIPPED,

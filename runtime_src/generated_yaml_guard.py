@@ -11,6 +11,13 @@ import yaml
 
 HEADER = "# Switch Vision generated SNMP2MQTT YAML"
 SOURCE_HEADER = "# Source: Switch Vision Discovery"
+UPTIME_OID = "1.3.6.1.2.1.1.3.0"
+
+
+def _sensor_oid(sensor: object) -> str:
+    if not isinstance(sensor, dict):
+        return ""
+    return str(sensor.get("oid") or "").strip().lstrip(".")
 
 
 def validate(path: Path) -> tuple[bool, str]:
@@ -35,6 +42,8 @@ def validate(path: Path) -> tuple[bool, str]:
     targets = document.get("targets")
     if not isinstance(targets, list) or not targets:
         return False, "generated YAML does not contain a non-empty targets list"
+
+    host_evidence: dict[str, dict[str, int]] = {}
     for index, target in enumerate(targets, start=1):
         if not isinstance(target, dict):
             return False, f"target {index} is not a mapping"
@@ -44,6 +53,34 @@ def validate(path: Path) -> tuple[bool, str]:
         sensors = target.get("sensors")
         if sensors is not None and not isinstance(sensors, list):
             return False, f"target {index} sensors is not a list"
+
+        sensor_oids = {
+            oid
+            for oid in (_sensor_oid(sensor) for sensor in (sensors or []))
+            if oid
+        }
+        model = str(target.get("device_model") or "").strip().casefold()
+        uptime_only = sensor_oids == {UPTIME_OID}
+        if uptime_only and model == "unknown":
+            return (
+                False,
+                f"target {index} has unknown model with only uptime; failed/insufficient walk suspected",
+            )
+
+        evidence = host_evidence.setdefault(host, {"uptime_only_groups": 0})
+        if uptime_only:
+            evidence["uptime_only_groups"] += 1
+
+    # A valid generated device normally has one slow-system group containing
+    # sysUpTime. More than one uptime-only group for the same host indicates
+    # duplicate/stale stored-walk input and must not be published atomically.
+    for host, evidence in host_evidence.items():
+        if evidence["uptime_only_groups"] > 1:
+            return (
+                False,
+                f"host {host} has duplicate uptime-only groups; stale/duplicate walk source suspected",
+            )
+
     return True, "valid"
 
 

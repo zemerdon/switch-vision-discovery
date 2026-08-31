@@ -16,6 +16,14 @@ assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+guard_spec = importlib.util.spec_from_file_location(
+    "switch_vision_generated_yaml_guard",
+    RUNTIME / "generated_yaml_guard.py",
+)
+assert guard_spec and guard_spec.loader
+guard = importlib.util.module_from_spec(guard_spec)
+guard_spec.loader.exec_module(guard)
+
 original = {
     "enable_switch_list": False,
     "run_snmp_walks": True,
@@ -107,4 +115,105 @@ assert "MIKROTIK_SUPPLEMENTAL_OIDS" in job_source
 assert "1.3.6.1.4.1.14988.1.1.15.1.1" in job_source
 assert "1.3.6.1.4.1.14988\n" not in job_source
 
-print("Discovery stored-walk SNMP2MQTT YAML regeneration, Q-BRIDGE, and manufacturer contracts: PASS")
+# Field regression from Support My Switch evidence: a failed/insufficient stored
+# walk could retain a mapped host, report an unknown model, and produce only the
+# unconditional uptime sensor. That exact generated signature must never be
+# atomically published as SNMP2MQTT YAML.
+with tempfile.TemporaryDirectory() as temp_dir:
+    temp = Path(temp_dir)
+    failed_candidate = temp / "failed-only.yaml"
+    failed_candidate.write_text(
+        """# Switch Vision generated SNMP2MQTT YAML
+# Source: Switch Vision Discovery v2.3.34
+targets:
+- host: 192.0.2.10
+  name: Switch Vision SW1 Slow System
+  version: 2c
+  community: readonly
+  device_manufacturer: Unknown
+  device_model: unknown
+  sensors:
+  - oid: 1.3.6.1.2.1.1.3.0
+    name: SW1 Uptime
+""",
+        encoding="utf-8",
+    )
+    valid, reason = guard.validate(failed_candidate)
+    assert valid is False, reason
+    assert "unknown model with only uptime" in reason, reason
+
+    valid_candidate = temp / "valid.yaml"
+    valid_candidate.write_text(
+        """# Switch Vision generated SNMP2MQTT YAML
+# Source: Switch Vision Discovery v2.3.34
+targets:
+- host: 192.0.2.10
+  name: Switch Vision SW1 Status 01
+  version: 2c
+  community: readonly
+  device_manufacturer: Cisco
+  device_model: WS-C3650-48PD-E
+  sensors:
+  - oid: 1.3.6.1.2.1.2.2.1.8.1
+    name: SW1 Port 1 Status
+- host: 192.0.2.10
+  name: Switch Vision SW1 Slow System
+  version: 2c
+  community: readonly
+  device_manufacturer: Cisco
+  device_model: WS-C3650-48PD-E
+  sensors:
+  - oid: 1.3.6.1.2.1.1.3.0
+    name: SW1 Uptime
+""",
+        encoding="utf-8",
+    )
+    valid, reason = guard.validate(valid_candidate)
+    assert valid is True, reason
+
+    duplicate_stale_candidate = temp / "duplicate-stale.yaml"
+    duplicate_stale_candidate.write_text(
+        """# Switch Vision generated SNMP2MQTT YAML
+# Source: Switch Vision Discovery v2.3.34
+targets:
+- host: 192.0.2.10
+  name: Switch Vision SW1 Status 01
+  version: 2c
+  community: readonly
+  device_manufacturer: Cisco
+  device_model: WS-C3650-48PD-E
+  sensors:
+  - oid: 1.3.6.1.2.1.2.2.1.8.1
+    name: SW1 Port 1 Status
+- host: 192.0.2.10
+  name: Switch Vision SW1 Slow System A
+  version: 2c
+  community: readonly
+  device_manufacturer: Cisco
+  device_model: WS-C3650-48PD-E
+  sensors:
+  - oid: 1.3.6.1.2.1.1.3.0
+    name: SW1 Uptime
+- host: 192.0.2.10
+  name: Switch Vision SW1 Slow System B
+  version: 2c
+  community: readonly
+  device_manufacturer: Cisco
+  device_model: WS-C3650-48PD-E
+  sensors:
+  - oid: 1.3.6.1.2.1.1.3.0
+    name: SW1 Uptime
+""",
+        encoding="utf-8",
+    )
+    valid, reason = guard.validate(duplicate_stale_candidate)
+    assert valid is False, reason
+    assert "duplicate uptime-only groups" in reason, reason
+
+support_source = (RUNTIME / "support_my_switch.sh").read_text(encoding="utf-8")
+assert "sanitization_version: 13" not in support_source
+assert 'sanitization_version: ([$a.sanitization_version // 0, $b.sanitization_version // 0] | max),' in support_source
+assert 'SANITIZATION_VERSION=$(jq -r' in support_source
+assert '"version": $SANITIZATION_VERSION,' in support_source
+
+print("Discovery stored-walk SNMP2MQTT YAML regeneration, sanitizer schema, Q-BRIDGE, and manufacturer contracts: PASS")
