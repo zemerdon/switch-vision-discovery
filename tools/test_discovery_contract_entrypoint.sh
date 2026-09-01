@@ -192,10 +192,10 @@ records = [
 ]
 
 def resolved_prepare(source: Path, destination: Path, work: Path):
-    if source.name == "unsupported.txt":
-        return None
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    if source.name == "unsupported.txt":
+        return None
     return {
         "source": source,
         "destination": destination,
@@ -213,6 +213,7 @@ targets = Path(staged["targets_csv"]).read_text(encoding="utf-8")
 assert "supported" in targets
 assert "unsupported" not in targets
 assert staged["input_path"].endswith("supported.txt"), staged["input_path"]
+assert not (root / "work" / "snmpwalks" / "unsupported" / "unsupported.txt").exists()
 
 module._prepare_walk = lambda source, destination, work: None
 try:

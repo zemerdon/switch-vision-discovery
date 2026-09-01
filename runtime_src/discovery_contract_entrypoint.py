@@ -265,6 +265,9 @@ def _stage_current_run_options(
             # Keep that target fail-closed, but do not let one AP, controller,
             # generic Linux appliance, or other non-switch target invalidate
             # resolved switches collected in the same live Discovery run.
+            # The resolver writes an unchanged compatibility copy for unresolved
+            # targets, so remove it before parse_all_walks sees the private tree.
+            destination.unlink(missing_ok=True)
             print(
                 "SV_STATUS|stage=Skipping unsupported target|"
                 f"switch={switch}|target=|command=Physical contract|"
