@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.3.38
+
+- Fixed legacy report/SNMP2MQTT local-model isolation so LLDP/CDP neighbour model strings cannot override the local switch model. Dell N2128PX-ON uplinks now retain their Dell SFP 10G entity contract when an HP 3500yl is discovered as a neighbour.
 ## 2.3.37
 
 ## Discovery 2.3.37 — mixed current-run physical contract handling

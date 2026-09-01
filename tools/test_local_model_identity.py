@@ -134,6 +134,13 @@ cv_write_capabilities_json "$1" "$2" ""
         assert caps["summary"]["sfp_plus_count"] == 4
         assert all(not row["physical"] for row in caps["interfaces"] if row["name"] in {"bridge", "lo"})
 
+
+    source = (ROOT / "runtime_src/discovery_job.sh").read_text(encoding="utf-8")
+    assert source.count("line !~ /\\.1\\.0\\.8802\\./ && line !~ /\\.3\\.6\\.1\\.4\\.1\\.9\\.9\\.23\\./ && tolower(line) ~ /j8693a/") == 2
+    assert source.count("line !~ /\\.1\\.0\\.8802\\./ && line !~ /\\.3\\.6\\.1\\.4\\.1\\.9\\.9\\.23\\./ && line ~ /N2128PX-ON/") == 2
+    assert 'if (tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/)' not in source
+    assert 'if (line ~ /N2128PX-ON/) dell_model' not in source
+
     print("Local model identity isolation and MikroTik CRS328 contract: PASS")
 
 

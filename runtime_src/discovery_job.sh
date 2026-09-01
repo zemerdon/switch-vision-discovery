@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.3.37"
+SWITCH_VISION_DISCOVERY_VERSION="2.3.38"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -938,8 +938,8 @@ parser_report() {
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model = "S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model = "XS1930-10"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model = "CRS328-24P-4S+"
-      if (tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model = "HP J8693A Switch 3500yl-48G"
-      if (line ~ /N2128PX-ON/) dell_model = "N2128PX-ON"
+      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model = "HP J8693A Switch 3500yl-48G"
+      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model = "N2128PX-ON"
       if (line ~ /N2128PX-ON, [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+,/ && match(line, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
         ios = substr(line, RSTART, RLENGTH)
       }
@@ -2893,8 +2893,8 @@ write_generated_yaml_for_walk() {
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model="S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model="XS1930-10"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model="CRS328-24P-4S+"
-      if (tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
-      if (line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
+      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
+      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
       if (line ~ /WS-C3750-48P/) c3750_model="WS-C3750-48P"
       if (match(line, /WS-C(3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
         model_candidate=substr(line, RSTART, RLENGTH)
