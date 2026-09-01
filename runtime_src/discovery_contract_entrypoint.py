@@ -261,26 +261,67 @@ def _stage_current_run_options(
         destination = staged_root / switch / source.name
         info = _prepare_walk(source, destination, work)
         if info is None:
-            raise RuntimeError("Current-run SNMP walk could not produce a resolved physical contract.")
+            # An unresolved/unregistered walk is not a proven physical switch.
+            # Keep that target fail-closed, but do not let one AP, controller,
+            # generic Linux appliance, or other non-switch target invalidate
+            # resolved switches collected in the same live Discovery run.
+            print(
+                "SV_STATUS|stage=Skipping unsupported target|"
+                f"switch={switch}|target=|command=Physical contract|"
+                "activity=No resolved physical switch contract; target excluded from this run"
+            )
+            continue
         ordered.append(info)
         by_source[source.resolve()] = destination
         staged_records.append({**record, "staged_walk": str(destination)})
 
-    # The compatibility tree contains only this run's successful walks, so
+    if not ordered:
+        raise RuntimeError(
+            "Current-run SNMP walks did not produce any resolved physical switch contracts."
+        )
+
+    # The compatibility tree contains only this run's resolved switch walks, so
     # parse_all_walks is safe internally even when the user's stored-walk
-    # preference is false. Historical files are never copied into this tree.
+    # preference is false. Historical and unresolved/non-switch files are never
+    # copied into this tree.
     staged["snmpwalks_dir"] = str(staged_root)
     staged["parse_all_walks"] = "true"
 
-    rows = staged.get("switches")
-    if not isinstance(rows, list):
-        rows = staged.get("multi_switch_walks")
+    resolved_switches = {
+        _safe(record.get("switch") or Path(record["walk"]).parent.name)
+        for record in staged_records
+    }
+    rows_key = "switches" if isinstance(staged.get("switches"), list) else "multi_switch_walks"
+    rows = staged.get(rows_key)
     if isinstance(rows, list):
+        filtered_rows: list[dict[str, Any]] = []
         for row in rows:
             if not isinstance(row, dict):
                 continue
             name = str(row.get("switch_name") or row.get("switch") or row.get("selected_switch") or row.get("name") or "").strip()
+            if _safe(name) not in resolved_switches:
+                continue
             row["output_dir"] = str(staged_root / _safe(name))
+            filtered_rows.append(row)
+        staged[rows_key] = filtered_rows
+
+    members = staged.get("stack_member_prefixes")
+    if isinstance(members, list):
+        staged["stack_member_prefixes"] = [
+            member
+            for member in members
+            if isinstance(member, dict)
+            and _safe(
+                str(
+                    member.get("switch_name")
+                    or member.get("switch")
+                    or member.get("selected_switch")
+                    or member.get("name")
+                    or ""
+                )
+            )
+            in resolved_switches
+        ]
 
     input_value = str(options.get("input_path") or "").strip()
     if input_value:
@@ -465,7 +506,7 @@ def main() -> int:
         _patch_yaml(generated_yaml, ordered)
         _publish_contracts(ordered, DEFAULT_CAPABILITIES)
         if current_run:
-            print(f"SV_DEBUG|Physical contract authority: preserved {len(current_run)} current-run walk(s) through normalized generation")
+            print(f"SV_DEBUG|Physical contract authority: accepted {len(ordered)} of {len(current_run)} current-run walk(s) through normalized generation")
         print(f"SV_DEBUG|Physical contract authority: resolved {len(ordered)} registered device walk(s)")
         return 0
 

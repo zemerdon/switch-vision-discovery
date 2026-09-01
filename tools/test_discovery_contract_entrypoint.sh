@@ -150,4 +150,90 @@ fi
 }
 
 echo 'entrypoint topology-conflict guard: PASS'
+
+# Mixed current-run path: unresolved/non-switch targets are excluded while a
+# resolved physical switch continues. All-unresolved runs still fail closed and
+# a real resolver/topology exception remains fatal.
+python3 - "$ENTRYPOINT" "$TMP" <<'PY'
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+import sys
+
+entrypoint = Path(sys.argv[1])
+root = Path(sys.argv[2]) / "mixed-current-run"
+root.mkdir(parents=True, exist_ok=True)
+
+spec = importlib.util.spec_from_file_location("sv_discovery_contract_entrypoint", entrypoint)
+assert spec and spec.loader
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+supported = root / "supported.txt"
+unsupported = root / "unsupported.txt"
+supported.write_text('.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"\n', encoding="utf-8")
+unsupported.write_text('.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "eth0"\n', encoding="utf-8")
+
+options = {
+    "switches": [
+        {"switch_name": "supported", "output_dir": "/should/be/replaced"},
+        {"switch_name": "unsupported", "output_dir": "/must/not/survive"},
+    ],
+    "stack_member_prefixes": [
+        {"switch_name": "supported", "member": "1"},
+        {"switch_name": "unsupported", "member": "1"},
+    ],
+    "input_path": str(unsupported),
+}
+records = [
+    {"walk": str(supported), "switch": "supported", "host": "192.0.2.21", "prefix": "GOOD", "community": "readonly"},
+    {"walk": str(unsupported), "switch": "unsupported", "host": "192.0.2.22", "prefix": "SKIP", "community": "readonly"},
+]
+
+def resolved_prepare(source: Path, destination: Path, work: Path):
+    if source.name == "unsupported.txt":
+        return None
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    return {
+        "source": source,
+        "destination": destination,
+        "capability": work / "cap.json",
+        "contract_path": work / "contract.json",
+        "contract": {"status": "resolved"},
+    }
+
+module._prepare_walk = resolved_prepare
+staged, ordered = module._stage_options(options, root / "work", records)
+assert len(ordered) == 1, ordered
+assert [row["switch_name"] for row in staged["switches"]] == ["supported"], staged["switches"]
+assert [row["switch_name"] for row in staged["stack_member_prefixes"]] == ["supported"], staged["stack_member_prefixes"]
+targets = Path(staged["targets_csv"]).read_text(encoding="utf-8")
+assert "supported" in targets
+assert "unsupported" not in targets
+assert staged["input_path"].endswith("supported.txt"), staged["input_path"]
+
+module._prepare_walk = lambda source, destination, work: None
+try:
+    module._stage_options(options, root / "all-unresolved", records)
+except RuntimeError as exc:
+    assert "did not produce any resolved physical switch contracts" in str(exc)
+else:
+    raise AssertionError("all-unresolved current-run staging unexpectedly succeeded")
+
+def fatal_prepare(source: Path, destination: Path, work: Path):
+    raise RuntimeError("synthetic topology conflict")
+
+module._prepare_walk = fatal_prepare
+try:
+    module._stage_options(options, root / "fatal", records[:1])
+except RuntimeError as exc:
+    assert "synthetic topology conflict" in str(exc)
+else:
+    raise AssertionError("topology-conflict exception was swallowed")
+
+print("entrypoint mixed current-run exclusion: PASS")
+PY
+
 echo 'Switch Vision Discovery physical-contract entrypoint: PASS'
