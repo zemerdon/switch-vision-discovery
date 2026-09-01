@@ -2993,7 +2993,9 @@ assert "unifi_api_port_map" not in us48
 
 xg16 = models["US XG 16"]
 assert xg16["status"] == "detected"
-assert xg16["dashboard_support"] is False
+assert xg16["dashboard_support"] is True
+assert xg16["calibration_profile"] == "unifi_4_rj45_12sfp"
+assert xg16["default_faceplate"] == "faceplates/unifi-4-rj45-12sfp.png"
 assert xg16["unifi_api_port_map"]["sfp"] == list(range(1, 13))
 assert xg16["unifi_api_port_map"]["rj45"] == [13, 14, 15, 16]
 
@@ -3061,11 +3063,11 @@ python3 "$BASE_DIR/unifi_dashboard_cards.py" \
     --summary > "$tmp_dir/community-validation-cards.yaml"
 grep -q 'switch_model: US 48' "$tmp_dir/community-validation-cards.yaml"
 grep -q 'unifi_sfp_port_offset: 48' "$tmp_dir/community-validation-cards.yaml"
-! grep -q 'switch_model: US XG 16' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'switch_model: US XG 16' "$tmp_dir/community-validation-cards.yaml"
 ! grep -q 'switch_model: USW Pro Aggregation' "$tmp_dir/community-validation-cards.yaml"
-grep -q 'US XG 16.*dashboard support is pending verified visuals' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'calibration_profile: unifi_4_rj45_12sfp' "$tmp_dir/community-validation-cards.yaml"
 grep -q 'USW Pro Aggregation.*dashboard support is pending verified visuals' "$tmp_dir/community-validation-cards.yaml"
-grep -q 'UniFi cards emitted: 1; waiting for visuals/registry: 2' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'UniFi cards emitted: 2; waiting for visuals/registry: 1' "$tmp_dir/community-validation-cards.yaml"
 echo "Switch Vision Discovery community-validation generated-card regression: PASS"
 # v2.1.36 UniFi-only SNMP2MQTT status regression.
 PYTHONPATH="$BASE_DIR" python3 - <<'PYTEST_V2136_UNIFI_ONLY'
@@ -3162,8 +3164,8 @@ for model, (rj45, uplinks, poe, dashboard, profile) in expected.items():
     assert profiles[profile]["status"] == "experimental", model
 
 promax = models["USW Pro Max 24"]
-assert promax["calibration_profile"] == "unifi_24p_rj45_2sfp"
-assert promax["default_faceplate"] == "faceplates/unifi-24p-rj45-2sfp.png"
+assert promax["calibration_profile"] == "unifi_24_rj45_2sfp_inline"
+assert promax["default_faceplate"] == "faceplates/unifi-24-rj45-2sfp-inline.png"
 ucg = models["UCG Ultra"]
 assert ucg["calibration_profile"] == "default_unifi_5_rj45"
 assert ucg["default_faceplate"] == "faceplates/unifi-5rj45.png"

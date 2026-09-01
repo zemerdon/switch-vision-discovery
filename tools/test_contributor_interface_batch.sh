@@ -182,7 +182,7 @@ jq -e '
   (dev("UDM Pro") | .status == "experimental" and .ports.rj45 == 9 and .ports.ten_gigabit_sfp_plus == 2) and
   (dev("US 8 60W") | .status == "experimental" and .ports.rj45 == 8) and
   (dev("US-8-150W") | .status == "experimental" and .ports.rj45 == 8 and .ports.gigabit_sfp == 2) and
-  (dev("US XG 16") | .status == "detected" and .dashboard_support == false and .ports.rj45 == 4 and .ports.ten_gigabit_sfp_plus == 12) and
+  (dev("US XG 16") | .status == "detected" and .dashboard_support == true and .calibration_profile == "unifi_4_rj45_12sfp" and .default_faceplate == "faceplates/unifi-4-rj45-12sfp.png" and .ports.rj45 == 4 and .ports.ten_gigabit_sfp_plus == 12) and
   (dev("US-24-250W") | .status == "experimental" and .ports.rj45 == 24 and .ports.gigabit_sfp == 2) and
   (dev("US 48") | .status == "experimental" and .ports.rj45 == 48 and .ports.gigabit_sfp == 2 and .ports.ten_gigabit_sfp_plus == 2)
 ' "$REGISTRY" >/dev/null
