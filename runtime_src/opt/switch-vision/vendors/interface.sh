@@ -337,6 +337,7 @@ cv_write_capabilities_json() {
   cut -f2 "$CV_CAP_IFNAME_LIST.raw" > "$CV_CAP_IFNAME_LIST"
   while IFS="$(printf '\t')" read -r idx name; do
     [ -n "$idx" ] || continue
+    CV_CAP_IF_INDEX="$idx"
     media=$(cv_interface_class_for_name "$name")
     physical=true
     case "$media" in virtual|stack|other) physical=false ;; esac
