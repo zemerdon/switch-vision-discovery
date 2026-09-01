@@ -734,8 +734,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-pro-24-poe",
-      "calibration_profile": "unifi_24p_rj45_2sfp",
-      "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+      "calibration_profile": "unifi_24_rj45_2sfp_inline",
+      "default_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
       "optional_faceplates": [
         "faceplates/24rj45-4sfp.png"
       ],
@@ -766,11 +766,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+        "recommended_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
         "optional_faceplates": [
           "faceplates/24rj45-4sfp.png"
         ],
-        "calibration_profile": "unifi_24p_rj45_2sfp",
+        "calibration_profile": "unifi_24_rj45_2sfp_inline",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -1260,7 +1260,7 @@
       },
       "stack_support": false,
       "discovery_support": true,
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "ubiquiti-us-xg-16-api",
       "unifi_api_port_map": {
         "rj45": [
@@ -1284,8 +1284,8 @@
           12
         ]
       },
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "unifi_4_rj45_12sfp",
+      "default_faceplate": "faceplates/unifi-4-rj45-12sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -1316,7 +1316,7 @@
         "The explicit UniFi API-port map is authoritative and must not be replaced with a copper-first offset approximation.",
         "One contributed 10G-capable RJ45 port was negotiating at 1G, confirming that live negotiated speed must remain independent from maximum connector capability.",
         "Port detail is available while per-port traffic is unavailable through the contributed UniFi API path.",
-        "No verified 12-SFP+ + 4-RJ45 faceplate coordinates are available yet, so dashboard support and calibration remain pending rather than assigning an inaccurate generic visual."
+        "Owner-calibrated 12-SFP+ + 4-RJ45 faceplate geometry is now bundled for this exact topology; dashboard rendering is enabled while live rendered alignment remains pending community confirmation."
       ],
       "validation": {
         "exact_model_detection": "live_api_confirmed_two_units",
@@ -1328,9 +1328,9 @@
       },
       "visuals": {
         "status": "detected",
-        "recommended_faceplate": "",
+        "recommended_faceplate": "faceplates/unifi-4-rj45-12sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "unifi_4_rj45_12sfp",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -1866,8 +1866,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-pro-24-api",
-      "calibration_profile": "unifi_24p_rj45_2sfp",
-      "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+      "calibration_profile": "unifi_24_rj45_2sfp_inline",
+      "default_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -1894,9 +1894,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+        "recommended_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
         "optional_faceplates": [],
-        "calibration_profile": "unifi_24p_rj45_2sfp",
+        "calibration_profile": "unifi_24_rj45_2sfp_inline",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -1983,8 +1983,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-24-poe-api",
-      "calibration_profile": "unifi_24p_rj45_2sfp",
-      "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+      "calibration_profile": "unifi_24_rj45_2sfp_inline",
+      "default_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
       "optional_faceplates": [],
       "tested_firmware": [
         "7.4.1"
@@ -2016,9 +2016,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+        "recommended_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
         "optional_faceplates": [],
-        "calibration_profile": "unifi_24p_rj45_2sfp",
+        "calibration_profile": "unifi_24_rj45_2sfp_inline",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -2345,8 +2345,8 @@
       },
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-pro-max-24-api",
-      "calibration_profile": "unifi_24p_rj45_2sfp",
-      "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+      "calibration_profile": "unifi_24_rj45_2sfp_inline",
+      "default_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
       "contributions": [
         {
           "id": "community-validation-1",
@@ -2399,9 +2399,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+        "recommended_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
         "optional_faceplates": [],
-        "calibration_profile": "unifi_24p_rj45_2sfp",
+        "calibration_profile": "unifi_24_rj45_2sfp_inline",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -2677,8 +2677,8 @@
           26
         ]
       },
-      "calibration_profile": "unifi_24p_rj45_2sfp",
-      "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+      "calibration_profile": "unifi_24_rj45_2sfp_inline",
+      "default_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
       "optional_faceplates": [],
       "tested_firmware": [
         "7.5.10"
@@ -2706,9 +2706,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
+        "recommended_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
         "optional_faceplates": [],
-        "calibration_profile": "unifi_24p_rj45_2sfp",
+        "calibration_profile": "unifi_24_rj45_2sfp_inline",
         "canvas": {
           "width": 2048,
           "height": 448
