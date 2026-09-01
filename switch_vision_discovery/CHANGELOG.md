@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.37
+
+## Discovery 2.3.37 — mixed current-run physical contract handling
+
+- Keep exact registered topology conflicts fail-closed while allowing intentionally unsupported/non-switch SNMP targets to be excluded from a mixed live Discovery run.
+- Do not let access points, generic UBNT/Linux devices, or other unresolved physical-contract targets turn otherwise valid switch collection into `Discovery exited with code 2`.
+- Filter unresolved current-run targets out of the staged switch inventory and current-run target CSV so they cannot leak into generated SNMP2MQTT/dashboard output.
+- Fail closed when a live run produces zero resolved physical-switch contracts.
+- Add permanent synthetic regression coverage for mixed resolved/unresolved targets, all-unresolved runs, and fatal topology-conflict propagation.
+
 ## 2.3.36
 
 - Add Experimental exact-model Discovery support for HP 1810-24G, Zyxel GS1900-8, and Sirivision SR-S25G3420F from privacy-processed community hardware evidence.
