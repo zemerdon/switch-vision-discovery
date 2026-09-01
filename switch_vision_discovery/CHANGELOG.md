@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.35
+
+- Synchronize Discovery UniFi visual/default registry contracts with Switch Vision Core 2.6.25 for US XG 16 and five 24-port models.
+- Enable the bundled 4-RJ45/12-SFP dashboard visual for US XG 16 while preserving its optical-first API port mapping.
+- Move the affected 24-port UniFi models to the Core 2.6.25 inline 24-RJ45/2-SFP calibration and faceplate identifiers.
+
 ## 2.3.34
 
 - Fix Support My Switch metadata so the combined sanitization report and manifest inherit the sanitizer schema version instead of hard-coding an older value.
