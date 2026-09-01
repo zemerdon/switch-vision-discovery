@@ -202,6 +202,67 @@ profiles:
       - te1/{port}
       - Te1/{port}
       - TenGigabitEthernet1/{port}
+  hp-1810-24g-24p-2sfp:
+    status: experimental
+    vendor: HP
+    family: 1810
+    model_patterns:
+    - HP 1810-24G
+    - 1810-24G
+    sys_object_ids:
+    - 1.3.6.1.4.1.11.2.3.7.11.151
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - '{port}'
+      sfp_1g:
+      - '25'
+      - '26'
+      sfp_10g: []
+    notes:
+    - Privacy-processed real-hardware evidence confirms IF-MIB indexes 1-24 as 1G copper and 25-26 as 1G SFP.
+  zyxel-gs1900-8:
+    status: experimental
+    vendor: Zyxel
+    family: GS1900
+    model_patterns:
+    - GS1900-8
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - '{port}'
+      sfp_1g: []
+      sfp_10g: []
+    notes:
+    - Privacy-processed real-hardware evidence confirms eight physical 1G copper interfaces; LAG rows are logical only.
+  sirivision-sr-s25g3420f:
+    status: experimental
+    vendor: Sirivision
+    family: SR-S25G
+    model_patterns:
+    - SR-S25G3420F
+    sys_object_ids:
+    - 1.3.6.1.4.1.27282
+    layout:
+      members: 1
+      rj45_ports: 16
+      sfp_1g_ports: 0
+      sfp_10g_ports: 4
+    interface_patterns:
+      rj45: []
+      sfp_1g: []
+      sfp_10g: []
+    notes:
+    - Privacy-processed real-hardware evidence confirms 16 2.5G-capable copper positions and four 10G optical positions.
+    - Physical connector capability is not inferred from down-port ifSpeed values.
   ubiquiti-usw-enterprise-8-poe:
     status: experimental
     vendor: Ubiquiti

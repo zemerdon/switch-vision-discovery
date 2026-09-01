@@ -40,6 +40,12 @@ cv_known_vendor_identity() {
         CV_ID_PRODUCT_MATCH="j8693a-local-sysdescr"
         CV_ID_SUPPORT_STATUS="detected"
         ;;
+      *1810-24G*|*1810-24g*)
+        CV_ID_FAMILY="1810"
+        CV_ID_MODEL_HINT="HP 1810-24G"
+        CV_ID_PRODUCT_MATCH="1810-24g-local-sysdescr"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
     esac
   fi
 
@@ -83,17 +89,35 @@ cv_known_vendor_identity() {
   fi
 
   if [ "$vendor_id" = "zyxel" ]; then
-    case "${CV_ID_SYS_OBJECT_ID:-}|${CV_ID_SYS_DESCR:-}" in
-      1.3.6.1.4.1.890.1.15*'|'*XS1930-10*|*'|'*XS1930-10*)
+    case "${CV_ID_SYS_DESCR:-}" in
+      *XS1930-10*)
         CV_ID_FAMILY="XS1930"
         CV_ID_MODEL_HINT="XS1930-10"
-        CV_ID_PRODUCT_MATCH="xs1930-10"
+        CV_ID_PRODUCT_MATCH="xs1930-10-local-sysdescr"
         CV_ID_SUPPORT_STATUS="experimental"
         ;;
-      *'|'*GS1900-24E*)
+      *GS1900-24E*)
         CV_ID_FAMILY="GS1900"
         CV_ID_MODEL_HINT="GS1900-24E"
         CV_ID_PRODUCT_MATCH="gs1900-24e-local-sysdescr"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
+      *GS1900-8*)
+        CV_ID_FAMILY="GS1900"
+        CV_ID_MODEL_HINT="GS1900-8"
+        CV_ID_PRODUCT_MATCH="gs1900-8-local-sysdescr"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
+    esac
+  fi
+
+  if [ "$vendor_id" = "realtek_oem" ]; then
+    case "${CV_ID_SYS_DESCR:-}" in
+      *SR-S25G3420F*)
+        CV_ID_VENDOR_NAME="Sirivision"
+        CV_ID_FAMILY="SR-S25G"
+        CV_ID_MODEL_HINT="SR-S25G3420F"
+        CV_ID_PRODUCT_MATCH="sr-s25g3420f-local-sysdescr"
         CV_ID_SUPPORT_STATUS="experimental"
         ;;
     esac

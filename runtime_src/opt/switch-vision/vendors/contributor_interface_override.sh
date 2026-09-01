@@ -9,6 +9,46 @@
 cv_interface_class_for_name() {
   name="$1"
 
+  # HP 1810-24G contribution: IF-MIB indexes 1-24 are fixed 1G copper,
+  # 25-26 are the two 1G SFP cages. Logical IP/LAG rows remain non-physical.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "HP 1810-24G" ]; then
+    case "${CV_CAP_IF_INDEX:-}" in
+      ''|*[!0-9]*) printf 'other' ;;
+      *)
+        if [ "$CV_CAP_IF_INDEX" -ge 1 ] && [ "$CV_CAP_IF_INDEX" -le 24 ]; then printf 'rj45';
+        elif [ "$CV_CAP_IF_INDEX" -ge 25 ] && [ "$CV_CAP_IF_INDEX" -le 26 ]; then printf 'sfp';
+        else printf 'other'; fi
+        ;;
+    esac
+    return 0
+  fi
+
+  # Zyxel GS1900-8 contribution: indexes 1-8 are the eight copper sockets.
+  # The later LAG interfaces are logical and must never become front-panel ports.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "GS1900-8" ]; then
+    case "${CV_CAP_IF_INDEX:-}" in
+      [1-8]) printf 'rj45' ;;
+      *) printf 'other' ;;
+    esac
+    return 0
+  fi
+
+  # Sirivision SR-S25G3420F contribution: indexes 1-16 are 2.5G-capable
+  # copper sockets and 17-20 are 10G optical cages. This rule deliberately
+  # uses the stable contributed physical index contract rather than ifSpeed,
+  # because down ports can report values that are not connector capabilities.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "SR-S25G3420F" ]; then
+    case "${CV_CAP_IF_INDEX:-}" in
+      ''|*[!0-9]*) printf 'other' ;;
+      *)
+        if [ "$CV_CAP_IF_INDEX" -ge 1 ] && [ "$CV_CAP_IF_INDEX" -le 16 ]; then printf 'rj45';
+        elif [ "$CV_CAP_IF_INDEX" -ge 17 ] && [ "$CV_CAP_IF_INDEX" -le 20 ]; then printf 'sfp_plus';
+        else printf 'other'; fi
+        ;;
+    esac
+    return 0
+  fi
+
   # Dell PowerConnect 5548P contribution: 48 fixed copper ports plus two
   # 10G SFP+ uplinks. Its IF-MIB uses lowercase gi1/0/N and te1/0/N names.
   if [ "${CV_CAP_MODEL_TEXT:-}" = "PowerConnect 5548P" ]; then

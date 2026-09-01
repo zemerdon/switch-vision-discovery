@@ -86,6 +86,61 @@ cv_detect_vendor_identity "$TMP/gs1900.txt"
 model=$(cv_cap_extract_model_text "$TMP/gs1900.txt")
 [ "$model" = "GS1900-24E" ]
 
+# HP 1810-24G: exact 24 copper + 2 SFP physical contract; logical rows excluded.
+set --
+i=1
+while [ "$i" -le 26 ]; do set -- "$@" "$i"; i=$((i + 1)); done
+set -- "$@" "IP" "Link Aggregate"
+make_ifname_walk "$TMP/hp1810.txt" "HP 1810-24G, PL.2.10" "1.3.6.1.4.1.11.2.3.7.11.151" "$@"
+cv_detect_vendor_identity "$TMP/hp1810.txt"
+[ "$CV_ID_VENDOR" = "hp_aruba" ]
+[ "$CV_ID_MODEL_HINT" = "HP 1810-24G" ]
+cv_write_capabilities_json "$TMP/hp1810.txt" "$TMP/hp1810.json" ""
+jq -e '(.device.model_text == "HP 1810-24G") and (.summary.physical_count == 26) and (.summary.rj45_count == 24) and (.summary.sfp_count == 2) and (all(.interfaces[] | select(.name == "IP" or .name == "Link Aggregate"); .physical == false))' "$TMP/hp1810.json" >/dev/null
+
+# Zyxel GS1900-8: exact eight physical copper ports, with LAGs excluded.
+set --
+i=1
+while [ "$i" -le 8 ]; do set -- "$@" "port$i"; i=$((i + 1)); done
+i=1
+while [ "$i" -le 8 ]; do set -- "$@" "LAG$i"; i=$((i + 1)); done
+make_ifname_walk "$TMP/gs1900-8.txt" "Zyxel GS1900-8" "1.3.6.1.4.1.890.1.15.3" "$@"
+cv_detect_vendor_identity "$TMP/gs1900-8.txt"
+[ "$CV_ID_VENDOR" = "zyxel" ]
+[ "$CV_ID_MODEL_HINT" = "GS1900-8" ]
+cv_write_capabilities_json "$TMP/gs1900-8.txt" "$TMP/gs1900-8.json" ""
+jq -e '(.device.model_text == "GS1900-8") and (.summary.physical_count == 8) and (.summary.rj45_count == 8) and (all(.interfaces[] | select(.name | startswith("LAG")); .physical == false))' "$TMP/gs1900-8.json" >/dev/null
+
+# Regression for the shared Zyxel enterprise branch: exact XS1930-10 sysDescr
+# remains XS1930-10 while GS1900-8 is no longer promoted by OID prefix alone.
+make_ifname_walk "$TMP/xs1930.txt" "Zyxel XS1930-10" "1.3.6.1.4.1.890.1.15.1" "swp00"
+cv_detect_vendor_identity "$TMP/xs1930.txt"
+[ "$CV_ID_VENDOR" = "zyxel" ]
+[ "$CV_ID_MODEL_HINT" = "XS1930-10" ]
+[ "$(cv_cap_extract_model_text "$TMP/xs1930.txt")" = "XS1930-10" ]
+
+# Sirivision SR-S25G3420F: exact contributed index mapping. Synthetic names
+# prove classification does not depend on OEM ifName spelling or ifSpeed.
+set --
+i=1
+while [ "$i" -le 20 ]; do set -- "$@" "port-$i"; i=$((i + 1)); done
+set -- "$@" "Vlan1" "LAG1"
+make_ifname_walk "$TMP/sirivision.txt" "Sirivision SR-S25G3420F Managed Switch" "1.3.6.1.4.1.27282.1" "$@"
+cv_detect_vendor_identity "$TMP/sirivision.txt"
+[ "$CV_ID_VENDOR" = "realtek_oem" ]
+[ "$CV_ID_VENDOR_NAME" = "Sirivision" ]
+[ "$CV_ID_MODEL_HINT" = "SR-S25G3420F" ]
+cv_write_capabilities_json "$TMP/sirivision.txt" "$TMP/sirivision.json" ""
+jq -e '(.device.model_text == "SR-S25G3420F") and (.summary.physical_count == 20) and (.summary.rj45_count == 16) and (.summary.sfp_plus_count == 4) and (all(.interfaces[] | select(.name == "Vlan1" or .name == "LAG1"); .physical == false))' "$TMP/sirivision.json" >/dev/null
+
+# Public registry support remains anonymous and Experimental.
+jq -e '
+  def dev($m): [.devices[] | select(.model == $m)][0];
+  (dev("HP 1810-24G") | .status == "experimental" and .ports.rj45 == 24 and .ports.gigabit_sfp == 2 and .contributor.public_credit == false) and
+  (dev("GS1900-8") | .status == "experimental" and .ports.rj45 == 8 and .ports.uplinks == 0 and .contributor.public_credit == false) and
+  (dev("SR-S25G3420F") | .status == "experimental" and .ports.rj45 == 16 and .ports.ten_gigabit_sfp_plus == 4 and .contributor.public_credit == false)
+' "$REGISTRY" >/dev/null
+
 # Anonymous UniFi SNMP evidence: compact model strings and 0/N front-panel names.
 set --
 i=1

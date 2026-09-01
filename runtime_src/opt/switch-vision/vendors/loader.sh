@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
-CV_VENDOR_LAYER_VERSION="5"
-CV_KNOWN_VENDOR_IDS="juniper hp_aruba dell extreme ruckus_brocade mikrotik ubiquiti netgear huawei zyxel"
+CV_VENDOR_LAYER_VERSION="6"
+CV_KNOWN_VENDOR_IDS="juniper hp_aruba dell extreme ruckus_brocade mikrotik ubiquiti netgear huawei zyxel realtek_oem"
 
 # interface.sh historically defined model extraction by scanning the complete
 # walk. Load the local-identity implementation after interface.sh so neighbour
