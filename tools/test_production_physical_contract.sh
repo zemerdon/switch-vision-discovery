@@ -148,6 +148,27 @@ i=1
 while [ "$i" -le 2 ]; do append_iface "$dell" "$idx" "te1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
 run_case dell-5548p "$dell" DELL 'PowerConnect 5548P' 50
 
+# Paul: a local Dell N2128PX-ON with an HP 3500yl visible only as an LLDP
+# remote neighbour must remain Dell through the legacy report/YAML generator.
+# The two Te1/0/N interfaces must retain the Dell SFP 10G entity contract; a
+# neighbour-model contamination regression would relabel them Interface 29/30.
+paul_dell="$TMP/paul-dell-with-hp-neighbour.txt"
+make_walk "$paul_dell" 'Dell EMC Networking N2128PX-ON, 6.7.1.27' '1.3.6.1.4.1.674.10895.3077'
+printf '.1.0.8802.1.1.2.1.4.1.1.10.118.30.2 = STRING: "HP J8693A Switch 3500yl-48G, revision K.16.02.0036"
+' >> "$paul_dell"
+idx=1
+i=1
+while [ "$i" -le 28 ]; do append_iface "$paul_dell" "$idx" "Gi1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+i=1
+while [ "$i" -le 2 ]; do append_iface "$paul_dell" "$idx" "Te1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+run_case paul-dell-hp-neighbour "$paul_dell" PAUL 'N2128PX-ON' 30
+paul_yaml="$TMP/paul-dell-hp-neighbour/generated.yaml"
+grep -Fq '    name: PAUL SFP 10G 1 Status' "$paul_yaml" || note_failure "paul-dell-hp-neighbour: missing SFP 10G 1 status entity"
+grep -Fq '    name: PAUL SFP 10G 2 Status' "$paul_yaml" || note_failure "paul-dell-hp-neighbour: missing SFP 10G 2 status entity"
+if grep -Fq '    name: PAUL Interface 29 Status' "$paul_yaml" || grep -Fq '    name: PAUL Interface 30 Status' "$paul_yaml"; then
+  note_failure "paul-dell-hp-neighbour: Dell uplink regressed to generic Interface 29/30 labels"
+fi
+
 # Bernard: GS1900 uses GigabitEthernet1..24 without slash-separated members.
 zyxel="$TMP/zyxel-gs1900.txt"
 make_walk "$zyxel" 'Zyxel GS1900-24E' '1.3.6.1.4.1.890.1.5.8.16'
