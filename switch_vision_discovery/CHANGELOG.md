@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.36
+
+- Add Experimental exact-model Discovery support for HP 1810-24G, Zyxel GS1900-8, and Sirivision SR-S25G3420F from privacy-processed community hardware evidence.
+- Fix GS1900-8 identity isolation so Zyxel devices sharing the 1.3.6.1.4.1.890.1.15 enterprise branch are not misidentified as XS1930-10.
+- Add a neutral Realtek-based OEM vendor knowledge pack for enterprise 1.3.6.1.4.1.27282 while assigning Sirivision identity only to exact local SR-S25G3420F model text.
+- Preserve physical capability separately from live IF-MIB speed observations; SR-S25G3420F down-port ifSpeed values are not treated as connector capability truth.
+
 ## 2.3.35
 
 - Synchronize Discovery UniFi visual/default registry contracts with Switch Vision Core 2.6.25 for US XG 16 and five 24-port models.
