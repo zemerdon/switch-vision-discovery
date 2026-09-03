@@ -1649,8 +1649,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.38"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.38"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.39"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.39"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
@@ -3522,3 +3522,9 @@ assert 'regenerated["generate_support_my_switch_bundle"] = False' in source
 
 print("Switch Vision Discovery v2.2.5 post-handoff bundle ordering regression: PASS")
 PYTEST_V225_BUNDLE_ORDER
+
+# Discovery 2.3.39 Hub Settings Back regression.
+sv_require_literal 'Hub Settings Save action' 'id="hubSettingsSave" class="primary" type="button" disabled>Save changes</button>' "$BASE_DIR/support_web.py"
+sv_require_literal 'Hub Settings Reload action' 'id="hubSettingsReload" type="button">Reload</button>' "$BASE_DIR/support_web.py"
+sv_require_literal 'Hub Settings Back action' 'id="hubSettingsBack" type="button">Back</button>' "$BASE_DIR/support_web.py"
+sv_require_literal 'Hub Settings Back goBack binding' "q('hubSettingsBack')?.addEventListener('click',goBack);" "$BASE_DIR/support_web.py"
