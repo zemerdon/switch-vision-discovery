@@ -5,6 +5,7 @@ import argparse
 import ast
 import json
 import re
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -274,6 +275,13 @@ def main() -> int:
     parser.add_argument("--core-settings-url", default=DEFAULT_CORE_SETTINGS_URL)
     parser.add_argument("--snmp-addon-config-url", default=DEFAULT_SNMP_ADDON_CONFIG_URL)
     args = parser.parse_args()
+
+    release_contract = subprocess.run(
+        [sys.executable, "tools/test_sv_release_check.py"],
+        check=False,
+    )
+    if release_contract.returncode:
+        raise SystemExit("Discovery product-owned release-check contract failed")
 
     errors: list[str] = []
     warnings: list[str] = []
