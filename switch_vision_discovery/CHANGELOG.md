@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.39
+
+- Added a Back action beside Save changes and Reload in Hub Settings, using the existing goBack() navigation path while leaving Save/Reload unchanged.
+
 ## 2.3.38
 
 - Fixed legacy report/SNMP2MQTT local-model isolation so LLDP/CDP neighbour model strings cannot override the local switch model. Dell N2128PX-ON uplinks now retain their Dell SFP 10G entity contract when an HP 3500yl is discovered as a neighbour.
