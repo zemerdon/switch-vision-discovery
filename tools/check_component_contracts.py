@@ -29,6 +29,13 @@ DEFAULT_SNMP_ADDON_CONFIG_URL = (
 # Any intentional divergence must be listed here with a non-empty reason.
 VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {}
 
+FACEPLATE_CATALOG_SCHEMA = "switch-vision-faceplate-catalog-v1"
+FACEPLATE_PIN_SCHEMA = "switch-vision-core-faceplate-catalog-pin-v1"
+CORE_FACEPLATE_REPOSITORY = "zemerdon/switch-vision-releases"
+CORE_FACEPLATE_CATALOG_PATH = "src/faceplates/catalog.json"
+CORE_FACEPLATE_PIN_PATH = Path("contracts/core-faceplate-catalog.json")
+EXACT_GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
 
 def classify_visual_contract_drift(model: str) -> tuple[str, str | None]:
     """Return strict/error by default; only documented exceptions may warn."""
@@ -47,6 +54,57 @@ def fetch_text(url: str) -> str:
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read().decode("utf-8")
+
+
+
+def parse_faceplate_catalog(data):
+    if not isinstance(data, dict) or data.get("schema") != FACEPLATE_CATALOG_SCHEMA:
+        raise RuntimeError("invalid Core faceplate catalog schema")
+    rows = data.get("faceplates")
+    if not isinstance(rows, list) or not rows:
+        raise RuntimeError("Core faceplate catalog is empty")
+    labels = {}
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {"filename", "display_name"}:
+            raise RuntimeError("invalid Core faceplate catalog entry")
+        filename, display = row["filename"], row["display_name"]
+        if not isinstance(filename, str) or Path(filename).name != filename or not filename.endswith(".png") or filename in labels:
+            raise RuntimeError("invalid/duplicate Core faceplate filename")
+        if not isinstance(display, str) or not display.strip() or display != display.strip():
+            raise RuntimeError("invalid Core faceplate display name")
+        labels[filename] = display
+    return labels
+
+def parse_faceplate_pin(data):
+    if not isinstance(data, dict) or data.get("schema") != FACEPLATE_PIN_SCHEMA:
+        raise RuntimeError("invalid Core faceplate catalog pin schema")
+    if data.get("repository") != CORE_FACEPLATE_REPOSITORY or data.get("path") != CORE_FACEPLATE_CATALOG_PATH:
+        raise RuntimeError("invalid Core faceplate catalog pin identity")
+    sha = data.get("commit_sha")
+    if not isinstance(sha, str) or not EXACT_GIT_SHA_RE.fullmatch(sha):
+        raise RuntimeError("Core faceplate catalog pin must use exact commit SHA")
+    return {"repository": CORE_FACEPLATE_REPOSITORY, "commit_sha": sha, "path": CORE_FACEPLATE_CATALOG_PATH}
+
+def load_pinned_faceplate_catalog():
+    pin = parse_faceplate_pin(json.loads(CORE_FACEPLATE_PIN_PATH.read_text(encoding="utf-8")))
+    url = f"https://raw.githubusercontent.com/{pin['repository']}/{pin['commit_sha']}/{pin['path']}"
+    return parse_faceplate_catalog(json.loads(fetch_text(url)))
+
+def validate_default_faceplates(registry, labels):
+    devices = registry.get("devices") if isinstance(registry, dict) else None
+    if not isinstance(devices, list):
+        return ["Discovery registry devices field is not a list"]
+    errors = []
+    for item in devices:
+        if not isinstance(item, dict) or item.get("default_faceplate") in (None, ""):
+            continue
+        value = item["default_faceplate"]; model = str(item.get("model") or "<unknown>")
+        match = re.fullmatch(r"faceplates/([^/]+\.png)", value) if isinstance(value, str) else None
+        if match is None:
+            errors.append(f"{model}: default_faceplate must be canonical faceplates/<filename>.png")
+        elif match.group(1) not in labels:
+            errors.append(f"{model}: default_faceplate {match.group(1)!r} is absent from exact pinned Core catalog")
+    return errors
 
 
 def by_model(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -244,6 +302,12 @@ def main() -> int:
         )
 
     discovery_registry = json.loads(discovery_registry_path.read_text(encoding="utf-8"))
+    try:
+        faceplate_labels = load_pinned_faceplate_catalog()
+    except Exception as exc:
+        errors.append(f"Could not load exact pinned Core faceplate catalog: {exc}")
+    else:
+        errors.extend(validate_default_faceplates(discovery_registry, faceplate_labels))
     profile_payload = yaml.safe_load(discovery_profiles_path.read_text(encoding="utf-8")) or {}
     discovery_profiles = profile_payload.get("profiles") or {}
     if not isinstance(discovery_profiles, dict):

@@ -36,6 +36,8 @@ jobs:
         run: python3 tools/test_public_attribution_privacy.py
       - name: Check strict visual contract policy
         run: python3 tools/test_visual_contract_policy.py
+      - name: Check exact Core faceplate catalog contract
+        run: python3 tools/test_faceplate_catalog_contract.py
       - name: Check cross-component contracts
         run: python3 tools/check_component_contracts.py
       - name: Check interface speed contracts
