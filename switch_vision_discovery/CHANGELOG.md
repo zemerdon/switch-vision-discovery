@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.40
+
+- Validate every registered Discovery exact-model `default_faceplate` against the canonical pinned Core faceplate catalog now shipping in Core 2.6.31, so missing or stale shipped faceplate identities fail CI instead of drifting silently.
+- Add product-owned deterministic Discovery release validation with exactly pinned dependencies, full permanent regression/runtime-parity checks, deterministic runtime archive rebuild verification, and a non-publishing image build/self-test.
+- No device mappings or Discovery runtime behavior changed in this release.
+
 ## 2.3.39
 
 - Added a Back action beside Save changes and Reload in Hub Settings, using the existing goBack() navigation path while leaving Save/Reload unchanged.
