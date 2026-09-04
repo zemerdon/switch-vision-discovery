@@ -697,7 +697,12 @@ with zipfile.ZipFile(path) as archive:
         assert names.count(wanted) == 1, (wanted, names.count(wanted))
     assert not any(name.startswith(f"{root}/diagnostics/") for name in names), "duplicate top-level diagnostics"
     manifest = json.loads(archive.read(f"{root}/MANIFEST.json"))
-    assert manifest["bundle_version"] == 12
+    assert manifest["bundle_version"] == 13
+    assert manifest["evidence"] == {
+        "quality": "complete",
+        "discovery_result": "success",
+        "snmp2mqtt_handoff": "verified",
+    }
     summary = json.loads(archive.read(f"{root}/switch_vision/diagnostics/diagnostic-summary.json"))
     assert summary["privacy"] == {
         "credentials_included": False,
