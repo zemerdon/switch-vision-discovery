@@ -34,6 +34,10 @@ CURRENT_RUN_TARGETS = Path("/tmp/switch_vision_current_run_targets.txt")
 CURRENT_RUN_SEPARATOR = "\x1c"
 
 
+class DegradedDiscoveryError(RuntimeError):
+    """Useful evidence exists, but downstream generation cannot be trusted."""
+
+
 def _bool(value: Any, default: bool = False) -> bool:
     if isinstance(value, bool):
         return value
@@ -92,10 +96,7 @@ def _is_walk(path: Path) -> bool:
         return False
     try:
         with path.open("r", encoding="utf-8", errors="replace") as handle:
-            for _ in range(4000):
-                line = handle.readline()
-                if not line:
-                    break
+            for line in handle:
                 if "1.3.6.1.2.1.31.1.1.1.1." in line or "1.3.6.1.2.1.2.2.1.2." in line:
                     return True
     except OSError:
@@ -470,6 +471,37 @@ def _publish_contracts(ordered: list[dict[str, Any]], destination: Path) -> None
         shutil.copy2(info["contract_path"], destination / f"{safe_parent}-physical-contract.json")
 
 
+def _expected_generated_snmp_cards(ordered: list[dict[str, Any]]) -> int:
+    expected = 0
+    for info in ordered:
+        contract = info.get("contract") if isinstance(info, dict) else None
+        if not isinstance(contract, dict) or contract.get("status") != "resolved":
+            continue
+        device = contract.get("device") if isinstance(contract.get("device"), dict) else {}
+        if device.get("dashboard_support") is not True:
+            continue
+        observed = contract.get("observed") if isinstance(contract.get("observed"), dict) else {}
+        try:
+            members = int(observed.get("members") or 1)
+        except (TypeError, ValueError):
+            members = 1
+        expected += max(1, members)
+    return expected
+
+
+def _generated_snmp_card_count(path: Path) -> int:
+    if not path.is_file():
+        return 0
+    text = path.read_text(encoding="utf-8", errors="replace")
+    snmp_only = text.split("# UniFi API devices", 1)[0]
+    return len(
+        re.findall(
+            r"(?m)^\s*-\s*type:\s*custom:switch-vision-3650\s*$",
+            snmp_only,
+        )
+    )
+
+
 def _stage_live_collection(options: dict[str, Any], work: Path) -> list[dict[str, str]]:
     if not _bool(options.get("run_snmp_walks", options.get("run_live_snmpwalk", False))):
         return []
@@ -497,17 +529,33 @@ def main() -> int:
         work = Path(tmp)
         current_run = _stage_live_collection(options, work)
         staged, ordered = _stage_options(options, work, current_run)
+        # Persist validated physical evidence before downstream generation. A
+        # later generator/cardinality failure must not discard useful evidence.
+        _publish_contracts(ordered, DEFAULT_CAPABILITIES)
         stage_path = work / "resolved_options.json"
         _write_options(stage_path, staged)
         return_code = _stream_legacy(stage_path, capabilities_dir=work / "runtime_capabilities")
         if return_code != 0:
-            return return_code
+            raise DegradedDiscoveryError(
+                f"Downstream Discovery generation exited with code {return_code} after validated physical evidence was collected."
+            )
 
         report = Path(str(options.get("report_path") or "/share/switch_vision/discovery-report.txt"))
         generated_yaml = Path(str(options.get("generated_yaml_path") or "/share/switch_vision/generated-snmp2mqtt.yaml"))
+        generated_card = Path(
+            str(
+                options.get("generated_card_path")
+                or "/share/switch_vision/generated-dashboard-card.yaml"
+            )
+        )
+        expected_cards = _expected_generated_snmp_cards(ordered)
+        actual_cards = _generated_snmp_card_count(generated_card)
+        if actual_cards != expected_cards:
+            raise DegradedDiscoveryError(
+                f"Generated SNMP card count mismatch: expected {expected_cards}, found {actual_cards}."
+            )
         _patch_report(report, ordered)
         _patch_yaml(generated_yaml, ordered)
-        _publish_contracts(ordered, DEFAULT_CAPABILITIES)
         if current_run:
             print(f"SV_DEBUG|Physical contract authority: accepted {len(ordered)} of {len(current_run)} current-run walk(s) through normalized generation")
         print(f"SV_DEBUG|Physical contract authority: resolved {len(ordered)} registered device walk(s)")
@@ -517,6 +565,13 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
+    except DegradedDiscoveryError as exc:
+        print(
+            "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"
+            f"target=|command=Physical contract|activity={exc}"
+        )
+        print(f"SV_DEBUG|Physical contract degraded result: {exc}")
+        raise SystemExit(10)
     except Exception as exc:
         print(f"SV_DEBUG|Physical contract failure: {exc}")
         print(str(exc), file=sys.stderr)

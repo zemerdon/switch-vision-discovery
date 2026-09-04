@@ -134,8 +134,18 @@ cat > "$conflict/options.json" <<EOF
   "generate_support_my_switch_bundle": "false"
 }
 EOF
-if run_entrypoint "$conflict" "$conflict/options.json" > "$conflict/stdout.txt" 2> "$conflict/stderr.txt"; then
+set +e
+run_entrypoint "$conflict" "$conflict/options.json" > "$conflict/stdout.txt" 2> "$conflict/stderr.txt"
+conflict_status=$?
+set -e
+if [ "$conflict_status" -eq 0 ]; then
   echo 'FAIL: topology conflict unexpectedly succeeded' >&2
+  exit 1
+fi
+if [ "$conflict_status" -ne 2 ]; then
+  echo "FAIL: topology conflict exited $conflict_status instead of 2" >&2
+  cat "$conflict/stdout.txt" >&2 || true
+  cat "$conflict/stderr.txt" >&2 || true
   exit 1
 fi
 if ! grep -Fq 'Topology conflict' "$conflict/stdout.txt"; then
@@ -150,6 +160,101 @@ fi
 }
 
 echo 'entrypoint topology-conflict guard: PASS'
+
+# Downstream/cardinality failure: validated physical evidence must survive and
+# the executable entrypoint must return the reserved degraded exit code 10.
+mismatch="$TMP/card-mismatch"
+mkdir -p "$mismatch/walks" "$mismatch/published-capabilities"
+cat > "$mismatch/walks/synthetic.txt" <<'EOF_MISMATCH_WALK'
+.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"
+.1.3.6.1.2.1.2.2.1.8.1 = INTEGER: up(1)
+EOF_MISMATCH_WALK
+cat > "$mismatch/registry.json" <<'EOF_MISMATCH_REGISTRY'
+{"devices":[]}
+EOF_MISMATCH_REGISTRY
+cat > "$mismatch/fake-prepare.sh" <<'EOF_MISMATCH_PREPARE'
+#!/usr/bin/env sh
+set -eu
+source=$1
+destination=$2
+capability=$3
+contract=$4
+cp "$source" "$destination"
+printf '{}\n' > "$capability"
+cat > "$contract" <<'JSON'
+{
+  "status": "resolved",
+  "device": {
+    "model": "Synthetic Stack",
+    "dashboard_support": true
+  },
+  "observed": {
+    "physical": 1,
+    "members": 2
+  }
+}
+JSON
+EOF_MISMATCH_PREPARE
+chmod +x "$mismatch/fake-prepare.sh"
+cat > "$mismatch/fake-legacy.sh" <<'EOF_MISMATCH_LEGACY'
+#!/usr/bin/env sh
+set -eu
+python3 - "$SWITCH_VISION_OPTIONS_FILE" <<'PY_MISMATCH_LEGACY'
+import json
+import sys
+from pathlib import Path
+options = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+Path(options["report_path"]).write_text("Single walk: synthetic\n", encoding="utf-8")
+Path(options["generated_yaml_path"]).write_text(
+    "# Device source: synthetic\n# Detected model: Synthetic Stack\n",
+    encoding="utf-8",
+)
+Path(options["generated_card_path"]).write_text(
+    "- type: custom:switch-vision-3650\n  title: Synthetic member 1\n",
+    encoding="utf-8",
+)
+PY_MISMATCH_LEGACY
+EOF_MISMATCH_LEGACY
+chmod +x "$mismatch/fake-legacy.sh"
+cat > "$mismatch/options.json" <<EOF_MISMATCH_OPTIONS
+{
+  "input_path": "$mismatch/walks/synthetic.txt",
+  "snmpwalks_dir": "$mismatch/walks",
+  "report_path": "$mismatch/report.txt",
+  "run_snmp_walks": "false",
+  "parse_all_walks": "true",
+  "generate_snmp2mqtt": "true",
+  "generated_yaml_path": "$mismatch/generated.yaml",
+  "generated_card_path": "$mismatch/card.yaml",
+  "generate_support_my_switch_bundle": "false"
+}
+EOF_MISMATCH_OPTIONS
+set +e
+SWITCH_VISION_OPTIONS_FILE="$mismatch/options.json" \
+SWITCH_VISION_LEGACY_DISCOVERY_SCRIPT="$mismatch/fake-legacy.sh" \
+SWITCH_VISION_PHYSICAL_PREPARE="$mismatch/fake-prepare.sh" \
+SWITCH_VISION_DEVICE_REGISTRY="$mismatch/registry.json" \
+SWITCH_VISION_CAPABILITIES_DIR="$mismatch/published-capabilities" \
+"$ENTRYPOINT" > "$mismatch/stdout.txt" 2> "$mismatch/stderr.txt"
+mismatch_status=$?
+set -e
+if [ "$mismatch_status" -ne 10 ]; then
+  echo "FAIL: card-count mismatch exited $mismatch_status instead of degraded code 10" >&2
+  cat "$mismatch/stdout.txt" >&2 || true
+  cat "$mismatch/stderr.txt" >&2 || true
+  exit 1
+fi
+grep -Fq 'Generated SNMP card count mismatch: expected 2, found 1.' "$mismatch/stdout.txt" || {
+  echo 'FAIL: card-count mismatch did not report the degraded cardinality reason' >&2
+  cat "$mismatch/stdout.txt" >&2 || true
+  exit 1
+}
+find "$mismatch/published-capabilities" -name '*-physical-contract.json' -type f | grep -q . || {
+  echo 'FAIL: degraded card-count mismatch discarded validated physical evidence' >&2
+  find "$mismatch" -maxdepth 3 -type f -print >&2 || true
+  exit 1
+}
+echo 'entrypoint degraded cardinality/evidence contract: PASS'
 
 # Mixed current-run path: unresolved/non-switch targets are excluded while a
 # resolved physical switch continues. All-unresolved runs still fail closed and

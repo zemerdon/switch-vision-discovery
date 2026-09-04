@@ -285,6 +285,129 @@ def test_snmp_reset_boundary() -> None:
         assert list(walks.iterdir()) == [] and list(caps.iterdir()) == []
 
 
+def test_discovery_exit10_warning_and_handoff_contract() -> None:
+    with tempfile.TemporaryDirectory(prefix="sv-discovery-warning-") as temp:
+        root = Path(temp)
+        log_path = root / "discovery.log"
+        options_path = root / "options.json"
+        generated_yaml = root / "generated-snmp2mqtt.yaml"
+        options_path.write_text("{}\n", encoding="utf-8")
+
+        class FakeProcess:
+            def __init__(self, return_code: int):
+                self.pid = 4242
+                self.stdout = [
+                    "SV_STATUS|stage=Generating|switch=Audit|target=|command=synthetic|activity=running\n",
+                    "synthetic discovery output\n",
+                ]
+                self._return_code = return_code
+
+            def wait(self):
+                return self._return_code
+
+            def poll(self):
+                return self._return_code
+
+        def run_case(return_code: int):
+            bundle_calls: list[dict] = []
+            handoff_calls: list[int] = []
+
+            def fake_popen(*_args, **_kwargs):
+                return FakeProcess(return_code)
+
+            def fake_handoff(*_args, **_kwargs):
+                handoff_calls.append(return_code)
+                return {
+                    "status": "Running",
+                    "action": "verified",
+                    "slug": "local_switch_vision_snmp2mqtt",
+                    "state": "started",
+                    "activation_verified": True,
+                    "handoff_failed": False,
+                    "message": "SNMP2MQTT activation verified",
+                }
+
+            def fake_bundle(_settings, _lines, **kwargs):
+                bundle_calls.append(copy.deepcopy(kwargs))
+                return True
+
+            original_popen = hub.subprocess.Popen
+            hub.subprocess.Popen = fake_popen
+            hub._DISCOVERY_STOP_REQUESTED.clear()
+            try:
+                with patched(
+                    DEFAULT_DISCOVERY_LOG=log_path,
+                    DEFAULT_GENERATED_SNMP2MQTT=generated_yaml,
+                    _ensure_runtime_paths=lambda: None,
+                    _self_addon_options=lambda: {"generate_support_my_switch_bundle": True},
+                    _write_authoritative_discovery_options_snapshot=lambda **_kwargs: options_path,
+                    _load_snmp2mqtt_retirement_topics=lambda: [],
+                    _ensure_snmp2mqtt_running=fake_handoff,
+                    _generate_automatic_support_bundle=fake_bundle,
+                ):
+                    hub._run_discovery(root / "synthetic-discovery")
+                    state = hub._discovery_state_snapshot()
+            finally:
+                hub.subprocess.Popen = original_popen
+                hub._DISCOVERY_STOP_REQUESTED.clear()
+            return state, handoff_calls, bundle_calls
+
+        degraded, degraded_handoff, degraded_bundle = run_case(10)
+        assert degraded["success"] is True
+        assert degraded["phase"] == "complete"
+        assert degraded["stage"] == "Complete with warnings"
+        assert degraded["snmp2mqtt"]["action"] == "blocked_degraded"
+        assert degraded["snmp2mqtt"]["activation_verified"] is False
+        assert degraded_handoff == [], "exit 10 must never start or restart SNMP2MQTT"
+        assert degraded_bundle == [{
+            "evidence_quality": "degraded",
+            "discovery_result": "complete_with_warnings",
+            "snmp2mqtt_handoff": "blocked_degraded",
+        }]
+
+        normal, normal_handoff, normal_bundle = run_case(0)
+        assert normal["success"] is True
+        assert normal["phase"] == "complete"
+        assert normal["stage"] == "Complete"
+        assert normal_handoff == [0], "exit 0 must retain the normal SNMP2MQTT handoff"
+        assert normal_bundle == [{
+            "evidence_quality": "complete",
+            "discovery_result": "success",
+            "snmp2mqtt_handoff": "verified",
+        }]
+
+
+def test_latest_contribution_exposes_evidence_metadata() -> None:
+    with tempfile.TemporaryDirectory(prefix="sv-evidence-metadata-") as temp:
+        root = Path(temp)
+        archive = root / "Switch_Vision_Contribution_SV-2026-000001_20260904-000000.zip"
+        evidence = {
+            "quality": "degraded",
+            "discovery_result": "complete_with_warnings",
+            "snmp2mqtt_handoff": "blocked_degraded",
+        }
+        with hub.zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr(
+                "Support_My_Switch_SV-2026-000001/MANIFEST.json",
+                hub.json.dumps({
+                    "contribution_id": "SV-2026-000001",
+                    "switch_vision_version": "2.3.40",
+                    "bundle_quality": "PASS",
+                    "ready_to_send": True,
+                    "evidence": evidence,
+                }),
+            )
+            zf.writestr(
+                "Support_My_Switch_SV-2026-000001/DEVICE_SUMMARY.json",
+                "[]",
+            )
+        latest = hub._latest_contribution(root)
+        assert latest is not None
+        assert latest["ready_to_send"] is True
+        assert latest["quality"] == "PASS"
+        assert latest["evidence"] == evidence
+
+
 def main() -> int:
     test_discovery_save_and_write_only_secrets()
     print("PASS: Discovery settings save, rename, manual-model and secret preservation contracts")
@@ -296,6 +419,10 @@ def main() -> int:
     print("PASS: SNMP2MQTT save preserves blank password and requests restart")
     test_snmp_reset_boundary()
     print("PASS: SNMP Discovery reset stop guard, cleanup and UniFi preservation boundary")
+    test_discovery_exit10_warning_and_handoff_contract()
+    print("PASS: Discovery exit 10 is warning-only, blocks SNMP2MQTT and preserves exit-0 handoff")
+    test_latest_contribution_exposes_evidence_metadata()
+    print("PASS: Support My Switch contribution status exposes structured evidence metadata")
     print("Switch Vision Hub executable save/reset contracts: PASS")
     return 0
 

@@ -284,7 +284,8 @@ cv_interface_class_for_name() {
       fi
       ;;
     XGigabitEthernet*|XGE*|TenGigabitEthernet*|Te*) printf 'sfp_plus' ;;
-    FortyGigabitEthernet*|Fo*|TwentyFiveGigE*|HundredGigE*) printf 'sfp_plus' ;;
+    TwentyFiveGigE*) printf 'sfp28' ;;
+    FortyGigabitEthernet*|Fo*|HundredGigE*) printf 'sfp_plus' ;;
     StackPort*|StackSub*|Stack*) printf 'stack' ;;
     Vlan*|Loopback*|Port-channel*|Null*|Control*) printf 'virtual' ;;
     *) printf 'other' ;;
@@ -363,7 +364,7 @@ cv_write_capabilities_json() {
     --arg sys_name "$CV_ID_SYS_NAME" \
     --arg model_text "$CV_CAP_MODEL_TEXT" \
     --arg walk_file "$walk_file" \
-    '{schema_version:($schema|tonumber),product:$product,release:$version,generated_at:(now|todateiso8601),source_walk:$walk_file,device:{vendor:$vendor,vendor_name:$vendor_name,adapter:$adapter,family:$family,model_text:$model_text,support_status:$support,sys_object_id:$sys_object_id,sys_name:$sys_name},capabilities:{standard_interfaces:true,identity:true,stack:null,vlan_trunk:null,environment:null,poe:null},interfaces:.,summary:{interface_count:length,physical_count:(map(select(.physical))|length),rj45_count:(map(select(.media=="rj45"))|length),sfp_count:(map(select(.media=="sfp"))|length),sfp_plus_count:(map(select(.media=="sfp_plus"))|length),uplink_count:(map(select(.media=="sfp" or .media=="sfp_plus" or .media=="uplink"))|length),stack_count:(map(select(.media=="stack"))|length),virtual_count:(map(select(.media=="virtual"))|length)}}' \
+    '{schema_version:($schema|tonumber),product:$product,release:$version,generated_at:(now|todateiso8601),source_walk:$walk_file,device:{vendor:$vendor,vendor_name:$vendor_name,adapter:$adapter,family:$family,model_text:$model_text,support_status:$support,sys_object_id:$sys_object_id,sys_name:$sys_name},capabilities:{standard_interfaces:true,identity:true,stack:null,vlan_trunk:null,environment:null,poe:null},interfaces:.,summary:{interface_count:length,physical_count:(map(select(.physical))|length),rj45_count:(map(select(.media=="rj45"))|length),sfp_count:(map(select(.media=="sfp"))|length),sfp_plus_count:(map(select(.media=="sfp_plus"))|length),sfp28_count:(map(select(.media=="sfp28"))|length),uplink_count:(map(select(.media=="sfp" or .media=="sfp_plus" or .media=="sfp28" or .media=="uplink"))|length),stack_count:(map(select(.media=="stack"))|length),virtual_count:(map(select(.media=="virtual"))|length)}}' \
     "$tmp_ports" > "$output_path"
 
   if [ -n "${latest_path:-}" ]; then cp "$output_path" "$latest_path"; fi

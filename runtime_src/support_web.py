@@ -708,6 +708,7 @@ def _latest_contribution(contributions_dir: Path) -> dict[str, Any] | None:
     devices = _zip_member_json(archive, "/DEVICE_SUMMARY.json") or []
     privacy = manifest.get("privacy_options") or {}
     processing = manifest.get("sanitization_processing") or {}
+    evidence = manifest.get("evidence") or {}
     return {
         "contribution_id": manifest.get("contribution_id") or "Unknown",
         "version": manifest.get("switch_vision_version") or "Unknown",
@@ -721,6 +722,7 @@ def _latest_contribution(contributions_dir: Path) -> dict[str, Any] | None:
         "devices": devices if isinstance(devices, list) else [],
         "privacy": privacy if isinstance(privacy, dict) else {},
         "processing": processing if isinstance(processing, dict) else {},
+        "evidence": evidence if isinstance(evidence, dict) else {},
     }
 
 
@@ -793,8 +795,12 @@ def _request_discovery_stop() -> bool:
 def _generate_automatic_support_bundle(
     settings: dict[str, Any],
     lines: list[str],
+    *,
+    evidence_quality: str = "complete",
+    discovery_result: str = "success",
+    snmp2mqtt_handoff: str = "verified",
 ) -> bool:
-    """Capture an automatic contribution only after the runtime handoff check."""
+    """Capture an automatic contribution with the exact Discovery outcome."""
     if not DEFAULT_SUPPORT_SCRIPT.is_file():
         lines.append(
             "Automatic Support My Switch capture skipped because the support backend is unavailable."
@@ -817,6 +823,9 @@ def _generate_automatic_support_bundle(
         "SUPPORT_CONTRIBUTOR_TYPE": str(settings["contributor_type"]),
         "SUPPORT_CONTRIBUTOR_VALUE": str(settings["contributor_value"]),
         "CONTRIBUTIONS_DIR": str(DEFAULT_CONTRIBUTIONS_DIR),
+        "SUPPORT_EVIDENCE_QUALITY": evidence_quality,
+        "SUPPORT_DISCOVERY_RESULT": discovery_result,
+        "SUPPORT_SNMP2MQTT_HANDOFF": snmp2mqtt_handoff,
     })
     try:
         result = subprocess.run(
@@ -965,10 +974,35 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
                 snmp2mqtt={"status": "Not started", "action": "none", "slug": None, "state": None, "message": "Discovery was stopped before completion"},
             )
             return
-        if return_code != 0:
+        degraded_result = return_code == 10
+        if return_code not in {0, 10}:
             raise RuntimeError(f"{operation_name} exited with code {return_code}.")
-        _set_discovery_state(stage="Starting SNMP2MQTT", activity="Validating generated SNMP2MQTT YAML", command="Supervisor app action", phase="running")
-        snmp2mqtt_result = _ensure_snmp2mqtt_running(lines, generated_yaml_previous_mtime, generated_yaml_previous_topics)
+        if degraded_result:
+            warning_message = (
+                f"{operation_name} completed with warnings; validated physical evidence was preserved "
+                "and the SNMP2MQTT handoff was blocked."
+            )
+            lines.append(warning_message)
+            snmp2mqtt_result = {
+                "status": "Warning",
+                "action": "blocked_degraded",
+                "slug": None,
+                "state": None,
+                "activation_verified": False,
+                "handoff_failed": False,
+                "degraded": True,
+                "message": warning_message,
+            }
+            _set_discovery_state(
+                stage="Complete with warnings",
+                activity=warning_message,
+                command="SNMP2MQTT handoff blocked",
+                phase="running",
+                snmp2mqtt=snmp2mqtt_result,
+            )
+        else:
+            _set_discovery_state(stage="Starting SNMP2MQTT", activity="Validating generated SNMP2MQTT YAML", command="Supervisor app action", phase="running")
+            snmp2mqtt_result = _ensure_snmp2mqtt_running(lines, generated_yaml_previous_mtime, generated_yaml_previous_topics)
         if auto_bundle_settings is not None:
             _set_discovery_state(
                 stage="Capturing Support My Switch",
@@ -979,6 +1013,13 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
             bundle_captured = _generate_automatic_support_bundle(
                 auto_bundle_settings,
                 lines,
+                evidence_quality="degraded" if degraded_result else "complete",
+                discovery_result="complete_with_warnings" if degraded_result else "success",
+                snmp2mqtt_handoff=(
+                    "blocked_degraded"
+                    if degraded_result
+                    else ("failed" if snmp2mqtt_result.get("handoff_failed") else "verified")
+                ),
             )
             snmp2mqtt_result["support_bundle_after_handoff"] = (
                 "captured" if bundle_captured else "failed"
@@ -999,11 +1040,18 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
                 snmp2mqtt=snmp2mqtt_result,
             )
             return
-        auto_message = "SNMP2MQTT YAML regeneration complete" if regenerate_only else "Discovery complete"
+        if degraded_result:
+            auto_message = (
+                "SNMP2MQTT YAML regeneration complete with warnings"
+                if regenerate_only
+                else "Discovery complete with warnings"
+            )
+        else:
+            auto_message = "SNMP2MQTT YAML regeneration complete" if regenerate_only else "Discovery complete"
         _set_discovery_state(
             success=True,
             message=auto_message,
-            stage="Complete",
+            stage="Complete with warnings" if degraded_result else "Complete",
             activity=snmp2mqtt_result.get("message") or auto_message,
             command="",
             phase="complete",
