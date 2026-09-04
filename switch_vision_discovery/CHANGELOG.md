@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.41
+
+- Fix current-run SNMP walk recognition so valid physical evidence is not discarded merely because qualifying IF-MIB rows occur after an arbitrary first-N-lines scan window.
+- Preserve validated physical evidence before downstream generation and distinguish successful, warning/degraded, and fatal Discovery outcomes; degraded runs retain useful evidence and block SNMP2MQTT handoff instead of silently promoting incomplete generated data.
+- Enforce resolved physical-device to generated dashboard-card cardinality, including the legacy single-walk fallback, so Discovery cannot report successful SNMP dashboard generation while producing zero switch cards.
+- Preserve physical media capability distinctions including RJ45, SFP, SFP+, and SFP28 where the device/evidence contract distinguishes them.
+- Record Support My Switch hardware-evidence quality separately from privacy/bundle readiness, with permanent regressions for normal exit 0, warning exit 10, fatal exit 2, evidence preservation, no degraded SNMP2MQTT handoff, dashboard cardinality, and evidence metadata.
+
 ## 2.3.40
 
 - Validate every registered Discovery exact-model `default_faceplate` against the canonical pinned Core faceplate catalog now shipping in Core 2.6.31, so missing or stale shipped faceplate identities fail CI instead of drifting silently.
