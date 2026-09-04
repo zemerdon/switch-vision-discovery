@@ -498,6 +498,9 @@ def main() -> int:
         work = Path(tmp)
         current_run = _stage_live_collection(options, work)
         staged, ordered = _stage_options(options, work, current_run)
+        # Persist validated physical evidence before downstream generation. A
+        # later generator/cardinality failure must not discard useful evidence.
+        _publish_contracts(ordered, DEFAULT_CAPABILITIES)
         stage_path = work / "resolved_options.json"
         _write_options(stage_path, staged)
         return_code = _stream_legacy(stage_path, capabilities_dir=work / "runtime_capabilities")
@@ -508,7 +511,6 @@ def main() -> int:
         generated_yaml = Path(str(options.get("generated_yaml_path") or "/share/switch_vision/generated-snmp2mqtt.yaml"))
         _patch_report(report, ordered)
         _patch_yaml(generated_yaml, ordered)
-        _publish_contracts(ordered, DEFAULT_CAPABILITIES)
         if current_run:
             print(f"SV_DEBUG|Physical contract authority: accepted {len(ordered)} of {len(current_run)} current-run walk(s) through normalized generation")
         print(f"SV_DEBUG|Physical contract authority: resolved {len(ordered)} registered device walk(s)")
