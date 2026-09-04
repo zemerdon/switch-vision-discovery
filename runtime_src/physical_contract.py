@@ -116,7 +116,7 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
     registry_device = _registry_device(registry, model)
     interfaces = [row for row in capabilities.get("interfaces", []) if isinstance(row, dict)]
 
-    physical_rows = [row for row in interfaces if row.get("physical") is True and str(row.get("media", "")) in {"rj45", "sfp", "sfp_plus", "uplink"}]
+    physical_rows = [row for row in interfaces if row.get("physical") is True and str(row.get("media", "")) in {"rj45", "sfp", "sfp_plus", "sfp28", "uplink"}]
     physical_rows.sort(key=lambda row: int(row.get("if_index") or 0))
 
     members = sorted({_member_from_name(str(row.get("name") or "")) for row in physical_rows}) or [1]
@@ -154,7 +154,9 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
             uplink_pos[member] = uplink_pos.get(member, 0) + 1
             position = uplink_pos[member]
             physical_id = f"m{member}:uplink:{position}"
-            if media == "sfp_plus":
+            if media == "sfp28":
+                compatibility = f"TwentyFiveGigE{member}/1/{position}"
+            elif media == "sfp_plus":
                 compatibility = f"Te{member}/1/{position}"
             else:
                 compatibility = f"Gi{member}/1/{position}"
@@ -165,9 +167,10 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         "members": member_count,
         "physical": len(ports),
         "rj45": sum(1 for port in ports if port.media == "rj45"),
-        "uplinks": sum(1 for port in ports if port.media in {"sfp", "sfp_plus", "uplink"}),
+        "uplinks": sum(1 for port in ports if port.media in {"sfp", "sfp_plus", "sfp28", "uplink"}),
         "sfp": sum(1 for port in ports if port.media == "sfp"),
         "sfp_plus": sum(1 for port in ports if port.media == "sfp_plus"),
+        "sfp28": sum(1 for port in ports if port.media == "sfp28"),
         "combo_or_unspecified_uplink": sum(1 for port in ports if port.media == "uplink"),
     }
 
@@ -177,7 +180,7 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
     if registry_device:
         registry_ports = registry_device.get("ports") if isinstance(registry_device.get("ports"), dict) else {}
         expected_rj45_per_member = int(registry_ports.get("rj45") or 0)
-        expected_uplinks_per_member = int(registry_ports.get("uplinks") or ((registry_ports.get("gigabit_sfp") or 0) + (registry_ports.get("ten_gigabit_sfp_plus") or 0)))
+        expected_uplinks_per_member = int(registry_ports.get("uplinks") or ((registry_ports.get("gigabit_sfp") or 0) + (registry_ports.get("ten_gigabit_sfp_plus") or 0) + (registry_ports.get("twenty_five_gigabit_sfp28") or 0)))
         stack_allowed = bool(registry_device.get("stack_support"))
         expected_members = member_count if stack_allowed else 1
         expected = {

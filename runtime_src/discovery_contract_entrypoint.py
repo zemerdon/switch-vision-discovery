@@ -92,10 +92,7 @@ def _is_walk(path: Path) -> bool:
         return False
     try:
         with path.open("r", encoding="utf-8", errors="replace") as handle:
-            for _ in range(4000):
-                line = handle.readline()
-                if not line:
-                    break
+            for line in handle:
                 if "1.3.6.1.2.1.31.1.1.1.1." in line or "1.3.6.1.2.1.2.2.1.2." in line:
                     return True
     except OSError:
