@@ -34,6 +34,10 @@ CURRENT_RUN_TARGETS = Path("/tmp/switch_vision_current_run_targets.txt")
 CURRENT_RUN_SEPARATOR = "\x1c"
 
 
+class DegradedDiscoveryError(RuntimeError):
+    """Useful evidence exists, but downstream generation cannot be trusted."""
+
+
 def _bool(value: Any, default: bool = False) -> bool:
     if isinstance(value, bool):
         return value
@@ -514,6 +518,13 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
+    except DegradedDiscoveryError as exc:
+        print(
+            "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"
+            f"target=|command=Physical contract|activity={exc}"
+        )
+        print(f"SV_DEBUG|Physical contract degraded result: {exc}")
+        raise SystemExit(10)
     except Exception as exc:
         print(f"SV_DEBUG|Physical contract failure: {exc}")
         print(str(exc), file=sys.stderr)
