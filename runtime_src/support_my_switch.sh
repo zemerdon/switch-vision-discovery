@@ -4,7 +4,7 @@ set -eu
 SWITCH_VISION_ROOT="${SWITCH_VISION_ROOT:-/share/switch_vision}"
 CONTRIBUTIONS_DIR="${CONTRIBUTIONS_DIR:-$SWITCH_VISION_ROOT/contributions}"
 VERSION="${SWITCH_VISION_DISCOVERY_VERSION:-unknown}"
-BUNDLE_VERSION="12"
+BUNDLE_VERSION="13"
 MASK_MANAGEMENT_IPS="${SUPPORT_MASK_MANAGEMENT_IPS:-true}"
 MASK_MAC_ADDRESSES="${SUPPORT_MASK_MAC_ADDRESSES:-true}"
 MASK_HOSTNAMES="${SUPPORT_MASK_HOSTNAMES:-true}"
@@ -17,6 +17,9 @@ REGISTRY_LOOKUP_SCRIPT="${SUPPORT_REGISTRY_LOOKUP_SCRIPT:-/registry_lookup.py}"
 REGISTRY_FILE="${SUPPORT_REGISTRY_FILE:-/opt/switch-vision/devices/supported_devices.json}"
 CONTRIBUTOR_TYPE="${SUPPORT_CONTRIBUTOR_TYPE:-anonymous}"
 CONTRIBUTOR_VALUE="${SUPPORT_CONTRIBUTOR_VALUE:-}"
+EVIDENCE_QUALITY="${SUPPORT_EVIDENCE_QUALITY:-complete}"
+DISCOVERY_RESULT="${SUPPORT_DISCOVERY_RESULT:-success}"
+SNMP2MQTT_HANDOFF="${SUPPORT_SNMP2MQTT_HANDOFF:-verified}"
 
 log() {
   printf '%s\n' "[Support My Switch] $*"
@@ -39,6 +42,9 @@ if [ "$CONTRIBUTOR_TYPE" != "anonymous" ] && [ -z "$CONTRIBUTOR_VALUE" ]; then
   CONTRIBUTOR_TYPE="anonymous"
 fi
 CONTRIBUTOR_VALUE_JSON=$(printf '%s' "$CONTRIBUTOR_VALUE" | jq -Rs '.')
+EVIDENCE_QUALITY_JSON=$(printf '%s' "$EVIDENCE_QUALITY" | jq -Rs '.')
+DISCOVERY_RESULT_JSON=$(printf '%s' "$DISCOVERY_RESULT" | jq -Rs '.')
+SNMP2MQTT_HANDOFF_JSON=$(printf '%s' "$SNMP2MQTT_HANDOFF" | jq -Rs '.')
 
 if [ ! -d "$SWITCH_VISION_ROOT" ]; then
   log "ERROR: Switch Vision data folder was not found: $SWITCH_VISION_ROOT"
@@ -562,6 +568,11 @@ cat > "$BUNDLE_ROOT/MANIFEST.json" <<EOF_MANIFEST
   "privacy_review_required": true,
   "bundle_quality": "$BUNDLE_QUALITY",
   "ready_to_send": $BUNDLE_READY,
+  "evidence": {
+    "quality": $EVIDENCE_QUALITY_JSON,
+    "discovery_result": $DISCOVERY_RESULT_JSON,
+    "snmp2mqtt_handoff": $SNMP2MQTT_HANDOFF_JSON
+  },
   "recognition": {
     "type": "$CONTRIBUTOR_TYPE",
     "value": $CONTRIBUTOR_VALUE_JSON

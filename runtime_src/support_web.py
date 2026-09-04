@@ -708,6 +708,7 @@ def _latest_contribution(contributions_dir: Path) -> dict[str, Any] | None:
     devices = _zip_member_json(archive, "/DEVICE_SUMMARY.json") or []
     privacy = manifest.get("privacy_options") or {}
     processing = manifest.get("sanitization_processing") or {}
+    evidence = manifest.get("evidence") or {}
     return {
         "contribution_id": manifest.get("contribution_id") or "Unknown",
         "version": manifest.get("switch_vision_version") or "Unknown",
@@ -721,6 +722,7 @@ def _latest_contribution(contributions_dir: Path) -> dict[str, Any] | None:
         "devices": devices if isinstance(devices, list) else [],
         "privacy": privacy if isinstance(privacy, dict) else {},
         "processing": processing if isinstance(processing, dict) else {},
+        "evidence": evidence if isinstance(evidence, dict) else {},
     }
 
 
@@ -793,8 +795,12 @@ def _request_discovery_stop() -> bool:
 def _generate_automatic_support_bundle(
     settings: dict[str, Any],
     lines: list[str],
+    *,
+    evidence_quality: str = "complete",
+    discovery_result: str = "success",
+    snmp2mqtt_handoff: str = "verified",
 ) -> bool:
-    """Capture an automatic contribution only after the runtime handoff check."""
+    """Capture an automatic contribution with the exact Discovery outcome."""
     if not DEFAULT_SUPPORT_SCRIPT.is_file():
         lines.append(
             "Automatic Support My Switch capture skipped because the support backend is unavailable."
@@ -817,6 +823,9 @@ def _generate_automatic_support_bundle(
         "SUPPORT_CONTRIBUTOR_TYPE": str(settings["contributor_type"]),
         "SUPPORT_CONTRIBUTOR_VALUE": str(settings["contributor_value"]),
         "CONTRIBUTIONS_DIR": str(DEFAULT_CONTRIBUTIONS_DIR),
+        "SUPPORT_EVIDENCE_QUALITY": evidence_quality,
+        "SUPPORT_DISCOVERY_RESULT": discovery_result,
+        "SUPPORT_SNMP2MQTT_HANDOFF": snmp2mqtt_handoff,
     })
     try:
         result = subprocess.run(
@@ -1004,6 +1013,13 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
             bundle_captured = _generate_automatic_support_bundle(
                 auto_bundle_settings,
                 lines,
+                evidence_quality="degraded" if degraded_result else "complete",
+                discovery_result="complete_with_warnings" if degraded_result else "success",
+                snmp2mqtt_handoff=(
+                    "blocked_degraded"
+                    if degraded_result
+                    else ("failed" if snmp2mqtt_result.get("handoff_failed") else "verified")
+                ),
             )
             snmp2mqtt_result["support_bundle_after_handoff"] = (
                 "captured" if bundle_captured else "failed"
