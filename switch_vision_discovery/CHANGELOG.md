@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.42
+
+- Pin Discovery visual validation to the exact published Core 2.6.32 faceplate catalog and adopt the corrected `unifi-32sfp.png` / `unifi_32sfp` identity.
+- Assign the 32-position optical faceplate to USW Aggregation and USW Pro Aggregation while preserving their authoritative 8-port and 32-port optical topologies respectively.
+- Apply the owner-approved oversized visual fallback rule to supported devices lacking exact artwork: the closest shipped stock canvas may be used, but extra canvas positions stay inert and never create phantom ports, entities, uplinks, connector types, PoE, or capabilities.
+- Add/refresh reviewed visuals for GS1900-8, SR-S25G3420F, US 16 PoE 150W, GS1900-24E, SG350-20, HP J8693A Switch 3500yl-48G, USW Flex 2.5G 5, and USW WAN without changing their verified physical topology.
+- Make the UniFi card generator honor an approved oversized registry canvas when it can contain the physical topology, prefer the neutral stock 24+2 fallback, and add permanent regressions for no-phantom-port behavior.
+
 ## 2.3.41
 
 - Fix current-run SNMP walk recognition so valid physical evidence is not discarded merely because qualifying IF-MIB rows occur after an arbitrary first-N-lines scan window.

@@ -44,16 +44,16 @@
       "ports": {"rj45": 8, "poe": false, "uplinks": 0, "uplink_type": "none", "gigabit_sfp": 0, "ten_gigabit_sfp_plus": 0},
       "stack_support": false,
       "discovery_support": true,
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "zyxel-gs1900-8",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "stock_24rj45_2sfp",
+      "default_faceplate": "faceplates/24rj45-2sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {"display_name": "community contributor", "public_credit": false},
       "notes": ["Privacy-processed real-hardware evidence confirms eight physical 1G copper interfaces.", "LAG interfaces are logical and excluded from the front panel.", "Exact local GS1900-8 identity prevents the shared Zyxel enterprise branch from being mistaken for XS1930-10."],
       "validation": {"exact_model_detection": "contribution_confirmed", "rj45_mapping": "real_hardware_eight_ports_confirmed", "poe": "not_applicable", "system_sensors": "pending", "uplinks": "not_applicable", "stack": "not_applicable"},
-      "visuals": {"status": "pending", "recommended_faceplate": "", "optional_faceplates": [], "calibration_profile": "", "canvas": {"width": 2048, "height": 448}}
+      "visuals": {"status": "experimental", "recommended_faceplate": "faceplates/24rj45-2sfp.png", "optional_faceplates": [], "calibration_profile": "stock_24rj45_2sfp", "canvas": {"width": 2048, "height": 448}}
     },
     {
       "vendor": "Sirivision",
@@ -66,16 +66,16 @@
       "ports": {"rj45": 16, "poe": false, "uplinks": 4, "uplink_type": "4x 10G optical", "gigabit_sfp": 0, "ten_gigabit_sfp_plus": 4},
       "stack_support": false,
       "discovery_support": true,
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "sirivision-sr-s25g3420f",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "stock_24rj45_4sfp",
+      "default_faceplate": "faceplates/24rj45-4sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {"display_name": "community contributor", "public_credit": false},
       "notes": ["Privacy-processed real-hardware evidence confirms 16 2.5G-capable copper interfaces plus four 10G optical positions.", "The device reports under Realtek enterprise 1.3.6.1.4.1.27282; Switch Vision assigns Sirivision only when the exact local model SR-S25G3420F is present.", "Connector capability remains separate from live negotiated speed because down-port IF-MIB speed values are not reliable capability truth."],
       "validation": {"exact_model_detection": "contribution_confirmed", "rj45_mapping": "real_hardware_indexes_1_16_confirmed", "poe": "not_applicable", "system_sensors": "pending", "uplinks": "real_hardware_indexes_17_20_confirmed", "stack": "not_applicable"},
-      "visuals": {"status": "pending", "recommended_faceplate": "", "optional_faceplates": [], "calibration_profile": "", "canvas": {"width": 2048, "height": 448}}
+      "visuals": {"status": "experimental", "recommended_faceplate": "faceplates/24rj45-4sfp.png", "optional_faceplates": [], "calibration_profile": "stock_24rj45_4sfp", "canvas": {"width": 2048, "height": 448}}
     },
     {
       "vendor": "Cisco",
@@ -1422,7 +1422,7 @@
       },
       "stack_support": false,
       "discovery_support": true,
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-pro-aggregation-api",
       "unifi_api_port_map": {
         "rj45": [],
@@ -1461,8 +1461,8 @@
           32
         ]
       },
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "unifi_32sfp",
+      "default_faceplate": "faceplates/unifi-32sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -1492,8 +1492,8 @@
         },
         "Ports 29 and 30 were observed negotiating at 10G despite 25G SFP28 capability; Switch Vision must display the current 10G link speed while retaining 25G as maximum capability metadata.",
         "Port detail is available while per-port traffic is unavailable through the contributed UniFi API path.",
-        "Core calibration storage supports the required connector count after the optical-only validation fix, but no verified 32-port faceplate coordinates are available yet.",
-        "Dashboard support remains disabled until a proper high-density optical faceplate/calibration profile is verified; a four-uplink fallback is intentionally not used."
+        "Core 2.6.32 supplies the owner-calibrated 32-position optical faceplate with SFP1-SFP28 plus TWE1-TWE4 geometry.",
+        "Dashboard support uses the exact Core 2.6.32 32-position optical faceplate while preserving the authoritative 28 SFP+ plus 4 SFP28 topology."
       ],
       "validation": {
         "exact_model_detection": "live_api_confirmed",
@@ -1505,9 +1505,9 @@
       },
       "visuals": {
         "status": "detected",
-        "recommended_faceplate": "",
+        "recommended_faceplate": "faceplates/unifi-32sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "unifi_32sfp",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -2321,10 +2321,10 @@
         "gigabit_sfp": 2,
         "ten_gigabit_sfp_plus": 0
       },
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "ubiquiti-us-16-poe-150w-api",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "stock_24rj45_2sfp",
+      "default_faceplate": "faceplates/24rj45-2sfp.png",
       "contributions": [
         {
           "id": "community-validation-1",
@@ -2364,7 +2364,7 @@
         "All sixteen copper ports expose PoE output capability in the normalized UniFi API evidence; the two SFP ports do not.",
         "The contract records the standardized PoE metadata actually exposed by the API and does not invent legacy passive-24V state that was not present in the contribution.",
         "Port detail is available while per-port RX/TX traffic is unavailable through the contributed UniFi API path.",
-        "A dedicated 16 RJ45 + 2 SFP faceplate is not yet verified, so exact dashboard visuals remain pending; Discovery uses its safe generic 24+2 visual with the true 16+2 counts."
+        "Discovery assigns the stock 24+2 faceplate as an oversized visual canvas while preserving exactly 16 RJ45 plus 2 SFP physical ports."
       ],
       "validation": {
         "exact_model_detection": "live_api_confirmed_two_corroborating_captures",
@@ -2375,10 +2375,10 @@
         "stack": "not_applicable"
       },
       "visuals": {
-        "status": "detected",
-        "recommended_faceplate": "",
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "stock_24rj45_2sfp",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -2923,10 +2923,10 @@
       },
       "stack_support": false,
       "discovery_support": true,
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "stock_24rj45_2sfp",
+      "default_faceplate": "faceplates/24rj45-2sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -2936,7 +2936,7 @@
       "notes": [
         "The contributed real-hardware walk already classifies all 24 RJ45 ports correctly with the generic interface parser.",
         "This entry adds exact identity/registry support without broadening the working interface classifier.",
-        "Exact dashboard artwork remains pending."
+        "Discovery uses the stock 24+2 faceplate as an oversized visual canvas while the authoritative topology remains 24 RJ45 and zero uplinks."
       ],
       "validation": {
         "exact_model_detection": "contribution_confirmed",
@@ -2947,10 +2947,10 @@
         "stack": "not_applicable"
       },
       "visuals": {
-        "status": "pending",
-        "recommended_faceplate": "",
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "stock_24rj45_2sfp",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -3057,10 +3057,10 @@
       },
       "stack_support": false,
       "discovery_support": true,
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "stock_24rj45_4sfp",
+      "default_faceplate": "faceplates/24rj45-4sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -3070,7 +3070,7 @@
       "notes": [
         "The real-hardware IF-MIB exposes gi1..gi20 for the twenty front-panel logical positions.",
         "Ports 17-18 are kept as neutral uplink/combo positions because ifName alone cannot prove whether copper or SFP is populated.",
-        "Ports 19-20 are SFP-only; exact combo-aware artwork remains pending."
+        "Ports 19-20 are SFP-only; the stock 24+4 faceplate is an oversized visual canvas while ports 17-18 remain neutral dual-personality positions."
       ],
       "validation": {
         "exact_model_detection": "contribution_confirmed",
@@ -3081,10 +3081,10 @@
         "stack": "not_applicable"
       },
       "visuals": {
-        "status": "pending",
-        "recommended_faceplate": "",
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "stock_24rj45_4sfp",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -3124,10 +3124,10 @@
       },
       "stack_support": false,
       "discovery_support": true,
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "stock_48rj45_4sfp",
+      "default_faceplate": "faceplates/48rj45-4sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -3148,10 +3148,10 @@
         "stack": "not_applicable"
       },
       "visuals": {
-        "status": "pending",
-        "recommended_faceplate": "",
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "stock_48rj45_4sfp",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -3258,10 +3258,10 @@
       },
       "stack_support": false,
       "discovery_support": true,
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-aggregation-api",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "unifi_32sfp",
+      "default_faceplate": "faceplates/unifi-32sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [
         "7.5.10"
@@ -3273,7 +3273,7 @@
       "notes": [
         "An anonymous UniFi2MQTT 2.0.50 real-hardware snapshot confirms eight 10G SFP+ API ports with live link-state/speed detail.",
         "The contributed snapshot observed five active 10G optical links; per-port traffic counters were not available through this normalized API path.",
-        "No existing generic faceplate can safely represent eight optical-only positions, so exact dashboard visuals remain pending."
+        "Core 2.6.32 supplies the approved 32-position optical canvas; this eight-port model binds only API ports 1-8 and positions 9-32 remain inert."
       ],
       "validation": {
         "exact_model_detection": "live_api_confirmed",
@@ -3284,10 +3284,10 @@
         "stack": "not_applicable"
       },
       "visuals": {
-        "status": "pending",
-        "recommended_faceplate": "",
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/unifi-32sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "unifi_32sfp",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -3447,10 +3447,10 @@
       },
       "stack_support": false,
       "discovery_support": true,
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-flex-2p5g-5-api",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "default_unifi_5_rj45",
+      "default_faceplate": "faceplates/unifi-5rj45.png",
       "optional_faceplates": [],
       "tested_firmware": [
         "2.1.8"
@@ -3462,7 +3462,7 @@
       "notes": [
         "An anonymous UniFi2MQTT 2.0.50 real-hardware snapshot confirms five 2.5G-capable RJ45 API ports.",
         "The contributed snapshot observed live 1G and 2.5G negotiated links; the device does not expose PoE output capability.",
-        "Exact five-port artwork remains pending; the UniFi card generator may use a safe oversized generic visual while preserving the true five-port count."
+        "The exact five-port UniFi faceplate is assigned while preserving the authoritative five-port 2.5G-capable RJ45 topology."
       ],
       "validation": {
         "exact_model_detection": "live_api_confirmed",
@@ -3473,10 +3473,10 @@
         "stack": "not_applicable"
       },
       "visuals": {
-        "status": "pending",
-        "recommended_faceplate": "",
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/unifi-5rj45.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "default_unifi_5_rj45",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -3529,10 +3529,10 @@
       },
       "stack_support": false,
       "discovery_support": true,
-      "dashboard_support": false,
+      "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-wan-api",
-      "calibration_profile": "",
-      "default_faceplate": "",
+      "calibration_profile": "stock_24rj45_4sfp",
+      "default_faceplate": "faceplates/24rj45-4sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [
         "7.3.109"
@@ -3544,7 +3544,7 @@
       "notes": [
         "An anonymous UniFi2MQTT 2.0.50 real-hardware snapshot reports three 10G SFP+ ports followed by one 1G RJ45 port, all live in the contributed capture.",
         "That observed connector topology exactly matches the Ubiquiti USW-WAN product and distinguishes it from the separate USW-WAN-RJ45 variant.",
-        "Exact four-position WAN-switch artwork remains pending."
+        "The stock 24+4 faceplate is an oversized visual canvas; only API port 4 RJ45 plus API ports 1-3 SFP+ are bound and all extra canvas positions remain inert."
       ],
       "validation": {
         "exact_model_detection": "live_api_plus_official_topology_confirmed",
@@ -3555,10 +3555,10 @@
         "stack": "not_applicable"
       },
       "visuals": {
-        "status": "pending",
-        "recommended_faceplate": "",
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "",
+        "calibration_profile": "stock_24rj45_4sfp",
         "canvas": {
           "width": 2048,
           "height": 448
