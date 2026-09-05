@@ -477,9 +477,6 @@ def _expected_generated_snmp_cards(ordered: list[dict[str, Any]]) -> int:
         contract = info.get("contract") if isinstance(info, dict) else None
         if not isinstance(contract, dict) or contract.get("status") != "resolved":
             continue
-        device = contract.get("device") if isinstance(contract.get("device"), dict) else {}
-        if device.get("dashboard_support") is not True:
-            continue
         observed = contract.get("observed") if isinstance(contract.get("observed"), dict) else {}
         try:
             members = int(observed.get("members") or 1)
