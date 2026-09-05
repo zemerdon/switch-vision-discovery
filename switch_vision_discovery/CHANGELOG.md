@@ -4,7 +4,7 @@
 
 - Fix mixed-device physical-contract dashboard cardinality so every resolved SNMP switch member actually passed to the legacy card generator counts toward the expected generated-card total, regardless of registry `dashboard_support`.
 - Prevent a valid fallback/generated card (for example HP 3500yl) from falsely degrading a run that also contains dashboard-supported switches, which previously blocked the SNMP2MQTT restart and could leave newly generated targets inactive.
-- Add a permanent Paul field regression for one HP J8693A 3500yl plus two Dell N2128PX-ON switches; the mixed run must expect all three generated cards.
+- Add a permanent field regression for one HP J8693A 3500yl plus two Dell N2128PX-ON switches; the mixed run must expect all three generated cards.
 
 ## 2.3.42
 
