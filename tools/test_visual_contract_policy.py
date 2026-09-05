@@ -26,7 +26,17 @@ for model in (
     assert policy == "error", (model, policy, reason)
     assert reason is None
 
-assert module.VISUAL_CONTRACT_EXCEPTIONS == {}, module.VISUAL_CONTRACT_EXCEPTIONS
+expected_exceptions = {
+    "US 16 PoE 150W": (
+        "Discovery owns the approved stock 24+2 visual fallback; the shared "
+        "physical 16 RJ45 + 2 SFP topology remains identical to Core."
+    ),
+    "USW Pro Aggregation": (
+        "Discovery consumes the exact Core 2.6.32 32-position optical canvas; "
+        "the shared physical 28 SFP+ + 4 SFP28 topology remains identical to Core."
+    ),
+}
+assert module.VISUAL_CONTRACT_EXCEPTIONS == expected_exceptions, module.VISUAL_CONTRACT_EXCEPTIONS
 
 module.VISUAL_CONTRACT_EXCEPTIONS["INTENTIONAL-MODEL"] = "documented test divergence"
 policy, reason = module.classify_visual_contract_drift("INTENTIONAL-MODEL")
