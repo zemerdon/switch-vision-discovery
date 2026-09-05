@@ -28,7 +28,16 @@ DEFAULT_SNMP_ADDON_CONFIG_URL = (
 
 # Shared exact-model visual defaults are a hard Core/Discovery contract.
 # Any intentional divergence must be listed here with a non-empty reason.
-VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {}
+VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {
+    "US 16 PoE 150W": (
+        "Discovery owns the approved stock 24+2 visual fallback; the shared "
+        "physical 16 RJ45 + 2 SFP topology remains identical to Core."
+    ),
+    "USW Pro Aggregation": (
+        "Discovery consumes the exact Core 2.6.32 32-position optical canvas; "
+        "the shared physical 28 SFP+ + 4 SFP28 topology remains identical to Core."
+    ),
+}
 
 FACEPLATE_CATALOG_SCHEMA = "switch-vision-faceplate-catalog-v1"
 FACEPLATE_PIN_SCHEMA = "switch-vision-core-faceplate-catalog-pin-v1"
@@ -362,10 +371,9 @@ def main() -> int:
         "ports",
         "stack_support",
         "discovery_support",
-        "dashboard_support",
     )
     support_fields = ("status", "evidence", "validation")
-    visual_fields = ("calibration_profile", "default_faceplate")
+    visual_fields = ("dashboard_support", "calibration_profile", "default_faceplate")
 
     for model in sorted(core_models.keys() & discovery_models.keys()):
         core = core_models[model]

@@ -21,7 +21,7 @@ import yaml
 # containers only; choosing an oversized temporary visual never changes the
 # physical port_count/sfp_port_count contract emitted on the card.
 GENERIC_VISUALS: tuple[tuple[int, int, str, str], ...] = (
-    (24, 2, "unifi_24p_rj45_2sfp", "faceplates/unifi-24p-rj45-2sfp.png"),
+    (24, 2, "stock_24rj45_2sfp", "faceplates/24rj45-2sfp.png"),
     (24, 4, "stock_24rj45_4sfp", "faceplates/24rj45-4sfp.png"),
     (48, 2, "stock_48rj45_2sfp", "faceplates/48rj45-2sfp.png"),
     (48, 4, "stock_48rj45_4sfp", "faceplates/48rj45-4sfp.png"),
@@ -79,9 +79,10 @@ def visual_geometry_matches(faceplate: str, rj45_count: int, sfp_count: int) -> 
     name = Path(str(faceplate or "")).name.casefold()
     match = re.search(r"(\d+)rj45-(\d+)sfp", name)
     if match:
-        return int(match.group(1)) == rj45_count and int(match.group(2)) == sfp_count
-    # Model-specific/legacy visual names cannot be inferred from the filename;
-    # trust the authoritative registry for those until they are replaced.
+        return rj45_count <= int(match.group(1)) and sfp_count <= int(match.group(2))
+    # Generic filenames express canvas capacity, not required physical equality.
+    # Model-specific visual names cannot be inferred from the filename; trust
+    # the authoritative registry assignment for those.
     return bool(name)
 
 
@@ -332,7 +333,7 @@ def render(
             elif reg.get("dashboard_support") is not True:
                 reason = "exact dashboard visuals are still pending"
             else:
-                reason = "the exact visual does not match the registered physical geometry"
+                reason = "the assigned visual cannot contain the registered physical geometry"
             lines.append(
                 f"{pad}# UniFi {json.dumps(model)}: {reason}; using generic "
                 f"{visual_rj45} RJ45 + {visual_sfp} SFP faceplate while preserving "

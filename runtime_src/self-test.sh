@@ -1654,8 +1654,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.41"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.41"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.42"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.42"' "$BASE_DIR/run.sh"
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
@@ -3006,11 +3006,13 @@ assert xg16["unifi_api_port_map"]["rj45"] == [13, 14, 15, 16]
 
 agg = models["USW Pro Aggregation"]
 assert agg["status"] == "detected"
-assert agg["dashboard_support"] is False
+assert agg["dashboard_support"] is True
 assert agg["ports"]["rj45"] == 0
 assert agg["ports"]["ten_gigabit_sfp_plus"] == 28
 assert agg["ports"]["twenty_five_gigabit_sfp28"] == 4
 assert agg["unifi_api_port_map"]["sfp"] == list(range(1, 33))
+assert agg["calibration_profile"] == "unifi_32sfp"
+assert agg["default_faceplate"] == "faceplates/unifi-32sfp.png"
 
 p48 = profiles["ubiquiti-us-48-api"]
 assert p48["layout"] == {"members": 1, "rj45_ports": 48, "sfp_1g_ports": 2, "sfp_10g_ports": 2}
@@ -3069,10 +3071,11 @@ python3 "$BASE_DIR/unifi_dashboard_cards.py" \
 grep -q 'switch_model: US 48' "$tmp_dir/community-validation-cards.yaml"
 grep -q 'unifi_sfp_port_offset: 48' "$tmp_dir/community-validation-cards.yaml"
 grep -q 'switch_model: US XG 16' "$tmp_dir/community-validation-cards.yaml"
-! grep -q 'switch_model: USW Pro Aggregation' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'switch_model: USW Pro Aggregation' "$tmp_dir/community-validation-cards.yaml"
 grep -q 'calibration_profile: unifi_4_rj45_12sfp' "$tmp_dir/community-validation-cards.yaml"
-grep -q 'USW Pro Aggregation.*dashboard support is pending verified visuals' "$tmp_dir/community-validation-cards.yaml"
-grep -q 'UniFi cards emitted: 2; waiting for visuals/registry: 1' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'calibration_profile: unifi_32sfp' "$tmp_dir/community-validation-cards.yaml"
+! grep -q 'USW Pro Aggregation.*dashboard support is pending verified visuals' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'UniFi cards emitted: 3; waiting for visuals/registry: 0' "$tmp_dir/community-validation-cards.yaml"
 echo "Switch Vision Discovery community-validation generated-card regression: PASS"
 # v2.1.36 UniFi-only SNMP2MQTT status regression.
 PYTHONPATH="$BASE_DIR" python3 - <<'PYTEST_V2136_UNIFI_ONLY'
@@ -3148,7 +3151,7 @@ models = {d["model"]: d for d in registry["devices"] if isinstance(d, dict)}
 
 expected = {
     "UCG Ultra": (5, 0, False, True, "ubiquiti-ucg-ultra-api"),
-    "US 16 PoE 150W": (16, 2, True, False, "ubiquiti-us-16-poe-150w-api"),
+    "US 16 PoE 150W": (16, 2, True, True, "ubiquiti-us-16-poe-150w-api"),
     "USW Pro Max 24": (24, 2, False, True, "ubiquiti-usw-pro-max-24-api"),
     "USW Ultra": (8, 0, True, True, "ubiquiti-usw-ultra-api"),
 }
@@ -3211,9 +3214,9 @@ grep -q 'switch_model: UCG Ultra' "$tmp_dir/community-unifi-cards.yaml"
 grep -q 'switch_model: US 16 PoE 150W' "$tmp_dir/community-unifi-cards.yaml"
 grep -q 'switch_model: USW Pro Max 24' "$tmp_dir/community-unifi-cards.yaml"
 grep -q 'switch_model: USW Ultra' "$tmp_dir/community-unifi-cards.yaml"
-test "$(grep -c 'generic_faceplate: true' "$tmp_dir/community-unifi-cards.yaml")" -eq 1
-test "$(grep -c 'generic_faceplate: false' "$tmp_dir/community-unifi-cards.yaml")" -eq 3
-grep -q 'UniFi cards emitted: 4; exact cards: 3; generic fallbacks: 1; exact support pending: 1; issues: 0' "$tmp_dir/community-unifi-cards.yaml"
+! grep -q 'generic_faceplate: true' "$tmp_dir/community-unifi-cards.yaml"
+test "$(grep -c 'generic_faceplate: false' "$tmp_dir/community-unifi-cards.yaml")" -eq 4
+grep -q 'UniFi cards emitted: 4; exact cards: 4; generic fallbacks: 0; exact support pending: 0; issues: 0' "$tmp_dir/community-unifi-cards.yaml"
 echo "Switch Vision Discovery community-hardware generated-card regression: PASS"
 
 # v2.2.5 generated-config activation and transaction-aware walk freshness regression.

@@ -134,8 +134,8 @@ legacy_small = {
     "ports": [port(i, "RJ45") for i in range(1, 9)],
 }
 text, emitted, exact, generic, pending, issues = render(legacy_small, legacy_small_registry)
-assert emitted == 1 and generic == 1 and issues == 0, text
+assert emitted == 1 and exact == 1 and generic == 0 and issues == 0, text
 assert "port_count: 8" in text and "sfp_port_count: 0" in text, text
-assert "faceplate_file: unifi-24p-rj45-2sfp.png" in text, text
+assert "faceplate_file: 24rj45-2sfp.png" in text, text
 
 print("Switch Vision UniFi physical-contract regressions: PASS")
