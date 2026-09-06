@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.3.43"
+SWITCH_VISION_DISCOVERY_VERSION="2.3.44"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -3681,15 +3681,21 @@ write_generated_dashboard_card() {
                 ($state != "false" and $state != "disabled" and $state != "disable" and
                  $state != "off" and $state != "no" and $state != "0"))
             else true end);
-        def swname($sw): ($sw.switch_name // $sw.switch // $sw.selected_switch // $sw.name // "");
-        def swlabel($sw): (swname($sw) // "live");
-        def swprefix($sw): ($sw.sensor_prefix // $sw.entity_prefix // $sw.prefix // swlabel($sw));
+        def first_nonempty($values; $fallback):
+          (($values
+            | map(if . == null then "" else tostring end)
+            | map(select(length > 0))
+            | .[0]) // $fallback);
+        def swname($sw): first_nonempty([$sw.switch_name, $sw.switch, $sw.selected_switch, $sw.name]; "");
+        def swlabel($sw): first_nonempty([swname($sw)]; "live");
+        def swprefix($sw): first_nonempty([$sw.sensor_prefix, $sw.entity_prefix, $sw.prefix, swlabel($sw)]; swlabel($sw));
         def member_id($m): (($m.member // $m.member_number // "") | tostring);
         def display_name($value):
           (($value // "") | tostring) as $name |
           if ($name | test("^sw[0-9]+$"; "i")) then ($name | ascii_upcase) else $name end;
-        def default_member_key($sw): display_name(swprefix($sw) // swname($sw));
-        def member_key($m; $fallback): display_name($m.profile // $m.sensor_prefix // $m.entity_prefix // $m.prefix // $fallback);
+        def default_member_key($sw): display_name(first_nonempty([swprefix($sw), swname($sw)]; "Switch Vision"));
+        def member_key($m; $fallback): display_name(first_nonempty([$m.profile, $m.sensor_prefix, $m.entity_prefix, $m.prefix]; $fallback));
+        def member_prefix($m; $fallback): first_nonempty([$m.sensor_prefix, $m.entity_prefix, $m.prefix]; $fallback);
         def parent_title($sw): (($sw.display_name // $sw.card_title // "") | tostring);
         def row_safe($value):
           ((if $value == null then "" else ($value | tostring) end) |
@@ -3715,13 +3721,13 @@ write_generated_dashboard_card() {
             else
               (member_key($m1; default_member_key($sw))) as $key |
               (member_display($m1; (if (parent_title($sw) | length) > 0 then parent_title($sw) else $key end))) as $title |
-              [[ $key, $name, ($m1.sensor_prefix // $m1.entity_prefix // $m1.prefix // swprefix($sw)), $host, "1", $title, member_header_title($m1; $sw) ]]
+              [[ $key, $name, member_prefix($m1; swprefix($sw)), $host, "1", $title, member_header_title($m1; $sw) ]]
             end)
             +
             ($members | map(select(member_id(.) != "1") |
               (member_key(.; ($name + "_M" + member_id(.)))) as $key |
               (member_display(.; $key)) as $title |
-              [ $key, $name, (.sensor_prefix // .entity_prefix // .prefix // swprefix($sw)), $host, member_id(.), $title, member_header_title(.; $sw) ]
+              [ $key, $name, member_prefix(.; swprefix($sw)), $host, member_id(.), $title, member_header_title(.; $sw) ]
             ))
           else
             (default_member_key($sw)) as $key |

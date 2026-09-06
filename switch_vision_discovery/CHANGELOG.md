@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.44
+
+- Fix generated SNMP dashboard-card emission when the optional `sensor_prefix` is explicitly blank: card identity now falls back to the stable configured switch name instead of producing an empty member key that is silently skipped.
+- Add a permanent all-supported-model SNMP card/visual matrix covering canonical pinned faceplates, calibration metadata, blank-prefix fallback, explicit-prefix preservation, and disabled-switch suppression.
+- Add cross-vendor regression coverage for the field-observed `expected 1, found 0` SNMP card failure without changing authoritative physical port topology.
+
 ## 2.3.43
 
 - Fix mixed-device physical-contract dashboard cardinality so every resolved SNMP switch member actually passed to the legacy card generator counts toward the expected generated-card total, regardless of registry `dashboard_support`.
