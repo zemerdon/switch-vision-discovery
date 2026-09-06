@@ -1654,8 +1654,21 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.45"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.45"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.46"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.3.46"' "$BASE_DIR/run.sh"
+
+# v2.3.46 Hub ownership / Auto-width regression.
+! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
+! grep -Fq '_switch_vision_component_releases' "$BASE_DIR/support_web.py"
+! grep -Fq '/api/component-releases' "$BASE_DIR/support_web.py"
+! grep -Fq 'renderComponentReleases' "$BASE_DIR/support_web.py"
+! grep -Fq 'releases:null' "$BASE_DIR/support_web.py"
+grep -Fq "['auto','Auto'],['800','800 px'],['1024','1024 px'],['custom','Custom']" "$BASE_DIR/support_web.py"
+grep -Fq "s.dashboard.faceplate_width_mode||'auto'" "$BASE_DIR/support_web.py"
+grep -Fq "(s.dashboard.faceplate_width_mode||'auto')==='custom'" "$BASE_DIR/support_web.py"
+grep -Fq 'function hubHelp(' "$BASE_DIR/support_web.py"
+grep -Fq "e.key==='Escape'" "$BASE_DIR/support_web.py"
+echo 'Switch Vision Discovery v2.3.46 Hub ownership / Auto width: PASS'
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
