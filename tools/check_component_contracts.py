@@ -157,6 +157,8 @@ CORE_HUB_SETTINGS_GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
     "dashboard": (
         ("CONF_SHOW_CALIBRATION_BUTTONS", "show_calibration_buttons"),
         ("CONF_SHOW_CARD_HEADERS", "show_card_headers"),
+        ("CONF_FACEPLATE_WIDTH_MODE", "faceplate_width_mode"),
+        ("CONF_FACEPLATE_CUSTOM_WIDTH", "faceplate_custom_width"),
     ),
     "activity_leds": (
         ("CONF_ACTIVITY_LED_SENSITIVITY_PRESET", "activity_led_sensitivity_preset"),

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.45
+
+- Hub component release rows now come from the current Switch Vision Installer component catalog and show authoritative GitHub Release publication date/time.
+- Added reusable accessible contextual help for non-obvious Hub settings and actions without blanket title attributes.
+- Added 800 px, 1024 px, and custom Core faceplate-width controls.
+- Updated the Core Hub settings contract for the new width keys.
+
 ## 2.3.44
 
 - Fix generated SNMP dashboard-card emission when the optional `sensor_prefix` is explicitly blank: card identity now falls back to the stable configured switch name instead of producing an empty member key that is silently skipped.
