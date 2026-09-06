@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import importlib.util
+import re
+import subprocess
 from pathlib import Path
 r=Path(__file__).resolve().parents[1]; s=importlib.util.spec_from_file_location("c",r/"tools/check_component_contracts.py")
 m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
@@ -37,4 +39,40 @@ def ports(rj,sfp): return [{"idx":i,"connector":"RJ45"} for i in rj]+[{"idx":i,"
 for model,payload,rj,sfp,face in [("USW Aggregation",ports([],range(1,9)),0,8,"unifi-32sfp.png"),("USW Pro Aggregation",ports([],range(1,33)),0,32,"unifi-32sfp.png"),("US 16 PoE 150W",ports(range(1,17),range(17,19)),16,2,"24rj45-2sfp.png"),("USW WAN",ports([4],[1,2,3]),1,3,"24rj45-4sfp.png")]:
  rendered=u.render({"devices":[{"model":model,"id":"fixture","name":model,"ports":payload}]},registry);text,emitted=rendered[0],rendered[1];assert emitted==1,(model,rendered[1:]);assert f"port_count: {rj}" in text and f"sfp_port_count: {sfp}" in text,model;assert f"faceplate_file: {face}" in text,model
 assert "sfp_port_count: 32" not in u.render({"devices":[{"model":"USW Aggregation","id":"agg","ports":ports([],range(1,9))}]},registry)[0]
+
+# All supported visual models must preserve a non-empty SNMP card identity even
+# when optional sensor_prefix is explicitly blank (the normal Hub form state).
+job=(r/"runtime_src/discovery_job.sh").read_text(encoding="utf-8")
+mx=re.search(r"# SWITCH_VISION_GENERATED_CARD_ROWS_JQ_BEGIN\n(?P<body>.*?)\n\s*# SWITCH_VISION_GENERATED_CARD_ROWS_JQ_END",job,re.S)
+assert mx, "generated-card JQ markers missing"
+program=mx.group("body")
+visual=[x for x in registry["devices"] if isinstance(x,dict) and x.get("discovery_support") is True and x.get("dashboard_support") is True]
+assert visual, "supported visual model matrix is empty"
+assert not m.validate_default_faceplates(registry, m.load_pinned_faceplate_catalog())
+for row in visual:
+    model=row["model"]; face=row.get("default_faceplate"); profile=row.get("calibration_profile")
+    assert isinstance(face,str) and face.startswith("faceplates/") and face.endswith(".png"), model
+    assert isinstance(profile,str) and profile, model
+    visuals=row.get("visuals") or {}
+    assert visuals.get("recommended_faceplate")==face, model
+    assert visuals.get("calibration_profile")==profile, model
+    ports=row.get("ports") or {}
+    assert isinstance(ports.get("rj45"),int) and ports["rj45"]>=0, model
+    assert isinstance(ports.get("uplinks"),int) and ports["uplinks"]>=0, model
+    key="MATRIX_"+re.sub(r"[^A-Za-z0-9]+","_",model).strip("_")
+    cfg={"switches":[{"switch_name":key,"sensor_prefix":"","enabled":"enabled","switch_model":model}],"stack_member_prefixes":[]}
+    p=subprocess.run(["jq","-r",program],input=json.dumps(cfg),text=True,capture_output=True)
+    assert p.returncode==0,(model,p.stderr)
+    rows_out=[x for x in p.stdout.split(chr(10)) if x]
+    assert len(rows_out)==1,(model,rows_out)
+    cols=rows_out[0].split("\x1c")
+    assert cols[0]==key and cols[2]==key,(model,cols)
+cfg={"switches":[{"switch_name":"EXPLICIT","sensor_prefix":"custom_prefix","enabled":"enabled"}],"stack_member_prefixes":[]}
+p=subprocess.run(["jq","-r",program],input=json.dumps(cfg),text=True,capture_output=True,check=True)
+cols=p.stdout.strip().split("\x1c"); assert cols[0]=="custom_prefix" and cols[2]=="custom_prefix",cols
+cfg={"switches":[{"switch_name":"DISABLED","sensor_prefix":"","enabled":"disabled"}],"stack_member_prefixes":[]}
+p=subprocess.run(["jq","-r",program],input=json.dumps(cfg),text=True,capture_output=True,check=True)
+assert not p.stdout.strip(),p.stdout
+print(f"Discovery all-supported-model SNMP card/visual matrix: PASS ({len(visual)} models)")
+
 print("Discovery faceplate catalog contract: PASS")
