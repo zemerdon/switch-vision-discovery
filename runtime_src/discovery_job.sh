@@ -3917,18 +3917,40 @@ report_generated_yaml_failure_state() {
   esac
 }
 
+new_generated_yaml_id() {
+  # This is an opaque, high-entropy load marker.  It is deliberately not a
+  # credential fingerprint or a hash of generated YAML (which can include a
+  # low-entropy SNMP community).  SNMP2MQTT reports it only after parsing this
+  # exact file, allowing Discovery to distinguish configuration activation
+  # from later retained discovery publication.
+  if [ -r /proc/sys/kernel/random/uuid ]; then
+    tr '[:upper:]' '[:lower:]' < /proc/sys/kernel/random/uuid | tr -d '\\n'
+    return 0
+  fi
+  if command -v uuidgen >/dev/null 2>&1; then
+    uuidgen | tr '[:upper:]' '[:lower:]'
+    return 0
+  fi
+  return 1
+}
+
 write_generated_yaml() {
   tmp_walks="$1"
   GENERATED_YAML_PUBLISHED="false"
   GENERATED_YAML_GENERATOR_FAILED="false"
   GENERATED_YAML_PREVIOUS_STATE="unknown"
   candidate_path="${GENERATED_YAML_PATH}.candidate.$$"
+  GENERATED_YAML_GENERATION_ID=$(new_generated_yaml_id) || {
+    echo "Generated YAML candidate refused: secure generation ID is unavailable." >> "$LIVE_LOG_PATH" 2>/dev/null || true
+    return 0
+  }
   guard="/generated_yaml_guard.py"
   [ -f "$guard" ] || guard="$(dirname "$0")/generated_yaml_guard.py"
   echo "Generating SNMP2MQTT YAML candidate: $candidate_path" >> "$LIVE_LOG_PATH" 2>/dev/null || true
   rm -f "$candidate_path"
   {
     echo "# Switch Vision generated SNMP2MQTT YAML"
+    echo "# Switch Vision generation ID: $GENERATED_YAML_GENERATION_ID"
     echo "# Source: Switch Vision Discovery v$SWITCH_VISION_DISCOVERY_VERSION"
     echo "# Product: Switch Vision"
     echo "# Product source: Switch Vision Discovery v$SWITCH_VISION_DISCOVERY_VERSION"

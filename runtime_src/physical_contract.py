@@ -177,6 +177,7 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
     expected: dict[str, Any] = {}
     status = "unregistered"
     errors: list[str] = []
+    partial_uplinks_allowed = False
     if registry_device:
         registry_ports = registry_device.get("ports") if isinstance(registry_device.get("ports"), dict) else {}
         expected_rj45_per_member = int(registry_ports.get("rj45") or 0)
@@ -195,9 +196,20 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
             errors.append(f"registry marks model non-stackable but observed {member_count} members")
         if observed["rj45"] != expected["rj45"]:
             errors.append(f"RJ45 expected {expected['rj45']} observed {observed['rj45']}")
-        if observed["uplinks"] != expected["uplinks"]:
+        # Physical inventory and live IF-MIB observation are deliberately
+        # different concepts.  In particular, an EX3300 may expose only the
+        # populated dual-speed cage(s); the other supported cages are still
+        # real front-panel positions, simply unknown/unavailable at runtime.
+        # Do not fabricate source bindings for those slots, but do not turn a
+        # partial live observation into a topology conflict either.
+        partial_uplinks_allowed = (
+            _canon_model(str(registry_device.get("model") or "")) == "ex3300-48p"
+            and observed["rj45"] == expected["rj45"]
+            and 0 < observed["uplinks"] < expected["uplinks"]
+        )
+        if observed["uplinks"] != expected["uplinks"] and not partial_uplinks_allowed:
             errors.append(f"uplinks expected {expected['uplinks']} observed {observed['uplinks']}")
-        if observed["physical"] != expected["physical"]:
+        if observed["physical"] != expected["physical"] and not partial_uplinks_allowed:
             errors.append(f"physical expected {expected['physical']} observed {observed['physical']}")
         status = "resolved" if not errors else "topology_conflict"
 
@@ -218,6 +230,14 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         "expected": expected,
         "observed": observed,
         "ports": [port.as_dict() for port in ports],
+        "unobserved_physical": {
+            "rj45": max(0, int(expected.get("rj45") or 0) - observed["rj45"]),
+            "uplinks": max(0, int(expected.get("uplinks") or 0) - observed["uplinks"]),
+            "reason": (
+                "known physical inventory not currently visible in IF-MIB"
+                if partial_uplinks_allowed else ""
+            ),
+        },
         "source_bindings_are_physical_identity": False,
     }
 

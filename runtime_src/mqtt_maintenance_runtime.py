@@ -28,6 +28,11 @@ RETIREMENT_STATE = Path("/data/snmp2mqtt-retirement-topics.json")
 MAX_RETAINED_MESSAGES = 5000
 FIRST_RETAINED_MESSAGE_TIMEOUT = 5.0
 RETAINED_IDLE_TIMEOUT = 1.0
+GENERATION_ID_PATTERN = re.compile(
+    r"^# Switch Vision generation ID: "
+    r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
+    re.IGNORECASE | re.MULTILINE,
+)
 RETAINED_SCAN_HARD_TIMEOUT = 20.0
 
 def _retained_receive_timeout(
@@ -378,6 +383,37 @@ def _retained_messages(
     except Exception as exc:
         raise RuntimeError(f"Home Assistant MQTT maintenance scan failed: {exc}") from exc
     return messages
+
+
+def generated_yaml_generation_id(path: Path = GENERATED_YAML) -> str | None:
+    """Read the opaque load marker without parsing or exposing YAML secrets."""
+    try:
+        match = GENERATION_ID_PATTERN.search(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return None
+    return match.group(1).lower() if match else None
+
+
+def verify_generated_yaml_loaded(
+    base_topic: str,
+    generation_id: str,
+) -> bool:
+    """Prove SNMP2MQTT parsed this generated file via its retained config topic."""
+    safe_topic = str(base_topic or "").strip().strip("/")
+    expected = str(generation_id or "").strip().lower()
+    if not safe_topic or not expected or "+" in safe_topic or "#" in safe_topic:
+        return False
+    topic = f"{safe_topic}/config"
+    for message in _retained_messages(topic):
+        if message.get("topic") != topic:
+            continue
+        try:
+            payload = json.loads(str(message.get("payload") or ""))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and str(payload.get("switch_vision_generation_id") or "").lower() == expected:
+            return True
+    return False
 
 
 def _save_retirement_topics(topics: list[str]) -> None:

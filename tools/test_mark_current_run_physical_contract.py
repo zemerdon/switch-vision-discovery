@@ -123,10 +123,11 @@ def main() -> None:
 
         work = temp / 'work'
         work.mkdir()
-        staged, ordered = entry._stage_options(options, work, records)
+        staged, ordered, accepted_evidence = entry._stage_options(options, work, records)
         assert options['parse_all_walks'] == 'false'
         assert staged['parse_all_walks'] == 'true'
         assert len(ordered) == 2
+        assert len(accepted_evidence) == 2
 
         staged_root = Path(staged['snmpwalks_dir'])
         staged_walks = sorted(path.relative_to(staged_root).as_posix() for path in staged_root.rglob('*.txt'))

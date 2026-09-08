@@ -35,7 +35,12 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 from registry_lookup import lookup as registry_lookup
-from mqtt_maintenance_runtime import repair_mqtt_entities, scan_mqtt_entities
+from mqtt_maintenance_runtime import (
+    generated_yaml_generation_id,
+    repair_mqtt_entities,
+    scan_mqtt_entities,
+    verify_generated_yaml_loaded,
+)
 from discovery_backups import (
     create_pre_mutation_backup,
     discovery_backup_status,
@@ -975,7 +980,8 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
             )
             return
         degraded_result = return_code == 10
-        if return_code not in {0, 10}:
+        partial_result = return_code == 11
+        if return_code not in {0, 10, 11}:
             raise RuntimeError(f"{operation_name} exited with code {return_code}.")
         if degraded_result:
             warning_message = (
@@ -1013,8 +1019,8 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
             bundle_captured = _generate_automatic_support_bundle(
                 auto_bundle_settings,
                 lines,
-                evidence_quality="degraded" if degraded_result else "complete",
-                discovery_result="complete_with_warnings" if degraded_result else "success",
+                evidence_quality="degraded" if (degraded_result or partial_result) else "complete",
+                discovery_result="complete_with_warnings" if (degraded_result or partial_result) else "success",
                 snmp2mqtt_handoff=(
                     "blocked_degraded"
                     if degraded_result
@@ -1040,7 +1046,7 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
                 snmp2mqtt=snmp2mqtt_result,
             )
             return
-        if degraded_result:
+        if degraded_result or partial_result:
             auto_message = (
                 "SNMP2MQTT YAML regeneration complete with warnings"
                 if regenerate_only
@@ -1051,7 +1057,7 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
         _set_discovery_state(
             success=True,
             message=auto_message,
-            stage="Complete with warnings" if degraded_result else "Complete",
+            stage="Complete with warnings" if (degraded_result or partial_result) else "Complete",
             activity=snmp2mqtt_result.get("message") or auto_message,
             command="",
             phase="complete",
@@ -2012,11 +2018,17 @@ def _save_discovery_settings(data: Any) -> dict[str, Any]:
                 community = row.get("snmp_community", "")
                 if not isinstance(community, str):
                     raise ValueError(f"Switch entry {index} snmp_community must be text.")
+                # The Hub intentionally never returns a saved community.  Treat
+                # whitespace-only edits as blank so a harmless settings save
+                # cannot replace a working write-only value with whitespace.
+                community = community.strip()
+                row["snmp_community"] = community
                 if not community:
                     previous = current_by_name.get(original_name or str(row.get("switch_name") or "").strip())
-                    if previous is None or not str(previous.get("snmp_community") or ""):
+                    preserved = str(previous.get("snmp_community") or "").strip() if previous else ""
+                    if not preserved:
                         raise ValueError(f"Switch entry {index} requires an SNMP community for a new or renamed switch.")
-                    row["snmp_community"] = str(previous.get("snmp_community"))
+                    row["snmp_community"] = preserved
                 validated_rows.append(_validate_switch_row(row, index))
             updated["switches"] = validated_rows
         if "stack_member_prefixes" in requested:
@@ -2807,6 +2819,26 @@ def _verify_snmp2mqtt_activation(
     return last
 
 
+def _verify_snmp2mqtt_generated_config_loaded(
+    lines: list[str], runtime: dict[str, Any]
+) -> bool:
+    generation_id = generated_yaml_generation_id(DEFAULT_GENERATED_SNMP2MQTT)
+    base_topic = str(runtime.get("base_topic") or "").strip().strip("/")
+    if not generation_id:
+        lines.append("SNMP2MQTT exact-load verification unavailable: generated YAML has no generation ID.")
+        return False
+    try:
+        verified = verify_generated_yaml_loaded(base_topic, generation_id)
+    except Exception as exc:
+        lines.append(f"SNMP2MQTT exact-load verification unavailable: {type(exc).__name__}.")
+        return False
+    if verified:
+        lines.append("SNMP2MQTT exact generated configuration load verified.")
+    else:
+        lines.append("SNMP2MQTT exact generated configuration load was not verified.")
+    return verified
+
+
 def _ensure_snmp2mqtt_running(
     lines: list[str],
     previous_mtime: float | None,
@@ -2906,6 +2938,7 @@ def _ensure_snmp2mqtt_running(
         except Exception as exc:
             lines.append(f"SNMP2MQTT status refresh warning: {type(exc).__name__}.")
 
+        exact_load_verified = _verify_snmp2mqtt_generated_config_loaded(lines, runtime)
         activation = _verify_snmp2mqtt_activation(lines)
         try:
             info = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
@@ -2933,7 +2966,7 @@ def _ensure_snmp2mqtt_running(
                 "message": message,
             }
 
-        if not activation.get("activation_verified"):
+        if not exact_load_verified:
             expected = activation.get("mqtt_current_expected")
             retained = activation.get("mqtt_current_retained")
             missing = activation.get("mqtt_current_missing")
@@ -2960,13 +2993,16 @@ def _ensure_snmp2mqtt_running(
                 "state": resulting_state,
                 "configuration_mode": configuration_mode,
                 **activation,
+                "config_load_verified": False,
                 "activation_verified": False,
                 "handoff_failed": True,
                 "message": message,
             }
 
-        # The replacement identity set is proven live. Only now may older exact
-        # generated identities be retired.
+        # The replacement configuration is proven loaded. Retained Home
+        # Assistant discovery publication is runtime health evidence and can
+        # lag a working poller, so it must not turn this successful handoff
+        # into a false activation failure.
         refreshed_runtime = _snmp2mqtt_runtime_info()
         prefix = str(
             refreshed_runtime.get("homeassistant_prefix")
@@ -2991,11 +3027,14 @@ def _ensure_snmp2mqtt_running(
             )
             _save_snmp2mqtt_retirement_topics(retirement_state)
 
-        message = (
-            f"Switch Vision SNMP2MQTT {action} verified active; "
-            f"{activation.get('mqtt_current_retained')}/"
-            f"{activation.get('mqtt_current_expected')} expected MQTT discovery entries are current."
-        )
+        message = f"Switch Vision SNMP2MQTT {action} verified active from exact generated configuration load."
+        if not activation.get("activation_verified"):
+            message += " MQTT discovery publication is still catching up."
+        else:
+            message += (
+                f" {activation.get('mqtt_current_retained')}/"
+                f"{activation.get('mqtt_current_expected')} expected MQTT discovery entries are current."
+            )
         if retired_topics:
             message += (
                 f" Previous generated discovery entries retired: "
@@ -3005,12 +3044,13 @@ def _ensure_snmp2mqtt_running(
             message += " Some previous generated discovery entries could not be retired."
         lines.append(message)
         return {
-            "status": "Warning" if retired_warnings else "Running",
+            "status": "Warning" if (retired_warnings or not activation.get("activation_verified")) else "Running",
             "action": action,
             "slug": slug,
             "state": resulting_state,
             "configuration_mode": configuration_mode,
             **activation,
+            "config_load_verified": True,
             "activation_verified": True,
             "handoff_failed": False,
             "mqtt_topics_retired": retired_cleared,
