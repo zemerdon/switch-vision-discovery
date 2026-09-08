@@ -371,24 +371,16 @@ PY
 # targeted attempts run, proving only CURRENT_RUN_WALKS is consumed.
 live="$TMP/live-exit"
 mkdir -p "$live/bin"
+make_dell_walk "$live/dell.txt" 48
 cat > "$live/bin/snmpwalk" <<'EOF_SNMP'
 #!/usr/bin/env sh
 set -eu
-host=""; oid=""
+host=""
 for arg in "$@"; do
-  case "$arg" in 192.0.2.*) host="$arg";; 1|1.*) oid="$arg";; esac
+  case "$arg" in 192.0.2.*) host="$arg";; esac
 done
-case "$host" in
-  192.0.2.31)
-    if [ "$oid" = "1.3.6.1.2.1.1.1.0" ]; then
-      echo '.1.3.6.1.2.1.1.1.0 = STRING: "Synthetic Switch"'
-    else
-      echo '.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"'
-      echo '.1.3.6.1.2.1.2.2.1.8.1 = INTEGER: up(1)'
-    fi
-    ;;
-  *) exit 1 ;;
-esac
+[ "$host" = "192.0.2.31" ] || exit 1
+cat "${SV_TEST_SNMP_SOURCE:?}"
 EOF_SNMP
 chmod +x "$live/bin/snmpwalk"
 
@@ -408,7 +400,7 @@ EOF_STALE
 EOF_OPTIONS
   rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
   set +e
-  PATH="$live/bin:$PATH" SWITCH_VISION_OPTIONS_FILE="$case_dir/options.json" SWITCH_VISION_CAPABILITIES_DIR="$case_dir/caps" "$RUNTIME/discovery_job.sh" >"$case_dir/stdout" 2>"$case_dir/stderr"
+  PATH="$live/bin:$PATH" SV_TEST_SNMP_SOURCE="$live/dell.txt" SWITCH_VISION_OPTIONS_FILE="$case_dir/options.json" SWITCH_VISION_CAPABILITIES_DIR="$case_dir/caps" "$RUNTIME/discovery_job.sh" >"$case_dir/stdout" 2>"$case_dir/stderr"
   status=$?
   set -e
   if [ "$good" = yes ]; then
