@@ -179,6 +179,57 @@ grep -Fq '/api/settings/discovery' "$BASE_DIR/support_web.py"
 grep -Fq "SwitchVisionHubSettings?.open('core')" "$BASE_DIR/support_web.py"
 grep -Fq 'id="hubComponent-snmp2mqtt"' "$BASE_DIR/support_web.py"
 grep -Fq 'id="hubComponent-discovery"' "$BASE_DIR/support_web.py"
+
+# Expected dependency failures on read-only Hub bridge endpoints must report
+# service unavailability instead of a generic Bad Gateway response. Fixed-route
+# programmer/input errors remain hard server failures rather than being softened.
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_HUB_EXPECTED_HTTP'
+from http import HTTPStatus
+import support_web as web
+
+def exercise(path, helper_name, exc):
+    original = getattr(web, helper_name)
+    def fail(*_args, **_kwargs):
+        raise exc
+    setattr(web, helper_name, fail)
+    handler = web.SupportHandler.__new__(web.SupportHandler)
+    handler.path = path
+    handler._allow_ingress_request = lambda: True
+    captured = {}
+    handler._json = lambda data, status=HTTPStatus.OK: captured.update(
+        data=data, status=status
+    )
+    try:
+        handler.do_GET()
+    finally:
+        setattr(web, helper_name, original)
+    return captured
+
+runtime_cases = (
+    ("/api/settings/core", "_core_settings_status"),
+    ("/api/settings/snmp2mqtt", "_snmp2mqtt_settings_status"),
+    ("/api/settings/discovery", "_discovery_settings_status"),
+    ("/api/maintenance/installer-backups", "_installer_maintenance_request"),
+    ("/api/calibration-profiles", "_home_assistant_ws"),
+    ("/api/unifi2mqtt/settings", "_unifi2mqtt_settings_status"),
+)
+for path, helper_name in runtime_cases:
+    result = exercise(path, helper_name, RuntimeError("dependency unavailable"))
+    assert result["status"] == HTTPStatus.SERVICE_UNAVAILABLE, (path, result)
+    assert result["data"]["error"] == "dependency unavailable", (path, result)
+
+for path, helper_name in (
+    ("/api/maintenance/installer-backups", "_installer_maintenance_request"),
+    ("/api/calibration-profiles", "_home_assistant_ws"),
+):
+    result = exercise(path, helper_name, ValueError("internal route error"))
+    assert result["status"] == HTTPStatus.INTERNAL_SERVER_ERROR, (path, result)
+    assert result["data"]["error"] == "internal route error", (path, result)
+
+print("Switch Vision Discovery expected dependency HTTP classification: PASS")
+PY_HUB_EXPECTED_HTTP
+! grep -Fq 'HTTPStatus.BAD_GATEWAY' "$BASE_DIR/support_web.py"
+
 # v2.3.7 explicit font range + shared Hub component geometry regression
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/hub_density_regression.py"
 # v2.3.6 themed visual hierarchy / elegance regression
