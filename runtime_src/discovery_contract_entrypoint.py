@@ -136,14 +136,29 @@ def _prepare_walk(source: Path, destination: Path, work: Path) -> dict[str, Any]
         errors = contract_data.get("errors") if isinstance(contract_data, dict) else None
         if isinstance(errors, list) and errors:
             detail = "; ".join(str(item) for item in errors)
-        print(f"SV_STATUS|stage=Topology conflict|switch={source.parent.name}|target=|command=Physical contract|activity={detail or 'Resolver rejected topology'}")
-        raise RuntimeError(f"Physical contract rejected {source}: {detail or 'unknown resolver error'}")
+        # Preserve authoritative capability/contract artifacts even when the
+        # exact topology is rejected. The caller excludes this target from
+        # generated output but continues independently valid targets.
+        if isinstance(contract_data, dict):
+            return {
+                "source": source,
+                "destination": destination,
+                "capability": capability,
+                "contract_path": contract,
+                "contract": contract_data,
+            }
+        print(
+            "SV_STATUS|stage=Topology conflict|"
+            f"switch={source.parent.name}|target=|command=Physical contract|"
+            f"activity={detail or 'Resolver rejected topology; target excluded'}"
+        )
+        return None
 
     try:
         contract_data = json.loads(contract.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-    if not isinstance(contract_data, dict) or contract_data.get("status") != "resolved":
+    if not isinstance(contract_data, dict):
         return None
     return {
         "source": source,
@@ -169,7 +184,7 @@ def _copy_tree_normalized(source_root: Path, destination_root: Path, work: Path,
         resolved_source = source.resolve()
         if resolved_source in prepared:
             existing = prepared[resolved_source]
-            if existing is not None:
+            if existing is not None and existing["contract"].get("status") == "resolved":
                 shutil.copy2(existing["destination"], destination)
             else:
                 shutil.copy2(source, destination)
@@ -249,10 +264,11 @@ def _stage_current_run_options(
     staged: dict[str, Any],
     work: Path,
     current_run: list[dict[str, str]],
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     staged_root = work / "snmpwalks"
     staged_root.mkdir(parents=True, exist_ok=True)
     ordered: list[dict[str, Any]] = []
+    accepted_evidence: list[dict[str, Any]] = []
     staged_records: list[dict[str, str]] = []
     by_source: dict[Path, Path] = {}
 
@@ -275,14 +291,28 @@ def _stage_current_run_options(
                 "activity=No resolved physical switch contract; target excluded from this run"
             )
             continue
+        accepted_evidence.append(info)
+        status = str(info["contract"].get("status") or "unresolved")
+        if status != "resolved":
+            # A successful walk from an unregistered physical device is still
+            # useful field evidence.  It must never be invented into a legacy
+            # topology/card, but it is retained with its capability and
+            # physical-contract records for later exact-profile work.
+            destination.unlink(missing_ok=True)
+            if status == "topology_conflict":
+                activity = "SNMP evidence preserved; observed topology conflicts with the exact physical contract; target excluded from generated topology"
+                stage = "Topology conflict"
+            else:
+                activity = "SNMP evidence preserved; exact physical mapping is unavailable; target excluded from generated topology"
+                stage = "Physical contract unresolved"
+            print(
+                f"SV_STATUS|stage={stage}|switch={switch}|target=|"
+                f"command=Physical contract|activity={activity}"
+            )
+            continue
         ordered.append(info)
         by_source[source.resolve()] = destination
         staged_records.append({**record, "staged_walk": str(destination)})
-
-    if not ordered:
-        raise RuntimeError(
-            "Current-run SNMP walks did not produce any resolved physical switch contracts."
-        )
 
     # The compatibility tree contains only this run's resolved switch walks, so
     # parse_all_walks is safe internally even when the user's stored-walk
@@ -340,14 +370,14 @@ def _stage_current_run_options(
     target_csv = work / "current-run-targets.csv"
     _write_current_run_targets_csv(target_csv, staged_records)
     staged["targets_csv"] = str(target_csv)
-    return staged, ordered
+    return staged, ordered, accepted_evidence
 
 
 def _stage_options(
     options: dict[str, Any],
     work: Path,
     current_run: list[dict[str, str]] | None = None,
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     staged = copy.deepcopy(options)
     staged["run_snmp_walks"] = "false"
     staged["run_live_snmpwalk"] = "false"
@@ -394,6 +424,7 @@ def _stage_options(
     # for patching legacy model labels; source ifIndex bindings remain in each
     # contract regardless of order.
     ordered: list[dict[str, Any]] = []
+    accepted_evidence: list[dict[str, Any]] = []
     seen: set[Path] = set()
     original_rows = options.get("switches")
     if not isinstance(original_rows, list):
@@ -409,14 +440,18 @@ def _stage_options(
             for source in sorted(output.iterdir()):
                 info = prepared.get(source.resolve()) if source.is_file() else None
                 if info is not None and source.resolve() not in seen:
-                    ordered.append(info)
+                    accepted_evidence.append(info)
+                    if info["contract"].get("status") == "resolved":
+                        ordered.append(info)
                     seen.add(source.resolve())
     for source_path, info in prepared.items():
         if info is not None and source_path not in seen:
-            ordered.append(info)
+            accepted_evidence.append(info)
+            if info["contract"].get("status") == "resolved":
+                ordered.append(info)
             seen.add(source_path)
 
-    return staged, ordered
+    return staged, ordered, accepted_evidence
 
 
 def _patch_report(path: Path, ordered: list[dict[str, Any]]) -> None:
@@ -525,10 +560,16 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="switch_vision_physical_contract_") as tmp:
         work = Path(tmp)
         current_run = _stage_live_collection(options, work)
-        staged, ordered = _stage_options(options, work, current_run)
+        staged, ordered, accepted_evidence = _stage_options(options, work, current_run)
         # Persist validated physical evidence before downstream generation. A
         # later generator/cardinality failure must not discard useful evidence.
-        _publish_contracts(ordered, DEFAULT_CAPABILITIES)
+        _publish_contracts(accepted_evidence, DEFAULT_CAPABILITIES)
+        if not ordered:
+            if accepted_evidence:
+                raise DegradedDiscoveryError(
+                    "SNMP evidence was preserved, but no exact physical switch contract was available for safe topology generation."
+                )
+            raise RuntimeError("Current-run SNMP walks did not produce any resolved physical switch contracts.")
         stage_path = work / "resolved_options.json"
         _write_options(stage_path, staged)
         return_code = _stream_legacy(stage_path, capabilities_dir=work / "runtime_capabilities")
@@ -553,9 +594,17 @@ def main() -> int:
             )
         _patch_report(report, ordered)
         _patch_yaml(generated_yaml, ordered)
+        partial_result = bool(current_run) and len(ordered) != len(current_run)
         if current_run:
             print(f"SV_DEBUG|Physical contract authority: accepted {len(ordered)} of {len(current_run)} current-run walk(s) through normalized generation")
         print(f"SV_DEBUG|Physical contract authority: resolved {len(ordered)} registered device walk(s)")
+        if partial_result:
+            print(
+                "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"
+                "target=|command=Physical contract|"
+                "activity=Safe generated topology completed; unresolved physical evidence was preserved"
+            )
+            return 11
         return 0
 
 

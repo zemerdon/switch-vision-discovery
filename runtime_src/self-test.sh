@@ -240,6 +240,12 @@ r=copy.deepcopy(st["settings"]);r["snmp_timeout"]="4"
 saved=support_web._save_discovery_settings({"settings":r})
 assert disc["switches"][0]["snmp_community"]=="PRIVATE_SNMP_COMMUNITY" and disc["support_contributor_value"]=="PRIVATE_CONTRIBUTOR" and disc["future"]=="keep-too"
 assert "PRIVATE_SNMP_COMMUNITY" not in repr(saved) and "PRIVATE_CONTRIBUTOR" not in repr(saved)
+# A whitespace-only write-only community edit must preserve the saved value,
+# never replace it with whitespace and break an existing target.
+r=copy.deepcopy(saved["settings"]);r["switches"][0]["snmp_community"]="  \t  "
+saved=support_web._save_discovery_settings({"settings":r})
+assert disc["switches"][0]["snmp_community"]=="PRIVATE_SNMP_COMMUNITY"
+assert "PRIVATE_SNMP_COMMUNITY" not in repr(saved)
 print('Switch Vision Discovery v2.3.4 Hub settings ownership/privacy: PASS')
 PY_HUB_SETTINGS
 
@@ -3310,6 +3316,11 @@ assert unexpected_actions == []
 # Successful restart: an initially missing retained identity may arrive later.
 events = []
 web._snmp2mqtt_runtime_info = lambda: dict(base_runtime)
+web.generated_yaml_generation_id = lambda _path: "123e4567-e89b-12d3-a456-426614174000"
+web.verify_generated_yaml_loaded = lambda base_topic, generation_id: (
+    base_topic == "snmp2mqtt"
+    and generation_id == "123e4567-e89b-12d3-a456-426614174000"
+)
 def supervisor(path, *, method="GET", timeout=12.0, payload=None):
     events.append(("supervisor", method, path))
     if path.endswith("/info"):
@@ -3354,6 +3365,7 @@ assert events.index(("scan", 1)) < events.index(("clear", 1))
 # stay untouched and the Discovery handoff must fail.
 events.clear()
 clears.clear()
+web.verify_generated_yaml_loaded = lambda _base_topic, _generation_id: False
 web.scan_mqtt_entities = lambda: {
     "current_expected_count": 1,
     "current_retained_count": 0,
@@ -3364,6 +3376,27 @@ failed = web._ensure_snmp2mqtt_running([], 0.0, [old_topic])
 assert failed["handoff_failed"] is True
 assert failed["activation_verified"] is False
 assert clears == []
+
+# Exact generated-file activation is authoritative. MQTT discovery entities
+# may be published later while the SNMP poller is already active.
+events.clear()
+clears.clear()
+web.generated_yaml_generation_id = lambda _path: "123e4567-e89b-12d3-a456-426614174000"
+web.verify_generated_yaml_loaded = lambda base_topic, generation_id: (
+    base_topic == "snmp2mqtt"
+    and generation_id == "123e4567-e89b-12d3-a456-426614174000"
+)
+web.scan_mqtt_entities = lambda: {
+    "current_expected_count": 2,
+    "current_retained_count": 0,
+    "current_missing_retained_count": 2,
+    "stale_count": 0,
+}
+exact_loaded = web._ensure_snmp2mqtt_running([], 0.0, [])
+assert exact_loaded["handoff_failed"] is False
+assert exact_loaded["config_load_verified"] is True
+assert exact_loaded["activation_verified"] is True
+assert "catching up" in exact_loaded["message"]
 
 source = Path(web.__file__).read_text(encoding="utf-8")
 assert 'if snmp2mqtt_result.get("handoff_failed"):' in source
@@ -3460,6 +3493,44 @@ assert malformed["ports"][0]["walk_freshness_reason"] == "stale"
 
 print("Switch Vision Discovery v2.2.5 verified handoff + walk freshness regression: PASS")
 PYTEST_V225_HANDOFF
+
+# Physical contracts separate valid raw SNMP evidence from an exact-model
+# topology authorization. An unregistered model must be retained for review,
+# while an EX3300 with only one observed uplink is a resolved partial view.
+PYTHONPATH="$BASE_DIR" python3 - <<'PYTEST_PHYSICAL_EVIDENCE'
+import physical_contract as contract
+
+def interface(index, name, media):
+    return {"if_index": index, "name": name, "media": media, "physical": True}
+
+unregistered = contract.resolve(
+    {
+        "device": {"model_text": "WS-C3850-12XS-E", "vendor_name": "Cisco"},
+        "interfaces": [interface(1, "Te1/1/1", "sfp_plus")],
+    },
+    {"devices": []},
+)
+assert unregistered["status"] == "unregistered"
+assert unregistered["device"]["registry_match"] is False
+assert unregistered["observed"]["physical"] == 1
+
+ex_registry = {"devices": [{
+    "model": "EX3300-48P",
+    "vendor": "Juniper",
+    "ports": {"rj45": 48, "uplinks": 4},
+    "stack_support": False,
+}]}
+ex_interfaces = [interface(index, f"ge-0/0/{index - 1}", "rj45") for index in range(1, 49)]
+ex_interfaces.append(interface(49, "xe-0/1/0", "sfp_plus"))
+ex = contract.resolve(
+    {"device": {"model_text": "EX3300-48P", "vendor_name": "Juniper"}, "interfaces": ex_interfaces},
+    ex_registry,
+)
+assert ex["status"] == "resolved"
+assert ex["unobserved_physical"]["uplinks"] == 3
+assert ex["unobserved_physical"]["reason"]
+print("Switch Vision physical evidence / EX3300 partial-observation regression: PASS")
+PYTEST_PHYSICAL_EVIDENCE
 
 # v2.2.5 automatic Support My Switch ordering regression. The shell Discovery
 # stage must never build the automatic contribution before the Hub has checked
