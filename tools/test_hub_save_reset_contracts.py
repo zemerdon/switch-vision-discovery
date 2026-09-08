@@ -148,6 +148,161 @@ def test_discovery_save_and_write_only_secrets() -> None:
         )
 
 
+def test_saved_row_effective_config_is_canonical_fresh_and_secret_safe() -> None:
+    legacy_row = {
+        "switch_name": "SW7",
+        "switch_host": "",
+        "sensor_prefix": "",
+        "snmp_community": "",
+        "walk_mode": "",
+        "switch_model": "",
+        "display_name": "2960X",
+        "host": " 192.168.1.103 ",
+        "prefix": " sw7 ",
+        "community": " private-community ",
+        "enabled": "enabled",
+        "mode": "targeted",
+        "model_override": "WS-C2960X-48FPD-L",
+        "card_header_title": "",
+    }
+    state = {
+        "options": {
+            "enable_switch_list": "true",
+            "snmp_timeout": "3",
+            "snmp_retries": "1",
+            "switches": [legacy_row],
+            "stack_member_prefixes": [],
+        }
+    }
+
+    def get_options():
+        return copy.deepcopy(state["options"])
+
+    def supervisor(path, *, method="GET", timeout=12.0, payload=None):
+        assert path == "/addons/self/options"
+        assert method == "POST"
+        state["options"] = copy.deepcopy(payload["options"])
+        return {}
+
+    with patched(
+        DEFAULT_REGISTRY_FILE=SOURCE_REGISTRY,
+        _self_addon_options=get_options,
+        _supervisor_json=supervisor,
+        create_pre_mutation_backup=lambda *_args, **_kwargs: None,
+        enforce_retention=lambda _options: None,
+    ):
+        status = hub._discovery_settings_status()
+        row = status["settings"]["switches"][0]
+        assert row["switch_name"] == "SW7"
+        assert row["switch_host"] == "192.168.1.103"
+        assert row["sensor_prefix"] == "sw7"
+        assert row["snmp_community"] == ""
+        assert row["snmp_community_configured"] is True
+        assert "community" not in row
+        assert "host" not in row
+        assert "prefix" not in row
+
+        provenance = status["effective_config"]
+        safe_row = provenance["switches"][0]
+        assert provenance["source"] == "supervisor"
+        assert len(provenance["revision"]) == 64
+        assert safe_row["switch_name"] == "SW7"
+        assert safe_row["switch_host"] == "192.168.1.103"
+        assert safe_row["credential_configured"] is True
+        assert "credential_fingerprint" not in safe_row
+        assert provenance["revision_scope"] == "non_secret_effective_config"
+        assert provenance["credential_evidence"] == "configured_state_only"
+        assert "private-community" not in hub.json.dumps(provenance)
+
+        # Reproduce a stale row with blank canonical keys plus populated aliases.
+        with tempfile.TemporaryDirectory(prefix="sv-effective-config-legacy-") as temp:
+            legacy_path = Path(temp) / "options.json"
+            hub._write_authoritative_discovery_options_snapshot(
+                destination=legacy_path,
+                options=state["options"],
+            )
+            legacy_effective = hub.json.loads(
+                legacy_path.read_text(encoding="utf-8")
+            )["switches"][0]
+            assert legacy_effective["switch_host"] == "192.168.1.103"
+            assert legacy_effective["sensor_prefix"] == "sw7"
+            assert legacy_effective["snmp_community"] == "private-community"
+            assert not {
+                "host", "manual_switch_host", "prefix", "entity_prefix",
+                "community", "mode", "model_override",
+            } & set(legacy_effective)
+
+        ambiguous = copy.deepcopy(state["options"])
+        ambiguous["switches"][0]["switch_host"] = "192.168.1.104"
+        expect_value_error(
+            lambda: hub._effective_discovery_options(ambiguous),
+            "conflicting saved aliases",
+        )
+
+        # Saving the original row with a blank write-only field must preserve
+        # its current effective community and migrate legacy aliases to the
+        # canonical row schema instead of requiring a duplicate row.
+        saved = hub._save_discovery_settings(
+            {"settings": {"switches": [dict(row, snmp_community="")]}}
+        )
+        assert saved["saved"] is True
+        persisted = state["options"]["switches"][0]
+        assert persisted["switch_name"] == "SW7"
+        assert persisted["switch_host"] == "192.168.1.103"
+        assert persisted["sensor_prefix"] == "sw7"
+        assert persisted["snmp_community"] == "private-community"
+        assert "community" not in persisted
+        assert "host" not in persisted
+        assert "prefix" not in persisted
+
+        with tempfile.TemporaryDirectory(prefix="sv-effective-config-") as temp:
+            path = Path(temp) / "options.json"
+            first = hub._write_authoritative_discovery_options_snapshot(
+                destination=path,
+                options=state["options"],
+            )
+            first_doc = hub.json.loads(first.read_text(encoding="utf-8"))
+            first_provenance = hub._discovery_effective_config_provenance(
+                state["options"]
+            )
+            assert first_doc["switches"][0]["switch_host"] == "192.168.1.103"
+            assert first_doc["switches"][0]["snmp_community"] == "private-community"
+
+            secret_only = copy.deepcopy(state["options"])
+            secret_only["switches"][0]["snmp_community"] = " another-community "
+            secret_only_provenance = hub._discovery_effective_config_provenance(
+                secret_only
+            )
+            assert secret_only_provenance["revision"] == first_provenance["revision"]
+            assert "credential_fingerprint" not in hub.json.dumps(secret_only_provenance)
+            assert "another-community" not in hub.json.dumps(secret_only_provenance)
+
+            # The next run must consume newly saved values rather than stale
+            # per-row state from the previous snapshot.
+            state["options"]["switches"][0]["switch_host"] = " 192.168.1.104 "
+            state["options"]["switches"][0]["snmp_community"] = " changed-community "
+            second = hub._write_authoritative_discovery_options_snapshot(
+                destination=path,
+                options=state["options"],
+            )
+            second_doc = hub.json.loads(second.read_text(encoding="utf-8"))
+            second_provenance = hub._discovery_effective_config_provenance(
+                state["options"]
+            )
+            assert second_doc["switches"][0]["switch_host"] == "192.168.1.104"
+            assert second_doc["switches"][0]["snmp_community"] == "changed-community"
+            assert first_provenance["revision"] != second_provenance["revision"]
+            assert "credential_fingerprint" not in hub.json.dumps(second_provenance)
+            assert "changed-community" not in hub.json.dumps(second_provenance)
+
+        duplicate = copy.deepcopy(state["options"])
+        duplicate["switches"].append(dict(duplicate["switches"][0]))
+        expect_value_error(
+            lambda: hub._effective_discovery_options(duplicate),
+            "duplicates",
+        )
+
+
 def test_manual_model_fallback_is_complete() -> None:
     # If the runtime registry is temporarily unreadable, the fallback must still
     # accept every manual model allowed by the Supervisor schema.
@@ -411,6 +566,8 @@ def test_latest_contribution_exposes_evidence_metadata() -> None:
 def main() -> int:
     test_discovery_save_and_write_only_secrets()
     print("PASS: Discovery settings save, rename, manual-model and secret preservation contracts")
+    test_saved_row_effective_config_is_canonical_fresh_and_secret_safe()
+    print("PASS: Saved switch rows use fresh canonical effective config with secret-safe provenance")
     test_manual_model_fallback_is_complete()
     print("PASS: Degraded registry fallback accepts current manual model set")
     test_core_reset_contract()
