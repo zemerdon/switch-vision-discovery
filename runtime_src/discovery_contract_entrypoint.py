@@ -534,9 +534,12 @@ def _generated_snmp_card_count(path: Path) -> int:
     )
 
 
-def _stage_live_collection(options: dict[str, Any], work: Path) -> list[dict[str, str]]:
+def _stage_live_collection(
+    options: dict[str, Any],
+    work: Path,
+) -> tuple[list[dict[str, str]], bool]:
     if not _bool(options.get("run_snmp_walks", options.get("run_live_snmpwalk", False))):
-        return []
+        return [], False
     stage = copy.deepcopy(options)
     stage["generate_snmp2mqtt"] = "false"
     stage["generate_support_my_switch_bundle"] = "false"
@@ -547,9 +550,18 @@ def _stage_live_collection(options: dict[str, Any], work: Path) -> list[dict[str
     stage_path = work / "live_collection_options.json"
     _write_options(stage_path, stage)
     return_code = _stream_legacy(stage_path, capabilities_dir=work / "live_collection_capabilities")
-    if return_code != 0:
+    if return_code == 10:
+        raise DegradedDiscoveryError(
+            "Live SNMP collection produced useful evidence, but safe downstream generation cannot be trusted."
+        )
+    if return_code not in {0, 11}:
         raise RuntimeError(f"Live SNMP collection exited with code {return_code}.")
-    return _read_current_run_records()
+    current_run = _read_current_run_records()
+    if return_code == 11 and not current_run:
+        raise RuntimeError(
+            "Live SNMP collection reported PARTIAL without any successful current-run walk."
+        )
+    return current_run, return_code == 11
 
 
 def main() -> int:
@@ -559,7 +571,7 @@ def main() -> int:
     options = _read_options(DEFAULT_OPTIONS)
     with tempfile.TemporaryDirectory(prefix="switch_vision_physical_contract_") as tmp:
         work = Path(tmp)
-        current_run = _stage_live_collection(options, work)
+        current_run, live_collection_partial = _stage_live_collection(options, work)
         staged, ordered, accepted_evidence = _stage_options(options, work, current_run)
         # Persist validated physical evidence before downstream generation. A
         # later generator/cardinality failure must not discard useful evidence.
@@ -594,15 +606,19 @@ def main() -> int:
             )
         _patch_report(report, ordered)
         _patch_yaml(generated_yaml, ordered)
-        partial_result = bool(current_run) and len(ordered) != len(current_run)
+        partial_result = live_collection_partial or (
+            bool(current_run) and len(ordered) != len(current_run)
+        )
         if current_run:
             print(f"SV_DEBUG|Physical contract authority: accepted {len(ordered)} of {len(current_run)} current-run walk(s) through normalized generation")
+        if live_collection_partial:
+            print("SV_DEBUG|Physical contract authority: live collection carried PARTIAL exit 11")
         print(f"SV_DEBUG|Physical contract authority: resolved {len(ordered)} registered device walk(s)")
         if partial_result:
             print(
                 "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"
                 "target=|command=Physical contract|"
-                "activity=Safe generated topology completed; unresolved physical evidence was preserved"
+                "activity=Safe generated topology completed; one or more configured live targets were excluded or unresolved"
             )
             return 11
         return 0

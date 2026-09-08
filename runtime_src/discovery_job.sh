@@ -38,6 +38,7 @@ CURRENT_RUN_TARGETS="/tmp/switch_vision_current_run_targets.txt"
 CAPABILITIES_DIR="${SWITCH_VISION_CAPABILITIES_DIR:-/share/switch_vision/capabilities}"
 POST_WALK_ALREADY_DONE="false"
 GENERATED_CARD_SNMP_ENABLED="false"
+DISCOVERY_EXIT_STATUS="0"
 
 sv_status() {
   # Structured, credential-safe status consumed by the persistent Web UI.
@@ -2499,10 +2500,31 @@ run_multi_switch_walks_if_enabled() {
   warn_count=$(cat /tmp/switch_vision_multi_warn 2>/dev/null || echo 0)
   fail_count=$(cat /tmp/switch_vision_multi_fail 2>/dev/null || echo 0)
   rm -f /tmp/switch_vision_multi_count /tmp/switch_vision_multi_pass /tmp/switch_vision_multi_warn /tmp/switch_vision_multi_fail
+
+  # Fail closed if a configured row somehow completed without a PASS/WARN/FAIL
+  # classification. A target that was not positively classified can never be
+  # promoted into current-run parsing.
+  classified_count=$((pass_count + warn_count + fail_count))
+  if [ "$classified_count" -lt "$count" ]; then
+    fail_count=$((fail_count + count - classified_count))
+  fi
+  useful_count=$((pass_count + warn_count))
+  multi_result="completed"
+  multi_status=0
+  if [ "$fail_count" -gt 0 ]; then
+    if [ "$useful_count" -gt 0 ]; then
+      multi_result="PARTIAL"
+      multi_status=11
+    elif [ "$count" -gt 0 ]; then
+      multi_result="FAILED"
+      multi_status=2
+    fi
+  fi
+
   multi_completed_iso=$(date -Iseconds)
   multi_duration=$(( $(now_epoch) - multi_started_epoch ))
   {
-    echo "Switch-list SNMP walk result: completed"
+    echo "Switch-list SNMP walk result: $multi_result"
     echo "- Started: $multi_started_iso"
     echo "- Completed: $multi_completed_iso"
     echo "- Duration: $(format_duration "$multi_duration")"
@@ -2517,6 +2539,7 @@ run_multi_switch_walks_if_enabled() {
   {
     echo ""
     echo "Switch-list completed: $multi_completed_iso"
+    echo "Switch-list result: $multi_result"
     echo "Switch-list duration: $(format_duration "$multi_duration")"
     echo "Switches walked: $count"
     echo "PASS: $pass_count"
@@ -2532,7 +2555,7 @@ run_multi_switch_walks_if_enabled() {
   PARSE_ALL_WALKS="$original_parse_all"
   SNMPWALKS_DIR="$SNMPWALKS_ROOT_DIR"
   rmdir "$SNMPWALKS_ROOT_DIR/live" 2>/dev/null || true
-  return 0
+  return "$multi_status"
 }
 
 run_live_snmpwalk_if_enabled() {
@@ -2542,20 +2565,38 @@ run_live_snmpwalk_if_enabled() {
   if ! truthy "$RUN_LIVE_SNMPWALK"; then
     return 0
   fi
-  if run_multi_switch_walks_if_enabled; then
-    {
-      echo ""
-      echo "Post-walk execution: switch-list walk complete; running parser/generator now"
-      echo "Post-walk execution: current-run walk list: ${CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks.txt}"
-    } >> "$LIVE_LOG_PATH" 2>/dev/null || true
-    # v0.7.12: run the post-walk parser/generator immediately after switch-list
-    # walks complete. This avoids the previous queued-but-not-parsed flow where
-    # current-run files were recorded but no report/YAML stage was executed.
-    write_report
-    write_last_run_summary
-    POST_WALK_ALREADY_DONE="true"
-    return 0
-  fi
+  # A switch-list return code is a collection classification, not permission
+  # to skip the safe report/generation phase. Preserve PARTIAL (11) and hard
+  # all-target failure (2) until that phase finishes; 1 remains the internal
+  # "switch-list mode not enabled" sentinel for the legacy single-target path.
+  multi_status=0
+  run_multi_switch_walks_if_enabled || multi_status=$?
+  case "$multi_status" in
+    0|11|2)
+      {
+        echo ""
+        echo "Post-walk execution: switch-list walk complete; running parser/generator now"
+        echo "Post-walk execution: current-run walk list: ${CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks.txt}"
+      } >> "$LIVE_LOG_PATH" 2>/dev/null || true
+      # Run the post-walk parser/generator from current-run evidence even for a
+      # partial collection. Failed targets were never queued, and the user's
+      # stored-walk preference has already been restored.
+      write_report
+      write_last_run_summary
+      POST_WALK_ALREADY_DONE="true"
+      if [ "$multi_status" -ne 0 ]; then
+        DISCOVERY_EXIT_STATUS="$multi_status"
+      fi
+      return 0
+      ;;
+    1)
+      : # Multi-switch mode is disabled; continue with legacy single-target mode.
+      ;;
+    *)
+      return "$multi_status"
+      ;;
+  esac
+
   LIVE_LOG_APPEND="false"
   run_live_snmpwalk_current
 }
@@ -4280,6 +4321,22 @@ if [ "$GENERATE_SUPPORT_MY_SWITCH_BUNDLE" = "true" ]; then
     /support_my_switch.sh
   echo ""
 fi
-sv_status "Complete" "All configured switches" "complete" "" "Discovery complete"
-sv_debug "STAGE: Discovery complete"
-echo "Switch Vision Discovery run complete. Web UI remains available."
+case "${DISCOVERY_EXIT_STATUS:-0}" in
+  0)
+    sv_status "Complete" "All configured switches" "complete" "" "Discovery complete"
+    sv_debug "STAGE: Discovery complete"
+    echo "Switch Vision Discovery run complete. Web UI remains available."
+    ;;
+  11)
+    sv_status "Complete with warnings" "All configured switches" "partial" "" "Discovery partial; safe current-run results preserved"
+    sv_debug "STAGE: Discovery partial"
+    echo "Switch Vision Discovery run completed with PARTIAL results. Safe current-run evidence was preserved."
+    exit 11
+    ;;
+  *)
+    sv_status "Failed" "All configured switches" "failed" "" "Discovery live collection failed"
+    sv_debug "STAGE: Discovery failed"
+    echo "Switch Vision Discovery run failed. Safe report state was written without historical walk fallback."
+    exit "$DISCOVERY_EXIT_STATUS"
+    ;;
+esac
