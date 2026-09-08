@@ -478,6 +478,123 @@ def _validate_inventory_identities(configuration: dict[str, Any]) -> None:
             )
 
 
+def _saved_switch_text(
+    row: dict[str, Any],
+    primary: str,
+    *legacy_aliases: str,
+    default: str = "",
+) -> str:
+    """Resolve one saved switch field without allowing stale aliases to override it."""
+    if primary in row:
+        return str(row.get(primary) or "").strip()
+    for alias in legacy_aliases:
+        if alias in row:
+            return str(row.get(alias) or "").strip()
+    return default
+
+
+def _effective_discovery_switch_row(raw: Any, index: int) -> dict[str, Any]:
+    """Canonicalize one saved row from the current Supervisor options snapshot."""
+    if not isinstance(raw, dict):
+        raise ValueError(f"Switch entry {index} must be an object.")
+
+    row: dict[str, Any] = {
+        "switch_name": _saved_switch_text(
+            raw, "switch_name", "switch", "selected_switch", "name"
+        ),
+        "switch_host": _saved_switch_text(
+            raw, "switch_host", "host", "manual_switch_host"
+        ),
+        "sensor_prefix": _saved_switch_text(
+            raw, "sensor_prefix", "entity_prefix", "prefix"
+        ),
+        "snmp_community": _saved_switch_text(
+            raw, "snmp_community", "community"
+        ),
+        "enabled": raw.get("enabled", "enabled"),
+        "walk_mode": _saved_switch_text(
+            raw, "walk_mode", "mode", default="targeted"
+        ) or "targeted",
+        "switch_model": _saved_switch_text(
+            raw, "switch_model", "model_override", default="auto"
+        ) or "auto",
+        "card_header_title": _saved_switch_text(
+            raw, "card_header_title"
+        ),
+    }
+    if "display_name" in raw or "card_title" in raw:
+        row["display_name"] = _saved_switch_text(
+            raw, "display_name", "card_title"
+        )
+    if "output_dir" in raw:
+        row["output_dir"] = raw.get("output_dir")
+    return _validate_switch_row(row, index)
+
+
+def _effective_discovery_options(options: dict[str, Any]) -> dict[str, Any]:
+    """Return the deterministic effective config consumed by every Discovery run."""
+    if not isinstance(options, dict):
+        raise RuntimeError("Discovery options must be an object.")
+    effective = dict(options)
+    rows = options.get("switches")
+    if not isinstance(rows, list):
+        rows = []
+    effective["switches"] = [
+        _effective_discovery_switch_row(raw, index)
+        for index, raw in enumerate(rows, start=1)
+    ]
+    _validate_inventory_identities(effective)
+    return effective
+
+
+def _credential_fingerprint(value: Any) -> str:
+    """Return a short one-way diagnostic fingerprint without exposing a credential."""
+    text = str(value or "")
+    if not text:
+        return ""
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return f"sha256:{digest[:12]}"
+
+
+def _discovery_effective_config_provenance(
+    options: dict[str, Any],
+    *,
+    source: str = "supervisor",
+) -> dict[str, Any]:
+    """Expose credential-safe proof of the exact switch values used for a run."""
+    effective = _effective_discovery_options(options)
+    safe_switches: list[dict[str, Any]] = []
+    for index, row in enumerate(effective.get("switches", []), start=1):
+        if not isinstance(row, dict):
+            continue
+        community = str(row.get("snmp_community") or "")
+        safe_switches.append({
+            "index": index,
+            "switch_name": str(row.get("switch_name") or ""),
+            "switch_host": str(row.get("switch_host") or ""),
+            "sensor_prefix": str(row.get("sensor_prefix") or ""),
+            "switch_model": str(row.get("switch_model") or "auto"),
+            "enabled": str(row.get("enabled") or "enabled"),
+            "walk_mode": str(row.get("walk_mode") or "targeted"),
+            "credential_configured": bool(community),
+            "credential_fingerprint": _credential_fingerprint(community),
+        })
+    material = {
+        "enable_switch_list": str(effective.get("enable_switch_list") or ""),
+        "snmp_timeout": str(effective.get("snmp_timeout") or ""),
+        "snmp_retries": str(effective.get("snmp_retries") or ""),
+        "switches": safe_switches,
+    }
+    revision = hashlib.sha256(
+        json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return {
+        "source": source,
+        "revision": revision,
+        "switches": safe_switches,
+    }
+
+
 def _validate_discovery_import(data: Any) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("Configuration file must contain a JSON object.")
@@ -905,6 +1022,12 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
             options_snapshot = _write_authoritative_discovery_options_snapshot(
                 options=authoritative_options,
             )
+            _set_discovery_state(
+                effective_config=_discovery_effective_config_provenance(
+                    authoritative_options,
+                    source="supervisor",
+                )
+            )
         discovery_env = os.environ.copy()
         discovery_env["SWITCH_VISION_OPTIONS_FILE"] = str(options_snapshot)
         if regenerate_only:
@@ -1314,8 +1437,7 @@ def _write_authoritative_discovery_options_snapshot(
     The Hub creates that bundle only after the SNMP2MQTT handoff has been checked.
     """
     source_options = dict(options) if isinstance(options, dict) else _self_addon_options()
-    _validate_inventory_identities(source_options)
-    snapshot_options = dict(source_options)
+    snapshot_options = _effective_discovery_options(source_options)
     snapshot_options["generate_support_my_switch_bundle"] = False
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
@@ -1926,7 +2048,7 @@ _DISCOVERY_HUB_PATH_KEYS = {"input_path", "snmpwalks_dir", "report_path", "targe
 
 
 def _discovery_settings_status() -> dict[str, Any]:
-    options = _self_addon_options()
+    options = _effective_discovery_options(_self_addon_options())
     defaults = {
         "input_path": "/share/switch_vision/snmpwalk.txt", "snmpwalks_dir": "/share/switch_vision/snmpwalks", "report_path": "/share/switch_vision/discovery-report.txt",
         "run_snmp_walks": "true", "enable_switch_list": "true", "switches": [], "stack_member_prefixes": [], "parse_all_walks": "false", "generate_snmp2mqtt": "true", "clean_output_before_walk": "false",
@@ -1951,7 +2073,16 @@ def _discovery_settings_status() -> dict[str, Any]:
     settings["stack_member_prefixes"] = [dict(item) for item in stack if isinstance(item, dict)] if isinstance(stack, list) else []
     settings["support_contributor_value_configured"] = bool(str(options.get("support_contributor_value") or ""))
     settings["support_contributor_value"] = ""
-    return {"schema_version": 1, "settings": settings, "models": sorted({"auto"} | _manual_snmp_override_models()), "secret_policy": {"snmp_community": "write_only_blank_preserves", "support_contributor_value": "write_only_blank_preserves"}}
+    return {
+        "schema_version": 1,
+        "settings": settings,
+        "models": sorted({"auto"} | _manual_snmp_override_models()),
+        "secret_policy": {
+            "snmp_community": "write_only_blank_preserves",
+            "support_contributor_value": "write_only_blank_preserves",
+        },
+        "effective_config": _discovery_effective_config_provenance(options),
+    }
 
 
 def _save_discovery_settings(data: Any) -> dict[str, Any]:
@@ -1966,6 +2097,7 @@ def _save_discovery_settings(data: Any) -> dict[str, Any]:
         raise ValueError(f"Unsupported Discovery setting: {unknown[0]}")
     with _OPTIONS_UPDATE_LOCK:
         current = _self_addon_options()
+        current_effective = _effective_discovery_options(current)
         updated = dict(current)
         for key in _DISCOVERY_HUB_PATH_KEYS:
             if key in requested:
@@ -2006,8 +2138,16 @@ def _save_discovery_settings(data: Any) -> dict[str, Any]:
             rows = requested["switches"]
             if not isinstance(rows, list) or len(rows) > 256:
                 raise ValueError("switches must contain at most 256 entries.")
-            current_rows = current.get("switches") if isinstance(current.get("switches"), list) else []
-            current_by_name = {str(row.get("switch_name") or "").strip(): row for row in current_rows if isinstance(row, dict) and str(row.get("switch_name") or "").strip()}
+            current_rows = (
+                current_effective.get("switches")
+                if isinstance(current_effective.get("switches"), list)
+                else []
+            )
+            current_by_name = {
+                str(row.get("switch_name") or "").strip(): row
+                for row in current_rows
+                if isinstance(row, dict) and str(row.get("switch_name") or "").strip()
+            }
             validated_rows: list[dict[str, Any]] = []
             for index, raw in enumerate(rows, start=1):
                 if not isinstance(raw, dict):
