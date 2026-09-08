@@ -108,18 +108,18 @@ find "$ok/published-capabilities" -name '*-physical-contract.json' -type f | gre
 
 echo 'entrypoint positive path: PASS'
 
-# Paul mixed-device regression: a resolved HP 3500yl contract can legitimately
+# Mixed-device regression: a resolved HP 3500yl contract can legitimately
 # use a fallback/generated card even when registry dashboard_support is false.
 # It must still count toward generated SNMP card cardinality alongside two
 # resolved Dell N2128PX-ON switches, or the Hub can falsely degrade the run
 # and block the SNMP2MQTT restart/handoff.
-python3 - "$ENTRYPOINT" <<'PY_PAUL_MIXED_CARDINALITY'
+python3 - "$ENTRYPOINT" <<'PY_MIXED_CARDINALITY'
 from __future__ import annotations
 import importlib.util
 from pathlib import Path
 import sys
 entrypoint = Path(sys.argv[1])
-spec = importlib.util.spec_from_file_location("sv_discovery_contract_entrypoint_paul", entrypoint)
+spec = importlib.util.spec_from_file_location("sv_discovery_contract_entrypoint_mixed", entrypoint)
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
@@ -129,9 +129,9 @@ ordered = [
     {"contract": {"status": "resolved", "device": {"model": "N2128PX-ON", "dashboard_support": True}, "observed": {"members": 1}}},
 ]
 expected = module._expected_generated_snmp_cards(ordered)
-assert expected == 3, f"Paul mixed HP + 2 Dell run must expect 3 cards, got {expected}"
-PY_PAUL_MIXED_CARDINALITY
-echo 'entrypoint Paul mixed HP + 2 Dell cardinality: PASS'
+assert expected == 3, f"Mixed HP + 2 Dell run must expect 3 cards, got {expected}"
+PY_MIXED_CARDINALITY
+echo 'entrypoint mixed HP + 2 Dell cardinality: PASS'
 
 # Negative path: an exact registered model with incomplete physical evidence
 # must fail closed rather than silently drawing a smaller switch.
