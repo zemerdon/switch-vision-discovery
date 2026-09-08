@@ -4491,22 +4491,24 @@ class SupportHandler(BaseHTTPRequestHandler):
             try:
                 self._json(_core_settings_status())
             except RuntimeError as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+                self._json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
         elif path == "/api/settings/snmp2mqtt":
             try:
                 self._json(_snmp2mqtt_settings_status())
             except RuntimeError as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+                self._json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
         elif path == "/api/settings/discovery":
             try:
                 self._json(_discovery_settings_status())
             except RuntimeError as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+                self._json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
         elif path == "/api/maintenance/installer-backups":
             try:
                 self._json(_installer_maintenance_request("status"))
-            except (ValueError, RuntimeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+            except ValueError as exc:
+                self._json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            except RuntimeError as exc:
+                self._json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
         elif path == "/api/maintenance/discovery-backups":
             try:
                 self._json(discovery_backup_status(_self_addon_options()))
@@ -4564,19 +4566,21 @@ class SupportHandler(BaseHTTPRequestHandler):
                     else {}
                 )
 
-            except (
-                ValueError,
-                RuntimeError,
-            ) as exc:
+            except ValueError as exc:
                 self._json(
                     {"error": str(exc)},
-                    HTTPStatus.BAD_GATEWAY,
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
+            except RuntimeError as exc:
+                self._json(
+                    {"error": str(exc)},
+                    HTTPStatus.SERVICE_UNAVAILABLE,
                 )
         elif path == "/api/unifi2mqtt/settings":
             try:
                 self._json(_unifi2mqtt_settings_status())
             except RuntimeError as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+                self._json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
         elif path == "/api/configured-devices":
             self._json(_configured_devices_snapshot(self.app.options_file))
         elif path == "/api/diagnostics":
