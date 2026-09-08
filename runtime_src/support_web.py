@@ -485,12 +485,17 @@ def _saved_switch_text(
     default: str = "",
 ) -> str:
     """Resolve one saved switch field without allowing stale aliases to override it."""
-    if primary in row:
-        return str(row.get(primary) or "").strip()
-    for alias in legacy_aliases:
-        if alias in row:
-            return str(row.get(alias) or "").strip()
-    return default
+    values = [
+        str(row.get(key) or "").strip()
+        for key in (primary, *legacy_aliases)
+        if key in row and str(row.get(key) or "").strip()
+    ]
+    if not values:
+        return default
+    selected = values[0]
+    if any(value != selected for value in values[1:]):
+        raise ValueError(f"{primary} has conflicting saved aliases.")
+    return selected
 
 
 def _effective_discovery_switch_row(raw: Any, index: int) -> dict[str, Any]:
@@ -547,15 +552,6 @@ def _effective_discovery_options(options: dict[str, Any]) -> dict[str, Any]:
     return effective
 
 
-def _credential_fingerprint(value: Any) -> str:
-    """Return a short one-way diagnostic fingerprint without exposing a credential."""
-    text = str(value or "")
-    if not text:
-        return ""
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    return f"sha256:{digest[:12]}"
-
-
 def _discovery_effective_config_provenance(
     options: dict[str, Any],
     *,
@@ -577,7 +573,6 @@ def _discovery_effective_config_provenance(
             "enabled": str(row.get("enabled") or "enabled"),
             "walk_mode": str(row.get("walk_mode") or "targeted"),
             "credential_configured": bool(community),
-            "credential_fingerprint": _credential_fingerprint(community),
         })
     material = {
         "enable_switch_list": str(effective.get("enable_switch_list") or ""),
@@ -591,6 +586,8 @@ def _discovery_effective_config_provenance(
     return {
         "source": source,
         "revision": revision,
+        "revision_scope": "non_secret_effective_config",
+        "credential_evidence": "configured_state_only",
         "switches": safe_switches,
     }
 
