@@ -167,14 +167,14 @@ if [ "$conflict_status" -eq 0 ]; then
   echo 'FAIL: topology conflict unexpectedly succeeded' >&2
   exit 1
 fi
-if [ "$conflict_status" -ne 2 ]; then
-  echo "FAIL: topology conflict exited $conflict_status instead of 2" >&2
+if [ "$conflict_status" -ne 10 ]; then
+  echo "FAIL: unresolved topology evidence exited $conflict_status instead of 10" >&2
   cat "$conflict/stdout.txt" >&2 || true
   cat "$conflict/stderr.txt" >&2 || true
   exit 1
 fi
-if ! grep -Fq 'Topology conflict' "$conflict/stdout.txt"; then
-  echo 'FAIL: topology conflict did not surface its status marker' >&2
+if ! grep -Fq 'Complete with warnings' "$conflict/stdout.txt"; then
+  echo 'FAIL: unresolved topology evidence did not surface its warning marker' >&2
   cat "$conflict/stdout.txt" >&2 || true
   cat "$conflict/stderr.txt" >&2 || true
   exit 1
@@ -184,7 +184,7 @@ fi
   exit 1
 }
 
-echo 'entrypoint topology-conflict guard: PASS'
+echo 'entrypoint unresolved-topology evidence guard: PASS'
 
 # Downstream/cardinality failure: validated physical evidence must survive and
 # the executable entrypoint must return the reserved degraded exit code 10.
@@ -335,7 +335,8 @@ def resolved_prepare(source: Path, destination: Path, work: Path):
     }
 
 module._prepare_walk = resolved_prepare
-staged, ordered = module._stage_options(options, root / "work", records)
+staged, ordered, accepted_evidence = module._stage_options(options, root / "work", records)
+assert len(accepted_evidence) == 1, accepted_evidence
 assert len(ordered) == 1, ordered
 assert [row["switch_name"] for row in staged["switches"]] == ["supported"], staged["switches"]
 assert [row["switch_name"] for row in staged["stack_member_prefixes"]] == ["supported"], staged["stack_member_prefixes"]
@@ -346,12 +347,10 @@ assert staged["input_path"].endswith("supported.txt"), staged["input_path"]
 assert not (root / "work" / "snmpwalks" / "unsupported" / "unsupported.txt").exists()
 
 module._prepare_walk = lambda source, destination, work: None
-try:
-    module._stage_options(options, root / "all-unresolved", records)
-except RuntimeError as exc:
-    assert "did not produce any resolved physical switch contracts" in str(exc)
-else:
-    raise AssertionError("all-unresolved current-run staging unexpectedly succeeded")
+staged, ordered, accepted_evidence = module._stage_options(options, root / "all-unresolved", records)
+assert not ordered, ordered
+assert not accepted_evidence, accepted_evidence
+assert staged["switches"] == [], staged["switches"]
 
 def fatal_prepare(source: Path, destination: Path, work: Path):
     raise RuntimeError("synthetic topology conflict")
