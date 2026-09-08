@@ -456,29 +456,37 @@ Path(record["walk"]).write_text('.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"\n
 m._read_current_run_records = lambda: [record]
 for code, expected_partial in ((0, False), (11, True)):
     m._stream_legacy = lambda *a, _code=code, **k: _code
-    rows, partial = m._stage_live_collection(options, root/f"stage-{code}")
+    work = root/f"stage-{code}"
+    work.mkdir(parents=True, exist_ok=True)
+    rows, partial = m._stage_live_collection(options, work)
     assert rows == [record] and partial is expected_partial
 
 m._stream_legacy = lambda *a, **k: 11
 m._read_current_run_records = lambda: []
+work = root/"empty-partial"
+work.mkdir(parents=True, exist_ok=True)
 try:
-    m._stage_live_collection(options, root/"empty-partial")
+    m._stage_live_collection(options, work)
 except RuntimeError as exc:
     assert "PARTIAL without any successful current-run walk" in str(exc)
 else:
     raise AssertionError("empty PARTIAL was accepted")
 
 m._stream_legacy = lambda *a, **k: 10
+work = root/"degraded"
+work.mkdir(parents=True, exist_ok=True)
 try:
-    m._stage_live_collection(options, root/"degraded")
+    m._stage_live_collection(options, work)
 except m.DegradedDiscoveryError as exc:
     assert "useful evidence" in str(exc)
 else:
     raise AssertionError("exit 10 lost degraded classification")
 
 m._stream_legacy = lambda *a, **k: 7
+work = root/"fatal"
+work.mkdir(parents=True, exist_ok=True)
 try:
-    m._stage_live_collection(options, root/"fatal")
+    m._stage_live_collection(options, work)
 except RuntimeError as exc:
     assert "code 7" in str(exc)
 else:
