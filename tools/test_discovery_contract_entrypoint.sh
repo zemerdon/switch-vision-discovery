@@ -404,7 +404,20 @@ EOF_OPTIONS
   status=$?
   set -e
   if [ "$good" = yes ]; then
-    [ "$status" -eq 11 ] || { echo "FAIL: mixed live rc=$status" >&2; exit 1; }
+    [ "$status" -eq 11 ] || {
+      echo "FAIL: mixed live rc=$status" >&2
+      echo '--- live stdout ---' >&2
+      cat "$case_dir/stdout" >&2 || true
+      echo '--- live stderr ---' >&2
+      cat "$case_dir/stderr" >&2 || true
+      echo '--- live report ---' >&2
+      cat "$case_dir/report.txt" >&2 || true
+      echo '--- live log ---' >&2
+      cat "$case_dir/discovery.log" >&2 || true
+      echo '--- current-run walks ---' >&2
+      cat /tmp/switch_vision_current_run_walks.txt >&2 || true
+      exit 1
+    }
     grep -Fq 'Switch-list SNMP walk result: PARTIAL' "$case_dir/report.txt"
     [ "$(wc -l </tmp/switch_vision_current_run_walks.txt | tr -d ' ')" -eq 1 ]
     grep -Fq "$case_dir/walks/one/live-targeted-snmpwalk.txt" /tmp/switch_vision_current_run_walks.txt
