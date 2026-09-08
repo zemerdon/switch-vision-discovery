@@ -387,7 +387,7 @@ chmod +x "$live/bin/snmpwalk"
 run_live_case() {
   name=$1; good=$2
   case_dir="$live/$name"
-  mkdir -p "$case_dir/walks/one" "$case_dir/walks/two" "$case_dir/caps"
+  mkdir -p "$case_dir/walks/one" "$case_dir/walks/two" "$case_dir/caps" "$case_dir/share"
   for sw in one two; do
     cat > "$case_dir/walks/$sw/live-full-snmpwalk.txt" <<'EOF_STALE'
 # STALE_HISTORICAL_WALK_MUST_NOT_PARSE
@@ -400,7 +400,7 @@ EOF_STALE
 EOF_OPTIONS
   rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
   set +e
-  PATH="$live/bin:$PATH" SV_TEST_SNMP_SOURCE="$live/dell.txt" SWITCH_VISION_OPTIONS_FILE="$case_dir/options.json" SWITCH_VISION_CAPABILITIES_DIR="$case_dir/caps" "$RUNTIME/discovery_job.sh" >"$case_dir/stdout" 2>"$case_dir/stderr"
+  PATH="$live/bin:$PATH" SV_TEST_SNMP_SOURCE="$live/dell.txt" SWITCH_VISION_OPTIONS_FILE="$case_dir/options.json" SWITCH_VISION_CAPABILITIES_DIR="$case_dir/caps" SWITCH_VISION_SHARE_DIR="$case_dir/share" "$RUNTIME/discovery_job.sh" >"$case_dir/stdout" 2>"$case_dir/stderr"
   status=$?
   set -e
   if [ "$good" = yes ]; then
