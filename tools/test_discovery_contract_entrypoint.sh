@@ -366,4 +366,140 @@ else:
 print("entrypoint mixed current-run exclusion: PASS")
 PY
 
+# Live partial/all-fail regression uses the real legacy runtime with a fake
+# snmpwalk. Stale full-walk files remain physically present while current
+# targeted attempts run, proving only CURRENT_RUN_WALKS is consumed.
+live="$TMP/live-exit"
+mkdir -p "$live/bin"
+cat > "$live/bin/snmpwalk" <<'EOF_SNMP'
+#!/usr/bin/env sh
+set -eu
+host=""; oid=""
+for arg in "$@"; do
+  case "$arg" in 192.0.2.*) host="$arg";; 1|1.*) oid="$arg";; esac
+done
+case "$host" in
+  192.0.2.31)
+    if [ "$oid" = "1.3.6.1.2.1.1.1.0" ]; then
+      echo '.1.3.6.1.2.1.1.1.0 = STRING: "Synthetic Switch"'
+    else
+      echo '.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"'
+      echo '.1.3.6.1.2.1.2.2.1.8.1 = INTEGER: up(1)'
+    fi
+    ;;
+  *) exit 1 ;;
+esac
+EOF_SNMP
+chmod +x "$live/bin/snmpwalk"
+
+run_live_case() {
+  name=$1; good=$2
+  case_dir="$live/$name"
+  mkdir -p "$case_dir/walks/one" "$case_dir/walks/two" "$case_dir/caps"
+  for sw in one two; do
+    cat > "$case_dir/walks/$sw/live-full-snmpwalk.txt" <<'EOF_STALE'
+# STALE_HISTORICAL_WALK_MUST_NOT_PARSE
+.1.3.6.1.2.1.31.1.1.1.1.99 = STRING: "Gi9/9/9"
+EOF_STALE
+  done
+  if [ "$good" = yes ]; then h1=192.0.2.31; h2=192.0.2.32; else h1=192.0.2.41; h2=192.0.2.42; fi
+  cat > "$case_dir/options.json" <<EOF_OPTIONS
+{"snmpwalks_dir":"$case_dir/walks","report_path":"$case_dir/report.txt","run_snmp_walks":"true","enable_switch_list":"true","parse_all_walks":"false","generate_snmp2mqtt":"false","switches":[{"switch_name":"one","switch_host":"$h1","sensor_prefix":"ONE","snmp_community":"readonly","enabled":true},{"switch_name":"two","switch_host":"$h2","sensor_prefix":"TWO","snmp_community":"readonly","enabled":true}],"last_run_summary_path":"$case_dir/summary.txt","generated_yaml_path":"$case_dir/generated.yaml","generated_card_path":"$case_dir/card.yaml","snmp_log_path":"$case_dir/discovery.log","minimum_valid_walk_lines":"1","clean_output_before_walk":"false","generate_support_my_switch_bundle":"false"}
+EOF_OPTIONS
+  rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
+  set +e
+  PATH="$live/bin:$PATH" SWITCH_VISION_OPTIONS_FILE="$case_dir/options.json" SWITCH_VISION_CAPABILITIES_DIR="$case_dir/caps" "$RUNTIME/discovery_job.sh" >"$case_dir/stdout" 2>"$case_dir/stderr"
+  status=$?
+  set -e
+  if [ "$good" = yes ]; then
+    [ "$status" -eq 11 ] || { echo "FAIL: mixed live rc=$status" >&2; exit 1; }
+    grep -Fq 'Switch-list SNMP walk result: PARTIAL' "$case_dir/report.txt"
+    [ "$(wc -l </tmp/switch_vision_current_run_walks.txt | tr -d ' ')" -eq 1 ]
+    grep -Fq "$case_dir/walks/one/live-targeted-snmpwalk.txt" /tmp/switch_vision_current_run_walks.txt
+  else
+    [ "$status" -eq 2 ] || { echo "FAIL: all-fail live rc=$status" >&2; exit 1; }
+    [ ! -s /tmp/switch_vision_current_run_walks.txt ]
+    grep -Fq 'Switch-list SNMP walk result: FAILED' "$case_dir/report.txt"
+    grep -Fq 'Historical SNMP walks were ignored.' "$case_dir/report.txt"
+  fi
+  ! grep -Fq 'STALE_HISTORICAL_WALK_MUST_NOT_PARSE' "$case_dir/report.txt"
+  test -f "$case_dir/walks/two/live-full-snmpwalk.txt"
+}
+run_live_case mixed yes
+run_live_case all-fail no
+echo 'entrypoint live PARTIAL/all-fail stale-walk contract: PASS'
+
+# Physical-contract return classification: 11 is accepted and carried, 10
+# remains degraded, and unexpected non-zero remains fatal.
+python3 - "$ENTRYPOINT" "$TMP" <<'PY_LIVE_CODES'
+from __future__ import annotations
+import importlib.util
+from pathlib import Path
+import sys
+
+entrypoint = Path(sys.argv[1])
+root = Path(sys.argv[2]) / "live-codes"
+root.mkdir(parents=True, exist_ok=True)
+spec = importlib.util.spec_from_file_location("sv_live_codes", entrypoint)
+assert spec and spec.loader
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+options = {"run_snmp_walks": True}
+record = {"walk": str(root/"ok.txt"), "switch":"ok", "host":"192.0.2.51", "prefix":"OK", "community":"readonly"}
+Path(record["walk"]).write_text('.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"\n', encoding="utf-8")
+
+m._read_current_run_records = lambda: [record]
+for code, expected_partial in ((0, False), (11, True)):
+    m._stream_legacy = lambda *a, _code=code, **k: _code
+    rows, partial = m._stage_live_collection(options, root/f"stage-{code}")
+    assert rows == [record] and partial is expected_partial
+
+m._stream_legacy = lambda *a, **k: 11
+m._read_current_run_records = lambda: []
+try:
+    m._stage_live_collection(options, root/"empty-partial")
+except RuntimeError as exc:
+    assert "PARTIAL without any successful current-run walk" in str(exc)
+else:
+    raise AssertionError("empty PARTIAL was accepted")
+
+m._stream_legacy = lambda *a, **k: 10
+try:
+    m._stage_live_collection(options, root/"degraded")
+except m.DegradedDiscoveryError as exc:
+    assert "useful evidence" in str(exc)
+else:
+    raise AssertionError("exit 10 lost degraded classification")
+
+m._stream_legacy = lambda *a, **k: 7
+try:
+    m._stage_live_collection(options, root/"fatal")
+except RuntimeError as exc:
+    assert "code 7" in str(exc)
+else:
+    raise AssertionError("unexpected non-zero was accepted")
+
+# Main path carries a live PARTIAL through safe normalized generation.
+m.LEGACY = root/"legacy"; m.PREPARE = root/"prepare"; m.REGISTRY = root/"registry"
+for path in (m.LEGACY, m.PREPARE, m.REGISTRY): path.write_text("x", encoding="utf-8")
+m.DEFAULT_OPTIONS = root/"options.json"; m.DEFAULT_OPTIONS.write_text("{}", encoding="utf-8")
+m.DEFAULT_CAPABILITIES = root/"caps"
+m._stage_live_collection = lambda options, work: ([record], True)
+contract = {"status":"resolved","device":{"model":"Synthetic"},"observed":{"physical":1,"members":1}}
+def stage(options, work, current):
+    cap=work/"cap"; con=work/"con"; dst=work/"ok.txt"
+    for p in (cap, con, dst): p.write_text("x", encoding="utf-8")
+    info={"source":Path(record["walk"]),"destination":dst,"capability":cap,"contract_path":con,"contract":contract}
+    return options, [info], [info]
+m._stage_options = stage
+m._publish_contracts = lambda *a, **k: None
+m._stream_legacy = lambda *a, **k: 0
+m._expected_generated_snmp_cards = lambda ordered: 1
+m._generated_snmp_card_count = lambda path: 1
+m._patch_report = lambda *a: None
+m._patch_yaml = lambda *a: None
+assert m.main() == 11
+print("entrypoint live exit classification/carry: PASS")
+PY_LIVE_CODES
+
 echo 'Switch Vision Discovery physical-contract entrypoint: PASS'
