@@ -523,10 +523,9 @@ def _effective_discovery_switch_row(raw: Any, index: int) -> dict[str, Any]:
         "switch_model": _saved_switch_text(
             raw, "switch_model", "model_override", default="auto"
         ) or "auto",
-        "card_header_title": _saved_switch_text(
-            raw, "card_header_title"
-        ),
     }
+    if "card_header_title" in raw:
+        row["card_header_title"] = _saved_switch_text(raw, "card_header_title")
     if "display_name" in raw or "card_title" in raw:
         row["display_name"] = _saved_switch_text(
             raw, "display_name", "card_title"
