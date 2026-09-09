@@ -183,6 +183,38 @@ i=1
 while [ "$i" -le 20 ]; do append_iface "$sg350" "$i" "gi$i"; i=$((i + 1)); done
 run_case cisco-sg350 "$sg350" SG350 'SG350-20' 20
 
+# Field-evidence invariant: IOS may expose four Te1/1/N rows for an empty
+# C3850-12XS network-module bay. Only the twelve fixed Te1/0/1..12 front-panel
+# positions are physical and may be normalized or published.
+c3850="$TMP/cisco-3850-12xs-no-module.txt"
+make_walk "$c3850" 'Cisco IOS Software, Catalyst 3850, WS-C3850-12XS' '1.3.6.1.4.1.9.1.1745'
+idx=1
+i=1
+while [ "$i" -le 12 ]; do append_iface "$c3850" "$idx" "Te1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+i=1
+while [ "$i" -le 4 ]; do append_iface "$c3850" "$idx" "Te1/1/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+printf '.1.3.6.1.2.1.47.1.1.1.1.13.1001 = STRING: "WS-C3850-12XS-E"\n' >> "$c3850"
+run_case cisco-3850-12xs-no-module "$c3850" C3850 'WS-C3850-12XS-E' 12
+
+c3850_dir="$TMP/cisco-3850-12xs-no-module"
+c3850_norm="$c3850_dir/snmpwalks/$(basename "$c3850")"
+c3850_yaml="$c3850_dir/generated.yaml"
+c3850_card="$c3850_dir/card.yaml"
+grep -Fq 'Te1/0/1' "$c3850_norm" || note_failure "cisco-3850-12xs-no-module: normalized fixed port Te1/0/1 missing"
+grep -Fq 'Te1/0/12' "$c3850_norm" || note_failure "cisco-3850-12xs-no-module: normalized fixed port Te1/0/12 missing"
+if grep -Eq '(Te|TenGigabitEthernet)1/1/' "$c3850_norm"; then
+  note_failure "cisco-3850-12xs-no-module: empty-bay Te1/1/N leaked into normalized physical walk"
+fi
+grep -Fq '    name: C3850 SFP 10G 1 Status' "$c3850_yaml" || note_failure "cisco-3850-12xs-no-module: missing SFP 10G 1 status entity"
+grep -Fq '    name: C3850 SFP 10G 12 Status' "$c3850_yaml" || note_failure "cisco-3850-12xs-no-module: missing SFP 10G 12 status entity"
+if grep -Eq 'Te1/1/|TenGigabitEthernet1/1/|Interface (13|14|15|16) Status' "$c3850_yaml"; then
+  note_failure "cisco-3850-12xs-no-module: empty-bay interfaces leaked into generated YAML"
+fi
+[ -f "$c3850_card" ] || note_failure "cisco-3850-12xs-no-module: generated card missing"
+if [ -f "$c3850_card" ] && grep -Eq 'Te1/1/|TenGigabitEthernet1/1/|Interface (13|14|15|16)' "$c3850_card"; then
+  note_failure "cisco-3850-12xs-no-module: empty-bay interfaces leaked into generated card"
+fi
+
 # Zayed: Gi aliases for C3KX cages 1-2 collapse onto Te, leaving 52 physical
 # positions per member rather than 54 interface aliases.
 c3750x="$TMP/cisco-3750x.txt"
