@@ -1098,7 +1098,24 @@ parser_report() {
         is_te = (key ~ /^Te/ || key ~ /^TenGigabitEthernet/)
         special = 0
 
-        if (model == "WS-C3750-48P" && n ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) {
+        if (model == "WS-C3850-12XS-E" && n ~ /^(Te|TenGigabitEthernet)[0-9]+\/0\/([1-9]|1[0-2])$/) {
+          c3850_key = n
+          sub(/^TenGigabitEthernet/, "", c3850_key)
+          sub(/^Te/, "", c3850_key)
+          split(c3850_key, cp, "/")
+          member = cp[1] + 0
+          port = cp[3] + 0
+          physical_id = "Te" member "/0/" port
+          if (!(physical_id in physical_key)) {
+            physical_key[physical_id] = 1; ten_key[physical_id] = 1
+            member_key[member] = 1; member_physical[member]++; member_ten[member]++
+          }
+          special = 1
+        } else if (model == "WS-C3850-12XS-E" && n ~ /^(Te|TenGigabitEthernet)[0-9]+\/1\/[0-9]+$/) {
+          # IOS can expose empty network-module-bay interfaces in IF-MIB.
+          # They are software-visible but not physical factory front-panel ports.
+          special = 1
+        } else if (model == "WS-C3750-48P" && n ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) {
           c3750_key = n
           sub(/^FastEthernet/, "", c3750_key)
           sub(/^Fa/, "", c3750_key)
@@ -1374,7 +1391,10 @@ parser_report() {
       print "- Native ifName entries used: " ifname_native_total
       print "- ifDescr fallback entries used: " ifdescr_fallback_total
       print "- Physical switch interfaces detected: " physical_if
-      if (model == "Juniper EX3300-48P") {
+      if (model == "WS-C3850-12XS-E") {
+        print "- Fixed 10G SFP+ Te <member>/0/1-12 ports: " ten
+        print "- Empty network-module bay Te <member>/1/* rows: non-physical"
+      } else if (model == "Juniper EX3300-48P") {
         print "- RJ45 ge-0/0/0-47 ports: " rj45
         print "- 1G SFP ge-0/1/* uplinks currently exposed: " sfp_gi
         print "- 10G SFP+ xe-0/1/* uplinks currently exposed: " ten
@@ -1405,7 +1425,7 @@ parser_report() {
       profile = "unknown"
       profile_status = profile_status_for(model)
       if (model == "WS-C3850-12XS-E") profile = "cisco-3850-12xs-12x10g"
-      if (model ~ /^WS-C3650-48/) profile = "cisco-3650-48p-2x10g"
+      else if (model ~ /^WS-C3650-48/) profile = "cisco-3650-48p-2x10g"
       else if (is_2960(model)) profile = c2960_profile(model)
       else if (model ~ /^WS-C3750-48P/) profile = "cisco-3750-48p-48fe-4sfp"
       else if (model ~ /^WS-C3750X-24P/) profile = "cisco-3750x-24p"
