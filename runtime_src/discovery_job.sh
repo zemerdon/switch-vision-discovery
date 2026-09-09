@@ -956,7 +956,7 @@ parser_report() {
         match(line, /Version [0-9][^,]*/)
         ios = substr(line, RSTART + 8, RLENGTH - 8)
       }
-      if (match(line, /WS-C(3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
+      if (match(line, /WS-C(3850|3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
         model_candidate = substr(line, RSTART, RLENGTH)
         if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.(2|7|13)\./ || line ~ /\.3\.6\.1\.4\.1\.9\.5\.1\./) {
           if (model_rank(model_candidate) > model_rank(local_model)) local_model = model_candidate
@@ -965,10 +965,10 @@ parser_report() {
         } else if (model_rank(model_candidate) > model_rank(candidate_model)) candidate_model = model_candidate
       }
       if (line ~ /\.3\.6\.1\.2\.1\.1\.1\.0 = /) sys_descr_present=1
-      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.2\.[0-9]+ = STRING:/ && val ~ /WS-C(3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/) {
+      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.2\.[0-9]+ = STRING:/ && val ~ /WS-C(3850|3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/) {
         idx=oid_index(line); identity_model_descr_idx[idx]=1; identity_idx[idx]=1
       }
-      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.13\.[0-9]+ = STRING:/ && val ~ /WS-C(3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/) {
+      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.13\.[0-9]+ = STRING:/ && val ~ /WS-C(3850|3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/) {
         idx=oid_index(line); identity_model_name_idx[idx]=1; identity_idx[idx]=1
       }
       if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.11\.[0-9]+ = STRING:/) {
@@ -1404,6 +1404,7 @@ parser_report() {
       print "Switch Vision mapping profile:"
       profile = "unknown"
       profile_status = profile_status_for(model)
+      if (model == "WS-C3850-12XS-E") profile = "cisco-3850-12xs-12x10g"
       if (model ~ /^WS-C3650-48/) profile = "cisco-3650-48p-2x10g"
       else if (is_2960(model)) profile = c2960_profile(model)
       else if (model ~ /^WS-C3750-48P/) profile = "cisco-3750-48p-48fe-4sfp"
@@ -2937,7 +2938,7 @@ write_generated_yaml_for_walk() {
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
       if (line ~ /WS-C3750-48P/) c3750_model="WS-C3750-48P"
-      if (match(line, /WS-C(3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
+      if (match(line, /WS-C(3850|3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
         model_candidate=substr(line, RSTART, RLENGTH)
         if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.(2|7|13)\./ || line ~ /\.3\.6\.1\.4\.1\.9\.5\.1\./) {
           if (model_rank(model_candidate) > model_rank(local_model)) local_model=model_candidate
