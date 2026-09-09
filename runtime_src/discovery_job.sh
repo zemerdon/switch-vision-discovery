@@ -2764,6 +2764,13 @@ write_generated_yaml_for_walk() {
       return 48
     }
     function physical_label(name, idx, key, parts, member, port, label) {
+      if (model == "WS-C3850-12XS-E" && name ~ /^(Te|TenGigabitEthernet)[0-9]+\/0\/([1-9]|1[0-2])$/) {
+        key = name
+        sub(/^TenGigabitEthernet/, "", key)
+        sub(/^Te/, "", key)
+        split(key, parts, "/")
+        return member_label(parts[1] + 0) " SFP 10G " (parts[3] + 0)
+      }
       if (model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) {
         key = name
         sub(/^FastEthernet/, "", key)
