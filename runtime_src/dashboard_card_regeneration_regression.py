@@ -9,8 +9,7 @@ import stat
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = ROOT / "runtime_src"
+RUNTIME = Path(__file__).resolve().parent
 
 spec = importlib.util.spec_from_file_location(
     "switch_vision_support_web_card_regression",
