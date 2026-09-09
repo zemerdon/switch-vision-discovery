@@ -2210,6 +2210,7 @@ grep -q 'function yaml_juniper_vlan_candidates_sensor' "$BASE_DIR/discovery_job.
 grep -q 'primary="xe-0/1/" cage' "$BASE_DIR/discovery_job.sh"
 grep -q 'secondary="ge-0/1/" cage' "$BASE_DIR/discovery_job.sh"
 grep -q 'label " Status", "oper_status"' "$BASE_DIR/discovery_job.sh"
+grep -q 'yaml_target_header("Switch Vision " prefix " SFP Status", 5)' "$BASE_DIR/discovery_job.sh"
 grep -q 'label " RX Bytes", "rx_bytes"' "$BASE_DIR/discovery_job.sh"
 grep -q 'label " TX Bytes", "tx_bytes"' "$BASE_DIR/discovery_job.sh"
 grep -q 'label " Admin Status", "admin_status"' "$BASE_DIR/discovery_job.sh"
