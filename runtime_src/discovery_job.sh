@@ -3213,7 +3213,9 @@ write_generated_yaml_for_walk() {
       }
 
       if (model == "Juniper EX3300-48P") {
-        yaml_target_header("Switch Vision " prefix " SFP Status", status_interval)
+        # EX3300 uplink identity/state watcher: keep the four dual-personality cages on a fast,
+        # lightweight cadence while traffic/VLAN/slow groups retain their normal intervals.
+        yaml_target_header("Switch Vision " prefix " SFP Status", 5)
         for (cage=0; cage<4; cage++) {
           label=prefix " SFP 10G " (cage + 1)
           primary="xe-0/1/" cage
