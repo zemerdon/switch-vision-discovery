@@ -70,6 +70,35 @@ cv_interface_class_for_name() {
     esac
   fi
 
+  # Catalyst 3850-12XS factory/no-module contract: only the twelve fixed
+  # SFP+ cages in slot 0 are physical. IOS can expose Te<member>/1/1-4 even
+  # with an empty optional network-module bay; those rows remain diagnostic
+  # and must never become dashboard or generated-YAML ports.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "WS-C3850-12XS-E" ]; then
+    case "$name" in
+      Te[0-9]*/0/*|TenGigabitEthernet[0-9]*/0/*)
+        short_name=$(printf '%s' "$name" | sed -E 's/^TenGigabitEthernet//; s/^Te//')
+        slot_number=$(printf '%s' "$short_name" | awk -F/ 'NF == 3 {print $2}')
+        port_number=${short_name##*/}
+        case "$port_number" in
+          ''|*[!0-9]*) printf 'other' ;;
+          *)
+            if [ "$slot_number" = "0" ] && [ "$port_number" -ge 1 ] && [ "$port_number" -le 12 ]; then
+              printf 'sfp_plus'
+            else
+              printf 'other'
+            fi
+            ;;
+        esac
+        return 0
+        ;;
+      Te[0-9]*/1/*|TenGigabitEthernet[0-9]*/1/*) printf 'other'; return 0 ;;
+      StackPort*|StackSub*|Stack*) printf 'stack'; return 0 ;;
+      Vlan*|Loopback*|Port-channel*|Null*|Control*) printf 'virtual'; return 0 ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
+
   # Catalyst 3750X-48P contribution: Gi member/0/1-48 are the access ports.
   # The C3KX network module can expose Gi aliases for cages also represented
   # by Te names; suppress those aliases so one physical cage is counted once.

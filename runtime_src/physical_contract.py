@@ -114,6 +114,8 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
     device_info = capabilities.get("device") if isinstance(capabilities.get("device"), dict) else {}
     model = str(device_info.get("model_text") or "").strip()
     registry_device = _registry_device(registry, model)
+    registry_model = _canon_model(str(registry_device.get("model") or "")) if registry_device else ""
+    c3850_12xs_no_module = registry_model == "ws-c3850-12xs-e"
     interfaces = [row for row in capabilities.get("interfaces", []) if isinstance(row, dict)]
 
     physical_rows = [row for row in interfaces if row.get("physical") is True and str(row.get("media", "")) in {"rj45", "sfp", "sfp_plus", "sfp28", "uplink"}]
@@ -154,7 +156,9 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
             uplink_pos[member] = uplink_pos.get(member, 0) + 1
             position = uplink_pos[member]
             physical_id = f"m{member}:uplink:{position}"
-            if media == "sfp28":
+            if c3850_12xs_no_module and media == "sfp_plus":
+                compatibility = f"Te{member}/0/{position}"
+            elif media == "sfp28":
                 compatibility = f"TwentyFiveGigE{member}/1/{position}"
             elif media == "sfp_plus":
                 compatibility = f"Te{member}/1/{position}"
