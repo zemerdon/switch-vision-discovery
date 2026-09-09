@@ -979,11 +979,24 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
     lines: list[str] = []
     generated_yaml_previous_mtime = DEFAULT_GENERATED_SNMP2MQTT.stat().st_mtime if DEFAULT_GENERATED_SNMP2MQTT.is_file() else None
     generated_yaml_previous_topics = _remember_current_snmp2mqtt_topics() if generated_yaml_previous_mtime is not None else _load_snmp2mqtt_retirement_topics()
-    regenerate_only = mode == "regenerate_yaml"
-    operation_name = "SNMP2MQTT YAML regeneration" if regenerate_only else "Discovery"
-    preparing_message = "Preparing SNMP2MQTT YAML regeneration" if regenerate_only else "Preparing Discovery"
-    preparing_activity = "Loading saved Discovery data and SNMP walks" if regenerate_only else "Validating configured switches"
-    waiting_message = "Waiting for YAML regeneration to complete" if regenerate_only else "Waiting for Discovery to complete"
+    regenerate_yaml_only = mode == "regenerate_yaml"
+    regenerate_card_only = mode == "regenerate_card"
+    regenerate_only = regenerate_yaml_only or regenerate_card_only
+    if regenerate_card_only:
+        operation_name = "Dashboard Card YAML regeneration"
+        preparing_message = "Preparing Dashboard Card YAML regeneration"
+        preparing_activity = "Loading saved Discovery state and stored walks"
+        waiting_message = "Waiting for Dashboard Card YAML regeneration to complete"
+    elif regenerate_yaml_only:
+        operation_name = "SNMP2MQTT YAML regeneration"
+        preparing_message = "Preparing SNMP2MQTT YAML regeneration"
+        preparing_activity = "Loading saved Discovery data and SNMP walks"
+        waiting_message = "Waiting for YAML regeneration to complete"
+    else:
+        operation_name = "Discovery"
+        preparing_message = "Preparing Discovery"
+        preparing_activity = "Validating configured switches"
+        waiting_message = "Waiting for Discovery to complete"
     _set_discovery_state(
         running=True,
         started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -1002,7 +1015,10 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
     )
     try:
         _ensure_runtime_paths()
-        if regenerate_only:
+        if regenerate_card_only:
+            auto_bundle_settings = None
+            options_snapshot = _write_dashboard_card_regeneration_options_snapshot()
+        elif regenerate_yaml_only:
             auto_bundle_settings = None
             options_snapshot = _write_snmp2mqtt_regeneration_options_snapshot()
         else:
@@ -1026,13 +1042,15 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
             )
         discovery_env = os.environ.copy()
         discovery_env["SWITCH_VISION_OPTIONS_FILE"] = str(options_snapshot)
-        if regenerate_only:
+        if regenerate_card_only:
+            discovery_env["SWITCH_VISION_CAPABILITIES_DIR"] = "/tmp/switch_vision_regenerate_card_capabilities"
+        elif regenerate_yaml_only:
             discovery_env["SWITCH_VISION_CAPABILITIES_DIR"] = "/tmp/switch_vision_regenerate_capabilities"
         with log_path.open("a", encoding="utf-8") as log_file:
-            action_label = "SNMP2MQTT YAML regeneration" if regenerate_only else "Discovery"
+            action_label = operation_name
             log_file.write(f"\n=== {action_label} started {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
             log_file.write(
-                "Discovery configuration: stored-walk regeneration snapshot\n"
+                "Discovery configuration: stored-state regeneration snapshot\n"
                 if regenerate_only
                 else "Discovery configuration: authoritative Supervisor snapshot\n"
             )
@@ -1488,6 +1506,48 @@ def _write_snmp2mqtt_regeneration_options_snapshot(
         except OSError:
             pass
         raise RuntimeError(f"Could not prepare SNMP2MQTT regeneration configuration: {exc}") from exc
+    return destination
+
+
+def _write_dashboard_card_regeneration_options_snapshot(
+    destination: Path = Path("/tmp/switch_vision_regenerate_card_options.json"),
+) -> Path:
+    """Prepare a stored-state-only snapshot for dashboard Card YAML regeneration."""
+    options = _effective_discovery_options(_self_addon_options())
+    _validate_inventory_identities(options)
+    regenerated = dict(options)
+    rows = regenerated.get("switches")
+    has_inventory = isinstance(rows, list) and any(
+        isinstance(row, dict)
+        and (str(row.get("switch_name") or "").strip() or str(row.get("switch_host") or "").strip())
+        for row in rows
+    )
+    if has_inventory:
+        regenerated["enable_switch_list"] = True
+    regenerated["run_snmp_walks"] = False
+    regenerated["run_live_snmpwalk"] = False
+    regenerated["clean_output_before_walk"] = False
+    regenerated["parse_all_walks"] = True
+    regenerated["generate_snmp2mqtt"] = False
+    regenerated["generate_support_my_switch_bundle"] = False
+    regenerated["report_path"] = "/tmp/switch_vision_regenerate_card_report.txt"
+    regenerated["last_run_summary_path"] = "/tmp/switch_vision_regenerate_card_summary.txt"
+    regenerated["generated_yaml_path"] = "/tmp/switch_vision_regenerate_card_snmp2mqtt.yaml"
+    regenerated["generated_card_path"] = str(DEFAULT_GENERATED_CARD)
+    regenerated["snmp_log_path"] = "/tmp/switch_vision_regenerate_card_snmp.log"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(json.dumps(regenerated, indent=2) + "\n", encoding="utf-8")
+        os.chmod(temporary, 0o600)
+        temporary.replace(destination)
+        os.chmod(destination, 0o600)
+    except OSError as exc:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise RuntimeError(f"Could not prepare Dashboard Card regeneration configuration: {exc}") from exc
     return destination
 
 
