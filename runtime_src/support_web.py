@@ -1747,6 +1747,93 @@ def _set_configured_device_state(options_file: Path, request_data: Any) -> dict[
     return _configured_devices_snapshot(options_file)
 
 
+def _move_configured_device(options_file: Path, request_data: Any) -> dict[str, Any]:
+    """Persist one deterministic saved-device ordering change through Supervisor."""
+    if not isinstance(request_data, dict):
+        raise ValueError("Device order request must contain a JSON object.")
+
+    def request_index(key: str) -> int:
+        value = request_data.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 255:
+            raise ValueError("Device order index is invalid. Refresh Devices and try again.")
+        return value
+
+    source_index = request_index("index")
+    destination_index = request_index("destination_index")
+    if source_index == destination_index:
+        raise ValueError("Device order did not change.")
+
+    expected_name = _plain_text(
+        request_data.get("switch_name", ""),
+        "switch_name",
+        max_length=64,
+        allow_empty=False,
+    ).strip()
+    expected_destination_name = _plain_text(
+        request_data.get("destination_switch_name", ""),
+        "destination_switch_name",
+        max_length=64,
+        allow_empty=False,
+    ).strip()
+
+    with _OPTIONS_UPDATE_LOCK:
+        options = _self_addon_options()
+        rows = options.get("switches")
+        if (
+            not isinstance(rows, list)
+            or source_index >= len(rows)
+            or destination_index >= len(rows)
+        ):
+            raise ValueError("The saved device list changed. Refresh Devices and try again.")
+
+        source = rows[source_index]
+        destination = rows[destination_index]
+        if not isinstance(source, dict) or not isinstance(destination, dict):
+            raise ValueError("The saved device list changed. Refresh Devices and try again.")
+        if (
+            str(source.get("switch_name") or "").strip() != expected_name
+            or str(destination.get("switch_name") or "").strip()
+            != expected_destination_name
+        ):
+            raise ValueError("The saved device list changed. Refresh Devices and try again.")
+
+        updated_rows = list(rows)
+        updated_rows[source_index], updated_rows[destination_index] = (
+            updated_rows[destination_index],
+            updated_rows[source_index],
+        )
+        updated_options = dict(options)
+        updated_options["switches"] = updated_rows
+        _validate_inventory_identities(updated_options)
+        create_pre_mutation_backup(options, reason="device_order_update")
+        _supervisor_json(
+            "/addons/self/options",
+            method="POST",
+            timeout=12.0,
+            payload={"options": updated_options},
+        )
+
+        confirmed = _self_addon_options()
+        confirmed_rows = confirmed.get("switches")
+        if not isinstance(confirmed_rows, list) or len(confirmed_rows) != len(updated_rows):
+            raise RuntimeError(
+                "Home Assistant saved the request but the updated device order could not be confirmed."
+            )
+
+        def order_identity(items: list[Any]) -> list[str]:
+            return [
+                str(item.get("switch_name") or "").strip()
+                if isinstance(item, dict)
+                else ""
+                for item in items
+            ]
+
+        if order_identity(confirmed_rows) != order_identity(updated_rows):
+            raise RuntimeError("Home Assistant did not confirm the requested device order.")
+
+    return _configured_devices_snapshot(options_file)
+
+
 def _home_assistant_service(domain: str, service: str, payload: dict[str, Any]) -> None:
     """Call a Home Assistant service through the supported Supervisor Core proxy."""
     token = _read_supervisor_token()
@@ -4428,8 +4515,9 @@ const messages=$('diagnosticsMessages');messages.innerHTML='';for(const [kind,it
 const devices=$('diagnosticsDevices');devices.innerHTML='';for(const item of d.devices||[]){const normalized={model:item.model,vendor_name:item.name,family:item.family,registry_status:item.registry_status,registry_match:item.registry_match,registry_last_validated_version:item.last_validated_version,physical_count:item.physical_interfaces,rj45_count:item.rj45_interfaces,registry_validation:item.validation};const card=deviceCard(normalized);const extra=document.createElement('div');extra.className='muted';extra.style.marginTop='10px';extra.textContent=`Source: ${item.data_source||'SNMP'} · ${item.data_source==='UniFi API'?`Firmware: ${item.firmware||'Unknown'}`:`SNMP walk: ${item.walk_found?'Available':'Unavailable'}`} · Uplinks detected: ${item.uplink_interfaces||0} · Mapping profile: ${item.mapping_profile||'Not assigned'} · Calibration profile: ${item.calibration_profile||'Not assigned'}`;card.appendChild(extra);devices.appendChild(card)}if(!(d.devices||[]).length)devices.textContent='No capability files were found. Run Discovery to populate device diagnostics.'}
 let lastConfiguredDevices=null;
 function configuredDeviceTitle(item){return item.display_name||item.switch_name||item.switch_host||'Configured switch'}
-function syncConfiguredDeviceToggleAvailability(){const running=!!lastDiscoveryState?.running;document.querySelectorAll('.device-state-toggle').forEach(btn=>{const writable=btn.dataset.writable==='true';btn.disabled=running||!writable;btn.title=running?'Stop Discovery before changing device state.':(writable?'Toggle whether this saved device participates in the next Discovery run.':'Home Assistant app configuration is temporarily unavailable; use Discovery Settings as a fallback.')})}
-function renderConfiguredDevices(d){lastConfiguredDevices=d;const root=$('configuredDevices');root.innerHTML='';const writable=!!d?.writable;for(const item of d?.devices||[]){const enabled=item.enabled!=='disabled';const row=document.createElement('div');row.className=`simple-result configured-device${enabled?'':' disabled'}`;const main=document.createElement('div');main.className='result-main';const title=document.createElement('strong');title.textContent=configuredDeviceTitle(item);const line=document.createElement('div');line.className='muted';const bits=[item.switch_name,item.sensor_prefix,item.switch_model&&item.switch_model!=='auto'?item.switch_model:'Auto-detect'].filter(Boolean);line.textContent=bits.join(' · ');const management=document.createElement('div');management.className='muted configured-management';const configured=item.configured_management_target||'Not configured';const effective=item.effective_management_target||(item.effective_management_status==='invalid_saved_row'?'Unavailable — saved row needs review':'Not configured');management.textContent=`Configured management IP/host: ${configured} · Effective management IP/host: ${effective}`;main.append(title,line,management);const actions=document.createElement('div');actions.className='result-actions';const toggle=document.createElement('button');toggle.type='button';toggle.className=`device-state-toggle ${enabled?'enabled':'disabled'}`;toggle.dataset.writable=String(writable);toggle.setAttribute('role','switch');toggle.setAttribute('aria-checked',String(enabled));toggle.setAttribute('aria-label',`${enabled?'Disable':'Enable'} ${configuredDeviceTitle(item)}`);const track=document.createElement('span');track.className='toggle-track';track.setAttribute('aria-hidden','true');const knob=document.createElement('span');knob.className='toggle-knob';track.appendChild(knob);const label=document.createElement('span');label.textContent=enabled?'Enabled':'Disabled';toggle.append(track,label);toggle.addEventListener('click',()=>setConfiguredDeviceState(item,enabled?'disabled':'enabled',toggle));actions.append(toggle);row.append(main,actions);root.appendChild(row)}if(!(d?.devices||[]).length)root.innerHTML='<p class="muted">No saved switches are configured. Add devices in Discovery Settings first.</p>';const status=$('configuredDevicesStatus');if(!d?.switch_list_enabled&&(d?.devices||[]).length)status.textContent='The saved switch list is globally disabled in Discovery Settings.';else if(!writable)status.textContent='Read-only fallback: Home Assistant app configuration is unavailable. Use Discovery Settings to change device state.';else status.textContent=`${d?.count||0} saved device(s). Changes apply to the next Discovery run.`;syncConfiguredDeviceToggleAvailability()}
+function syncConfiguredDeviceToggleAvailability(){const running=!!lastDiscoveryState?.running;document.querySelectorAll('.device-state-toggle').forEach(btn=>{const writable=btn.dataset.writable==='true';btn.disabled=running||!writable;btn.title=running?'Stop Discovery before changing device state.':(writable?'Toggle whether this saved device participates in the next Discovery run.':'Home Assistant app configuration is temporarily unavailable; use Discovery Settings as a fallback.')});document.querySelectorAll('.device-order-button').forEach(btn=>{const writable=btn.dataset.writable==='true';const boundary=btn.dataset.boundary==='true';btn.disabled=running||!writable||boundary;btn.title=running?'Stop Discovery before changing device order.':(!writable?'Home Assistant app configuration is temporarily unavailable; use Discovery Settings as a fallback.':(boundary?'Already at this end of the saved device order.':'Move this saved device in the persistent Discovery order.'))})}
+function renderConfiguredDevices(d){lastConfiguredDevices=d;const root=$('configuredDevices');root.innerHTML='';const writable=!!d?.writable;const devices=d?.devices||[];for(const [position,item] of devices.entries()){const enabled=item.enabled!=='disabled';const row=document.createElement('div');row.className=`simple-result configured-device${enabled?'':' disabled'}`;const main=document.createElement('div');main.className='result-main';const title=document.createElement('strong');title.textContent=configuredDeviceTitle(item);const line=document.createElement('div');line.className='muted';const bits=[item.switch_name,item.sensor_prefix,item.switch_model&&item.switch_model!=='auto'?item.switch_model:'Auto-detect'].filter(Boolean);line.textContent=bits.join(' · ');const management=document.createElement('div');management.className='muted configured-management';const configured=item.configured_management_target||'Not configured';const effective=item.effective_management_target||(item.effective_management_status==='invalid_saved_row'?'Unavailable — saved row needs review':'Not configured');management.textContent=`Configured management IP/host: ${configured} · Effective management IP/host: ${effective}`;main.append(title,line,management);const actions=document.createElement('div');actions.className='result-actions';const toggle=document.createElement('button');toggle.type='button';toggle.className=`device-state-toggle ${enabled?'enabled':'disabled'}`;toggle.dataset.writable=String(writable);toggle.setAttribute('role','switch');toggle.setAttribute('aria-checked',String(enabled));toggle.setAttribute('aria-label',`${enabled?'Disable':'Enable'} ${configuredDeviceTitle(item)}`);const track=document.createElement('span');track.className='toggle-track';track.setAttribute('aria-hidden','true');const knob=document.createElement('span');knob.className='toggle-knob';track.appendChild(knob);const label=document.createElement('span');label.textContent=enabled?'Enabled':'Disabled';toggle.append(track,label);toggle.addEventListener('click',()=>setConfiguredDeviceState(item,enabled?'disabled':'enabled',toggle));const up=document.createElement('button');up.type='button';up.className='device-order-button';up.textContent='↑';up.dataset.writable=String(writable);up.dataset.boundary=String(position===0);up.setAttribute('aria-label',`Move up ${configuredDeviceTitle(item)}`);if(position>0)up.addEventListener('click',()=>moveConfiguredDevice(item,devices[position-1],'up',up));const down=document.createElement('button');down.type='button';down.className='device-order-button';down.textContent='↓';down.dataset.writable=String(writable);down.dataset.boundary=String(position===devices.length-1);down.setAttribute('aria-label',`Move down ${configuredDeviceTitle(item)}`);if(position<devices.length-1)down.addEventListener('click',()=>moveConfiguredDevice(item,devices[position+1],'down',down));actions.append(up,down,toggle);row.append(main,actions);root.appendChild(row)}if(!(d?.devices||[]).length)root.innerHTML='<p class="muted">No saved switches are configured. Add devices in Discovery Settings first.</p>';const status=$('configuredDevicesStatus');if(!d?.switch_list_enabled&&(d?.devices||[]).length)status.textContent='The saved switch list is globally disabled in Discovery Settings.';else if(!writable)status.textContent='Read-only fallback: Home Assistant app configuration is unavailable. Use Discovery Settings to change device state.';else status.textContent=`${d?.count||0} saved device(s). Device order is persistent and is reused by Discovery and YAML/Card regeneration.`;syncConfiguredDeviceToggleAvailability()}
+async function moveConfiguredDevice(item,destination,direction,button){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device order.';return}button.disabled=true;const title=configuredDeviceTitle(item);$('configuredDevicesStatus').textContent=`Moving ${title} ${direction}…`;try{const r=await fetch(endpoint('api/configured-devices/order'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:item.index,switch_name:item.switch_name,destination_index:destination.index,destination_switch_name:destination.switch_name})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device order');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent=`Saved persistent device order. Discovery and YAML/Card regeneration will use this order.`}catch(e){$('configuredDevicesStatus').textContent=`Could not change device order: ${e.message||e}`;await refreshConfiguredDevices(false)}finally{syncConfiguredDeviceToggleAvailability()}}
 async function refreshConfiguredDevices(showStatus=false){if(showStatus)$('configuredDevicesStatus').textContent='Refreshing saved devices…';try{const r=await fetch(endpoint('api/configured-devices'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load saved devices');renderConfiguredDevices(d)}catch(e){$('configuredDevicesStatus').textContent=`Could not load saved devices: ${e.message||e}`}}
 async function setConfiguredDeviceState(item,nextState,button){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device state.';return}button.disabled=true;const title=configuredDeviceTitle(item);$('configuredDevicesStatus').textContent=`Saving ${title} as ${nextState}…`;try{const r=await fetch(endpoint('api/configured-devices/state'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:item.index,switch_name:item.switch_name,enabled:nextState})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device state');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent=`${title} is now ${nextState}. The change applies to the next Discovery run.`}catch(e){$('configuredDevicesStatus').textContent=`Could not change ${title}: ${e.message||e}`;await refreshConfiguredDevices(false)}finally{syncConfiguredDeviceToggleAvailability()}}
 function renderDevices(d){const root=$('devicesSummary');root.innerHTML='';for(const item of d.devices||[]){const row=document.createElement('div');row.className='simple-result';const main=document.createElement('div');main.className='result-main';const title=document.createElement('strong');title.textContent=item.model||'Unknown model';const line=document.createElement('div');line.className='muted';const support=statusLabel(item.registry_status||'detected');line.textContent=`Source: ${item.data_source||'SNMP'} · ${item.data_source==='UniFi API'?(item.online?'Online':'Offline'):(item.walk_found?'Discovery passed':'Needs attention')} · Support: ${support} · Ports: ${item.rj45_interfaces||0} RJ45 + ${item.uplink_interfaces||0} uplinks`;if(item.compatibility_mode){const warning=document.createElement('div');warning.className='notice warning';warning.textContent=`Experimental model override: ${item.detected_model||item.model} → ${item.effective_model}`;main.append(title,line,warning)}else{main.append(title,line)}const generated=document.createElement('div');generated.className='muted';generated.textContent=`Sensor configuration: ${d.files?.generated_yaml?.found?'Ready':'Not available'} · Dashboard configuration: ${d.files?.generated_card?.found?'Ready':'Not available'}`;if(!item.compatibility_mode){}main.append(generated);const action=document.createElement('button');action.type='button';action.textContent='View Details';action.addEventListener('click',loadDiagnostics);row.append(main,action);root.appendChild(row)}if(!(d.devices||[]).length)root.innerHTML='<p class="muted">No discovered devices are available yet. Run Discovery first.</p>'}
@@ -5007,6 +5095,19 @@ class SupportHandler(BaseHTTPRequestHandler):
                         raise ValueError("Invalid device state request size.")
                     data = json.loads(self.rfile.read(length).decode("utf-8"))
                     self._json(_set_configured_device_state(self.app.options_file, data))
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/configured-devices/order":
+            try:
+                with _exclusive_operation("Device order update"):
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 8192:
+                        raise ValueError("Invalid device order request size.")
+                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    self._json(_move_configured_device(self.app.options_file, data))
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:

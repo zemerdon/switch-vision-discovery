@@ -8,6 +8,7 @@ SV_COPY_DEBUG_TEST_DIR="$BASE_DIR"
 python3 "$BASE_DIR/dashboard_card_regeneration_regression.py"
 python3 "$BASE_DIR/discovery_history_regression.py"
 python3 "$BASE_DIR/management_ip_display_regression.py"
+python3 "$BASE_DIR/device_ordering_regression.py"
 sv_require_literal() {
     label=$1
     literal=$2
