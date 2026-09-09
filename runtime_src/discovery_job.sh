@@ -1530,6 +1530,17 @@ parser_report() {
           }
           continue
         }
+        if (model == "WS-C3850-12XS-E" && name ~ /^(Te|TenGigabitEthernet)[0-9]+\/0\/([1-9]|1[0-2])$/) {
+          c3850_key = name
+          sub(/^TenGigabitEthernet/, "", c3850_key)
+          sub(/^Te/, "", c3850_key)
+          split(c3850_key, cp, "/")
+          mapped_rows++; print "  - ifIndex " idx " -> " name " -> member " (cp[1] + 0) " fixed 10G SFP+ port " (cp[3] + 0)
+          continue
+        }
+        if (model == "WS-C3850-12XS-E" && name ~ /^(Te|TenGigabitEthernet)[0-9]+\/1\/[0-9]+$/) {
+          continue
+        }
         if (model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) {
           c3750_key = name
           sub(/^FastEthernet/, "", c3750_key)
@@ -1607,6 +1618,7 @@ parser_report() {
       print ""
       print "Discovery checks:"
       if (model == "Juniper EX3300-48P") print "- PASS: Juniper EX3300-48P model detected"
+      else if (model == "WS-C3850-12XS-E") print "- PASS: Catalyst 3850-12XS exact factory/no-module model detected"
       else if (model ~ /^WS-C3650/) print "- PASS: Catalyst 3650 model detected"
       else if (is_2960x(model) && profile_status == "supported") print "- PASS: Catalyst 2960X exact model confirmed by supported-device registry"
       else if (is_2960s(model) && profile_status == "supported") print "- PASS: Catalyst 2960S exact model confirmed by supported-device registry"
@@ -1630,7 +1642,8 @@ parser_report() {
       else print (trunk_status_count > 0 ? "- PASS: Cisco trunk status OIDs detected" : "- WARN: Cisco trunk status OIDs not detected")
       if (target_ip != "unknown" && target_ip != "") print "- PASS: management target provided: " target_ip
       else print "- WARN: management target not provided; provide a switch_host in the switch list or targets CSV before generator use"
-      ready = (((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "CRS328-24P-4S+" && if_total > 0 && rj45 == 24 && ten == 4) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48) || (model == "UDM Pro" && if_total > 0 && rj45 == 9 && ten == 2) || (model == "US 8 60W" && if_total > 0 && rj45 == 8) || (model == "US-8-150W" && if_total > 0 && rj45 == 8 && sfp_gi == 2) || (model == "US-24-250W" && if_total > 0 && rj45 == 24 && sfp_gi == 2) || (model == "US 48" && if_total > 0 && rj45 == 48 && ten == 2 && sfp_gi == 2))
+      c3850_ready = (model == "WS-C3850-12XS-E" && if_total > 0 && rj45 == 0 && ten == 12)
+      ready = (c3850_ready || ((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "CRS328-24P-4S+" && if_total > 0 && rj45 == 24 && ten == 4) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48) || (model == "UDM Pro" && if_total > 0 && rj45 == 9 && ten == 2) || (model == "US 8 60W" && if_total > 0 && rj45 == 8) || (model == "US-8-150W" && if_total > 0 && rj45 == 8 && sfp_gi == 2) || (model == "US-24-250W" && if_total > 0 && rj45 == 24 && sfp_gi == 2) || (model == "US 48" && if_total > 0 && rj45 == 48 && ten == 2 && sfp_gi == 2))
       print "- Ready for SNMP2MQTT generation: " (ready ? "yes, review-only" : "no")
       if (profile_status == "supported") print "- Generator confidence: supported profile; review generated YAML before installing"
       else if (profile_status == "community_validated") print "- Generator confidence: community-validated profile; physical layout verified on real hardware"
