@@ -1,4 +1,26 @@
 profiles:
+  cisco-3850-12xs-12x10g:
+    status: experimental
+    vendor: Cisco
+    family: Catalyst 3850
+    model_patterns:
+    - WS-C3850-12XS-E
+    layout:
+      members: 1
+      rj45_ports: 0
+      sfp_1g_ports: 0
+      sfp_10g_ports: 12
+    interface_patterns:
+      rj45: []
+      sfp_1g: []
+      sfp_10g:
+      - Te{member}/0/{port}
+      - TenGigabitEthernet{member}/0/{port}
+    notes:
+    - Exact factory/no-module WS-C3850-12XS-E support is limited to the twelve fixed
+      Te{member}/0/1 through Te{member}/0/12 SFP+ cages.
+    - Te{member}/1/* belongs to the optional network-module namespace and is not
+      a physical front-panel port when the module bay is empty.
   cisco-3650-48p-2x10g:
     status: supported
     vendor: Cisco
