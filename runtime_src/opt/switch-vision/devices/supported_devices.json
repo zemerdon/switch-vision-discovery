@@ -468,6 +468,62 @@
       }
     },
     {
+      "vendor": "Cisco",
+      "family": "Catalyst 3850",
+      "model": "WS-C3850-12XS-E",
+      "status": "experimental",
+      "confirmed_since": "2.3.46",
+      "last_validated_version": "2.3.46",
+      "evidence": "privacy_processed_real_hardware_full_walk_factory_no_module",
+      "ports": {
+        "rj45": 0,
+        "poe": false,
+        "uplinks": 12,
+        "uplink_type": "12x 10G SFP+",
+        "gigabit_sfp": 0,
+        "ten_gigabit_sfp_plus": 12
+      },
+      "stack_support": false,
+      "discovery_support": true,
+      "dashboard_support": true,
+      "mapping_profile": "cisco-3850-12xs-12x10g",
+      "calibration_profile": "cisco_3850_12xs",
+      "default_faceplate": "faceplates/cisco-3850-12xs.png",
+      "optional_faceplates": [],
+      "tested_firmware": [
+        "16.12.14"
+      ],
+      "contributor": {
+        "display_name": "community contributor",
+        "public_credit": false
+      },
+      "notes": [
+        "Privacy-processed real-hardware full-walk evidence confirms the exact WS-C3850-12XS-E chassis on IOS XE 16.12.14.",
+        "The twelve fixed front-panel SFP+ cages are Te<member>/0/1 through Te<member>/0/12.",
+        "IOS may expose Te<member>/1/1 through Te<member>/1/4 even with the optional network-module bay empty; those rows are software-visible but non-physical and must never create Switch Vision ports or generated entities.",
+        "This exact entry covers only the factory/no-module topology; no module-equipped Catalyst 3850 variant is inferred from it.",
+        "The exact Core faceplate/calibration provides twelve SFP positions on the 2680 x 356 canvas."
+      ],
+      "validation": {
+        "exact_model_detection": "real_hardware_full_walk_confirmed",
+        "rj45_mapping": "not_applicable",
+        "poe": "not_applicable",
+        "system_sensors": "pending",
+        "uplinks": "real_hardware_te_member_0_1_12_confirmed",
+        "stack": "not_applicable"
+      },
+      "visuals": {
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/cisco-3850-12xs.png",
+        "optional_faceplates": [],
+        "calibration_profile": "cisco_3850_12xs",
+        "canvas": {
+          "width": 2680,
+          "height": 356
+        }
+      }
+    },
+    {
       "vendor": "Juniper",
       "family": "EX3300",
       "model": "EX3300-48P",
