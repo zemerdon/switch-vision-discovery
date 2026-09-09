@@ -183,6 +183,19 @@ i=1
 while [ "$i" -le 20 ]; do append_iface "$sg350" "$i" "gi$i"; i=$((i + 1)); done
 run_case cisco-sg350 "$sg350" SG350 'SG350-20' 20
 
+# Field-evidence invariant: IOS may expose four Te1/1/N rows for an empty
+# C3850-12XS network-module bay. Only the twelve fixed Te1/0/1..12 front-panel
+# positions are physical and may be normalized or published.
+c3850="$TMP/cisco-3850-12xs-no-module.txt"
+make_walk "$c3850" 'Cisco IOS Software, Catalyst 3850, WS-C3850-12XS' '1.3.6.1.4.1.9.1.1745'
+idx=1
+i=1
+while [ "$i" -le 12 ]; do append_iface "$c3850" "$idx" "Te1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+i=1
+while [ "$i" -le 4 ]; do append_iface "$c3850" "$idx" "Te1/1/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+printf '.1.3.6.1.2.1.47.1.1.1.1.13.1001 = STRING: "WS-C3850-12XS-E"\n' >> "$c3850"
+run_case cisco-3850-12xs-no-module "$c3850" C3850 'WS-C3850-12XS-E' 12
+
 # Zayed: Gi aliases for C3KX cages 1-2 collapse onto Te, leaving 52 physical
 # positions per member rather than 54 interface aliases.
 c3750x="$TMP/cisco-3750x.txt"
