@@ -3007,7 +3007,16 @@ write_generated_yaml_for_walk() {
           sub(/\.0$/, "", logical_port)
           juniper_logical_ifindex[logical_port + 0]=idx
         }
-        if (c3750_model != "" && val ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) {
+        if (c3850_model != "") {
+          if (val ~ /^(Te|TenGigabitEthernet)[0-9]+\/0\/([1-9]|1[0-2])$/) {
+            physical_count++
+            c3850_key=val
+            sub(/^TenGigabitEthernet/, "", c3850_key)
+            sub(/^Te/, "", c3850_key)
+            split(c3850_key, c3850_parts, "/")
+            physical_member[c3850_parts[1] + 0] = 1
+          }
+        } else if (c3750_model != "" && val ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) {
           physical_count++
           c3750_key=val
           sub(/^FastEthernet/, "", c3750_key)
