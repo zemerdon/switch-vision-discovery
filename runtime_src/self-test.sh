@@ -5,6 +5,7 @@ set -eu
 # the exact missing contract instead of failing silently under set -e.
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SV_COPY_DEBUG_TEST_DIR="$BASE_DIR"
+python3 "$BASE_DIR/dashboard_card_regeneration_regression.py"
 sv_require_literal() {
     label=$1
     literal=$2

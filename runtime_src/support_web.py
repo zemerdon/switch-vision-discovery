@@ -977,11 +977,17 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
     global _DISCOVERY_PROCESS
     log_path = DEFAULT_DISCOVERY_LOG
     lines: list[str] = []
-    generated_yaml_previous_mtime = DEFAULT_GENERATED_SNMP2MQTT.stat().st_mtime if DEFAULT_GENERATED_SNMP2MQTT.is_file() else None
-    generated_yaml_previous_topics = _remember_current_snmp2mqtt_topics() if generated_yaml_previous_mtime is not None else _load_snmp2mqtt_retirement_topics()
     regenerate_yaml_only = mode == "regenerate_yaml"
     regenerate_card_only = mode == "regenerate_card"
     regenerate_only = regenerate_yaml_only or regenerate_card_only
+    if regenerate_card_only:
+        # Card-only regeneration must not inspect or mutate SNMP2MQTT handoff
+        # bookkeeping. The live YAML/service plane is intentionally untouched.
+        generated_yaml_previous_mtime = None
+        generated_yaml_previous_topics: list[str] = []
+    else:
+        generated_yaml_previous_mtime = DEFAULT_GENERATED_SNMP2MQTT.stat().st_mtime if DEFAULT_GENERATED_SNMP2MQTT.is_file() else None
+        generated_yaml_previous_topics = _remember_current_snmp2mqtt_topics() if generated_yaml_previous_mtime is not None else _load_snmp2mqtt_retirement_topics()
     if regenerate_card_only:
         operation_name = "Dashboard Card YAML regeneration"
         preparing_message = "Preparing Dashboard Card YAML regeneration"
@@ -1011,7 +1017,17 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
         command="",
         activity=preparing_activity,
         phase="preparing",
-        snmp2mqtt={"status": "Waiting", "action": "none", "slug": None, "state": None, "message": waiting_message},
+        snmp2mqtt=(
+            {
+                "status": "Not touched",
+                "action": "none",
+                "slug": None,
+                "state": None,
+                "message": "SNMP2MQTT is outside Dashboard Card YAML regeneration.",
+            }
+            if regenerate_card_only
+            else {"status": "Waiting", "action": "none", "slug": None, "state": None, "message": waiting_message}
+        ),
     )
     try:
         _ensure_runtime_paths()
@@ -1103,7 +1119,11 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
                 _set_discovery_state(log_tail=lines)
             return_code = process.wait()
         if _DISCOVERY_STOP_REQUESTED.is_set():
-            stopped_label = "YAML regeneration" if regenerate_only else "Discovery"
+            stopped_label = (
+                "Dashboard Card YAML regeneration"
+                if regenerate_card_only
+                else ("SNMP2MQTT YAML regeneration" if regenerate_yaml_only else "Discovery")
+            )
             lines.append(f"{stopped_label} stopped by user request.")
             _set_discovery_state(
                 success=None,
@@ -1120,7 +1140,33 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
         partial_result = return_code == 11
         if return_code not in {0, 10, 11}:
             raise RuntimeError(f"{operation_name} exited with code {return_code}.")
-        if degraded_result:
+        if regenerate_card_only:
+            card_warning = degraded_result or partial_result
+            card_message = (
+                "Dashboard Card YAML regeneration completed with warnings from stored evidence."
+                if card_warning
+                else "Dashboard Card YAML regenerated from saved Discovery state and stored walks."
+            )
+            if card_warning:
+                lines.append(card_message)
+            snmp2mqtt_result = {
+                "status": "Not touched",
+                "action": "none",
+                "slug": None,
+                "state": None,
+                "activation_verified": False,
+                "handoff_failed": False,
+                "degraded": card_warning,
+                "message": "SNMP2MQTT was not started or restarted during Dashboard Card YAML regeneration.",
+            }
+            _set_discovery_state(
+                stage="Complete with warnings" if card_warning else "Finalizing Dashboard Card YAML",
+                activity=card_message,
+                command="",
+                phase="running",
+                snmp2mqtt=snmp2mqtt_result,
+            )
+        elif degraded_result:
             warning_message = (
                 f"{operation_name} completed with warnings; validated physical evidence was preserved "
                 "and the SNMP2MQTT handoff was blocked."
@@ -1183,19 +1229,29 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
                 snmp2mqtt=snmp2mqtt_result,
             )
             return
-        if degraded_result or partial_result:
+        if regenerate_card_only:
+            auto_message = (
+                "Dashboard Card YAML regeneration complete with warnings"
+                if (degraded_result or partial_result)
+                else "Dashboard Card YAML regeneration complete"
+            )
+        elif regenerate_yaml_only:
             auto_message = (
                 "SNMP2MQTT YAML regeneration complete with warnings"
-                if regenerate_only
-                else "Discovery complete with warnings"
+                if (degraded_result or partial_result)
+                else "SNMP2MQTT YAML regeneration complete"
             )
         else:
-            auto_message = "SNMP2MQTT YAML regeneration complete" if regenerate_only else "Discovery complete"
+            auto_message = (
+                "Discovery complete with warnings"
+                if (degraded_result or partial_result)
+                else "Discovery complete"
+            )
         _set_discovery_state(
             success=True,
             message=auto_message,
             stage="Complete with warnings" if (degraded_result or partial_result) else "Complete",
-            activity=snmp2mqtt_result.get("message") or auto_message,
+            activity=auto_message if regenerate_card_only else (snmp2mqtt_result.get("message") or auto_message),
             command="",
             phase="complete",
             log_tail=lines[-300:],
@@ -4182,9 +4238,9 @@ body.density-dense .step{padding:7px 9px}
 <p id="regenerateYamlStatus" class="muted"></p>
 <details class="yaml-manager generated-card-manager">
 <summary><strong>Generated Card YAML</strong></summary>
-<p>Exact dashboard YAML produced by Discovery. Review, copy, or download it before using it in a custom Home Assistant dashboard. Discovery does not install this file automatically.</p>
+<p>Exact dashboard YAML produced by Discovery. Review, copy, or download it before using it in a custom Home Assistant dashboard. <b>Regenerate Card YAML</b> reuses saved Discovery configuration and stored SNMP walks; it does not run new SNMP walks, overwrite live SNMP2MQTT YAML, or start/restart SNMP2MQTT.</p>
 <dl class="yaml-state"><dt>Generated file</dt><dd id="generatedCardYamlState">Checking…</dd><dt>Validation</dt><dd id="generatedCardYamlValidation">Checking…</dd><dt>Last updated</dt><dd id="generatedCardYamlUpdated">Checking…</dd></dl>
-<div class="actions"><button id="previewGeneratedCardYamlButton" type="button">Preview Card YAML</button><button id="copyGeneratedCardYamlButton" type="button">Copy Card YAML</button><a id="downloadGeneratedCardYamlButton" class="button" href="#">Download Card YAML</a></div>
+<div class="actions"><button id="regenerateCardYamlButton" class="primary" type="button">Regenerate Card YAML</button><button id="previewGeneratedCardYamlButton" type="button">Preview Card YAML</button><button id="copyGeneratedCardYamlButton" type="button">Copy Card YAML</button><a id="downloadGeneratedCardYamlButton" class="button" href="#">Download Card YAML</a></div>
 <p id="generatedCardYamlActionStatus" class="muted"></p><pre id="generatedCardYamlPreview" class="code-preview hidden"></pre>
 </details>
 <details class="yaml-manager">
@@ -4419,7 +4475,7 @@ let debugVisible=false;
 function elapsedText(started,finished=null){if(!started)return '00:00';const start=Date.parse(started);const end=finished?Date.parse(finished):Date.now();if(!Number.isFinite(start)||!Number.isFinite(end))return '00:00';const total=Math.max(0,Math.floor((end-start)/1000));const h=Math.floor(total/3600);const m=Math.floor((total%3600)/60);const s=total%60;return h?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
 function updateElapsedClock(){const state=lastDiscoveryState||{};if(!$('liveElapsed'))return;$('liveElapsed').textContent=state.running?elapsedText(state.started_at):((state.started_at&&state.finished_at)?elapsedText(state.started_at,state.finished_at):'00:00')}
 function startElapsedTicker(){if(elapsedTicker)return;elapsedTicker=setInterval(()=>{if(!document.hidden&&lastDiscoveryState?.running)updateElapsedClock()},250)}
-function showDiscovery(d){const state=d||{};lastDiscoveryState=state;const running=!!state.running;const regen=state.mode==='regenerate_yaml';const phase=state.phase||(running?'running':(state.success===true?'complete':(state.success===false?'failed':'idle')));const preparing=running&&phase==='preparing';const stopping=running&&phase==='stopping';const active=running&&!preparing&&!stopping;const btn=$('runDiscoveryButton');const regenBtn=$('regenerateYamlButton');const stopBtn=$('stopDiscoveryButton');btn.disabled=running;regenBtn.disabled=running;btn.textContent=preparing&&!regen?'Preparing…':(stopping?'Stopping…':(active&&!regen?'Discovery Running…':'Run Discovery'));regenBtn.textContent=regen&&preparing?'Preparing…':(regen&&active?'Regenerating…':'Regenerate SNMP2MQTT YAML');stopBtn.disabled=!running||stopping;stopBtn.textContent=stopping?'Stopping…':'Stop Discovery';let label='Idle / Ready';if(preparing)label=regen?'Preparing SNMP2MQTT YAML regeneration':'Preparing Discovery';else if(stopping)label=regen?'Stopping YAML regeneration':'Stopping Discovery';else if(active)label=regen?'Regenerating SNMP2MQTT YAML':'Discovery running';else if(phase==='stopped')label=regen?'YAML regeneration stopped':'Discovery stopped';else if(state.success===true)label=regen?'SNMP2MQTT YAML regeneration complete':'Discovery complete';else if(state.success===false)label=`${regen?'YAML regeneration':'Discovery'} failed: ${state.message||'Unknown error'}`;$('discoveryStatus').textContent=label;$('homeStatus').textContent=preparing?'Preparing Discovery':(stopping?'Stopping Discovery':(active?'Discovery running':(phase==='stopped'?'Discovery stopped':(state.success===true?'Last discovery complete':(state.success===false?'Discovery needs attention':'Ready')))));$('homeStatusDot').className=`status-dot${running?' running':(state.success===false?' failed':'')}`;$('liveStage').textContent=preparing?'Preparing Discovery':(state.stage||label);$('liveSwitch').textContent=preparing?'Waiting':(state.switch||(!running&&state.success===true?'All configured switches':'Not running'));$('liveTarget').textContent=preparing?'Waiting':(state.target||'Not running');$('liveActivity').textContent=preparing?'Validating configured switches':(state.activity||label);$('liveCommand').textContent=preparing?'Not started':(state.command||'No command running');$('liveRunStatus').textContent=preparing?'Preparing':(stopping?'Stopping':(active?'Running':(phase==='stopped'?'Stopped':(state.success===true?'Complete':(state.success===false?'Failed':'Idle / Ready')))));const snmp=state.snmp2mqtt||{};$('liveSnmp2mqtt').textContent=snmp.message||snmp.status||'Waiting for Discovery';updateElapsedClock();const lines=state.log_tail||[];$('discoveryLog').textContent=lines.length?lines.join('\n'):'No debug details are available yet.';updateSteps(state);syncConfiguredDeviceToggleAvailability()}
+function showDiscovery(d){const state=d||{};lastDiscoveryState=state;const running=!!state.running;const regenYaml=state.mode==='regenerate_yaml';const regenCard=state.mode==='regenerate_card';const regen=regenYaml||regenCard;const phase=state.phase||(running?'running':(state.success===true?'complete':(state.success===false?'failed':'idle')));const preparing=running&&phase==='preparing';const stopping=running&&phase==='stopping';const active=running&&!preparing&&!stopping;const btn=$('runDiscoveryButton');const regenBtn=$('regenerateYamlButton');const cardBtn=$('regenerateCardYamlButton');const stopBtn=$('stopDiscoveryButton');btn.disabled=running;regenBtn.disabled=running;cardBtn.disabled=running;btn.textContent=preparing&&!regen?'Preparing…':(stopping?'Stopping…':(active&&!regen?'Discovery Running…':'Run Discovery'));regenBtn.textContent=regenYaml&&preparing?'Preparing…':(regenYaml&&active?'Regenerating…':'Regenerate SNMP2MQTT YAML');cardBtn.textContent=regenCard&&preparing?'Preparing…':(regenCard&&active?'Regenerating…':'Regenerate Card YAML');stopBtn.disabled=!running||stopping;stopBtn.textContent=stopping?'Stopping…':'Stop Discovery';const modeLabel=regenCard?'Dashboard Card YAML regeneration':(regenYaml?'SNMP2MQTT YAML regeneration':'Discovery');let label='Idle / Ready';if(preparing)label=`Preparing ${modeLabel}`;else if(stopping)label=`Stopping ${modeLabel}`;else if(active)label=regen?`${modeLabel} running`:'Discovery running';else if(phase==='stopped')label=`${modeLabel} stopped`;else if(state.success===true)label=`${modeLabel} complete`;else if(state.success===false)label=`${modeLabel} failed: ${state.message||'Unknown error'}`;$('discoveryStatus').textContent=label;$('homeStatus').textContent=preparing?'Preparing Discovery':(stopping?'Stopping Discovery':(active?'Discovery running':(phase==='stopped'?'Discovery stopped':(state.success===true?'Last discovery complete':(state.success===false?'Discovery needs attention':'Ready')))));$('homeStatusDot').className=`status-dot${running?' running':(state.success===false?' failed':'')}`;$('liveStage').textContent=preparing?`Preparing ${modeLabel}`:(state.stage||label);$('liveSwitch').textContent=preparing?'Waiting':(state.switch||(!running&&state.success===true?'All configured switches':'Not running'));$('liveTarget').textContent=preparing?'Waiting':(state.target||'Not running');$('liveActivity').textContent=preparing?(regenCard?'Loading saved Discovery state and stored walks':(regenYaml?'Loading saved Discovery data and SNMP walks':'Validating configured switches')):(state.activity||label);$('liveCommand').textContent=preparing?'Not started':(state.command||'No command running');$('liveRunStatus').textContent=preparing?'Preparing':(stopping?'Stopping':(active?'Running':(phase==='stopped'?'Stopped':(state.success===true?'Complete':(state.success===false?'Failed':'Idle / Ready')))));const snmp=state.snmp2mqtt||{};$('liveSnmp2mqtt').textContent=snmp.message||snmp.status||'Waiting for Discovery';updateElapsedClock();const lines=state.log_tail||[];$('discoveryLog').textContent=lines.length?lines.join('\n'):'No debug details are available yet.';updateSteps(state);syncConfiguredDeviceToggleAvailability()}
 async function loadGeneratedCardYamlStatus(){const status=$('generatedCardYamlActionStatus');const preview=$('generatedCardYamlPreview');try{const r=await fetch(endpoint('api/generated-card-yaml/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not read generated Card YAML status');const found=!!d.generated?.found;const valid=!!d.validation?.valid;const modified=d.generated?.modified||null;$('generatedCardYamlState').textContent=found?`${d.generated.path||'generated-dashboard-card.yaml'} · ${d.generated.size||0} bytes`:'Not generated';$('generatedCardYamlValidation').textContent=valid?`Valid · ${d.validation?.documents||1} YAML document${(d.validation?.documents||1)===1?'':'s'}`:`Invalid · ${d.validation?.error||'validation failed'}`;$('generatedCardYamlUpdated').textContent=modified||'Not available';$('downloadGeneratedCardYamlButton').href=endpoint('download/generated-dashboard-card.yaml');if(!found||!valid){preview.textContent='';preview.classList.add('hidden');status.textContent=!found?'Run Discovery to generate the Card YAML preview.':`Generated Card YAML is not available for preview: ${d.validation?.error||'validation failed'}`}else{if(generatedCardYamlModified&&modified!==generatedCardYamlModified&&!preview.classList.contains('hidden')){preview.textContent=await fetchGeneratedCardYaml();status.textContent='Generated Card YAML preview refreshed.'}else if(status.textContent.startsWith('Could not load')||status.textContent.startsWith('Generated Card YAML is not available'))status.textContent=''}generatedCardYamlModified=modified}catch(e){preview.textContent='';preview.classList.add('hidden');status.textContent=`Could not load generated Card YAML status: ${e}`}}
 async function fetchGeneratedCardYaml(){const r=await fetch(endpoint('api/generated-card-yaml/preview'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Card YAML preview failed');return d.text||''}
 async function previewGeneratedCardYaml(){const status=$('generatedCardYamlActionStatus');try{const text=await fetchGeneratedCardYaml();$('generatedCardYamlPreview').textContent=text;$('generatedCardYamlPreview').classList.remove('hidden');status.textContent='Generated Card YAML preview loaded.'}catch(e){status.textContent=`Could not preview generated Card YAML: ${e}`}}
@@ -4427,6 +4483,7 @@ async function copyGeneratedCardYaml(){const status=$('generatedCardYamlActionSt
 async function loadGeneratedYamlStatus(){try{const r=await fetch(endpoint('api/generated-yaml/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not read generated YAML status');const applicable=d.applicable!==false;const found=!!d.generated?.found;const description=$('generatedYamlDescription');const actions=$('generatedYamlActions');const regen=$('regenerateYamlButton');const regenHelp=$('regenerateYamlHelp');const preview=$('generatedYamlPreview');const actionStatus=$('generatedYamlActionStatus');if(!applicable){$('generatedYamlState').textContent='Not in use';$('generatedYamlValidation').textContent=`Not applicable · ${d.reason||'No enabled SNMP targets are configured.'}`;$('generatedYamlUpdated').textContent='Not applicable';if(description)description.textContent='SNMP2MQTT YAML is only required for switches using the SNMP data path. UniFi API devices use UniFi2MQTT and do not require this file.';if(actions)actions.hidden=true;if(regen)regen.hidden=true;if(regenHelp)regenHelp.hidden=true;preview.textContent='';preview.classList.add('hidden');actionStatus.textContent='No SNMP2MQTT YAML action is required for this installation.';$('liveSnmp2mqtt').textContent='Not in use · no enabled SNMP targets';return}if(description)description.textContent='Discovery writes the file used by the SNMP2MQTT generated-YAML import option. After a successful SNMP Discovery run, Switch Vision validates the YAML and automatically starts or restarts the SNMP2MQTT app.';if(actions)actions.hidden=false;if(regen)regen.hidden=false;if(regenHelp)regenHelp.hidden=false;actionStatus.textContent='';$('generatedYamlState').textContent=found?`${d.generated.path||'generated-snmp2mqtt.yaml'} · ${d.generated.size||0} bytes`:'Not generated';$('generatedYamlValidation').textContent=d.validation?.valid?'Valid':`Invalid · ${d.validation?.error||'validation failed'}`;$('generatedYamlUpdated').textContent=d.generated?.modified||'Not available';$('downloadGeneratedYamlButton').href=endpoint('download/generated-snmp2mqtt.yaml')}catch(e){$('generatedYamlActionStatus').textContent=`Could not load generated YAML status: ${e}`}}
 async function previewGeneratedYaml(){const status=$('generatedYamlActionStatus');try{const r=await fetch(endpoint('api/generated-yaml/preview'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Preview failed');$('generatedYamlPreview').textContent=d.text||'';$('generatedYamlPreview').classList.remove('hidden');status.textContent='Generated YAML preview loaded.'}catch(e){status.textContent=`Could not preview generated YAML: ${e}`}}
 function toggleDebug(){debugVisible=!debugVisible;$('debugWrap').classList.toggle('hidden',!debugVisible);$('toggleDebugButton').textContent=debugVisible?'Hide Debug':'Show Debug'}
+async function regenerateDashboardCardYaml(){const btn=$('regenerateCardYamlButton');const status=$('generatedCardYamlActionStatus');btn.disabled=true;status.textContent='Preparing stored-state Card YAML regeneration…';try{const r=await fetch(endpoint('api/discovery/regenerate-card'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start Card YAML regeneration');status.textContent='Card regeneration started. Saved Discovery state and stored walks are being reused; no SNMP walks will run and SNMP2MQTT will not be restarted.';await refresh()}catch(e){status.textContent=`Could not regenerate Card YAML: ${e.message||e}`;btn.disabled=false}}
 async function regenerateSnmp2mqttYaml(){const btn=$('regenerateYamlButton');const status=$('regenerateYamlStatus');btn.disabled=true;status.textContent='Preparing stored-walk YAML regeneration…';try{const r=await fetch(endpoint('api/discovery/regenerate-yaml'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start YAML regeneration');status.textContent='Regeneration started. Existing saved walks are being reprocessed; no SNMP walks will run.';await refresh()}catch(e){status.textContent=`Could not regenerate SNMP2MQTT YAML: ${e.message||e}`;btn.disabled=false}}
 async function runDiscovery(){const btn=$('runDiscoveryButton');btn.disabled=true;$('discoveryStatus').textContent='Preparing Discovery';try{const r=await fetch(endpoint('api/discovery/start'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start Discovery');await refresh()}catch(e){$('discoveryStatus').textContent=`Could not start Discovery: ${e}`;btn.disabled=false}}
 async function stopDiscovery(){const btn=$('stopDiscoveryButton');btn.disabled=true;$('discoveryStatus').textContent='Stopping Discovery';try{const r=await fetch(endpoint('api/discovery/stop'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not stop Discovery');await refresh()}catch(e){$('discoveryStatus').textContent=`Could not stop Discovery: ${e}`;btn.disabled=false}}
@@ -4437,7 +4494,7 @@ function schedulePoll(running=lastRunning){if(polling){clearTimeout(polling);pol
 async function refresh(){if(refreshInFlight)return;refreshInFlight=true;try{const r=await fetch(endpoint('api/status'),{cache:'no-store'});const d=await r.json();if(d.ui_preferences?.density)syncDensityUi(d.ui_preferences.density);setUnifiHomeCardVisibility(d.ui_preferences?.show_unifi_integration!==false);if(d.ui_preferences?.show_unifi_integration!==false)await refreshUnifiHomeCard();if(!defaultsLoaded)setForm(d.defaults);showDiscovery(d.discovery);const contributionRunning=!!d.job.running;const discoveryRunning=!!d.discovery?.running;lastRunning=contributionRunning||discoveryRunning;$('createButton').disabled=contributionRunning;if(contributionRunning&&currentView!=='discovery')setView('progress');$('progressMessage').textContent=d.job.message||'Working…';$('logTail').textContent=(d.job.log_tail||[]).join('\n');if(!contributionRunning&&d.job.success===false&&currentView==='progress'){$('progressMessage').textContent=`Failed: ${d.job.message}`}if(!contributionRunning){showLatest(d.latest);if(d.job.success===true&&d.latest&&currentView==='progress')setView('ready')}if(currentView==='devices')await refreshDevicesData(false);else if(currentView==='diagnostics')await refreshDiagnosticsData(false);else if(currentView==='discovery')await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])}catch(e){if(currentView==='progress')$('progressMessage').textContent=`Could not contact Support My Switch: ${e}`;else $('homeStatus').textContent=`Connection problem: ${e}`}finally{refreshInFlight=false;schedulePoll(lastRunning)}}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(polling){clearTimeout(polling);polling=null}}else{updateElapsedClock();refresh()}});window.addEventListener('focus',()=>{if(!document.hidden){updateElapsedClock();refresh()}});
 async function create(){const btn=$('createButton');btn.disabled=true;setView('progress');$('progressMessage').textContent='Starting…';try{const r=await fetch(endpoint('api/create'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start contribution');await refresh()}catch(e){$('progressMessage').textContent=`Could not start: ${e}`;btn.disabled=false}}
-$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openCalibrationProfilesButton').addEventListener('click',()=>{setView('profiles');window.SwitchVisionCalibrationProfiles?.load()});$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedCardYamlButton').addEventListener('click',previewGeneratedCardYaml);$('copyGeneratedCardYamlButton').addEventListener('click',copyGeneratedCardYaml);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('openDiagnosticsButton').addEventListener('click',loadDiagnostics);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json')});$('openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()});$('openIntegrationSettingsButton').addEventListener('click',()=>window.SwitchVisionHubSettings?.open('core'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('refreshDiagnosticsButton').addEventListener('click',loadDiagnostics);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('diagnosticsRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});setView('home');startElapsedTicker();refresh();
+$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openCalibrationProfilesButton').addEventListener('click',()=>{setView('profiles');window.SwitchVisionCalibrationProfiles?.load()});$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedCardYamlButton').addEventListener('click',previewGeneratedCardYaml);$('copyGeneratedCardYamlButton').addEventListener('click',copyGeneratedCardYaml);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('openDiagnosticsButton').addEventListener('click',loadDiagnostics);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json')});$('openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()});$('openIntegrationSettingsButton').addEventListener('click',()=>window.SwitchVisionHubSettings?.open('core'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('refreshDiagnosticsButton').addEventListener('click',loadDiagnostics);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('diagnosticsRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});setView('home');startElapsedTicker();refresh();
 </script>
 <script src="credits_v25.js"></script>
 <script>
@@ -5017,6 +5074,48 @@ class SupportHandler(BaseHTTPRequestHandler):
                 _release_operation(operation_name)
                 raise
             self._json({"started": True, "mode": "regenerate_yaml"}, HTTPStatus.ACCEPTED)
+            return
+        if path == "/api/discovery/regenerate-card":
+            operation_name = "Dashboard Card YAML regeneration"
+            try:
+                _claim_operation(operation_name)
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+                return
+            _DISCOVERY_STOP_REQUESTED.clear()
+            _set_discovery_state(
+                running=True,
+                started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                finished_at=None,
+                success=None,
+                message="Preparing Dashboard Card YAML regeneration",
+                log_tail=[],
+                stage="Preparing Dashboard Card YAML regeneration",
+                switch="",
+                target="",
+                command="",
+                activity="Loading saved Discovery state and stored walks",
+                phase="preparing",
+                mode="regenerate_card",
+                snmp2mqtt={
+                    "status": "Not touched",
+                    "action": "none",
+                    "slug": None,
+                    "state": None,
+                    "message": "SNMP2MQTT will not be started or restarted for Card YAML regeneration",
+                },
+            )
+            thread = threading.Thread(
+                target=_run_discovery,
+                args=(self.app.discovery_script, "regenerate_card"),
+                daemon=True,
+            )
+            try:
+                thread.start()
+            except Exception:
+                _release_operation(operation_name)
+                raise
+            self._json({"started": True, "mode": "regenerate_card"}, HTTPStatus.ACCEPTED)
             return
         if path == "/api/discovery/start":
             try:
