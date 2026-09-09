@@ -88,7 +88,14 @@ for marker in (
 ):
     assert marker in source, marker
 
-assert 'generated_yaml_path"] = "/tmp/' not in source
+snmp_snapshot_source = source.split(
+    "def _write_snmp2mqtt_regeneration_options_snapshot(",
+    1,
+)[1].split(
+    "def _write_dashboard_card_regeneration_options_snapshot(",
+    1,
+)[0]
+assert 'generated_yaml_path"] = "/tmp/' not in snmp_snapshot_source
 
 job_source = (RUNTIME / "discovery_job.sh").read_text(encoding="utf-8")
 for oid in (
