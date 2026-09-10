@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.1"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.2"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -899,7 +899,7 @@ parser_report() {
       if (status == "supported") return "validated"
       if (status == "community_validated") return "real-hardware validated"
       if (is_2960(model)) return "generated from SNMP layout; physical SFP validation pending"
-      if (model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC" || model == "XS1930-10" || model == "N2128PX-ON" || model == "CRS328-24P-4S+") return "generated from contribution-backed interface names; contributor/live validation pending"
+      if (model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC" || model == "XS1930-10" || model == "GS1915-24EP" || model == "N2128PX-ON" || model == "CRS328-24P-4S+") return "generated from contribution-backed interface names; contributor/live validation pending"
       return "review required"
     }
     function model_rank(value, score) {
@@ -938,6 +938,7 @@ parser_report() {
       if (line ~ /S5735-L8P4X-A1/) huawei_s5735_model = "S5735-L8P4X-A1"
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model = "S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model = "XS1930-10"
+      else if (line ~ /GS1915-24EP/) zyxel_model = "GS1915-24EP"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model = "CRS328-24P-4S+"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model = "HP J8693A Switch 3500yl-48G"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model = "N2128PX-ON"
@@ -1199,6 +1200,14 @@ parser_report() {
             } else {
               ten_key[physical_id] = 1; member_ten[1]++
             }
+          }
+          special = 1
+        } else if (model == "GS1915-24EP" && n ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) {
+          port = n; sub(/^swp/, "", port)
+          physical_id = "gs1915-swp" port
+          if (!(physical_id in physical_key)) {
+            physical_key[physical_id] = 1; rj45_key[physical_id] = 1
+            member_key[1] = 1; member_physical[1]++; member_rj45[1]++
           }
           special = 1
         } else if (model == "CRS328-24P-4S+" && n ~ /^ether([1-9]|1[0-9]|2[0-4])$/) {
@@ -1509,6 +1518,11 @@ parser_report() {
           } else {
             mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone 10G SFP+ uplink " ((port + 0) - 7)
           }
+          continue
+        }
+        if (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) {
+          port = name; sub(/^swp/, "", port)
+          mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone RJ45 port " ((port + 0) + 1)
           continue
         }
         if (model == "CRS328-24P-4S+" && name ~ /^ether([1-9]|1[0-9]|2[0-4])$/) {
@@ -2825,6 +2839,10 @@ write_generated_yaml_for_walk() {
         if ((port + 0) <= 7) return prefix " Port " ((port + 0) + 1)
         return prefix " SFP 10G " ((port + 0) - 7)
       }
+      if (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) {
+        port = name; sub(/^swp/, "", port)
+        return prefix " Port " ((port + 0) + 1)
+      }
       if (model == "CRS328-24P-4S+" && name ~ /^ether([1-9]|1[0-9]|2[0-4])$/) {
         port = name; sub(/^ether/, "", port)
         return prefix " Port " (port + 0)
@@ -2974,6 +2992,7 @@ write_generated_yaml_for_walk() {
       if (line ~ /S5735-L8P4X-A1/) huawei_s5735_model="S5735-L8P4X-A1"
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model="S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model="XS1930-10"
+      else if (line ~ /GS1915-24EP/) zyxel_model="GS1915-24EP"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model="CRS328-24P-4S+"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
@@ -3039,7 +3058,10 @@ write_generated_yaml_for_walk() {
         } else if (huawei_s5720_model != "" && val ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) {
           physical_count++
           physical_member[1] = 1
-        } else if (zyxel_model != "" && val ~ /^swp0[0-9]$/) {
+        } else if (zyxel_model == "XS1930-10" && val ~ /^swp0[0-9]$/) {
+          physical_count++
+          physical_member[1] = 1
+        } else if (zyxel_model == "GS1915-24EP" && val ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) {
           physical_count++
           physical_member[1] = 1
         } else if (mikrotik_model != "" && val ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/) {
@@ -3225,7 +3247,7 @@ write_generated_yaml_for_walk() {
       phys_n = 0
       for (idx=1; idx<=maxidx; idx++) if (idx in ifname) {
         name=ifname[idx]
-        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
+        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
           if (model == "Juniper EX3300-48P" && name ~ /^(xe|ge)-0\/1\/[0-3]$/) continue
           if (name ~ /^ge-0\/0\/[0-9]+$/) {
             port_no=name
@@ -3333,7 +3355,7 @@ write_generated_yaml_for_walk() {
           # Zyxel XS1930-10 maps dot1dBasePortIfIndex directly to its
           # physical swp ifIndex values. Use Q-BRIDGE PVID only when the
           # current walk proves both sides of that join.
-          if (!vlan_emitted && model == "XS1930-10" && ifname[idx] ~ /^swp0[0-9]$/) {
+          if (!vlan_emitted && ((model == "XS1930-10" && ifname[idx] ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && ifname[idx] ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/))) {
             bridge_idx=bridge_for_ifindex[idx]
             if (bridge_idx > 0 && (bridge_idx in qbridge_pvid_idx)) {
               yaml_sensor("1.3.6.1.2.1.17.7.1.4.5.1.1." bridge_idx, label " VLAN ID")
@@ -3439,7 +3461,7 @@ write_generated_yaml_for_walk() {
         if (idx in identity_serial_idx) yaml_sensor("1.3.6.1.2.1.47.1.1.1.1.11." idx, label " Serial")
       }
 
-      if (model == "XS1930-10") {
+      if (model == "XS1930-10" || model == "GS1915-24EP") {
         if (zyxel_model_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.1.11.0", prefix " Model")
         if (zyxel_firmware_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.1.6.0", prefix " Firmware")
         if (zyxel_serial_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.1.12.0", prefix " Serial")

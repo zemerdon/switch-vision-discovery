@@ -33,6 +33,17 @@ cv_interface_class_for_name() {
     return 0
   fi
 
+  # Zyxel GS1915-24EP contribution: IF-MIB indexes 1-24 map to the
+  # zero-based swp00-swp23 front-panel GbE ports. Keep both index and name
+  # checks so logical/management rows can never become physical ports.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "GS1915-24EP" ]; then
+    case "${CV_CAP_IF_INDEX:-}:$name" in
+      1:swp00|2:swp01|3:swp02|4:swp03|5:swp04|6:swp05|7:swp06|8:swp07|9:swp08|10:swp09|11:swp10|12:swp11|13:swp12|14:swp13|15:swp14|16:swp15|17:swp16|18:swp17|19:swp18|20:swp19|21:swp20|22:swp21|23:swp22|24:swp23) printf 'rj45' ;;
+      *) printf 'other' ;;
+    esac
+    return 0
+  fi
+
   # Sirivision SR-S25G3420F contribution: indexes 1-16 are 2.5G-capable
   # copper sockets and 17-20 are 10G optical cages. This rule deliberately
   # uses the stable contributed physical index contract rather than ifSpeed,

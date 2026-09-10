@@ -265,6 +265,54 @@ profiles:
       sfp_10g: []
     notes:
     - Privacy-processed real-hardware evidence confirms eight physical 1G copper interfaces; LAG rows are logical only.
+  zyxel-gs1915-24ep:
+    status: experimental
+    vendor: Zyxel
+    family: GS1915
+    model_patterns:
+    - GS1915-24EP
+    sys_object_ids:
+    - 1.3.6.1.4.1.890.1.15.3.139.1
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - swp00
+      - swp01
+      - swp02
+      - swp03
+      - swp04
+      - swp05
+      - swp06
+      - swp07
+      - swp08
+      - swp09
+      - swp10
+      - swp11
+      - swp12
+      - swp13
+      - swp14
+      - swp15
+      - swp16
+      - swp17
+      - swp18
+      - swp19
+      - swp20
+      - swp21
+      - swp22
+      - swp23
+      sfp_1g: []
+      sfp_10g: []
+    notes:
+    - Real-hardware walk evidence confirms the exact GS1915-24EP identity and the
+      swp00 through swp23 front-panel IF-MIB interface set.
+    - The authoritative physical contract is 24 copper ports and zero optical uplinks.
+    - The neutral 24+2 visual is only a temporary canvas; zero uplinks in the
+      physical contract keep both artwork SFP positions inert.
+
   sirivision-sr-s25g3420f:
     status: experimental
     vendor: Sirivision

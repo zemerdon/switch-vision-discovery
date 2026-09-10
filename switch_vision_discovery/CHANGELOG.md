@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.2
+
+- Register the walk-backed Zyxel GS1915-24EP as an exact Experimental model instead of stopping at detected-only identity.
+- Map the contributed `swp00` through `swp23` IF-MIB set to exactly 24 copper ports, preserve zero optical uplinks, and keep unrelated/logical interfaces non-physical.
+- Carry the exact model through the legacy SNMP2MQTT YAML path with deterministic Port 1-24 labels, walk-aware status/traffic polling, and Q-BRIDGE VLAN emission only when the current walk proves the join.
+- Record standard POWER-ETHERNET-MIB evidence as PoE capability without inventing unsupported per-port presentation details.
+- Keep GS1915 visual alignment Experimental; the stock 24+2 canvas is temporary and its two artwork SFP positions remain inert because the authoritative topology has zero uplinks.
+- Lock permanent regression coverage for walk-backed exact-model registration and downstream evidence preservation.
+
 ## 2.4.1
 
 - Replace the stacked Switch Vision Settings sections with top tabs for UI Settings, Discovery Settings and SNMP2MQTT Settings while preserving unsaved edits, shortcuts and keyboard navigation.
