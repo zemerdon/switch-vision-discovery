@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.4.1
+
+- Replace the stacked Switch Vision Settings sections with top tabs for UI Settings, Discovery Settings and SNMP2MQTT Settings while preserving unsaved edits, shortcuts and keyboard navigation.
+- Put Regenerate Dashboard Card YAML beside Regenerate SNMP2MQTT YAML and expose the same immediate saved-state regeneration on Devices, so enable/disable changes can update dashboard YAML without rerunning Discovery or new SNMP walks.
+- Fold Detected Device Information into expandable rows on the Devices page, preserving detailed validation/source/mapping information plus diagnostics copy/download actions and expansion state across background refreshes; remove the duplicate standalone Hub card/page.
+- Treat exact generated-configuration load as the SNMP2MQTT handoff success proof. Retained Home Assistant MQTT Discovery entity counts are asynchronous health evidence and no longer turn an otherwise successful Discovery into a false failure.
+- Align the Experimental WS-C3850-12XS-E visual canvas metadata with Core's owner-supplied 2048 x 448 render geometry without changing its proven 0-RJ45 / 12-SFP physical contract.
+
 ## 2.4.0
 
 - Make live Discovery runs fail-soft per target: preserve valid evidence/results when only some targets fail, return PARTIAL with exit 11 for mixed success/failure, and reserve exit 2 for runs that genuinely cannot produce a safe live result.

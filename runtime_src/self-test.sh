@@ -9,6 +9,8 @@ python3 "$BASE_DIR/dashboard_card_regeneration_regression.py"
 python3 "$BASE_DIR/discovery_history_regression.py"
 python3 "$BASE_DIR/management_ip_display_regression.py"
 python3 "$BASE_DIR/device_ordering_regression.py"
+python3 "$BASE_DIR/hub_settings_tabs_regression.py"
+python3 "$BASE_DIR/devices_diagnostics_regression.py"
 sv_require_literal() {
     label=$1
     literal=$2
@@ -243,7 +245,9 @@ grep -Fq -- '--heading:#79d7f5;--heading-strong:#ace9fb;--heading-line:#42b4e6' 
 grep -Fq -- '--heading:#005ed8;--heading-strong:#003f9e;--heading-line:#6aa7ff' "$BASE_DIR/support_web.py"
 grep -Fq 'h2{font-size:var(--sv-font-section-title);line-height:1.25;color:var(--heading)}' "$BASE_DIR/support_web.py"
 grep -Fq '.hub-settings-section h3::before{content:"";position:absolute;left:0;top:.12em;width:3px;height:1.05em' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-component>summary{cursor:pointer;font-size:1rem;font-weight:750;color:var(--heading)' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-settings-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-settings-tab.is-active{color:var(--heading-strong)!important' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-settings-pane[hidden]{display:none!important}' "$BASE_DIR/support_web.py"
 grep -Fq 'box-shadow:0 0 0 3px var(--accent-soft)' "$BASE_DIR/support_web.py"
 grep -Fq '.nav-card::before{content:"";position:absolute;left:0;top:0;right:0;height:2px' "$BASE_DIR/support_web.py"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_HUB_SETTINGS'
@@ -1715,8 +1719,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.0"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.0"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.1"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.1"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -3369,7 +3373,8 @@ assert path_result["handoff_failed"] is True
 assert path_result["configuration_mode"] == "generated_path_mismatch"
 assert unexpected_actions == []
 
-# Successful restart: an initially missing retained identity may arrive later.
+# Successful restart is proven by exact generated-config identity, not by the
+# timing of Home Assistant retained MQTT Discovery publication.
 events = []
 web._snmp2mqtt_runtime_info = lambda: dict(base_runtime)
 web.generated_yaml_generation_id = lambda _path: "123e4567-e89b-12d3-a456-426614174000"
@@ -3383,25 +3388,10 @@ def supervisor(path, *, method="GET", timeout=12.0, payload=None):
         return {"data": {"state": "started"}}
     return {"result": "ok"}
 web._supervisor_json = supervisor
-scans = [
-    {
-        "current_expected_count": 1,
-        "current_retained_count": 0,
-        "current_missing_retained_count": 1,
-        "stale_count": 1,
-    },
-    {
-        "current_expected_count": 1,
-        "current_retained_count": 1,
-        "current_missing_retained_count": 0,
-        "stale_count": 1,
-    },
-]
-def scan_success():
-    value = scans.pop(0)
-    events.append(("scan", value["current_retained_count"]))
-    return value
-web.scan_mqtt_entities = scan_success
+
+def unexpected_scan():
+    raise AssertionError("retained MQTT entity counts must not gate SNMP2MQTT handoff")
+web.scan_mqtt_entities = unexpected_scan
 clears = []
 def clear_topics(topics):
     events.append(("clear", len(topics)))
@@ -3412,51 +3402,35 @@ web._save_snmp2mqtt_retirement_topics = lambda topics: events.append(("save", le
 old_topic = "homeassistant/sensor/snmp2mqtt/old_identity/config"
 success = web._ensure_snmp2mqtt_running([], 0.0, [old_topic])
 assert success["handoff_failed"] is False
+assert success["config_load_verified"] is True
 assert success["activation_verified"] is True
-assert success["mqtt_current_retained"] == 1
+assert success["mqtt_current_expected"] is None
+assert success["mqtt_current_retained"] is None
+assert success["mqtt_current_missing"] is None
 assert clears == [[old_topic]]
-assert events.index(("scan", 1)) < events.index(("clear", 1))
+assert "verified active from exact generated configuration load" in success["message"]
+assert "catching up" not in success["message"]
 
-# If the replacement identity set never appears, old retained identities must
-# stay untouched and the Discovery handoff must fail.
+# If exact generated-file activation cannot be proven, preserve old retained
+# identities and surface a warning. This is a handoff warning, not a false
+# overall Discovery failure caused by MQTT publication counts.
 events.clear()
 clears.clear()
 web.verify_generated_yaml_loaded = lambda _base_topic, _generation_id: False
-web.scan_mqtt_entities = lambda: {
-    "current_expected_count": 1,
-    "current_retained_count": 0,
-    "current_missing_retained_count": 1,
-    "stale_count": 1,
-}
 failed = web._ensure_snmp2mqtt_running([], 0.0, [old_topic])
 assert failed["handoff_failed"] is True
+assert failed["config_load_verified"] is False
 assert failed["activation_verified"] is False
 assert clears == []
-
-# Exact generated-file activation is authoritative. MQTT discovery entities
-# may be published later while the SNMP poller is already active.
-events.clear()
-clears.clear()
-web.generated_yaml_generation_id = lambda _path: "123e4567-e89b-12d3-a456-426614174000"
-web.verify_generated_yaml_loaded = lambda base_topic, generation_id: (
-    base_topic == "snmp2mqtt"
-    and generation_id == "123e4567-e89b-12d3-a456-426614174000"
-)
-web.scan_mqtt_entities = lambda: {
-    "current_expected_count": 2,
-    "current_retained_count": 0,
-    "current_missing_retained_count": 2,
-    "stale_count": 0,
-}
-exact_loaded = web._ensure_snmp2mqtt_running([], 0.0, [])
-assert exact_loaded["handoff_failed"] is False
-assert exact_loaded["config_load_verified"] is True
-assert exact_loaded["activation_verified"] is True
-assert "catching up" in exact_loaded["message"]
+assert "exact generated-configuration load was not verified yet" in failed["message"]
 
 source = Path(web.__file__).read_text(encoding="utf-8")
-assert 'if snmp2mqtt_result.get("handoff_failed"):' in source
-assert 'stage="SNMP2MQTT handoff not verified"' in source
+assert 'handoff_warning = bool(snmp2mqtt_result.get("handoff_failed"))' in source
+assert 'operation_warning = degraded_result or partial_result or handoff_warning' in source
+assert 'stage="SNMP2MQTT handoff not verified"' not in source
+assert 'retained MQTT discovery' in source
+assert 'entity counts are never a Discovery success gate' in source
+assert '"mqtt_current_expected": None' in source
 
 # A long multi-switch Discovery run must not age out its own early walk.
 root = tmp / "walk-freshness"

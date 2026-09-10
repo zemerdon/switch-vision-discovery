@@ -44,7 +44,18 @@ saved_options = {
             "walk_mode": "targeted",
             "switch_model": "auto",
             "card_header_title": "",
-        }
+        },
+        {
+            "switch_name": "LAB-SW2",
+            "display_name": "Disabled Regression Switch",
+            "switch_host": "192.0.2.11",
+            "sensor_prefix": "LAB_SW2",
+            "snmp_community": "private-test-value-2",
+            "enabled": "disabled",
+            "walk_mode": "targeted",
+            "switch_model": "auto",
+            "card_header_title": "",
+        },
     ],
     "stack_member_prefixes": [],
 }
@@ -89,6 +100,9 @@ with tempfile.TemporaryDirectory(prefix="sv-card-regeneration-") as temp_dir:
 
     assert generated["switches"][0]["switch_name"] == "LAB-SW1"
     assert generated["switches"][0]["switch_host"] == "192.0.2.10"
+    assert generated["switches"][0]["enabled"] == "enabled"
+    assert generated["switches"][1]["switch_name"] == "LAB-SW2"
+    assert generated["switches"][1]["enabled"] == "disabled"
     assert generated["enable_switch_list"] is True
     assert generated["run_snmp_walks"] is False
     assert generated["run_live_snmpwalk"] is False
@@ -173,9 +187,15 @@ for marker in (
     '/api/discovery/regenerate-card',
     'mode="regenerate_card"',
     'id="regenerateCardYamlButton"',
-    'Regenerate Card YAML',
+    'Regenerate Dashboard Card YAML',
+    'id="devicesRegenerateCardYamlButton"',
+    'async function startDashboardCardYamlRegeneration(btn,status)',
     'async function regenerateDashboardCardYaml()',
+    'async function regenerateDashboardCardYamlFromDevices()',
     "$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml)",
+    "$('devicesRegenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYamlFromDevices)",
+    'Regenerate Dashboard Card YAML to apply this saved state immediately; no Discovery run is required.',
+    'Dashboard Card YAML regeneration started from the current saved device state. No Discovery run or new SNMP walks are required',
     'SNMP2MQTT was not started or restarted during Dashboard Card YAML regeneration.',
 ):
     assert marker in source, marker

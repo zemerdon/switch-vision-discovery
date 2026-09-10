@@ -80,7 +80,7 @@ assert original["parse_all_walks"] is False
 source = (RUNTIME / "support_web.py").read_text(encoding="utf-8")
 for marker in (
     'id="regenerateYamlButton"',
-    'Regenerate SNMP2MQTT YAML uses the existing saved Discovery data and SNMP walks.',
+    'Regenerate SNMP2MQTT YAML and Regenerate Dashboard Card YAML reuse existing saved Discovery data and stored SNMP walks.',
     '/api/discovery/regenerate-yaml',
     'mode="regenerate_yaml"',
     'SWITCH_VISION_CAPABILITIES_DIR',
