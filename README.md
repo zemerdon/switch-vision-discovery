@@ -20,3 +20,11 @@ Repository URL:
 - Current Switch Vision Core compatibility floor: v2.3.10+ for the Calibration Profile management/storage API used by Discovery
 
 Switch Vision components are independently versioned. The main Switch Vision Core product source is maintained separately and is not published in this repository.
+
+## Exact-model support status
+
+Discovery's reviewed exact-model registry is the public software source of truth for Switch Vision device support state. The normal confidence ladder is **Detected -> Experimental -> Community Validated -> Confirmed Supported**.
+
+A first valid contribution adds the exact model as **Detected**; a reviewed Experimental mapping/profile or dashboard implementation may already exist at this stage. A second meaningfully independent contribution that corroborates the model's evidence promotes it to **Experimental**. A third independent contribution plus applicable visual/real-hardware confirmation can promote it to **Community Validated**. **Confirmed Supported** is a later repeatability/maturity decision rather than an automatic fourth contribution.
+
+Duplicate/replayed evidence does not increase confidence, conflicting evidence blocks promotion, and non-applicable hardware capabilities are never invented to complete a checklist. Public support status is derived from the reviewed registry rather than directly from private Support My Switch evidence.
