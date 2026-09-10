@@ -9,6 +9,7 @@ python3 "$BASE_DIR/dashboard_card_regeneration_regression.py"
 python3 "$BASE_DIR/discovery_history_regression.py"
 python3 "$BASE_DIR/management_ip_display_regression.py"
 python3 "$BASE_DIR/device_ordering_regression.py"
+python3 "$BASE_DIR/hub_settings_tabs_regression.py"
 sv_require_literal() {
     label=$1
     literal=$2
@@ -243,7 +244,9 @@ grep -Fq -- '--heading:#79d7f5;--heading-strong:#ace9fb;--heading-line:#42b4e6' 
 grep -Fq -- '--heading:#005ed8;--heading-strong:#003f9e;--heading-line:#6aa7ff' "$BASE_DIR/support_web.py"
 grep -Fq 'h2{font-size:var(--sv-font-section-title);line-height:1.25;color:var(--heading)}' "$BASE_DIR/support_web.py"
 grep -Fq '.hub-settings-section h3::before{content:"";position:absolute;left:0;top:.12em;width:3px;height:1.05em' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-component>summary{cursor:pointer;font-size:1rem;font-weight:750;color:var(--heading)' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-settings-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-settings-tab.is-active{color:var(--heading-strong)!important' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-settings-pane[hidden]{display:none!important}' "$BASE_DIR/support_web.py"
 grep -Fq 'box-shadow:0 0 0 3px var(--accent-soft)' "$BASE_DIR/support_web.py"
 grep -Fq '.nav-card::before{content:"";position:absolute;left:0;top:0;right:0;height:2px' "$BASE_DIR/support_web.py"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_HUB_SETTINGS'
