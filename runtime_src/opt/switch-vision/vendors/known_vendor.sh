@@ -108,6 +108,14 @@ cv_known_vendor_identity() {
         CV_ID_PRODUCT_MATCH="gs1900-8-local-sysdescr"
         CV_ID_SUPPORT_STATUS="experimental"
         ;;
+      *GS1915-24EP*|*gs1915-24ep*)
+        # Exact identity only. The contribution proves the local model and a
+        # successful IF-MIB walk, but does not yet authorize physical topology.
+        CV_ID_FAMILY="GS1915"
+        CV_ID_MODEL_HINT="GS1915-24EP"
+        CV_ID_PRODUCT_MATCH="gs1915-24ep-local-sysdescr"
+        CV_ID_SUPPORT_STATUS="detected"
+        ;;
     esac
   fi
 
