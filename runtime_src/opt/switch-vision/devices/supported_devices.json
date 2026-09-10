@@ -502,7 +502,7 @@
         "The twelve fixed front-panel SFP+ cages are Te<member>/0/1 through Te<member>/0/12.",
         "IOS may expose Te<member>/1/1 through Te<member>/1/4 even with the optional network-module bay empty; those rows are software-visible but non-physical and must never create Switch Vision ports or generated entities.",
         "This exact entry covers only the factory/no-module topology; no module-equipped Catalyst 3850 variant is inferred from it.",
-        "The exact Core faceplate/calibration provides twelve SFP positions on the 2680 x 356 canvas."
+        "The exact Core faceplate/calibration provides twelve SFP positions using the owner-supplied 2048 x 448 render geometry."
       ],
       "validation": {
         "exact_model_detection": "real_hardware_full_walk_confirmed",
@@ -518,8 +518,8 @@
         "optional_faceplates": [],
         "calibration_profile": "cisco_3850_12xs",
         "canvas": {
-          "width": 2680,
-          "height": 356
+          "width": 2048,
+          "height": 448
         }
       }
     },
