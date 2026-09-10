@@ -26,6 +26,7 @@ RUNTIME_VERSION_FILES = (
 PERMANENT_CHECKS = (
     "tools/test_unifi_dashboard_failure_modes.py",
     "tools/test_local_model_identity.py",
+    "tools/test_gs1915_evidence_preservation.py",
     "tools/test_ha_entity_snapshot.py",
     "tools/test_public_attribution_privacy.py",
     "tools/test_visual_contract_policy.py",
