@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.0
+
+- Make live Discovery runs fail-soft per target: preserve valid evidence/results when only some targets fail, return PARTIAL with exit 11 for mixed success/failure, and reserve exit 2 for runs that genuinely cannot produce a safe live result.
+- Tolerate expected per-OID SNMP walk failures and read-only dependency staging conditions without collapsing otherwise usable Discovery work; remove generic BAD_GATEWAY bridging for unrelated dependency failures.
+- Add Juniper EX3300 dynamic dual-personality uplink observation so the four shared cages are re-evaluated every 5 seconds while slower telemetry groups keep their normal cadence.
+- Add exact Experimental WS-C3850-12XS-E physical support with Te1/0/1-Te1/0/12 as the twelve physical SFP ports and explicit suppression of empty-bay Te1/1/1-Te1/1/4 interfaces.
+- Restore Dashboard Card YAML regeneration from stored Discovery state, add bounded structured run history, show configured versus effective management targets, and persist deterministic configured-device ordering reused by Discovery/SNMP/card generation.
+- Preserve generated-config activation so a valid new SNMP2MQTT configuration can become active without waiting for every slow polling group to complete.
+
 ## 2.3.46
 
 - Moved component installed/latest version and authoritative release publication-time presentation out of Switch Vision Hub; Switch Vision Installer now owns that component-status surface.
