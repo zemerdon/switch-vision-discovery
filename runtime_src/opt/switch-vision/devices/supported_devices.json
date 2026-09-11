@@ -2868,12 +2868,12 @@
         "public_credit": false
       },
       "notes": [
-        "A privacy-processed real-hardware SNMP capture reports the local RouterOS model string CRS328-24P-4S+; the registry retains the marketed CRS328-24P-4S+RM SKU only as lookup normalization.",
-        "ifIndex 1-24 map to ether1-ether24 and 25-28 map to sfp-sfpplus1-sfp-sfpplus4; bridge and lo are excluded as non-physical interfaces.",
-        "The contribution proves the complete 24 RJ45 plus 4 SFP+ physical interface topology and standard IF-MIB status, speed and traffic counters.",
-        "The four SFP+ cages were empty in the contributed capture, so live optical link and negotiated-speed validation remains pending.",
-        "PoE capability is hardware-confirmed for the exact model, while Switch Vision PoE and environmental SNMP presentation remains pending the new narrow supplemental telemetry confirmation.",
-        "The neutral 24 RJ45 plus 4 SFP faceplate is a temporary geometry fallback; MikroTik-specific rendered alignment remains pending field confirmation."
+        "Multiple privacy-processed real-hardware captures confirm the local RouterOS model string CRS328-24P-4S+; the registry retains the marketed CRS328-24P-4S+RM SKU as lookup normalization.",
+        "ifIndex 1-24 map to ether1-ether24 and 25-28 map to sfp-sfpplus1-sfp-sfpplus4; bridge and lo remain excluded as non-physical interfaces.",
+        "HOST-RESOURCES-MIB CPU plus MikroTik health-gauge temperature, fan, PSU and aggregate PoE consumption rows are contribution-confirmed; the generated SNMP2MQTT telemetry mapping remains pending post-release field validation.",
+        "MikroTik per-port PoE status, voltage, current and power rows are contribution-confirmed for the copper interfaces and are emitted only when present in the current walk.",
+        "The four SFP+ cage positions are contribution-confirmed but were empty in the supplied captures, so live optical link and negotiated-speed validation remains pending.",
+        "The neutral 24 RJ45 plus 4 SFP faceplate remains a temporary geometry fallback; exact MikroTik rendered alignment remains pending field confirmation before Community Validated promotion."
       ],
       "validation": {
         "exact_model_detection": "contribution_confirmed_local_routeros_identity",

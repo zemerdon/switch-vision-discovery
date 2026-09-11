@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.2"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.3"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -33,12 +33,42 @@ LIVE_MIN_VALID_LINES="100"
 MULTI_SWITCH_WALKS_ENABLED="false"
 DISCOVERY_STARTED_ISO=$(date -Iseconds)
 DISCOVERY_STARTED_EPOCH=$(date +%s)
-CURRENT_RUN_WALKS="/tmp/switch_vision_current_run_walks.txt"
-CURRENT_RUN_TARGETS="/tmp/switch_vision_current_run_targets.txt"
+CURRENT_RUN_WALKS="${SWITCH_VISION_CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks_$$.txt}"
+CURRENT_RUN_TARGETS="${SWITCH_VISION_CURRENT_RUN_TARGETS:-/tmp/switch_vision_current_run_targets_$$.txt}"
+LIVE_WALK_SUMMARY="/tmp/switch_vision_live_walk_summary_$$.txt"
+LIVE_WALK_SUMMARY_ALL="/tmp/switch_vision_live_walk_summary_all_$$.txt"
+SNMP_PRECHECK_PATH="/tmp/switch_vision_snmp_precheck_$$.txt"
+RUNTIME_CSV_HAS_ROWS="/tmp/switch_vision_runtime_csv_has_rows_$$"
+MULTI_COUNT_FILE="/tmp/switch_vision_multi_count_$$"
+MULTI_PASS_FILE="/tmp/switch_vision_multi_pass_$$"
+MULTI_WARN_FILE="/tmp/switch_vision_multi_warn_$$"
+MULTI_FAIL_FILE="/tmp/switch_vision_multi_fail_$$"
 CAPABILITIES_DIR="${SWITCH_VISION_CAPABILITIES_DIR:-/share/switch_vision/capabilities}"
 POST_WALK_ALREADY_DONE="false"
 GENERATED_CARD_SNMP_ENABLED="false"
 DISCOVERY_EXIT_STATUS="0"
+
+cleanup_discovery_scratch() {
+  rm -f \
+    "/tmp/switch_vision_current_run_walks_$$.txt" \
+    "/tmp/switch_vision_current_run_targets_$$.txt" \
+    "/tmp/switch_vision_multi_switch_targets_$$.csv" \
+    "/tmp/switch_vision_stack_member_map_$$.csv" \
+    "/tmp/switch_vision_dashboard_mode_walks_$$.txt" \
+    "/tmp/switch_vision_generated_port_modes_$$.tsv" \
+    "/tmp/switch_vision_generated_card_rows_$$.tsv" \
+    "/tmp/switch_vision_walk_files_$$.txt" \
+    "$LIVE_WALK_SUMMARY" \
+    "$LIVE_WALK_SUMMARY_ALL" \
+    "$SNMP_PRECHECK_PATH" \
+    "$RUNTIME_CSV_HAS_ROWS" \
+    "$MULTI_COUNT_FILE" \
+    "$MULTI_PASS_FILE" \
+    "$MULTI_WARN_FILE" \
+    "$MULTI_FAIL_FILE" \
+    /tmp/switch_vision_generator_raw_$$.yaml 2>/dev/null || true
+}
+trap cleanup_discovery_scratch EXIT
 
 sv_status() {
   # Structured, credential-safe status consumed by the persistent Web UI.
@@ -1962,8 +1992,8 @@ should_skip_walk_file() {
 }
 
 write_live_summary_if_present() {
-  if [ -f /tmp/switch_vision_live_walk_summary.txt ]; then
-    cat /tmp/switch_vision_live_walk_summary.txt
+  if [ -f "$LIVE_WALK_SUMMARY" ]; then
+    cat "$LIVE_WALK_SUMMARY"
     echo ""
   elif truthy "$RUN_LIVE_SNMPWALK"; then
     echo "SNMP walk result: not run"
@@ -2054,7 +2084,7 @@ run_live_snmpwalk_current() {
       if [ "$result" != "PASS" ]; then
         echo "- Check: switch power, IP, community, ACL/source IP, routing, and UDP 161"
       fi
-    } > /tmp/switch_vision_live_walk_summary.txt
+    } > "$LIVE_WALK_SUMMARY"
   }
 
   fail_live_walk() {
@@ -2102,8 +2132,8 @@ run_live_snmpwalk_current() {
   sv_status "Running SNMP walks" "${SELECTED_SWITCH:-${LIVE_SWITCH_LABEL:-Switch}}" "$LIVE_SWITCH_IP" "$precheck_command" "Checking SNMP connection"
   sv_debug "COMMAND: $precheck_command"
   echo "SNMP connection test: sysDescr" >> "$LIVE_LOG_PATH"
-  if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" 1.3.6.1.2.1.1.1.0 >/tmp/switch_vision_snmp_precheck.txt 2>> "$LIVE_LOG_PATH"; then
-    pre_lines=$(walk_line_count /tmp/switch_vision_snmp_precheck.txt)
+  if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" 1.3.6.1.2.1.1.1.0 >"$SNMP_PRECHECK_PATH" 2>> "$LIVE_LOG_PATH"; then
+    pre_lines=$(walk_line_count "$SNMP_PRECHECK_PATH")
     echo "SNMP connection test: PASS ($pre_lines line(s))" >> "$LIVE_LOG_PATH"
     sv_debug "RESULT: sysDescr pre-check returned $pre_lines line(s)"
   else
@@ -2126,7 +2156,7 @@ run_live_snmpwalk_current() {
   total=0
 
   if [ "$LIVE_SNMPWALK_MODE" = "full" ]; then
-    if grep -qi "Juniper" /tmp/switch_vision_snmp_precheck.txt 2>/dev/null; then
+    if grep -qi "Juniper" "$SNMP_PRECHECK_PATH" 2>/dev/null; then
       # A root walk from OID 1 on EX3300 can time out in the standard branch
       # before lexicographic traversal ever reaches Juniper enterprise OIDs.
       # Walk the standard and Juniper enterprise roots independently so one
@@ -2173,28 +2203,32 @@ run_live_snmpwalk_current() {
       fi
     fi
   else
-    # Targeted discovery OID trees. Includes explicit ifOperStatus plus the
-    # standard bridge-port and PVID tables required for dynamic per-port VLAN
-    # correlation on Juniper and other standards-compliant switches.
+    # Targeted discovery OID trees. Prefer broad, standards-based evidence so
+    # newly contributed hardware arrives with useful identity, topology,
+    # telemetry and PoE context even before a vendor profile exists. Vendor
+    # enterprise supplements remain deliberately narrow below; do not replace
+    # this with an uncontrolled private-enterprise-tree walk.
     LIVE_OIDS="
 1.3.6.1.2.1.1
-1.3.6.1.4.1.9.2.1.3
 1.3.6.1.2.1.2.2.1
-1.3.6.1.2.1.2.2.1.8
 1.3.6.1.2.1.31.1.1.1
+1.3.6.1.2.1.10.7
 1.3.6.1.2.1.26
 1.3.6.1.2.1.17.1.4.1.2
 1.3.6.1.2.1.17.7.1.4.3
 1.3.6.1.2.1.17.7.1.4.5.1.1
+1.3.6.1.2.1.25.3.3.1.2
+1.3.6.1.2.1.47.1.1.1.1
+1.3.6.1.2.1.99.1.1.1
+1.3.6.1.2.1.105.1.3.1
+1.3.6.1.4.1.9.2.1.3
 1.3.6.1.4.1.9.9.13.1.3.1
-1.3.6.1.2.1.47.1.1.1.1.2
 1.3.6.1.4.1.9.9.68.1.2.2.1.2
 1.3.6.1.4.1.9.9.46.1.3.1.1.4
 1.3.6.1.4.1.9.9.46.1.6.1.1.13
 1.3.6.1.4.1.9.9.46.1.6.1.1.14
 1.3.6.1.4.1.9.9.109.1.1.1.1
 1.3.6.1.4.1.9.9.402.1.3.1
-1.3.6.1.2.1.105.1.3.1
 "
 
     for oid in $LIVE_OIDS; do
@@ -2228,7 +2262,7 @@ run_live_snmpwalk_current() {
   # lexicographic root walk skips or filters private MIBs. Query the supported
   # jnxOperatingTable columns explicitly so CPU, temperature, memory, fan and
   # power-supply health can be generated when the switch exposes them.
-  if grep -qi "Juniper" /tmp/switch_vision_snmp_precheck.txt 2>/dev/null; then
+  if grep -qi "Juniper" "$SNMP_PRECHECK_PATH" 2>/dev/null; then
     JUNIPER_HEALTH_OIDS="
 1.3.6.1.4.1.2636.3.1.13.1.5
 1.3.6.1.4.1.2636.3.1.13.1.6
@@ -2257,7 +2291,7 @@ run_live_snmpwalk_current() {
   # complete 14988 enterprise tree because RouterOS exposes unrelated/private
   # objects there; collect only standard CPU/sensor tables plus known health
   # and PoE-Out subtrees for review.
-  if grep -Eqi 'MikroTik|RouterOS|CRS328-24P-4S\+' /tmp/switch_vision_snmp_precheck.txt 2>/dev/null; then
+  if grep -Eqi 'MikroTik|RouterOS|CRS328-24P-4S\+' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
     MIKROTIK_SUPPLEMENTAL_OIDS="
 1.3.6.1.2.1.25.3.3.1.2
 1.3.6.1.2.1.99.1.1.1
@@ -2372,8 +2406,8 @@ build_runtime_multi_switch_targets_csv() {
   # Build a temporary target map from the app UI rows. This makes the rest
   # of Discovery use the same resolver/generator path for UI rows and CSV rows.
   # Row values are written first, so they override matching rows in discovery-targets.csv.
-  runtime_csv="/tmp/switch_vision_multi_switch_targets.csv"
-  stack_map_csv="/tmp/switch_vision_stack_member_map.csv"
+  runtime_csv="/tmp/switch_vision_multi_switch_targets_$$.csv"
+  stack_map_csv="/tmp/switch_vision_stack_member_map_$$.csv"
   wrote_rows=0
   : > "$stack_map_csv"
   echo "output_dir,folder label,switch name,member,member name,sensor prefix" > "$stack_map_csv"
@@ -2395,7 +2429,7 @@ build_runtime_multi_switch_targets_csv() {
       # Only write full switch definitions. Switch/mode-only legacy rows still resolve from the CSV fallback below.
       if [ -n "$row_host" ]; then
         printf '%s,%s,%s,%s,%s,%s\n' "$row_switch" "$row_host" "$row_prefix" "$row_community" "$row_output_dir" "$row_display_name"
-        echo 1 > /tmp/switch_vision_runtime_csv_has_rows
+        echo 1 > "$RUNTIME_CSV_HAS_ROWS"
       fi
     done
     multi_switch_stack_member_rows \
@@ -2428,8 +2462,8 @@ build_runtime_multi_switch_targets_csv() {
       done < "$TARGETS_CSV"
     fi
   } > "$runtime_csv"
-  if [ -f /tmp/switch_vision_runtime_csv_has_rows ]; then
-    rm -f /tmp/switch_vision_runtime_csv_has_rows
+  if [ -f "$RUNTIME_CSV_HAS_ROWS" ]; then
+    rm -f "$RUNTIME_CSV_HAS_ROWS"
     TARGETS_CSV="$runtime_csv"
   fi
 }
@@ -2452,13 +2486,13 @@ run_multi_switch_walks_if_enabled() {
       echo "- Mode: multi-switch"
       echo "- Detail: no enabled switch rows configured; disabled switches remain saved"
       echo "- Log path: $LIVE_LOG_PATH"
-    } > /tmp/switch_vision_live_walk_summary.txt
+    } > "$LIVE_WALK_SUMMARY"
     return 0
   fi
 
   multi_started_iso=$(date -Iseconds)
   multi_started_epoch=$(now_epoch)
-  : > /tmp/switch_vision_live_walk_summary_all.txt
+  : > "$LIVE_WALK_SUMMARY_ALL"
   {
     echo "Switch Vision switch-list SNMP walk"
     echo "===================================="
@@ -2472,7 +2506,7 @@ run_multi_switch_walks_if_enabled() {
     echo ""
   } > "$LIVE_LOG_PATH"
 
-  rm -f /tmp/switch_vision_multi_count /tmp/switch_vision_multi_pass /tmp/switch_vision_multi_warn /tmp/switch_vision_multi_fail
+  rm -f "$MULTI_COUNT_FILE" "$MULTI_PASS_FILE" "$MULTI_WARN_FILE" "$MULTI_FAIL_FILE"
   original_selected="$SELECTED_SWITCH"
   original_mode="$LIVE_SNMPWALK_MODE"
   original_parse_all="$PARSE_ALL_WALKS"
@@ -2496,10 +2530,10 @@ run_multi_switch_walks_if_enabled() {
     case "$row_mode" in targeted|full) : ;; *) row_mode="targeted" ;; esac
     [ -n "$row_switch" ] || continue
 
-    count_file=/tmp/switch_vision_multi_count
-    pass_file=/tmp/switch_vision_multi_pass
-    warn_file=/tmp/switch_vision_multi_warn
-    fail_file=/tmp/switch_vision_multi_fail
+    count_file="$MULTI_COUNT_FILE"
+    pass_file="$MULTI_PASS_FILE"
+    warn_file="$MULTI_WARN_FILE"
+    fail_file="$MULTI_FAIL_FILE"
     [ -f "$count_file" ] || echo 0 > "$count_file"
     [ -f "$pass_file" ] || echo 0 > "$pass_file"
     [ -f "$warn_file" ] || echo 0 > "$warn_file"
@@ -2530,12 +2564,12 @@ run_multi_switch_walks_if_enabled() {
     fi
     echo "Persistent walk verified: $LIVE_OUTPUT_PATH" >> "$LIVE_LOG_PATH"
 
-    if [ -f /tmp/switch_vision_live_walk_summary.txt ]; then
-      cat /tmp/switch_vision_live_walk_summary.txt >> /tmp/switch_vision_live_walk_summary_all.txt
-      echo "" >> /tmp/switch_vision_live_walk_summary_all.txt
-      if grep -q "SNMP walk result: PASS" /tmp/switch_vision_live_walk_summary.txt; then
+    if [ -f "$LIVE_WALK_SUMMARY" ]; then
+      cat "$LIVE_WALK_SUMMARY" >> "$LIVE_WALK_SUMMARY_ALL"
+      echo "" >> "$LIVE_WALK_SUMMARY_ALL"
+      if grep -q "SNMP walk result: PASS" "$LIVE_WALK_SUMMARY"; then
         n=$(( $(cat "$pass_file") + 1 )); echo "$n" > "$pass_file"
-      elif grep -q "SNMP walk result: WARN" /tmp/switch_vision_live_walk_summary.txt; then
+      elif grep -q "SNMP walk result: WARN" "$LIVE_WALK_SUMMARY"; then
         n=$(( $(cat "$warn_file") + 1 )); echo "$n" > "$warn_file"
       else
         n=$(( $(cat "$fail_file") + 1 )); echo "$n" > "$fail_file"
@@ -2543,11 +2577,11 @@ run_multi_switch_walks_if_enabled() {
     fi
   done
 
-  count=$(cat /tmp/switch_vision_multi_count 2>/dev/null || echo 0)
-  pass_count=$(cat /tmp/switch_vision_multi_pass 2>/dev/null || echo 0)
-  warn_count=$(cat /tmp/switch_vision_multi_warn 2>/dev/null || echo 0)
-  fail_count=$(cat /tmp/switch_vision_multi_fail 2>/dev/null || echo 0)
-  rm -f /tmp/switch_vision_multi_count /tmp/switch_vision_multi_pass /tmp/switch_vision_multi_warn /tmp/switch_vision_multi_fail
+  count=$(cat "$MULTI_COUNT_FILE" 2>/dev/null || echo 0)
+  pass_count=$(cat "$MULTI_PASS_FILE" 2>/dev/null || echo 0)
+  warn_count=$(cat "$MULTI_WARN_FILE" 2>/dev/null || echo 0)
+  fail_count=$(cat "$MULTI_FAIL_FILE" 2>/dev/null || echo 0)
+  rm -f "$MULTI_COUNT_FILE" "$MULTI_PASS_FILE" "$MULTI_WARN_FILE" "$MULTI_FAIL_FILE"
 
   # Fail closed if a configured row somehow completed without a PASS/WARN/FAIL
   # classification. A target that was not positively classified can never be
@@ -2582,8 +2616,8 @@ run_multi_switch_walks_if_enabled() {
     echo "- FAIL/SKIP: $fail_count"
     echo "- SNMP walks root: $SNMPWALKS_ROOT_DIR"
     echo ""
-    cat /tmp/switch_vision_live_walk_summary_all.txt 2>/dev/null || true
-  } > /tmp/switch_vision_live_walk_summary.txt
+    cat "$LIVE_WALK_SUMMARY_ALL" 2>/dev/null || true
+  } > "$LIVE_WALK_SUMMARY"
   {
     echo ""
     echo "Switch-list completed: $multi_completed_iso"
@@ -2607,7 +2641,7 @@ run_multi_switch_walks_if_enabled() {
 }
 
 run_live_snmpwalk_if_enabled() {
-  rm -f /tmp/switch_vision_live_walk_summary.txt /tmp/switch_vision_live_walk_summary_all.txt "$CURRENT_RUN_WALKS" "$CURRENT_RUN_TARGETS"
+  rm -f "$LIVE_WALK_SUMMARY" "$LIVE_WALK_SUMMARY_ALL" "$CURRENT_RUN_WALKS" "$CURRENT_RUN_TARGETS"
   : > "$CURRENT_RUN_WALKS"
   : > "$CURRENT_RUN_TARGETS"
   if ! truthy "$RUN_LIVE_SNMPWALK"; then
@@ -2624,7 +2658,7 @@ run_live_snmpwalk_if_enabled() {
       {
         echo ""
         echo "Post-walk execution: switch-list walk complete; running parser/generator now"
-        echo "Post-walk execution: current-run walk list: ${CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks.txt}"
+        echo "Post-walk execution: current-run walk list: ${CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks_$$.txt}"
       } >> "$LIVE_LOG_PATH" 2>/dev/null || true
       # Run the post-walk parser/generator from current-run evidence even for a
       # partial collection. Failed targets were never queued, and the user's
@@ -2656,7 +2690,7 @@ collect_multi_walks() {
   # v0.7.12: after switch-list SNMP walks, parse only the walk files created in
   # this app run. This prevents old full walks or stale failed files under
   # /share/switch_vision/snmpwalks from making the post-walk stage appear stuck.
-  if [ -s "${CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks.txt}" ]; then
+  if [ -s "${CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks_$$.txt}" ]; then
     echo "Post-walk parser: using current-run walk list" >> "$LIVE_LOG_PATH" 2>/dev/null || true
     while IFS= read -r walk_file || [ -n "$walk_file" ]; do
       [ -f "$walk_file" ] || continue
@@ -2699,7 +2733,7 @@ collect_multi_walks() {
 
 target_member_map_for_walk() {
   walk_file="$1"
-  stack_map_csv="/tmp/switch_vision_stack_member_map.csv"
+  stack_map_csv="/tmp/switch_vision_stack_member_map_$$.csv"
   [ -f "$stack_map_csv" ] || return 0
   result=""
   walk_dir=$(dirname "$walk_file" | sed 's#//*#/#g')
@@ -2900,6 +2934,14 @@ write_generated_yaml_for_walk() {
       print "  - oid: " oid
       print "    name: " name
     }
+    function yaml_sensor_meta(oid, name, transform, unit, device_class, state_class, icon) {
+      yaml_sensor(oid, name)
+      if (transform != "") print "    transform: " transform
+      if (unit != "") print "    unit_of_measurement: \"" unit "\""
+      if (device_class != "") print "    device_class: " device_class
+      if (state_class != "") print "    state_class: " state_class
+      if (icon != "") print "    icon: " icon
+    }
     function physical_speed_cap_mbps(model, label) {
       if (model == "HP J8693A Switch 3500yl-48G") return 1000
       if (model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /) return 1000
@@ -2973,7 +3015,7 @@ write_generated_yaml_for_walk() {
       return score
     }
     BEGIN {
-      model="unknown"; manufacturer="Unknown"; maxidx=0; maxcpu=0; maxpoe=0; maxstdpoe=0; maxtemp=0; physical_count=0
+      model="unknown"; manufacturer="Unknown"; maxidx=0; maxcpu=0; maxpoe=0; maxstdpoe=0; maxtemp=0; maxhostcpu=0; maxmikropoe=0; physical_count=0
       if (member_map != "") {
         split(member_map, mm_items, ",")
         for (mmi in mm_items) {
@@ -3118,6 +3160,15 @@ write_generated_yaml_for_walk() {
       if (line ~ /\.3\.6\.1\.2\.1\.2\.2\.1\.16\.[0-9]+ = /) { idx=oid_index(line); legacy_out_idx[idx]=1 }
       if (line ~ /\.3\.6\.1\.2\.1\.31\.1\.1\.1\.15\.[0-9]+ = /) { idx=oid_index(line); highspeed_idx[idx]=1 }
       if (line ~ /\.3\.6\.1\.2\.1\.2\.2\.1\.5\.[0-9]+ = /) { idx=oid_index(line); ifspeed_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.2\.1\.25\.3\.3\.1\.2\.[0-9]+ = /) { idx=oid_index(line); host_cpu_idx[idx]=1; if(idx>maxhostcpu) maxhostcpu=idx }
+      if (line ~ /\.3\.6\.1\.4\.1\.14988\.1\.1\.3\.100\.1\.2\.[0-9]+ = STRING:/) { idx=oid_index(line); mt_gauge_name[idx]=val; mt_gauge_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.14988\.1\.1\.3\.100\.1\.3\.[0-9]+ = /) { idx=oid_index(line); mt_gauge_value_idx[idx]=1; mt_gauge_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.14988\.1\.1\.3\.100\.1\.4\.[0-9]+ = /) { idx=oid_index(line); mt_gauge_unit[idx]=val+0; mt_gauge_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.14988\.1\.1\.15\.1\.1\.2\.[0-9]+ = STRING:/) { idx=oid_index(line); mt_poe_name[idx]=val; mt_poe_idx[idx]=1; if(idx>maxmikropoe) maxmikropoe=idx }
+      if (line ~ /\.3\.6\.1\.4\.1\.14988\.1\.1\.15\.1\.1\.3\.[0-9]+ = /) { idx=oid_index(line); mt_poe_status_idx[idx]=1; mt_poe_idx[idx]=1; if(idx>maxmikropoe) maxmikropoe=idx }
+      if (line ~ /\.3\.6\.1\.4\.1\.14988\.1\.1\.15\.1\.1\.4\.[0-9]+ = /) { idx=oid_index(line); mt_poe_voltage_idx[idx]=1; mt_poe_idx[idx]=1; if(idx>maxmikropoe) maxmikropoe=idx }
+      if (line ~ /\.3\.6\.1\.4\.1\.14988\.1\.1\.15\.1\.1\.5\.[0-9]+ = /) { idx=oid_index(line); mt_poe_current_idx[idx]=1; mt_poe_idx[idx]=1; if(idx>maxmikropoe) maxmikropoe=idx }
+      if (line ~ /\.3\.6\.1\.4\.1\.14988\.1\.1\.15\.1\.1\.6\.[0-9]+ = /) { idx=oid_index(line); mt_poe_power_idx[idx]=1; mt_poe_idx[idx]=1; if(idx>maxmikropoe) maxmikropoe=idx }
       if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.109\.1\.1\.1\.1\.6\.[0-9]+ = Gauge32:/) { idx=oid_index(line); cpu_idx[idx]=1; if(idx>maxcpu) maxcpu=idx }
       if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.109\.1\.1\.1\.1\.7\.[0-9]+ = Gauge32:/) { idx=oid_index(line); cpu_idx[idx]=1; if(idx>maxcpu) maxcpu=idx }
       if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.109\.1\.1\.1\.1\.8\.[0-9]+ = Gauge32:/) { idx=oid_index(line); cpu_idx[idx]=1; if(idx>maxcpu) maxcpu=idx }
@@ -3467,6 +3518,54 @@ write_generated_yaml_for_walk() {
         if (zyxel_serial_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.1.12.0", prefix " Serial")
       }
 
+      # MikroTik CRS328 real-hardware contribution evidence exposes CPU via
+      # HOST-RESOURCES-MIB, health gauges via MIKROTIK-MIB mtxrGaugeTable and
+      # per-port PoE via mtxrPOETable. Emit only rows proven present in the
+      # current walk. The gauge table reports engineering units directly;
+      # dW/dV table columns are converted to W/V with safe SNMP2MQTT transforms.
+      if (model == "CRS328-24P-4S+") {
+        primary_cpu=0
+        for (idx=1; idx<=maxhostcpu; idx++) if (idx in host_cpu_idx) {
+          if (!primary_cpu) {
+            yaml_sensor_meta("1.3.6.1.2.1.25.3.3.1.2." idx, prefix " CPU", "", "%", "", "measurement", "mdi:cpu-64-bit")
+            primary_cpu=1
+          } else {
+            yaml_sensor_meta("1.3.6.1.2.1.25.3.3.1.2." idx, prefix " CPU " idx, "", "%", "", "measurement", "mdi:cpu-64-bit")
+          }
+        }
+        for (idx in mt_gauge_idx) if ((idx in mt_gauge_value_idx) && (idx in mt_gauge_unit)) {
+          lname=tolower(mt_gauge_name[idx])
+          unit_code=mt_gauge_unit[idx]
+          if (lname == "cpu-temperature" && unit_code == 1) {
+            yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.3.100.1.3." idx, prefix " Temperature", "", "°C", "temperature", "measurement", "mdi:thermometer")
+          } else if (lname ~ /^board-temperature/ && unit_code == 1) {
+            yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.3.100.1.3." idx, prefix " Board Temperature", "", "°C", "temperature", "measurement", "mdi:thermometer")
+          } else if (lname == "poe-out-consumption" && unit_code == 5) {
+            yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.3.100.1.3." idx, prefix " PoE Used", "value / 10", "W", "power", "measurement", "mdi:flash")
+          } else if (lname ~ /^fan[0-9]+-speed$/ && unit_code == 2) {
+            fan_label=lname; sub(/^fan/, "", fan_label); sub(/-speed$/, "", fan_label)
+            yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.3.100.1.3." idx, prefix " Fan " fan_label " RPM", "", "rpm", "", "measurement", "mdi:fan")
+          } else if (lname ~ /^psu[0-9]+-voltage$/ && unit_code == 3) {
+            psu_label=lname; sub(/^psu/, "", psu_label); sub(/-voltage$/, "", psu_label)
+            yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.3.100.1.3." idx, prefix " PSU " psu_label " Voltage", "value / 10", "V", "voltage", "measurement", "mdi:current-dc")
+          } else if (lname ~ /^psu[0-9]+-current$/ && unit_code == 4) {
+            psu_label=lname; sub(/^psu/, "", psu_label); sub(/-current$/, "", psu_label)
+            yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.3.100.1.3." idx, prefix " PSU " psu_label " Current", "value / 10", "A", "current", "measurement", "mdi:current-dc")
+          }
+        }
+        for (idx=1; idx<=maxmikropoe; idx++) if (idx in mt_poe_idx) {
+          port_name=mt_poe_name[idx]
+          port_no=idx
+          if (port_name ~ /^ether([1-9]|1[0-9]|2[0-4])$/) { port_no=port_name; sub(/^ether/, "", port_no); port_no += 0 }
+          if (port_no >= 1 && port_no <= 24) {
+            if (idx in mt_poe_power_idx) yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.15.1.1.6." idx, prefix " Port " port_no " PoE Power", "value / 10", "W", "power", "measurement", "mdi:flash")
+            if (idx in mt_poe_voltage_idx) yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.15.1.1.4." idx, prefix " Port " port_no " PoE Voltage", "value / 10", "V", "voltage", "measurement", "mdi:current-dc")
+            if (idx in mt_poe_current_idx) yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.15.1.1.5." idx, prefix " Port " port_no " PoE Current", "", "mA", "current", "measurement", "mdi:current-dc")
+            if (idx in mt_poe_status_idx) yaml_sensor("1.3.6.1.4.1.14988.1.1.15.1.1.3." idx, prefix " Port " port_no " PoE Status Code")
+          }
+        }
+      }
+
       cpu_member=0
       for (idx=1; idx<=maxcpu; idx++) if (idx in cpu_idx) {
         cpu_member++
@@ -3501,7 +3600,7 @@ write_generated_yaml_for_walk() {
         if (zyxel_cpu_5sec_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.2.7.0", prefix " CPU 5sec")
         if (zyxel_cpu_1min_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.2.8.0", prefix " CPU 1min")
         if (zyxel_cpu_5min_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.2.9.0", prefix " CPU 5min")
-        if (zyxel_memory_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.2.5.0", prefix " Memory Utilization")
+        if (zyxel_memory_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.2.4.3", prefix " Memory Utilization")
         fan_status_primary=0
         for (idx in zyxel_fan_idx) {
           if (idx in zyxel_fan_rpm) yaml_sensor("1.3.6.1.4.1.890.1.15.3.26.1.1.1.3." idx, prefix " Fan " idx " RPM")
@@ -3718,7 +3817,7 @@ build_juniper_port_mode_metadata() {
   [ -f "$helper" ] || helper="$(dirname "$0")/juniper_vlan_modes.py"
   [ -f "$helper" ] || return 0
 
-  tmp_walks="/tmp/switch_vision_dashboard_mode_walks.txt"
+  tmp_walks="/tmp/switch_vision_dashboard_mode_walks_$$.txt"
   collect_multi_walks "$tmp_walks"
   while IFS= read -r walk_file; do
     [ -f "$walk_file" ] || continue
@@ -3762,7 +3861,7 @@ yaml_quote() {
 }
 
 write_generated_dashboard_card() {
-  port_mode_metadata="/tmp/switch_vision_generated_port_modes.tsv"
+  port_mode_metadata="/tmp/switch_vision_generated_port_modes_$$.tsv"
   build_juniper_port_mode_metadata "$port_mode_metadata"
   # This is a review/copy helper only. Discovery does not write Lovelace dashboards.
   {
@@ -3786,7 +3885,7 @@ write_generated_dashboard_card() {
     echo "          Generated review-only card examples."
 
     if truthy "${GENERATED_CARD_SNMP_ENABLED:-false}" && command -v jq >/dev/null 2>&1 && [ -f "$CONFIG_FILE" ] && json_has_configured_switch_rows; then
-      tmp_cards="/tmp/switch_vision_generated_card_rows.tsv"
+      tmp_cards="/tmp/switch_vision_generated_card_rows_$$.tsv"
       jq -r '
         # SWITCH_VISION_GENERATED_CARD_ROWS_JQ_BEGIN
         def enabled($sw):
@@ -3931,6 +4030,11 @@ write_generated_dashboard_card() {
             echo "        cpu_entity: sensor.${safe_prefix}_cpu"
             echo "        temperature_entity: sensor.${safe_prefix}_temperature"
             echo "        fans_entity: sensor.${safe_prefix}_fans"
+            ;;
+          *CRS328-24P-4S+*)
+            echo "        cpu_entity: sensor.${safe_prefix}_cpu"
+            echo "        temperature_entity: sensor.${safe_prefix}_temperature"
+            echo "        fans_entity: sensor.${safe_prefix}_fan_1_rpm"
             ;;
           *)
             echo "        cpu_entity: sensor.${safe_prefix}_cpu_5min"
@@ -4122,10 +4226,10 @@ write_generated_yaml() {
 write_report() {
   sv_status "Identifying exact models and interfaces" "All configured switches" "multiple" "Parser and registry lookup" "Reading completed SNMP walk files"
   sv_debug "STAGE: Identifying exact models and interfaces"
-  tmp_walks="/tmp/switch_vision_walk_files.txt"
+  tmp_walks="/tmp/switch_vision_walk_files_$$.txt"
   echo "Post-walk stage: collecting walk files for parse/report" >> "$LIVE_LOG_PATH" 2>/dev/null || true
   collect_multi_walks "$tmp_walks"
-  if [ -s "${CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks.txt}" ]; then
+  if [ -s "${CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks_$$.txt}" ]; then
     echo "Current-run walks detected; parse_all_walks is ignored for this run" >> "$LIVE_LOG_PATH" 2>/dev/null || true
   fi
   multi_count=$(wc -l < "$tmp_walks" | tr -d ' ')
@@ -4355,9 +4459,9 @@ write_last_run_summary() {
     echo "Report: $REPORT_PATH"
     echo "Generated YAML: $GENERATED_YAML_PATH"
     echo "Generated dashboard card: $GENERATED_CARD_PATH"
-    if [ -f /tmp/switch_vision_live_walk_summary.txt ]; then
+    if [ -f "$LIVE_WALK_SUMMARY" ]; then
       echo ""
-      cat /tmp/switch_vision_live_walk_summary.txt
+      cat "$LIVE_WALK_SUMMARY"
     fi
   } > "$LAST_RUN_SUMMARY_PATH"
 }

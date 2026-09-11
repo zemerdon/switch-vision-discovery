@@ -52,6 +52,10 @@ jobs:
         run: python3 tools/test_c3750_48p_contract.py
       - name: Check Catalyst 3750 live 48+4 mapping
         run: python3 tools/test_c3750_48p_live_mapping.py
+      - name: Check MikroTik CRS328 telemetry mapping
+        run: python3 tools/test_crs328_telemetry.py
+      - name: Check self-contained MIB runtime dependencies
+        run: python3 tools/test_runtime_mib_dependencies.py
       - name: Check Discovery release image-reference contract
         shell: bash
         run: |

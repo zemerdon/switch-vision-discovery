@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "scope": "standards-based sensor and topology evidence roots",
+  "policy": "Numeric OIDs are authoritative at runtime; bundled MIB tooling is optional translation/validation assistance.",
+  "oid_roots": [
+    {
+      "mib": "IF-MIB",
+      "oid_prefix": "1.3.6.1.2.1.2.2.1",
+      "purpose": "interface status, counters and base attributes"
+    },
+    {
+      "mib": "IF-MIB/ifXTable",
+      "oid_prefix": "1.3.6.1.2.1.31.1.1.1",
+      "purpose": "ifName, high-capacity counters, aliases and high speed"
+    },
+    {
+      "mib": "EtherLike-MIB",
+      "oid_prefix": "1.3.6.1.2.1.10.7",
+      "purpose": "Ethernet interface diagnostics and error evidence"
+    },
+    {
+      "mib": "MAU-MIB",
+      "oid_prefix": "1.3.6.1.2.1.26",
+      "purpose": "media attachment and negotiated media evidence"
+    },
+    {
+      "mib": "BRIDGE-MIB",
+      "oid_prefix": "1.3.6.1.2.1.17.1.4.1.2",
+      "purpose": "bridge-port to ifIndex correlation"
+    },
+    {
+      "mib": "Q-BRIDGE-MIB",
+      "oid_prefix": "1.3.6.1.2.1.17.7.1.4",
+      "purpose": "VLAN membership and PVID evidence"
+    },
+    {
+      "mib": "HOST-RESOURCES-MIB",
+      "oid_prefix": "1.3.6.1.2.1.25.3.3.1.2",
+      "purpose": "processor load candidates"
+    },
+    {
+      "mib": "ENTITY-MIB",
+      "oid_prefix": "1.3.6.1.2.1.47.1.1.1.1",
+      "purpose": "physical inventory identity and component evidence"
+    },
+    {
+      "mib": "ENTITY-SENSOR-MIB",
+      "oid_prefix": "1.3.6.1.2.1.99.1.1.1",
+      "purpose": "standard environmental sensor evidence"
+    },
+    {
+      "mib": "POWER-ETHERNET-MIB",
+      "oid_prefix": "1.3.6.1.2.1.105.1.3.1",
+      "purpose": "standard aggregate PoE evidence"
+    }
+  ]
+}
