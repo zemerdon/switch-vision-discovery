@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.4
+
+- Promote **US XG 16** from Detected to Experimental after corroborating independent real-hardware UniFi API evidence confirms the exact optical-first contract: API/physical ports 1-12 are 10G SFP+ and ports 13-16 are 10G-capable RJ45.
+- Preserve the exact 4-RJ45 + 12-SFP+ topology, explicit API-port map, no-PoE contract and bundled owner-calibrated faceplate while keeping visual confidence Detected until model-specific live rendered alignment/behavior is confirmed.
+- Remove legacy protected contribution identifiers from public US XG 16 / USW Pro Aggregation registry notes and strengthen the public-attribution privacy regression so structured metadata dictionary keys are scanned as well as values.
+- Add permanent acceptance regression coverage that prevents US XG 16 from regressing below Experimental or being promoted beyond its still-pending visual field evidence.
+
 ## 2.4.3
 
 - Make Discovery user-first and fail-soft for reachable hardware: exact registry matches use their reviewed model/card contract, while reachable unregistered hardware receives the safest neutral best-fit display card that can contain only the observed physical RJ45/uplink positions.

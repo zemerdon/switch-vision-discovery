@@ -16,6 +16,13 @@ PACKAGE_NAME = re.compile(r"(?i)Switch[_ -]Vision[_ -]Contribution")
 
 def check_structured(value: object, path: Path) -> None:
     if isinstance(value, dict):
+        for key in value.keys():
+            if isinstance(key, str):
+                if SUBMISSION_ID.search(key):
+                    raise SystemExit(f"Submission identifier remains in structured public metadata key: {path}")
+                if PACKAGE_NAME.search(key):
+                    raise SystemExit(f"Contribution package reference remains in structured public metadata key: {path}")
+
         if "display_name" in value and "public_credit" in value:
             name = str(value.get("display_name") or "").strip()
             if name.casefold() not in ALLOWED:

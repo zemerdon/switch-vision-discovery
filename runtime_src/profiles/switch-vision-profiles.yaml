@@ -782,7 +782,7 @@ profiles:
     - Community hardware evidence confirms the legacy sequential API path: RJ45 1-48, 10G SFP+
         49-50, 1G SFP 51-52.
   ubiquiti-us-xg-16-api:
-    status: detected
+    status: experimental
     vendor: Ubiquiti
     family: UniFi Switch XG
     model_patterns:
