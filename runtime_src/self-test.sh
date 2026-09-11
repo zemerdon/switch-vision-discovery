@@ -4,10 +4,12 @@ set -eu
 # Early Hub regression checks use a diagnostic literal helper so CI identifies
 # the exact missing contract instead of failing silently under set -e.
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export SV_CURRENT_DISCOVERY_DEBUG_PATH="${SV_CURRENT_DISCOVERY_DEBUG_PATH:-/tmp/switch-vision-current-discovery-debug.log}"
 SV_COPY_DEBUG_TEST_DIR="$BASE_DIR"
 python3 "$BASE_DIR/dashboard_card_regeneration_regression.py"
 python3 "$BASE_DIR/discovery_history_regression.py"
 python3 "$BASE_DIR/current_debug_regression.py"
+python3 "$BASE_DIR/secret_reveal_regression.py"
 python3 "$BASE_DIR/management_ip_display_regression.py"
 python3 "$BASE_DIR/device_ordering_regression.py"
 python3 "$BASE_DIR/hub_settings_tabs_regression.py"
