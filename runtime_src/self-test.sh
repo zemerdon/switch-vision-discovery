@@ -1720,8 +1720,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.3"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.3"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.4"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.4"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -3082,7 +3082,7 @@ assert us48["ports"]["ten_gigabit_sfp_plus"] == 2
 assert "unifi_api_port_map" not in us48
 
 xg16 = models["US XG 16"]
-assert xg16["status"] == "detected"
+assert xg16["status"] == "experimental"
 assert xg16["dashboard_support"] is True
 assert xg16["calibration_profile"] == "unifi_4_rj45_12sfp"
 assert xg16["default_faceplate"] == "faceplates/unifi-4-rj45-12sfp.png"
