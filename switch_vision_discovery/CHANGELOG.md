@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.5
+
+- Merge saved and detected hardware into one expandable **Devices** list. Saved switches keep Enable/Disable plus the existing up/down arrows, gain drag-and-drop persistent ordering, and expose detected/diagnostic details inline; duplicate lower detected-device content is removed while detected-only devices remain visible.
+- Retain the complete credential-sanitized debug output for the current Discovery operation instead of trimming the live session at 300 lines. **Copy Debug Info** now copies the complete sanitized session, while bounded historical excerpts remain intentionally compact.
+- Preserve **Recent Discovery activity** entry expansion across background polling and align its disclosure styling with the rest of Switch Vision Hub.
+- Expand contextual help/tooltips across Hub controls and add the requested Home-page capability bullets for **Add / remove switches** and **Reorder switches**.
+- Make Switch Vision Hub the full UniFi2MQTT configuration surface for Local Integration API, Remote / UniFi Site Manager, Local/Remote priority with automatic fallback, additional multi-controller entries, MQTT TLS/CA settings, and write-only secret retention. Self-hosted Local controller guidance now calls out HTTPS port **11443**; username/password UniFi authentication remains unsupported by design.
+- Keep reachable Cisco hardware fail-soft when optional trunk/status OIDs are absent, add curated Cisco ENVMON temperature/fan/power sensor knowledge, and preserve topology safety rather than treating optional telemetry as a Discovery-readiness gate.
+- Promote **WS-C3850-12XS-E** to **Community Validated** from three independent real-hardware capture sessions plus live rendered/link/speed/activity and ENVMON confirmation. Keep **WS-C2960X-24PS-L** Experimental until its four physical uplinks are field-confirmed.
+- Rename the Home Assistant app display name to **Switch Vision Discovery / Hub** while preserving the existing slug, ingress identity, storage paths, and upgrade compatibility.
+
 ## 2.4.4
 
 - Promote **US XG 16** from Detected to Experimental after corroborating independent real-hardware UniFi API evidence confirms the exact optical-first contract: API/physical ports 1-12 are 10G SFP+ and ports 13-16 are 10G-capable RJ45.

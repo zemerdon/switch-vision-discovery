@@ -249,7 +249,15 @@ def _capability_model(path: Path) -> dict[str, Any] | None:
         if key in device and device.get(key) not in (None, ""):
             row[key] = device.get(key)
     row["registry_match"] = bool(registry.get("match")) if registry else False
-    if registry:
+    if row["registry_match"]:
+        row["registry_status"] = registry.get("status")
+        if registry.get("family"):
+            row["family"] = registry.get("family")
+        if registry.get("exact_model"):
+            row["model"] = registry.get("exact_model")
+        if registry.get("status"):
+            row["support_status"] = registry.get("status")
+    elif registry:
         row["registry_status"] = registry.get("status")
     for key in ("interface_count", "physical_count", "rj45_count", "sfp_count", "sfp_plus_count", "sfp28_count", "uplink_count", "stack_count"):
         if key in summary:

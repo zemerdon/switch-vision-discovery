@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.4"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.5"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1687,7 +1687,7 @@ parser_report() {
       if (target_ip != "unknown" && target_ip != "") print "- PASS: management target provided: " target_ip
       else print "- WARN: management target not provided; provide a switch_host in the switch list or targets CSV before generator use"
       c3850_ready = (model == "WS-C3850-12XS-E" && if_total > 0 && rj45 == 0 && ten == 12)
-      ready = (c3850_ready || ((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "CRS328-24P-4S+" && if_total > 0 && rj45 == 24 && ten == 4) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48) || (model == "UDM Pro" && if_total > 0 && rj45 == 9 && ten == 2) || (model == "US 8 60W" && if_total > 0 && rj45 == 8) || (model == "US-8-150W" && if_total > 0 && rj45 == 8 && sfp_gi == 2) || (model == "US-24-250W" && if_total > 0 && rj45 == 24 && sfp_gi == 2) || (model == "US 48" && if_total > 0 && rj45 == 48 && ten == 2 && sfp_gi == 2))
+      ready = (c3850_ready || ((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "CRS328-24P-4S+" && if_total > 0 && rj45 == 24 && ten == 4) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48) || (model == "UDM Pro" && if_total > 0 && rj45 == 9 && ten == 2) || (model == "US 8 60W" && if_total > 0 && rj45 == 8) || (model == "US-8-150W" && if_total > 0 && rj45 == 8 && sfp_gi == 2) || (model == "US-24-250W" && if_total > 0 && rj45 == 24 && sfp_gi == 2) || (model == "US 48" && if_total > 0 && rj45 == 48 && ten == 2 && sfp_gi == 2))
       print "- Ready for SNMP2MQTT generation: " (ready ? "yes, review-only" : "no")
       if (profile_status == "supported") print "- Generator confidence: supported profile; review generated YAML before installing"
       else if (profile_status == "community_validated") print "- Generator confidence: community-validated profile; physical layout verified on real hardware"
@@ -2761,6 +2761,7 @@ write_generated_yaml_for_walk() {
   community="$4"
   member_map="${5:-}"
   source_name=$(basename "$walk_file")
+  source_key=$(basename "$(dirname "$walk_file")")
   generator_raw_tmp="/tmp/switch_vision_generator_raw_$$.yaml"
   rm -f "$generator_raw_tmp"
   if [ "$target_ip" = "unknown" ] || [ -z "$target_ip" ]; then
@@ -2768,7 +2769,7 @@ write_generated_yaml_for_walk() {
     return 1
   fi
 
-  awk -v host="$target_ip" -v prefix="$prefix" -v community="$community" -v source_name="$source_name" -v member_map="$member_map" '
+  awk -v host="$target_ip" -v prefix="$prefix" -v community="$community" -v source_name="$source_name" -v source_key="$source_key" -v member_map="$member_map" '
     function value_of(line, v) {
       v = line
       sub(/^[^=]*= /, "", v)
@@ -3279,6 +3280,7 @@ write_generated_yaml_for_walk() {
       else if (candidate_model != "") { model = candidate_model; manufacturer = "Cisco" }
       else if (generic_model != "") { model = generic_model; manufacturer = "Cisco" }
       print "# Device source: " source_name
+      print "# Switch key: " source_key
       print "# Target host: " host
       print "# Prefix: " prefix
       if (member_map != "") print "# Stack member prefixes: " member_map

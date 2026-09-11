@@ -217,6 +217,34 @@ targets:
     assert valid is False, reason
     assert "duplicate uptime-only groups" in reason, reason
 
+with tempfile.TemporaryDirectory() as temp_dir:
+    temp = Path(temp_dir)
+    inconsistent = temp / "inconsistent-model.yaml"
+    inconsistent.write_text(
+        """# Switch Vision generated SNMP2MQTT YAML
+# Source: Switch Vision Discovery v2.4.5
+# Device source: live-targeted-snmpwalk.txt
+# Switch key: SW8
+# Target host: 192.0.2.18
+# Prefix: sw8
+# Detected model: WS-C2960X-24PS-L
+targets:
+- host: 192.0.2.18
+  name: Switch Vision SW8 Status
+  version: 2c
+  community: readonly
+  device_manufacturer: Cisco
+  device_model: WS-C3850-12XS-E
+  sensors:
+  - oid: 1.3.6.1.2.1.2.2.1.8.1
+    name: SW8 Port 1 Status
+""",
+        encoding="utf-8",
+    )
+    valid, reason = guard.validate(inconsistent)
+    assert valid is False, reason
+    assert "inconsistent detected/device model metadata" in reason, reason
+
 support_source = (RUNTIME / "support_my_switch.sh").read_text(encoding="utf-8")
 assert "sanitization_version: 13" not in support_source
 assert 'sanitization_version: ([$a.sanitization_version // 0, $b.sanitization_version // 0] | max),' in support_source

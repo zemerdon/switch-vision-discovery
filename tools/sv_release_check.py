@@ -30,6 +30,7 @@ PERMANENT_CHECKS = (
     "tools/test_ha_entity_snapshot.py",
     "tools/test_public_attribution_privacy.py",
     "tools/test_us_xg16_acceptance.py",
+    "tools/test_c3850_community_validation.py",
     "tools/test_visual_contract_policy.py",
     "tools/test_faceplate_catalog_contract.py",
     "tools/check_component_contracts.py",

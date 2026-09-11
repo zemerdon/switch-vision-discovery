@@ -6,7 +6,7 @@ CONFIG = ROOT / "switch_vision_discovery" / "config.yaml"
 text = CONFIG.read_text(encoding="utf-8")
 
 required = [
-    'name: Switch Vision Discovery',
+    'name: Switch Vision Discovery / Hub',
     'ingress: true',
     'panel_title: Switch Vision Hub',
 ]
