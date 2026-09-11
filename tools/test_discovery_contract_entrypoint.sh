@@ -163,28 +163,34 @@ set +e
 run_entrypoint "$conflict" "$conflict/options.json" > "$conflict/stdout.txt" 2> "$conflict/stderr.txt"
 conflict_status=$?
 set -e
-if [ "$conflict_status" -eq 0 ]; then
-  echo 'FAIL: topology conflict unexpectedly succeeded' >&2
-  exit 1
-fi
-if [ "$conflict_status" -ne 10 ]; then
-  echo "FAIL: unresolved topology evidence exited $conflict_status instead of 10" >&2
+if [ "$conflict_status" -ne 0 ]; then
+  echo "FAIL: reachable registered topology conflict exited $conflict_status instead of fail-soft success" >&2
   cat "$conflict/stdout.txt" >&2 || true
   cat "$conflict/stderr.txt" >&2 || true
   exit 1
 fi
-if ! grep -Fq 'Complete with warnings' "$conflict/stdout.txt"; then
-  echo 'FAIL: unresolved topology evidence did not surface its warning marker' >&2
-  cat "$conflict/stdout.txt" >&2 || true
-  cat "$conflict/stderr.txt" >&2 || true
+grep -Fq 'Complete with warnings' "$conflict/stdout.txt" || {
+  echo 'FAIL: topology conflict did not surface warning state' >&2
   exit 1
-fi
+}
+grep -Fq 'SV_RESULT|warnings=true|degraded=true' "$conflict/stdout.txt" || {
+  echo 'FAIL: topology conflict did not mark display-only degraded success' >&2
+  exit 1
+}
 [ ! -s "$conflict/generated.yaml" ] || {
-  echo 'FAIL: topology conflict produced final YAML' >&2
+  echo 'FAIL: topology conflict produced untrusted SNMP2MQTT YAML' >&2
+  exit 1
+}
+grep -Fq 'type: custom:switch-vision-3650' "$conflict/card.yaml" || {
+  echo 'FAIL: registered topology conflict did not keep a diagnosable card' >&2
+  exit 1
+}
+grep -Fq 'Support My Switch' "$conflict/card.yaml" || {
+  echo 'FAIL: registered topology conflict did not include contribution guidance' >&2
   exit 1
 }
 
-echo 'entrypoint unresolved-topology evidence guard: PASS'
+echo 'entrypoint registered-topology fail-soft display guard: PASS'
 
 # Downstream/cardinality failure: validated physical evidence must survive and
 # the executable entrypoint must return the reserved degraded exit code 10.
@@ -281,9 +287,10 @@ find "$mismatch/published-capabilities" -name '*-physical-contract.json' -type f
 }
 echo 'entrypoint degraded cardinality/evidence contract: PASS'
 
-# Mixed current-run path: unresolved/non-switch targets are excluded while a
-# resolved physical switch continues. All-unresolved runs still fail closed and
-# a real resolver/topology exception remains fatal.
+# Mixed current-run staging keeps unresolved/non-switch targets out of exact
+# telemetry generation while a resolved physical switch continues. Main runtime
+# later turns reachable unsupported evidence into display-only fallback/CTA;
+# genuine resolver exceptions remain software faults.
 python3 - "$ENTRYPOINT" "$TMP" <<'PY'
 from __future__ import annotations
 
@@ -363,6 +370,39 @@ except RuntimeError as exc:
 else:
     raise AssertionError("topology-conflict exception was swallowed")
 
+# Explicit unsupported-device best-fit contract: observed topology may select only
+# a neutral stock visual, must preserve exact observed counts, and must tell the
+# user how to contribute for exact support.
+fallback_dir = root / "best-fit"
+fallback_dir.mkdir(parents=True, exist_ok=True)
+fallback_source = fallback_dir / "walks" / "unknown" / "live-targeted-snmpwalk.txt"
+fallback_source.parent.mkdir(parents=True, exist_ok=True)
+fallback_source.write_text('.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "ether1"\n', encoding="utf-8")
+fallback_info = {
+    "source": fallback_source,
+    "contract": {
+        "status": "unregistered",
+        "device": {"model": "Example Unknown 8+2", "registry_match": False},
+        "observed": {"physical": 10, "rj45": 8, "uplinks": 2, "members": 1},
+        "ports": [
+            *[{"physical_id": f"m1:rj45:{i}", "media": "rj45"} for i in range(1, 9)],
+            *[{"physical_id": f"m1:uplink:{i}", "media": "sfp_plus"} for i in range(1, 3)],
+        ],
+    },
+}
+fallback_card = fallback_dir / "card.yaml"
+fallback_options = {
+    "switches": [{"switch_name": "unknown", "display_name": "Unknown Lab Switch", "switch_host": "192.0.2.60", "sensor_prefix": "UNKNOWN"}]
+}
+cards, notices = module._append_display_fallbacks(fallback_card, [fallback_info], fallback_options)
+text = fallback_card.read_text(encoding="utf-8")
+assert cards == 1 and notices == 1
+assert "calibration_profile: \"stock_24rj45_2sfp\"" in text
+assert "port_count: 8" in text and "sfp_port_count: 2" in text
+assert "Support My Switch" in text
+assert "Best-fit unsupported-model visual" in text
+print("entrypoint unsupported best-fit + contribution CTA: PASS")
+
 print("entrypoint mixed current-run exclusion: PASS")
 PY
 
@@ -398,7 +438,6 @@ EOF_STALE
   cat > "$case_dir/options.json" <<EOF_OPTIONS
 {"snmpwalks_dir":"$case_dir/walks","report_path":"$case_dir/report.txt","run_snmp_walks":"true","enable_switch_list":"true","parse_all_walks":"false","generate_snmp2mqtt":"false","switches":[{"switch_name":"one","switch_host":"$h1","sensor_prefix":"ONE","snmp_community":"readonly","enabled":true},{"switch_name":"two","switch_host":"$h2","sensor_prefix":"TWO","snmp_community":"readonly","enabled":true}],"last_run_summary_path":"$case_dir/summary.txt","generated_yaml_path":"$case_dir/generated.yaml","generated_card_path":"$case_dir/card.yaml","snmp_log_path":"$case_dir/discovery.log","minimum_valid_walk_lines":"1","clean_output_before_walk":"false","generate_support_my_switch_bundle":"false"}
 EOF_OPTIONS
-  rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
   set +e
   PATH="$live/bin:$PATH" SV_TEST_SNMP_SOURCE="$live/dell.txt" SWITCH_VISION_OPTIONS_FILE="$case_dir/options.json" SWITCH_VISION_CAPABILITIES_DIR="$case_dir/caps" SWITCH_VISION_SHARE_DIR="$case_dir/share" "$RUNTIME/discovery_job.sh" >"$case_dir/stdout" 2>"$case_dir/stderr"
   status=$?
@@ -414,16 +453,14 @@ EOF_OPTIONS
       cat "$case_dir/report.txt" >&2 || true
       echo '--- live log ---' >&2
       cat "$case_dir/discovery.log" >&2 || true
-      echo '--- current-run walks ---' >&2
-      cat /tmp/switch_vision_current_run_walks.txt >&2 || true
       exit 1
     }
     grep -Fq 'Switch-list SNMP walk result: PARTIAL' "$case_dir/report.txt"
-    [ "$(wc -l </tmp/switch_vision_current_run_walks.txt | tr -d ' ')" -eq 1 ]
-    grep -Fq "$case_dir/walks/one/live-targeted-snmpwalk.txt" /tmp/switch_vision_current_run_walks.txt
+    [ "$(grep -c '^File: ' "$case_dir/report.txt" || true)" -eq 1 ]
+    grep -Fq "File: $case_dir/walks/one/live-targeted-snmpwalk.txt" "$case_dir/report.txt"
   else
     [ "$status" -eq 2 ] || { echo "FAIL: all-fail live rc=$status" >&2; exit 1; }
-    [ ! -s /tmp/switch_vision_current_run_walks.txt ]
+    [ "$(grep -c '^File: ' "$case_dir/report.txt" || true)" -eq 0 ]
     grep -Fq 'Switch-list SNMP walk result: FAILED' "$case_dir/report.txt"
     grep -Fq 'Historical SNMP walks were ignored.' "$case_dir/report.txt"
   fi
@@ -434,8 +471,8 @@ run_live_case mixed yes
 run_live_case all-fail no
 echo 'entrypoint live PARTIAL/all-fail stale-walk contract: PASS'
 
-# Physical-contract return classification: 11 is accepted and carried, 10
-# remains degraded, and unexpected non-zero remains fatal.
+# Physical-contract collection classification: legacy 11 is accepted as a warning, legacy 10
+# remains a degraded software classification, and unexpected non-zero remains fatal.
 python3 - "$ENTRYPOINT" "$TMP" <<'PY_LIVE_CODES'
 from __future__ import annotations
 import importlib.util
@@ -453,7 +490,7 @@ options = {"run_snmp_walks": True}
 record = {"walk": str(root/"ok.txt"), "switch":"ok", "host":"192.0.2.51", "prefix":"OK", "community":"readonly"}
 Path(record["walk"]).write_text('.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"\n', encoding="utf-8")
 
-m._read_current_run_records = lambda: [record]
+m._read_current_run_records = lambda *args, **kwargs: [record]
 for code, expected_partial in ((0, False), (11, True)):
     m._stream_legacy = lambda *a, _code=code, **k: _code
     work = root/f"stage-{code}"
@@ -462,7 +499,7 @@ for code, expected_partial in ((0, False), (11, True)):
     assert rows == [record] and partial is expected_partial
 
 m._stream_legacy = lambda *a, **k: 11
-m._read_current_run_records = lambda: []
+m._read_current_run_records = lambda *args, **kwargs: []
 work = root/"empty-partial"
 work.mkdir(parents=True, exist_ok=True)
 try:
@@ -492,7 +529,7 @@ except RuntimeError as exc:
 else:
     raise AssertionError("unexpected non-zero was accepted")
 
-# Main path carries a live PARTIAL through safe normalized generation.
+# Main path converts a reachable live PARTIAL into successful Discovery with warnings.
 m.LEGACY = root/"legacy"; m.PREPARE = root/"prepare"; m.REGISTRY = root/"registry"
 for path in (m.LEGACY, m.PREPARE, m.REGISTRY): path.write_text("x", encoding="utf-8")
 m.DEFAULT_OPTIONS = root/"options.json"; m.DEFAULT_OPTIONS.write_text("{}", encoding="utf-8")
@@ -511,8 +548,8 @@ m._expected_generated_snmp_cards = lambda ordered: 1
 m._generated_snmp_card_count = lambda path: 1
 m._patch_report = lambda *a: None
 m._patch_yaml = lambda *a: None
-assert m.main() == 11
-print("entrypoint live exit classification/carry: PASS")
+assert m.main() == 0
+print("entrypoint live fail-soft classification/carry: PASS")
 PY_LIVE_CODES
 
 echo 'Switch Vision Discovery physical-contract entrypoint: PASS'

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.3
+
+- Make Discovery user-first and fail-soft for reachable hardware: exact registry matches use their reviewed model/card contract, while reachable unregistered hardware receives the safest neutral best-fit display card that can contain only the observed physical RJ45/uplink positions.
+- Keep reachable-but-unsupported or incomplete hardware as a successful Discovery with warnings and a clear **Support My Switch** contribution prompt; reserve hard runtime failure for communication/authentication failure that leaves no usable target, invalid runtime/configuration that prevents a real attempt, or a genuine Switch Vision software/integrity fault.
+- Preserve strict topology safety: best-fit visuals are display-only, are capped to observed port counts, never create SNMP2MQTT entities, never promote registry support, and never create phantom ports. Registered topology conflicts retain the exact registered visual for diagnosis but do not trust conflicting telemetry bindings.
+- Add walk-aware MikroTik CRS328 CPU, temperature, fan and PoE telemetry from OIDs actually present in the captured switch data, including unit/scaling support for MikroTik gauge and PoE tables. Keep CRS328 support status Experimental while exact faceplate/SFP+ field validation remains pending.
+- Broaden the self-contained Discovery image with Net-SNMP/libsmi runtime support and a wider standard MIB knowledge set for IF-MIB, BRIDGE/Q-BRIDGE, ENTITY/ENTITY-SENSOR, HOST-RESOURCES, POWER-ETHERNET, MAU and EtherLike evidence. Vendor definitions remain numeric/project-owned when redistribution terms are unsuitable.
+- Make Discovery scratch/collector handoff paths process-scoped so concurrent audit/regression work cannot collide on fixed `/tmp` names.
+- Add permanent regressions for CRS328 telemetry, self-contained MIB/runtime dependencies, fail-soft registered topology conflicts, unregistered best-fit cards, contribution guidance, mixed target runs and process-safe current-run handoff.
+
 ## 2.4.2
 
 - Register the walk-backed Zyxel GS1915-24EP as an exact Experimental model instead of stopping at detected-only identity.

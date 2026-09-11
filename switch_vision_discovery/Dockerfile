@@ -3,7 +3,26 @@ FROM ghcr.io/home-assistant/base:3.22@sha256:8f937e0b89e108f432d3cb140900f06e568
 ARG BUILD_VERSION
 ARG BUILD_ARCH
 
-RUN apk add --no-cache net-snmp-tools jq zip python3 py3-yaml py3-websockets
+RUN apk add --no-cache net-snmp-tools net-snmp libsmi jq zip python3 py3-yaml py3-websockets
+
+# Keep the runtime self-contained for both current and future model work. Net-SNMP
+# stays in numeric-output mode at runtime (-On); bundled MIB tooling is for
+# translation, validation and future vendor/profile development, not a hidden
+# dependency on host-installed packages.
+RUN command -v snmpwalk \
+    && command -v snmptranslate \
+    && command -v smilint \
+    && command -v smidump \
+    && snmptranslate -On SNMPv2-MIB::sysDescr.0 | grep -Fqx '.1.3.6.1.2.1.1.1.0' \
+    && test -f /usr/share/snmp/mibs/IF-MIB.txt \
+    && test -f /usr/share/snmp/mibs/BRIDGE-MIB.txt \
+    && test -f /usr/share/snmp/mibs/HOST-RESOURCES-MIB.txt \
+    && test -f /usr/share/libsmi/mibs/ietf/Q-BRIDGE-MIB \
+    && test -f /usr/share/libsmi/mibs/ietf/ENTITY-MIB \
+    && test -f /usr/share/libsmi/mibs/ietf/ENTITY-SENSOR-MIB \
+    && test -f /usr/share/libsmi/mibs/ietf/POWER-ETHERNET-MIB \
+    && test -f /usr/share/libsmi/mibs/ietf/MAU-MIB
+
 
 ADD runtime.tar.gz /
 

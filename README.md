@@ -21,6 +21,19 @@ Repository URL:
 
 Switch Vision components are independently versioned. The main Switch Vision Core product source is maintained separately and is not published in this repository.
 
+## User-first Discovery behavior
+
+Switch Vision Discovery is deliberately **fail-soft for reachable hardware**. The goal is to give the user something useful and diagnosable whenever the switch answers, rather than turn an incomplete model mapping or optional telemetry gap into a failed Discovery run.
+
+- If a reachable switch has an exact registry match, Discovery uses that registered model, topology and approved card/faceplate contract.
+- If a reachable switch is not registered, Discovery uses the safest neutral best-fit card that can contain the **observed** physical RJ45/uplink positions. The card is clearly marked as approximate and its port counts are capped to observed hardware, so extra stock-canvas sockets never become phantom ports or entities.
+- If a reachable switch does not expose enough trustworthy topology to draw even a safe fallback, Discovery still completes and clearly directs the user to **Support My Switch** so exact support can be added.
+- Missing optional MIBs/OIDs, sensors, telemetry, artwork, unsupported models and partial model knowledge are warnings/diagnostics, not reachability failures.
+- In a multi-switch run, one unreachable/auth-blocked target does not invalidate other reachable targets.
+- Hard runtime failure is reserved for inability to communicate/authenticate with any required target, invalid configuration/runtime that prevents a real attempt, or a genuine Switch Vision software/integrity fault.
+
+This user-facing fail-soft policy does **not** weaken release engineering. Registry integrity, topology, privacy, calibration, deterministic packaging and release gates remain strict and must be repaired/rerun when they fail.
+
 ## Exact-model support status
 
 Discovery's reviewed exact-model registry is the public software source of truth for Switch Vision device support state. The normal confidence ladder is **Detected -> Experimental -> Community Validated -> Confirmed Supported**.

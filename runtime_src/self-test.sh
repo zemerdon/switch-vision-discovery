@@ -1061,7 +1061,8 @@ cat > "$zyxel_walk" <<'WALK'
 .1.3.6.1.2.1.31.1.1.1.1.9 = STRING: "swp08"
 .1.3.6.1.2.1.31.1.1.1.1.10 = STRING: "swp09"
 .1.3.6.1.4.1.890.1.15.3.2.4.0 = INTEGER: 12
-.1.3.6.1.4.1.890.1.15.3.2.5.0 = INTEGER: 34
+.1.3.6.1.4.1.890.1.15.3.2.4.3 = INTEGER: 34
+.1.3.6.1.4.1.890.1.15.3.2.5.0 = INTEGER: 45
 .1.3.6.1.4.1.890.1.15.3.2.7.0 = INTEGER: 13
 .1.3.6.1.4.1.890.1.15.3.2.8.0 = INTEGER: 11
 .1.3.6.1.4.1.890.1.15.3.2.9.0 = INTEGER: 9
@@ -1719,8 +1720,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.2"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.2"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.3"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.3"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -2168,7 +2169,7 @@ grep -q 'model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2' "$BASE_D
 grep -q 'RJ45 swp00-swp07 ports' "$BASE_DIR/discovery_job.sh"
 grep -q '10G SFP+ swp08-swp09 uplinks' "$BASE_DIR/discovery_job.sh"
 grep -q '1.3.6.1.4.1.890.1.15.3.2.4.0' "$BASE_DIR/discovery_job.sh"
-grep -q '1.3.6.1.4.1.890.1.15.3.2.5.0' "$BASE_DIR/discovery_job.sh"
+grep -q '1.3.6.1.4.1.890.1.15.3.2.4.3' "$BASE_DIR/discovery_job.sh"
 grep -q 'Q-BRIDGE-MIB PVID' "$BASE_DIR/discovery_job.sh"
 
 awk '
@@ -2903,7 +2904,8 @@ from pathlib import Path
 import sys
 
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
-assert 'CURRENT_RUN_TARGETS="/tmp/switch_vision_current_run_targets.txt"' in text
+assert 'CURRENT_RUN_TARGETS="${SWITCH_VISION_CURRENT_RUN_TARGETS:-/tmp/switch_vision_current_run_targets_$$.txt}"' in text
+assert 'CURRENT_RUN_WALKS="${SWITCH_VISION_CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks_$$.txt}"' in text
 assert 'record_current_run_target' in text
 assert 'current_run_target_field_for_walk "$walk_file" host' in text
 assert 'current_run_target_field_for_walk "$walk_file" prefix' in text
@@ -3020,11 +3022,15 @@ cat > "$v2131_e2e/options.json" <<JSON_V2131
 }
 JSON_V2131
 
-rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
+v2131_current_walks="$v2131_e2e/current-run-walks.txt"
+v2131_current_targets="$v2131_e2e/current-run-targets.txt"
+rm -f "$v2131_current_walks" "$v2131_current_targets"
 if ! PATH="$v2131_e2e/bin:$PATH" \
   SWITCH_VISION_OPTIONS_FILE="$v2131_e2e/options.json" \
   SWITCH_VISION_SHARE_DIR="$v2131_e2e/share" \
   SWITCH_VISION_CAPABILITIES_DIR="$v2131_e2e/capabilities" \
+  SWITCH_VISION_CURRENT_RUN_WALKS="$v2131_current_walks" \
+  SWITCH_VISION_CURRENT_RUN_TARGETS="$v2131_current_targets" \
   CV_MIB_DATABASE_DIR="$RUNTIME_DATA_DIR/mib_database" \
   CV_VENDOR_DIR="$RUNTIME_DATA_DIR/vendors" \
   sh "$BASE_DIR/discovery_job.sh" > "$v2131_e2e/run-output.txt" 2>&1; then
@@ -3044,16 +3050,16 @@ fi
 grep -Eq '^- host: 192\.0\.2\.31$' "$v2131_e2e/generated-snmp2mqtt.yaml"
 grep -Eq '^- host: 192\.0\.2\.32$' "$v2131_e2e/generated-snmp2mqtt.yaml"
 grep -Fq 'template: "{{ [value | int, 1000] | min }}"' "$v2131_e2e/generated-snmp2mqtt.yaml"
-grep -Fq 'DELL-REGRESSION/live-targeted-snmpwalk.txt' /tmp/switch_vision_current_run_targets.txt
-grep -Fq 'S5720-REGRESSION/live-targeted-snmpwalk.txt' /tmp/switch_vision_current_run_targets.txt
-grep -Fq '192.0.2.31' /tmp/switch_vision_current_run_targets.txt
-grep -Fq '192.0.2.32' /tmp/switch_vision_current_run_targets.txt
-grep -Fq 'dellreg' /tmp/switch_vision_current_run_targets.txt
-grep -Fq 'huaweireg' /tmp/switch_vision_current_run_targets.txt
+grep -Fq 'DELL-REGRESSION/live-targeted-snmpwalk.txt' "$v2131_current_targets"
+grep -Fq 'S5720-REGRESSION/live-targeted-snmpwalk.txt' "$v2131_current_targets"
+grep -Fq '192.0.2.31' "$v2131_current_targets"
+grep -Fq '192.0.2.32' "$v2131_current_targets"
+grep -Fq 'dellreg' "$v2131_current_targets"
+grep -Fq 'huaweireg' "$v2131_current_targets"
 grep -Fq 'Generated YAML published atomically:' "$v2131_e2e/snmpwalk.log"
 ! grep -Fq 'Generated YAML source parser failed' "$v2131_e2e/snmpwalk.log"
 ! grep -Fq 'no target host entries' "$v2131_e2e/run-output.txt"
-rm -f /tmp/switch_vision_current_run_walks.txt /tmp/switch_vision_current_run_targets.txt
+rm -f "$v2131_current_walks" "$v2131_current_targets"
 printf '%s\n' "Switch Vision Discovery v2.1.31 end-to-end Dell + S5720 current-run handoff: PASS"
 
 # community-validation UniFi exact-model/API mapping regression.

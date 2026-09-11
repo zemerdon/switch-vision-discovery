@@ -1140,8 +1140,11 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
                 snmp2mqtt={"status": "Not started", "action": "none", "slug": None, "state": None, "message": "Discovery was stopped before completion"},
             )
             return
-        degraded_result = return_code == 10
-        partial_result = return_code == 11
+        result_markers = [line for line in lines if line.startswith("SV_RESULT|")]
+        soft_warning_result = any("warnings=true" in line for line in result_markers)
+        soft_degraded_result = any("degraded=true" in line for line in result_markers)
+        degraded_result = return_code == 10 or soft_degraded_result
+        partial_result = return_code == 11 or soft_warning_result
         if return_code not in {0, 10, 11}:
             raise RuntimeError(f"{operation_name} exited with code {return_code}.")
         if regenerate_card_only:

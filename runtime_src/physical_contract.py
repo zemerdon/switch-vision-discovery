@@ -274,11 +274,17 @@ def _replace_value(line: str, value: str) -> str:
 def normalize_walk(source: Path, destination: Path, contract: dict[str, Any]) -> None:
     """Write a compatibility view without altering original evidence.
 
-    Exact-model contracts with a topology conflict fail closed: the source is
-    copied unchanged so no fabricated physical topology can reach production.
+    Exact-model contracts with a topology conflict fail closed. Unregistered
+    devices may still receive a compatibility view when the capability layer
+    has positively classified physical interfaces; only those observed ports
+    are renamed, so fallback display never invents topology.
     """
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if contract.get("status") != "resolved":
+    status = str(contract.get("status") or "unregistered")
+    if status not in {"resolved", "unregistered"}:
+        destination.write_bytes(source.read_bytes())
+        return
+    if status == "unregistered" and not contract.get("ports"):
         destination.write_bytes(source.read_bytes())
         return
 

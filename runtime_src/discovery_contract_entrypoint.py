@@ -29,13 +29,32 @@ REGISTRY = Path(os.environ.get("SWITCH_VISION_DEVICE_REGISTRY", "/opt/switch-vis
 DEFAULT_OPTIONS = Path(os.environ.get("SWITCH_VISION_OPTIONS_FILE", "/data/options.json"))
 DEFAULT_CAPABILITIES = Path(os.environ.get("SWITCH_VISION_CAPABILITIES_DIR", "/share/switch_vision/capabilities"))
 DEFAULT_WALK_ROOT = Path("/share/switch_vision/snmpwalks")
-CURRENT_RUN_WALKS = Path("/tmp/switch_vision_current_run_walks.txt")
-CURRENT_RUN_TARGETS = Path("/tmp/switch_vision_current_run_targets.txt")
 CURRENT_RUN_SEPARATOR = "\x1c"
 
 
 class DegradedDiscoveryError(RuntimeError):
     """Useful evidence exists, but downstream generation cannot be trusted."""
+
+
+def _fallback_contract_usable(contract: dict[str, Any]) -> bool:
+    """Return True only for observed, unregistered physical topology.
+
+    Fallback display is allowed to reuse observed physical ports, never to infer
+    missing ports or override an exact registered topology conflict.
+    """
+    if str(contract.get("status") or "") != "unregistered":
+        return False
+    observed = contract.get("observed") if isinstance(contract.get("observed"), dict) else {}
+    ports = contract.get("ports") if isinstance(contract.get("ports"), list) else []
+    try:
+        physical = int(observed.get("physical") or 0)
+    except (TypeError, ValueError):
+        physical = 0
+    return physical > 0 and len(ports) == physical
+
+
+def _contract_usable_for_display(contract: dict[str, Any]) -> bool:
+    return str(contract.get("status") or "") == "resolved" or _fallback_contract_usable(contract)
 
 
 def _bool(value: Any, default: bool = False) -> bool:
@@ -69,10 +88,17 @@ def _write_options(path: Path, options: dict[str, Any]) -> None:
     path.write_text(json.dumps(options, indent=2) + "\n", encoding="utf-8")
 
 
-def _stream_legacy(options_path: Path, *, capabilities_dir: Path) -> int:
+def _stream_legacy(
+    options_path: Path,
+    *,
+    capabilities_dir: Path,
+    env_overrides: dict[str, str] | None = None,
+) -> int:
     env = os.environ.copy()
     env["SWITCH_VISION_OPTIONS_FILE"] = str(options_path)
     env["SWITCH_VISION_CAPABILITIES_DIR"] = str(capabilities_dir)
+    if env_overrides:
+        env.update(env_overrides)
     process = subprocess.Popen(
         [str(LEGACY)],
         stdout=subprocess.PIPE,
@@ -184,7 +210,7 @@ def _copy_tree_normalized(source_root: Path, destination_root: Path, work: Path,
         resolved_source = source.resolve()
         if resolved_source in prepared:
             existing = prepared[resolved_source]
-            if existing is not None and existing["contract"].get("status") == "resolved":
+            if existing is not None and _contract_usable_for_display(existing["contract"]):
                 shutil.copy2(existing["destination"], destination)
             else:
                 shutil.copy2(source, destination)
@@ -200,15 +226,18 @@ def _staged_path_for(path: Path, source_root: Path, staged_root: Path) -> Path |
         return None
 
 
-def _read_current_run_records() -> list[dict[str, str]]:
-    if not CURRENT_RUN_WALKS.is_file() or not CURRENT_RUN_WALKS.stat().st_size:
+def _read_current_run_records(
+    current_run_walks: Path,
+    current_run_targets: Path,
+) -> list[dict[str, str]]:
+    if not current_run_walks.is_file() or not current_run_walks.stat().st_size:
         return []
 
     metadata: dict[str, dict[str, str]] = {}
-    if CURRENT_RUN_TARGETS.is_file():
+    if current_run_targets.is_file():
         # The manifest uses ASCII FS (0x1c) as its field separator. Python's
         # splitlines() also treats FS as a line boundary, so split only on LF.
-        for raw in CURRENT_RUN_TARGETS.read_text(encoding="utf-8", errors="replace").split("\n"):
+        for raw in current_run_targets.read_text(encoding="utf-8", errors="replace").split("\n"):
             parts = raw.split(CURRENT_RUN_SEPARATOR)
             if len(parts) != 5:
                 continue
@@ -224,7 +253,7 @@ def _read_current_run_records() -> list[dict[str, str]]:
 
     records: list[dict[str, str]] = []
     seen: set[str] = set()
-    for raw in CURRENT_RUN_WALKS.read_text(encoding="utf-8", errors="replace").splitlines():
+    for raw in current_run_walks.read_text(encoding="utf-8", errors="replace").splitlines():
         raw = raw.strip()
         if not raw:
             continue
@@ -278,46 +307,57 @@ def _stage_current_run_options(
         destination = staged_root / switch / source.name
         info = _prepare_walk(source, destination, work)
         if info is None:
-            # An unresolved/unregistered walk is not a proven physical switch.
-            # Keep that target fail-closed, but do not let one AP, controller,
-            # generic Linux appliance, or other non-switch target invalidate
-            # resolved switches collected in the same live Discovery run.
-            # The resolver writes an unchanged compatibility copy for unresolved
-            # targets, so remove it before parse_all_walks sees the private tree.
             destination.unlink(missing_ok=True)
             print(
-                "SV_STATUS|stage=Skipping unsupported target|"
+                "SV_STATUS|stage=Support contribution recommended|"
                 f"switch={switch}|target=|command=Physical contract|"
-                "activity=No resolved physical switch contract; target excluded from this run"
+                "activity=Switch responded, but there was not enough trustworthy physical interface evidence to draw a safe card; submit Support My Switch so exact support can be added"
             )
             continue
         accepted_evidence.append(info)
-        status = str(info["contract"].get("status") or "unresolved")
-        if status != "resolved":
-            # A successful walk from an unregistered physical device is still
-            # useful field evidence.  It must never be invented into a legacy
-            # topology/card, but it is retained with its capability and
-            # physical-contract records for later exact-profile work.
-            destination.unlink(missing_ok=True)
-            if status == "topology_conflict":
-                activity = "SNMP evidence preserved; observed topology conflicts with the exact physical contract; target excluded from generated topology"
-                stage = "Topology conflict"
-            else:
-                activity = "SNMP evidence preserved; exact physical mapping is unavailable; target excluded from generated topology"
-                stage = "Physical contract unresolved"
-            print(
-                f"SV_STATUS|stage={stage}|switch={switch}|target=|"
-                f"command=Physical contract|activity={activity}"
-            )
+        contract = info["contract"]
+        status = str(contract.get("status") or "unresolved")
+        if status == "resolved":
+            ordered.append(info)
+            by_source[source.resolve()] = destination
+            staged_records.append({**record, "staged_walk": str(destination)})
             continue
-        ordered.append(info)
-        by_source[source.resolve()] = destination
-        staged_records.append({**record, "staged_walk": str(destination)})
+        if _fallback_contract_usable(contract):
+            observed = contract.get("observed") if isinstance(contract.get("observed"), dict) else {}
+            model = str(contract.get("device", {}).get("model") or "unknown")
+            print(
+                "SV_STATUS|stage=Unsupported model fallback|"
+                f"switch={switch}|target=|command=Physical contract|"
+                f"activity={model} is not in the exact registry; preserving {int(observed.get('physical') or 0)} observed physical ports and showing the safest best-fit card. Submit Support My Switch to add exact support"
+            )
+            # Keep the evidence in the accepted set, but do not feed the unknown
+            # model into exact-model YAML generation. A best-fit display card is
+            # appended after the exact/registered generation phase.
+            destination.unlink(missing_ok=True)
+            continue
+        destination.unlink(missing_ok=True)
+        if status == "topology_conflict":
+            model = str(contract.get("device", {}).get("model") or "unknown")
+            activity = (
+                f"{model} is registered, but this walk conflicts with the exact physical contract. "
+                "The registered layout will be shown without trusting conflicting port bindings; submit Support My Switch if the mismatch persists"
+            )
+            stage = "Registered model fallback"
+        else:
+            activity = (
+                "Switch responded, but there is no safe exact or generic physical layout yet; "
+                "submit Support My Switch so support can be added"
+            )
+            stage = "Support contribution recommended"
+        print(
+            f"SV_STATUS|stage={stage}|switch={switch}|target=|"
+            f"command=Physical contract|activity={activity}"
+        )
 
-    # The compatibility tree contains only this run's resolved switch walks, so
-    # parse_all_walks is safe internally even when the user's stored-walk
-    # preference is false. Historical and unresolved/non-switch files are never
-    # copied into this tree.
+    # The compatibility tree contains only this run's exact resolved switch walks.
+    # Unsupported or conflicting devices are handled by a display-only fallback
+    # after generation, so parse_all_walks never mistakes a best-fit visual for
+    # authoritative topology or SNMP2MQTT bindings.
     staged["snmpwalks_dir"] = str(staged_root)
     staged["parse_all_walks"] = "true"
 
@@ -441,15 +481,44 @@ def _stage_options(
                 info = prepared.get(source.resolve()) if source.is_file() else None
                 if info is not None and source.resolve() not in seen:
                     accepted_evidence.append(info)
-                    if info["contract"].get("status") == "resolved":
+                    if str(info["contract"].get("status") or "") == "resolved":
                         ordered.append(info)
                     seen.add(source.resolve())
     for source_path, info in prepared.items():
         if info is not None and source_path not in seen:
             accepted_evidence.append(info)
-            if info["contract"].get("status") == "resolved":
+            if str(info["contract"].get("status") or "") == "resolved":
                 ordered.append(info)
             seen.add(source_path)
+
+    # Stored-walk regeneration follows the same boundary as a live run: only
+    # exact resolved walks feed telemetry generation. Reachable unsupported or
+    # conflicting evidence is retained for display-only fallback/CTA output.
+    for source_path, info in prepared.items():
+        if info is None or str(info["contract"].get("status") or "") == "resolved":
+            continue
+        mapped = _staged_path_for(source_path, source_root, staged_root)
+        if mapped is not None:
+            mapped.unlink(missing_ok=True)
+
+    resolved_switches = {_safe(Path(info["source"]).parent.name) for info in ordered}
+    rows_key = "switches" if isinstance(staged.get("switches"), list) else "multi_switch_walks"
+    rows = staged.get(rows_key)
+    if isinstance(rows, list):
+        staged[rows_key] = [
+            row for row in rows
+            if isinstance(row, dict)
+            and _safe(str(row.get("switch_name") or row.get("switch") or row.get("selected_switch") or row.get("name") or "")) in resolved_switches
+        ]
+    members = staged.get("stack_member_prefixes")
+    if isinstance(members, list):
+        staged["stack_member_prefixes"] = [
+            member for member in members
+            if isinstance(member, dict)
+            and _safe(str(member.get("switch_name") or member.get("switch") or member.get("selected_switch") or member.get("name") or "")) in resolved_switches
+        ]
+    if ordered:
+        staged["input_path"] = str(ordered[0]["destination"])
 
     return staged, ordered, accepted_evidence
 
@@ -510,7 +579,7 @@ def _expected_generated_snmp_cards(ordered: list[dict[str, Any]]) -> int:
     expected = 0
     for info in ordered:
         contract = info.get("contract") if isinstance(info, dict) else None
-        if not isinstance(contract, dict) or contract.get("status") != "resolved":
+        if not isinstance(contract, dict) or str(contract.get("status") or "") != "resolved":
             continue
         observed = contract.get("observed") if isinstance(contract.get("observed"), dict) else {}
         try:
@@ -519,6 +588,215 @@ def _expected_generated_snmp_cards(ordered: list[dict[str, Any]]) -> int:
             members = 1
         expected += max(1, members)
     return expected
+
+
+def _best_generic_profile(rj45: int, uplinks: int) -> tuple[str, str, int, int] | None:
+    # Neutral stock visuals only. Vendor-specific artwork is never used as an
+    # unsupported-model guess. port_count/sfp_port_count cap unused sockets.
+    candidates = (
+        (24, 2, "stock_24rj45_2sfp", "24 RJ45 + 2 uplink"),
+        (24, 4, "stock_24rj45_4sfp", "24 RJ45 + 4 uplink"),
+        (48, 2, "stock_48rj45_2sfp", "48 RJ45 + 2 uplink"),
+        (48, 4, "stock_48rj45_4sfp", "48 RJ45 + 4 uplink"),
+    )
+    fits = [row for row in candidates if rj45 <= row[0] and uplinks <= row[1]]
+    if not fits:
+        return None
+    fits.sort(key=lambda row: ((row[0] - rj45) + (row[1] - uplinks) * 4, row[0], row[1]))
+    capacity_rj45, capacity_uplinks, profile, label = fits[0]
+    return profile, label, capacity_rj45, capacity_uplinks
+
+
+def _switch_row(options: dict[str, Any], switch: str) -> dict[str, Any]:
+    rows = options.get("switches") if isinstance(options.get("switches"), list) else options.get("multi_switch_walks")
+    if not isinstance(rows, list):
+        return {}
+    target = _safe(switch)
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("switch_name") or row.get("switch") or row.get("selected_switch") or row.get("name") or "").strip()
+        if _safe(name) == target:
+            return row
+    return {}
+
+
+def _ensure_dashboard_card_base(path: Path) -> None:
+    if path.is_file() and path.stat().st_size:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "# Switch Vision generated dashboard card examples\n"
+        "# Reachable devices are kept diagnosable even when exact support is not registered.\n"
+        "views:\n"
+        "  - title: Switch Vision\n"
+        "    path: switch-vision\n"
+        "    type: custom:vertical-layout\n"
+        "    layout:\n"
+        "      width: 800\n"
+        "      max_cols: 1\n"
+        "    cards:\n",
+        encoding="utf-8",
+    )
+
+
+def _append_report_fallback_notices(
+    path: Path,
+    accepted_evidence: list[dict[str, Any]],
+    *,
+    replace: bool = False,
+) -> int:
+    rows: list[str] = []
+    count = 0
+    for info in accepted_evidence:
+        contract = info.get("contract") if isinstance(info, dict) else None
+        if not isinstance(contract, dict) or str(contract.get("status") or "") == "resolved":
+            continue
+        device = contract.get("device") if isinstance(contract.get("device"), dict) else {}
+        observed = contract.get("observed") if isinstance(contract.get("observed"), dict) else {}
+        model = str(device.get("model") or "Unknown switch")
+        status = str(contract.get("status") or "unresolved")
+        registered = bool(device.get("registry_match"))
+        count += 1
+        rows.extend(["", f"Reachable device support note: {model}"])
+        if status == "topology_conflict" and registered:
+            rows.append("- Result: exact model exists in the Switch Vision registry; registered visual retained for diagnosis")
+            rows.append("- Telemetry binding: not trusted for this capture because observed topology conflicted with the exact registry contract")
+            rows.append("- Action: Discovery still passes; use Support My Switch if the mismatch persists so the model evidence can be reviewed")
+        elif _fallback_contract_usable(contract):
+            rows.append("- Result: exact model is not registered; best-fit visual may be shown from observed physical ports")
+            rows.append(f"- Observed physical ports: {int(observed.get('physical') or 0)}")
+            rows.append("- Action: submit Support My Switch to add exact registry support, telemetry mapping and faceplate alignment")
+        else:
+            rows.append("- Result: switch is reachable, but there is not enough trustworthy topology to draw a safe card")
+            rows.append("- Action: submit Support My Switch so exact support can be added; no phantom topology was invented")
+    if not rows:
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if replace or not path.exists():
+        prefix = [
+            "Switch Vision Discovery",
+            "=======================",
+            "Discovery communication succeeded. The notes below describe display/support limitations, not reachability failures.",
+        ]
+        path.write_text("\n".join(prefix + rows) + "\n", encoding="utf-8")
+    else:
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n".join(rows) + "\n")
+    return count
+
+
+def _append_display_fallbacks(
+    path: Path,
+    accepted_evidence: list[dict[str, Any]],
+    options: dict[str, Any],
+) -> tuple[int, int]:
+    """Append display-only cards/CTAs for reachable non-resolved hardware.
+
+    Returns (cards_appended, contribution_notices). No fallback is allowed to
+    create SNMP entities or alter the exact-model registry.
+    """
+    fallbacks: list[tuple[dict[str, Any], str]] = []
+    for info in accepted_evidence:
+        contract = info.get("contract") if isinstance(info, dict) else None
+        if not isinstance(contract, dict) or str(contract.get("status") or "") == "resolved":
+            continue
+        switch = _safe(Path(info["source"]).parent.name)
+        fallbacks.append((contract, switch))
+    if not fallbacks:
+        return 0, 0
+
+    _ensure_dashboard_card_base(path)
+    out: list[str] = []
+    cards = 0
+    notices = 0
+    for contract, switch in fallbacks:
+        status = str(contract.get("status") or "unresolved")
+        device = contract.get("device") if isinstance(contract.get("device"), dict) else {}
+        observed = contract.get("observed") if isinstance(contract.get("observed"), dict) else {}
+        expected = contract.get("expected") if isinstance(contract.get("expected"), dict) else {}
+        model = str(device.get("model") or "Unknown switch")
+        row = _switch_row(options, switch)
+        title = str(row.get("display_name") or switch or model).strip() or model
+        host = str(row.get("switch_host") or row.get("host") or "").strip()
+        prefix = str(row.get("sensor_prefix") or row.get("entity_prefix") or switch).strip() or switch
+        profile = ""
+        rj45 = 0
+        uplinks = 0
+        detail = ""
+        exact_registered = bool(device.get("registry_match"))
+
+        if status == "topology_conflict" and exact_registered:
+            profile = str(device.get("calibration_profile") or "").strip()
+            rj45 = int(expected.get("rj45") or 0)
+            uplinks = int(expected.get("uplinks") or 0)
+            if not profile:
+                generic = _best_generic_profile(rj45, uplinks)
+                if generic:
+                    profile, label, _, _ = generic
+                    detail = f"Registered topology is shown with the neutral {label} visual."
+            else:
+                detail = "The exact registered Switch Vision layout is shown, but this walk was not trusted for port bindings."
+        elif _fallback_contract_usable(contract):
+            rj45 = int(observed.get("rj45") or 0)
+            uplinks = int(observed.get("uplinks") or 0)
+            generic = _best_generic_profile(rj45, uplinks)
+            if generic:
+                profile, label, _, _ = generic
+                detail = f"Showing a neutral best-fit {label} card using only the {rj45} RJ45 and {uplinks} uplink positions observed in this walk."
+
+        notices += 1
+        out.extend([
+            "",
+            "      - type: markdown",
+            "        content: |",
+            f"          ### {title}",
+        ])
+        if exact_registered:
+            out.append(f"          **{model} is registered, but this capture did not match the exact physical binding contract.**")
+            if detail:
+                out.append(f"          {detail}")
+            out.append("          Discovery completed so the card remains diagnosable. If the mismatch persists, use **Support My Switch** and submit the contribution bundle.")
+        else:
+            out.append(f"          **{model} is reachable but does not yet have exact Switch Vision registry support.**")
+            if detail:
+                out.append(f"          {detail}")
+            else:
+                out.append("          Switch Vision could not choose a safe neutral card layout from the observed ports, so no topology was invented.")
+            out.append("          Use **Support My Switch** to submit a contribution so exact model support, telemetry and faceplate mapping can be added.")
+
+        if not profile:
+            continue
+        cards += 1
+        out.extend([
+            "",
+            "      - type: custom:switch-vision-3650",
+            f"        title: {json.dumps(title)}",
+            f"        member: {json.dumps(switch)}",
+            f"        selected_switch: {json.dumps(switch)}",
+            f"        discovery_selected_switch: {json.dumps(switch)}",
+            f"        switch_model: {json.dumps(model)}",
+            f"        calibration_profile: {json.dumps(profile)}",
+            "        calibration_profile_load: true",
+            "        calibration_profile_auto_load: true",
+            "        calibration_button: true",
+            f"        port_count: {max(0, rj45)}",
+            f"        sfp_port_count: {max(0, uplinks)}",
+            "        activity_hold_seconds: 12",
+            f"        status_entity_prefix: sensor.{_safe(prefix).lower()}_port_",
+            "        status_entity_suffix: _status",
+        ])
+        if host:
+            out.append(f"        switch_ip: {json.dumps(host)}")
+            out.append(f"        management_ip: {json.dumps(host)}")
+        if not exact_registered:
+            out.append("        # Best-fit unsupported-model visual; exact support requires Support My Switch evidence.")
+        else:
+            out.append("        # Exact registered visual shown in diagnostic mode; conflicting walk bindings were not trusted.")
+
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("\n".join(out) + "\n")
+    return cards, notices
 
 
 def _generated_snmp_card_count(path: Path) -> int:
@@ -548,15 +826,24 @@ def _stage_live_collection(
     stage["generated_card_path"] = str(work / "live_collection_card.yaml")
     stage["last_run_summary_path"] = str(work / "live_collection_summary.txt")
     stage_path = work / "live_collection_options.json"
+    current_run_walks = work / "current_run_walks.txt"
+    current_run_targets = work / "current_run_targets.txt"
     _write_options(stage_path, stage)
-    return_code = _stream_legacy(stage_path, capabilities_dir=work / "live_collection_capabilities")
+    return_code = _stream_legacy(
+        stage_path,
+        capabilities_dir=work / "live_collection_capabilities",
+        env_overrides={
+            "SWITCH_VISION_CURRENT_RUN_WALKS": str(current_run_walks),
+            "SWITCH_VISION_CURRENT_RUN_TARGETS": str(current_run_targets),
+        },
+    )
     if return_code == 10:
         raise DegradedDiscoveryError(
             "Live SNMP collection produced useful evidence, but safe downstream generation cannot be trusted."
         )
     if return_code not in {0, 11}:
         raise RuntimeError(f"Live SNMP collection exited with code {return_code}.")
-    current_run = _read_current_run_records()
+    current_run = _read_current_run_records(current_run_walks, current_run_targets)
     if return_code == 11 and not current_run:
         raise RuntimeError(
             "Live SNMP collection reported PARTIAL without any successful current-run walk."
@@ -576,20 +863,6 @@ def main() -> int:
         # Persist validated physical evidence before downstream generation. A
         # later generator/cardinality failure must not discard useful evidence.
         _publish_contracts(accepted_evidence, DEFAULT_CAPABILITIES)
-        if not ordered:
-            if accepted_evidence:
-                raise DegradedDiscoveryError(
-                    "SNMP evidence was preserved, but no exact physical switch contract was available for safe topology generation."
-                )
-            raise RuntimeError("Current-run SNMP walks did not produce any resolved physical switch contracts.")
-        stage_path = work / "resolved_options.json"
-        _write_options(stage_path, staged)
-        return_code = _stream_legacy(stage_path, capabilities_dir=work / "runtime_capabilities")
-        if return_code != 0:
-            raise DegradedDiscoveryError(
-                f"Downstream Discovery generation exited with code {return_code} after validated physical evidence was collected."
-            )
-
         report = Path(str(options.get("report_path") or "/share/switch_vision/discovery-report.txt"))
         generated_yaml = Path(str(options.get("generated_yaml_path") or "/share/switch_vision/generated-snmp2mqtt.yaml"))
         generated_card = Path(
@@ -598,6 +871,42 @@ def main() -> int:
                 or "/share/switch_vision/generated-dashboard-card.yaml"
             )
         )
+
+        if not ordered:
+            # A reachable switch with unsupported/incomplete topology is a
+            # successful diagnostic Discovery, not a failed run. Preserve the
+            # evidence, show the safest display we can, and ask for a Support My
+            # Switch contribution. The existing generated SNMP2MQTT YAML is not
+            # replaced or activated because there are no trusted bindings.
+            notices = _append_report_fallback_notices(report, accepted_evidence, replace=True)
+            generated_card.unlink(missing_ok=True)
+            fallback_cards, card_notices = _append_display_fallbacks(generated_card, accepted_evidence, options)
+            if not notices and not card_notices:
+                report.parent.mkdir(parents=True, exist_ok=True)
+                report.write_text(
+                    "Switch Vision Discovery\n"
+                    "=======================\n"
+                    "Discovery completed with no exact displayable switch contract.\n"
+                    "If the switch is reachable but no card can be shown, use Support My Switch to submit a contribution so support can be added.\n",
+                    encoding="utf-8",
+                )
+                _ensure_dashboard_card_base(generated_card)
+            print(
+                "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"
+                "target=|command=Physical contract|"
+                "activity=Discovery communication succeeded, but exact telemetry generation was unavailable; best-fit display/contribution guidance was preserved"
+            )
+            print(f"SV_DEBUG|Physical contract authority: display-only fallback cards={fallback_cards}; support notices={max(notices, card_notices)}")
+            print("SV_RESULT|warnings=true|degraded=true")
+            return 0
+
+        stage_path = work / "resolved_options.json"
+        _write_options(stage_path, staged)
+        return_code = _stream_legacy(stage_path, capabilities_dir=work / "runtime_capabilities")
+        if return_code != 0:
+            raise DegradedDiscoveryError(
+                f"Downstream Discovery generation exited with code {return_code} after validated physical evidence was collected."
+            )
         expected_cards = _expected_generated_snmp_cards(ordered)
         actual_cards = _generated_snmp_card_count(generated_card)
         if actual_cards != expected_cards:
@@ -606,21 +915,23 @@ def main() -> int:
             )
         _patch_report(report, ordered)
         _patch_yaml(generated_yaml, ordered)
-        partial_result = live_collection_partial or (
+        fallback_notices = _append_report_fallback_notices(report, accepted_evidence)
+        fallback_cards, card_notices = _append_display_fallbacks(generated_card, accepted_evidence, options)
+        partial_result = live_collection_partial or fallback_notices > 0 or (
             bool(current_run) and len(ordered) != len(current_run)
         )
         if current_run:
-            print(f"SV_DEBUG|Physical contract authority: accepted {len(ordered)} of {len(current_run)} current-run walk(s) through normalized generation")
+            print(f"SV_DEBUG|Physical contract authority: accepted {len(ordered)} exact walk(s) of {len(current_run)} current-run walk(s) for normalized telemetry generation")
         if live_collection_partial:
-            print("SV_DEBUG|Physical contract authority: live collection carried PARTIAL exit 11")
-        print(f"SV_DEBUG|Physical contract authority: resolved {len(ordered)} registered device walk(s)")
+            print("SV_DEBUG|Physical contract authority: one or more configured targets were unreachable/auth-failed while other targets remained usable")
+        print(f"SV_DEBUG|Physical contract authority: resolved exact models={len(ordered)}; display-only fallback cards={fallback_cards}; support notices={max(fallback_notices, card_notices)}")
         if partial_result:
             print(
                 "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"
                 "target=|command=Physical contract|"
-                "activity=Safe generated topology completed; one or more configured live targets were excluded or unresolved"
+                "activity=Discovery completed; exact registered devices were generated and reachable unsupported/partial devices were kept diagnosable with best-fit display or Support My Switch guidance"
             )
-            return 11
+            print("SV_RESULT|warnings=true|degraded=false")
         return 0
 
 
