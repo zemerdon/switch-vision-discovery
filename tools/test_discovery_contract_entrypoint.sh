@@ -316,10 +316,12 @@ options = {
     "switches": [
         {"switch_name": "supported", "output_dir": "/should/be/replaced"},
         {"switch_name": "unsupported", "output_dir": "/must/not/survive"},
+        {"switch_name": "2960x-48p", "display_name": "SW7 2960X 48P", "sensor_prefix": "sw7", "switch_host": "192.0.2.23"},
     ],
     "stack_member_prefixes": [
         {"switch_name": "supported", "member": "1"},
         {"switch_name": "unsupported", "member": "1"},
+        {"switch_name": "2960x-48p", "member": "1"},
     ],
     "input_path": str(unsupported),
 }
@@ -346,7 +348,10 @@ staged, ordered, accepted_evidence = module._stage_options(options, root / "work
 assert len(accepted_evidence) == 1, accepted_evidence
 assert len(ordered) == 1, ordered
 assert [row["switch_name"] for row in staged["switches"]] == ["supported"], staged["switches"]
+assert [row["switch_name"] for row in staged["dashboard_switches"]] == ["supported", "2960x-48p"], staged["dashboard_switches"]
 assert [row["switch_name"] for row in staged["stack_member_prefixes"]] == ["supported"], staged["stack_member_prefixes"]
+assert [row["switch_name"] for row in staged["dashboard_stack_member_prefixes"]] == ["supported", "2960x-48p"], staged["dashboard_stack_member_prefixes"]
+assert module._expected_generated_dashboard_cards(staged) == 2, staged
 targets = Path(staged["targets_csv"]).read_text(encoding="utf-8")
 assert "supported" in targets
 assert "unsupported" not in targets
@@ -358,6 +363,7 @@ staged, ordered, accepted_evidence = module._stage_options(options, root / "all-
 assert not ordered, ordered
 assert not accepted_evidence, accepted_evidence
 assert staged["switches"] == [], staged["switches"]
+assert [row["switch_name"] for row in staged["dashboard_switches"]] == ["2960x-48p"], staged["dashboard_switches"]
 
 def fatal_prepare(source: Path, destination: Path, work: Path):
     raise RuntimeError("synthetic topology conflict")
@@ -405,6 +411,77 @@ print("entrypoint unsupported best-fit + contribution CTA: PASS")
 
 print("entrypoint mixed current-run exclusion: PASS")
 PY
+
+# Current-run partial regression at the full physical-contract wrapper boundary.
+# A temporarily unreachable saved switch must stay in the generated Dashboard
+# Card inventory, while SNMP2MQTT telemetry remains restricted to the switch
+# with validated current-run evidence. This is the SW7 / 2960X-48P failure mode
+# reported from a real contribution bundle.
+retain="$TMP/dashboard-retain"
+mkdir -p "$retain/bin" "$retain/walks" "$retain/share" "$retain/live"
+make_dell_walk "$retain/dell.txt" 48
+cat > "$retain/bin/snmpwalk" <<'EOF_RETAIN_SNMP'
+#!/usr/bin/env sh
+set -eu
+host=""
+for arg in "$@"; do
+  case "$arg" in 192.0.2.*) host="$arg";; esac
+done
+[ "$host" = "192.0.2.71" ] || exit 1
+cat "${SV_TEST_SNMP_SOURCE:?}"
+EOF_RETAIN_SNMP
+chmod +x "$retain/bin/snmpwalk"
+cat > "$retain/options.json" <<EOF_RETAIN_OPTIONS
+{
+  "snmpwalks_dir": "$retain/walks",
+  "report_path": "$retain/report.txt",
+  "run_snmp_walks": "true",
+  "enable_switch_list": "true",
+  "parse_all_walks": "false",
+  "generate_snmp2mqtt": "true",
+  "switches": [
+    {"switch_name":"working","display_name":"Working Switch","switch_host":"192.0.2.71","sensor_prefix":"GOOD","snmp_community":"readonly","enabled":"enabled","walk_mode":"targeted","switch_model":"auto","card_header_title":""},
+    {"switch_name":"2960x-48p","display_name":"SW7 2960X 48P","switch_host":"192.0.2.72","sensor_prefix":"sw7","snmp_community":"readonly","enabled":"enabled","walk_mode":"targeted","switch_model":"auto","card_header_title":""}
+  ],
+  "stack_member_prefixes": [],
+  "last_run_summary_path": "$retain/summary.txt",
+  "generated_yaml_path": "$retain/generated.yaml",
+  "generated_card_path": "$retain/card.yaml",
+  "snmp_log_path": "$retain/discovery.log",
+  "live_output_dir": "$retain/live",
+  "live_output_path": "$retain/live/live-targeted-snmpwalk.txt",
+  "minimum_valid_walk_lines": "1",
+  "clean_output_before_walk": "false",
+  "generate_support_my_switch_bundle": "false"
+}
+EOF_RETAIN_OPTIONS
+if ! PATH="$retain/bin:$PATH" SV_TEST_SNMP_SOURCE="$retain/dell.txt" run_entrypoint "$retain" "$retain/options.json" > "$retain/stdout.txt" 2> "$retain/stderr.txt"; then
+  echo 'FAIL: partial wrapper dashboard-retention path exited non-zero' >&2
+  cat "$retain/stdout.txt" >&2 || true
+  cat "$retain/stderr.txt" >&2 || true
+  exit 1
+fi
+card_count=$(grep -c '^      - type: custom:switch-vision-3650$' "$retain/card.yaml" || true)
+[ "$card_count" -eq 2 ] || {
+  echo "FAIL: expected two saved Dashboard Card rows after partial SNMP run, found $card_count" >&2
+  cat "$retain/card.yaml" >&2 || true
+  exit 1
+}
+grep -Fq 'Working Switch' "$retain/card.yaml" || { echo 'FAIL: responding saved switch missing from Dashboard Card' >&2; cat "$retain/card.yaml" >&2; exit 1; }
+grep -Fq 'SW7 2960X 48P' "$retain/card.yaml" || { echo 'FAIL: failed SW7 saved switch was dropped from Dashboard Card' >&2; cat "$retain/card.yaml" >&2; exit 1; }
+grep -Fq 'sensor.sw7_model' "$retain/card.yaml" || { echo 'FAIL: retained SW7 card lost its configured sensor prefix' >&2; cat "$retain/card.yaml" >&2; exit 1; }
+grep -Fq '192.0.2.71' "$retain/generated.yaml" || { echo 'FAIL: responding switch telemetry missing from generated YAML' >&2; cat "$retain/generated.yaml" >&2; exit 1; }
+if grep -Fq '192.0.2.72' "$retain/generated.yaml" || grep -Fq '# Prefix: sw7' "$retain/generated.yaml"; then
+  echo 'FAIL: failed SW7 target leaked into generated telemetry' >&2
+  cat "$retain/generated.yaml" >&2 || true
+  exit 1
+fi
+grep -Fq 'SV_RESULT|warnings=true|degraded=false' "$retain/stdout.txt" || {
+  echo 'FAIL: partial wrapper run did not complete fail-soft with warnings' >&2
+  cat "$retain/stdout.txt" >&2 || true
+  exit 1
+}
+echo 'entrypoint partial run retains saved Dashboard Card inventory but filters telemetry: PASS'
 
 # Live partial/all-fail regression uses the real legacy runtime with a fake
 # snmpwalk. Stale full-walk files remain physically present while current
@@ -544,7 +621,7 @@ def stage(options, work, current):
 m._stage_options = stage
 m._publish_contracts = lambda *a, **k: None
 m._stream_legacy = lambda *a, **k: 0
-m._expected_generated_snmp_cards = lambda ordered: 1
+m._expected_generated_dashboard_cards = lambda staged: 1
 m._generated_snmp_card_count = lambda path: 1
 m._patch_report = lambda *a: None
 m._patch_yaml = lambda *a: None

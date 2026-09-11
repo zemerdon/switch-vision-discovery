@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.7
+
+- Keep every enabled saved switch in generated **Dashboard Card YAML** during mixed Discovery runs even when that switch's current SNMP attempt fails. This prevents a temporarily unreachable saved device such as SW7 / a 2960X 48P from disappearing from the dashboard.
+- Keep telemetry safety strict: failed/unreachable targets are still excluded from generated **SNMP2MQTT YAML**, while switches that responded with unsupported/conflicting evidence continue through the existing physical-contract best-fit/support-guidance path instead of being duplicated.
+- Align Dashboard Card cardinality validation with the saved presentation inventory while preserving the legacy single-walk evidence-count fallback, and add an end-to-end partial-run regression proving two saved cards can coexist with telemetry for only the one validated target.
+
 ## 2.4.6
 
 - Remove Devices drag-and-drop ordering and make the existing **up/down arrows** the sole reorder control. Move those reorder buttons to the left of each saved switch row and keep Dashboard Card regeneration bound to the persisted saved-switch order.

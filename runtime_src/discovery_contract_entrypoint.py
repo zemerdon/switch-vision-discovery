@@ -365,22 +365,55 @@ def _stage_current_run_options(
         _safe(record.get("switch") or Path(record["walk"]).parent.name)
         for record in staged_records
     }
+    current_run_switches = {
+        _safe(record.get("switch") or Path(record["walk"]).parent.name)
+        for record in current_run
+    }
+    dashboard_switches: set[str] = set()
     rows_key = "switches" if isinstance(staged.get("switches"), list) else "multi_switch_walks"
     rows = staged.get(rows_key)
     if isinstance(rows, list):
+        # Dashboard presentation and telemetry generation intentionally have
+        # different safety contracts. Exact current-run rows remain available
+        # to both paths. Saved rows with no successful current-run walk remain
+        # available only to the Dashboard Card so a temporary SNMP failure does
+        # not make the device disappear. Rows that did respond but require an
+        # unsupported/conflict fallback are excluded here because the physical
+        # contract layer appends their safe display-only card separately.
+        dashboard_rows: list[dict[str, Any]] = []
         filtered_rows: list[dict[str, Any]] = []
         for row in rows:
             if not isinstance(row, dict):
                 continue
             name = str(row.get("switch_name") or row.get("switch") or row.get("selected_switch") or row.get("name") or "").strip()
-            if _safe(name) not in resolved_switches:
+            safe_name = _safe(name)
+            if safe_name in resolved_switches or safe_name not in current_run_switches:
+                dashboard_rows.append(copy.deepcopy(row))
+                dashboard_switches.add(safe_name)
+            if safe_name not in resolved_switches:
                 continue
-            row["output_dir"] = str(staged_root / _safe(name))
+            row["output_dir"] = str(staged_root / safe_name)
             filtered_rows.append(row)
+        staged["dashboard_switches"] = dashboard_rows
         staged[rows_key] = filtered_rows
 
     members = staged.get("stack_member_prefixes")
     if isinstance(members, list):
+        staged["dashboard_stack_member_prefixes"] = [
+            copy.deepcopy(member)
+            for member in members
+            if isinstance(member, dict)
+            and _safe(
+                str(
+                    member.get("switch_name")
+                    or member.get("switch")
+                    or member.get("selected_switch")
+                    or member.get("name")
+                    or ""
+                )
+            )
+            in dashboard_switches
+        ]
         staged["stack_member_prefixes"] = [
             member
             for member in members
@@ -609,6 +642,54 @@ def _expected_generated_snmp_cards(ordered: list[dict[str, Any]]) -> int:
         except (TypeError, ValueError):
             members = 1
         expected += max(1, members)
+    return expected
+
+
+def _expected_generated_dashboard_cards(options: dict[str, Any]) -> int | None:
+    rows = options.get("dashboard_switches")
+    if not isinstance(rows, list):
+        rows = options.get("switches") if isinstance(options.get("switches"), list) else options.get("multi_switch_walks")
+    if not isinstance(rows, list):
+        return None
+    members = options.get("dashboard_stack_member_prefixes")
+    if not isinstance(members, list):
+        members = options.get("stack_member_prefixes") if isinstance(options.get("stack_member_prefixes"), list) else []
+
+    def enabled(row: dict[str, Any]) -> bool:
+        value = row.get("enabled", "enabled")
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() not in {"false", "disabled", "disable", "off", "no", "0"}
+        return True
+
+    expected = 0
+    for row in rows:
+        if not isinstance(row, dict) or not enabled(row):
+            continue
+        name = str(row.get("switch_name") or row.get("switch") or row.get("selected_switch") or row.get("name") or "").strip()
+        if not name:
+            continue
+        safe_name = _safe(name)
+        matching_members = []
+        for member in members:
+            if not isinstance(member, dict):
+                continue
+            member_switch = str(
+                member.get("switch_name")
+                or member.get("switch")
+                or member.get("selected_switch")
+                or member.get("name")
+                or ""
+            ).strip()
+            if _safe(member_switch) == safe_name:
+                matching_members.append(member)
+        non_primary = 0
+        for member in matching_members:
+            member_id = str(member.get("member") or member.get("member_number") or "")
+            if member_id != "1":
+                non_primary += 1
+        expected += 1 + non_primary
     return expected
 
 
@@ -929,7 +1010,9 @@ def main() -> int:
             raise DegradedDiscoveryError(
                 f"Downstream Discovery generation exited with code {return_code} after validated physical evidence was collected."
             )
-        expected_cards = _expected_generated_snmp_cards(ordered)
+        expected_cards = _expected_generated_dashboard_cards(staged)
+        if expected_cards is None:
+            expected_cards = _expected_generated_snmp_cards(ordered)
         actual_cards = _generated_snmp_card_count(generated_card)
         if actual_cards != expected_cards:
             raise DegradedDiscoveryError(

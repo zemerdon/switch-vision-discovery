@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.6"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.7"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -3925,11 +3925,11 @@ write_generated_dashboard_card() {
         def parent_header_title($sw): clean_header_title($sw.card_header_title // "");
         def member_header_title($m; $sw): clean_header_title($m.card_header_title // $sw.card_header_title // "");
         def member_display($m; $fallback): display_name($m.display_name // $m.member_name // $m.name // $fallback);
-        (.switches // .multi_switch_walks // [])[]? as $sw |
+        (.dashboard_switches // .switches // .multi_switch_walks // [])[]? as $sw |
           select(enabled($sw)) |
           swname($sw) as $name |
           ($sw.switch_host // $sw.host // $sw.manual_switch_host // "") as $host |
-          ([ (.stack_member_prefixes // [])[]? | select((.switch_name // .switch // .selected_switch // .name // "") == $name) ]) as $members |
+          ([ (.dashboard_stack_member_prefixes // .stack_member_prefixes // [])[]? | select((.switch_name // .switch // .selected_switch // .name // "") == $name) ]) as $members |
           (if ($members | length) > 0 then
             (($members | map(select(member_id(.) == "1")) | .[0]) // null) as $m1 |
             (if $m1 == null then
