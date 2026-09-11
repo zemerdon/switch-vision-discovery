@@ -100,6 +100,18 @@ try:
     else:
         raise AssertionError("stale source identity must fail closed")
 
+    # Drag-and-drop sends the complete visible order. Blank/non-device option rows
+    # keep their raw slots while complete per-switch dictionaries (including
+    # secrets) move as one unit.
+    dragged = web._move_configured_device(Path("/unused/options.json"), {
+        "order": ["SW-B", "SW-A", "SW-C"],
+    })
+    assert [item["switch_name"] for item in dragged["devices"]] == ["SW-B", "SW-A", "SW-C"], dragged
+    assert [str(item.get("switch_name") or "") for item in state["switches"]] == ["SW-B", "", "SW-A", "SW-C"], state
+    assert state["switches"][0]["snmp_community"] == "private-swb"
+    assert state["switches"][2]["snmp_community"] == "private-swa"
+    assert backup_reasons.count("device_order_update") == 2, backup_reasons
+
     serialized = json.dumps(web._configured_devices_snapshot(Path("/unused/options.json")))
     assert "private-swa" not in serialized
     assert "private-swb" not in serialized

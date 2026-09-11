@@ -31,24 +31,35 @@ for marker in (
 ):
     assert marker in source, marker
 
-# The entire detected-device row is expandable and expansion survives Hub
-# background refreshes instead of collapsing every polling cycle.
+# Saved and detected devices share one expandable list. Expansion survives Hub
+# background refreshes, and saved-device order supports both drag/drop and the
+# existing arrow controls while unmatched API-only devices remain visible.
 for marker in (
-    "let expandedDetectedDevices=new Set();",
+    "let expandedUnifiedDevices=new Set();",
     "function detectedDeviceKey(item)",
-    "entry.className='device-card detected-device-details'",
-    "entry.open=expandedDetectedDevices.has(key)",
-    "entry.addEventListener('toggle'",
-    "if(entry.open)expandedDetectedDevices.add(key);else expandedDetectedDevices.delete(key)",
+    "function renderUnifiedDevices()",
+    "entry.className=`device-card unified-device-details configured-device",
+    "entry.open=expandedUnifiedDevices.has(key)",
+    "if(entry.open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)",
+    "handle.className='device-drag-handle'",
+    "reorderConfiguredByDrag(source,item.switch_name,after)",
+    "className='device-order-button'",
+    "for(const [index,item] of detected.entries())",
     "if(currentView==='devices')await refreshDevicesData(false)",
 ):
     assert marker in source, marker
+
+for forbidden in (
+    'id="devicesSummary"',
+    '<h3>Detected Devices</h3>',
+):
+    assert forbidden not in source, forbidden
 
 # Expanded rows preserve the detailed information previously exposed on the
 # standalone page: registry validation plus source/walk/firmware, uplinks,
 # mapping and calibration profile.
 for marker in (
-    "const card=deviceCard(normalized);",
+    "body.appendChild(deviceCard(normalized));",
     "Uplinks detected:",
     "Mapping profile:",
     "Calibration profile:",

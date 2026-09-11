@@ -83,8 +83,7 @@ jobs:
           import re
           from pathlib import Path
           import support_web
-          import unifi_multi_controller_bridge
-          page = unifi_multi_controller_bridge._patch_page(support_web._PAGE)
+          page = support_web._PAGE
           scripts = re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', page, flags=re.S|re.I)
           out = Path('/tmp/sv-multi-controller-js')
           out.mkdir(exist_ok=True)

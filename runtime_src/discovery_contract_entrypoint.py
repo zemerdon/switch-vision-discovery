@@ -524,17 +524,30 @@ def _stage_options(
 
 
 def _patch_report(path: Path, ordered: list[dict[str, Any]]) -> None:
+    """Patch legacy report metadata by exact staged walk identity, never list order."""
     if not path.is_file() or not ordered:
         return
+    by_path = {
+        str(Path(info["destination"]).resolve()): info["contract"]
+        for info in ordered
+        if info.get("destination") and isinstance(info.get("contract"), dict)
+    }
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    section = -1
+    contract: dict[str, Any] | None = None
     for index, line in enumerate(lines):
         if re.match(r"^Device \d+: ", line) or line.startswith("Single walk: "):
-            section += 1
+            contract = None
             continue
-        if not (0 <= section < len(ordered)):
+        if line.startswith("File: "):
+            raw_path = line.removeprefix("File: ").strip()
+            try:
+                key = str(Path(raw_path).resolve())
+            except (OSError, RuntimeError):
+                key = raw_path
+            contract = by_path.get(key)
             continue
-        contract = ordered[section]["contract"]
+        if not contract:
+            continue
         model = str(contract.get("device", {}).get("model") or "unknown")
         physical = int(contract.get("observed", {}).get("physical") or 0)
         if line.startswith("Model/platform: "):
@@ -547,17 +560,26 @@ def _patch_report(path: Path, ordered: list[dict[str, Any]]) -> None:
 
 
 def _patch_yaml(path: Path, ordered: list[dict[str, Any]]) -> None:
+    """Patch generated model metadata by stable switch key, never section order."""
     if not path.is_file() or not ordered:
         return
+    by_switch = {
+        _safe(Path(info["destination"]).parent.name): info["contract"]
+        for info in ordered
+        if info.get("destination") and isinstance(info.get("contract"), dict)
+    }
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    section = -1
+    contract: dict[str, Any] | None = None
     for index, line in enumerate(lines):
         if line.startswith("# Device source: "):
-            section += 1
+            contract = None
             continue
-        if not (0 <= section < len(ordered)):
+        if line.startswith("# Switch key: "):
+            contract = by_switch.get(_safe(line.removeprefix("# Switch key: ").strip()))
             continue
-        model = str(ordered[section]["contract"].get("device", {}).get("model") or "unknown")
+        if not contract:
+            continue
+        model = str(contract.get("device", {}).get("model") or "unknown")
         if line.startswith("# Detected model: "):
             lines[index] = f"# Detected model: {model}"
         elif re.match(r"^\s*device_model:\s*", line):
@@ -915,6 +937,26 @@ def main() -> int:
             )
         _patch_report(report, ordered)
         _patch_yaml(generated_yaml, ordered)
+        if generated_yaml.is_file():
+            guard = Path(__file__).with_name("generated_yaml_guard.py")
+            if not guard.is_file():
+                raise DegradedDiscoveryError(
+                    "Generated YAML post-contract validation could not run because the guard is missing."
+                )
+            guard_result = subprocess.run(
+                [sys.executable, str(guard), "--validate", str(generated_yaml)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+            if guard_result.returncode != 0:
+                detail = guard_result.stdout.strip() or "generated YAML guard refused patched output"
+                raise DegradedDiscoveryError(
+                    f"Generated YAML post-contract validation failed: {detail}"
+                )
         fallback_notices = _append_report_fallback_notices(report, accepted_evidence)
         fallback_cards, card_notices = _append_display_fallbacks(generated_card, accepted_evidence, options)
         partial_result = live_collection_partial or fallback_notices > 0 or (

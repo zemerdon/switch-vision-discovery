@@ -43,6 +43,16 @@
       "tested_models": [
         "WS-C3560CG-8PC-S"
       ]
+    },
+    {
+      "sys_object_id": "1.3.6.1.4.1.9.1.1745",
+      "vendor": "cisco",
+      "family": "Catalyst 3850",
+      "model_hint": "WS-C3850-12XS-E",
+      "support_status": "community_validated",
+      "tested_models": [
+        "WS-C3850-12XS-E"
+      ]
     }
   ]
 }

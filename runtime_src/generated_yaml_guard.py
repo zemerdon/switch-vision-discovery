@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,21 @@ def validate(path: Path) -> tuple[bool, str]:
         return False, "Switch Vision Discovery source header missing"
     if "CHANGE_ME" in text:
         return False, "CHANGE_ME placeholder found"
+    # Each source section carries its detected model as a comment and repeats
+    # that model in every emitted polling target. Keep those two views locked
+    # together so post-generation metadata repair cannot silently corrupt one.
+    for section_index, section in enumerate(text.split("# Device source: ")[1:], start=1):
+        detected = re.search(r"(?m)^# Detected model:\s*(.+?)\s*$", section)
+        if not detected:
+            continue
+        expected_model = detected.group(1).strip()
+        emitted_models = [
+            match.group(1).strip()
+            for match in re.finditer(r"(?m)^\s*device_model:\s*(.+?)\s*$", section)
+        ]
+        if emitted_models and any(model != expected_model for model in emitted_models):
+            return False, f"source section {section_index} has inconsistent detected/device model metadata"
+
     try:
         document: Any = yaml.safe_load(text)
     except yaml.YAMLError as exc:

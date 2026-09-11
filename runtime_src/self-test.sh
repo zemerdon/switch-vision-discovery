@@ -4,9 +4,12 @@ set -eu
 # Early Hub regression checks use a diagnostic literal helper so CI identifies
 # the exact missing contract instead of failing silently under set -e.
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export SV_CURRENT_DISCOVERY_DEBUG_PATH="${SV_CURRENT_DISCOVERY_DEBUG_PATH:-/tmp/switch-vision-current-discovery-debug.log}"
 SV_COPY_DEBUG_TEST_DIR="$BASE_DIR"
 python3 "$BASE_DIR/dashboard_card_regeneration_regression.py"
 python3 "$BASE_DIR/discovery_history_regression.py"
+python3 "$BASE_DIR/current_debug_regression.py"
+python3 "$BASE_DIR/secret_reveal_regression.py"
 python3 "$BASE_DIR/management_ip_display_regression.py"
 python3 "$BASE_DIR/device_ordering_regression.py"
 python3 "$BASE_DIR/hub_settings_tabs_regression.py"
@@ -1707,7 +1710,7 @@ printf '%s\n' "Switch Vision vendor/interface/privacy self-test: PASS"
 grep -q 'id="openUnifi2mqttSettingsButton"' "$BASE_DIR/support_web.py"
 grep -q 'unifi-unavailable' "$BASE_DIR/support_web.py"
 grep -q 'UniFi2MQTT is not installed. Install it from Switch Vision Installer first.' "$BASE_DIR/support_web.py"
-grep -q 'UniFi2MQTT is installed but not configured. Open settings to complete setup.' "$BASE_DIR/support_web.py"
+grep -q 'UniFi2MQTT is installed but no usable Local, Remote, or multi-controller API credential is configured.' "$BASE_DIR/support_web.py"
 grep -q 'show_unifi_integration' "$BASE_DIR/support_web.py"
 grep -q "openResolvedApp('discovery')" "$BASE_DIR/support_web.py"
 ! grep -q '/config/app/local_switch_vision_discovery/config' "$BASE_DIR/support_web.py"
@@ -1720,8 +1723,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.4"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.4"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.5"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.5"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"

@@ -13,163 +13,155 @@ import support_web  # noqa: E402
 import unifi_multi_controller_bridge as bridge  # noqa: E402
 
 
-def _fake_module() -> SimpleNamespace:
-    page = "\n".join(old for old, _new in bridge._PAGE_PATCHES)
-
-    def status():
-        return {
-            "installed": True,
-            "options": {
-                "controller_url": "https://192.168.1.1",
-                "site_id": "auto",
-                "mqtt_host": "core-mosquitto",
-                "controllers": [
-                    {
-                        "id": "branch-office",
-                        "controller_url": "https://10.20.0.1",
-                        "site_id": "Branch Office",
-                        "api_key": "private-controller-key",
-                    },
-                    {
-                        "id": "home",
-                        "controller_url": "https://10.0.0.1",
-                        "site_id": "auto",
-                        "api_key": "private-home-key",
-                    },
-                ],
-            },
-            "api_key_configured": False,
-        }
-
-    def validate(data, current):
-        result = dict(current)
-        if not str(result.get("api_key") or "").strip():
-            raise ValueError("legacy API key required")
-        if isinstance(data, dict):
-            for key in ("poll_interval", "mqtt_host", "api_key"):
-                if key in data and data[key] not in (None, ""):
-                    result[key] = data[key]
-        return result
-
-    return SimpleNamespace(
-        _PAGE=page,
-        _unifi2mqtt_settings_status=status,
-        _validate_unifi2mqtt_options=validate,
-    )
-
-
-def test_page_patch_matches_current_hub() -> None:
-    patched = bridge._patch_page(support_web._PAGE)
-    assert "d?.multi_controller_enabled" in patched
-    assert "Managed in Home Assistant App configuration" in patched
-    assert "Multi-controller mode is active." in patched
-    for old, _new in bridge._PAGE_PATCHES:
-        assert old not in patched
-
-
-def test_status_redacts_nested_controller_secrets() -> None:
-    module = _fake_module()
-    bridge.install(module)
-    result = module._unifi2mqtt_settings_status()
-
-    assert result["multi_controller_enabled"] is True
-    assert result["controller_count"] == 2
-    assert result["controller_credentials_configured"] is True
-    assert result["api_key_configured"] is True
-    assert result["legacy_api_key_configured"] is False
-    assert "controllers" not in result["options"]
-
-    serialized = repr(result)
-    assert "private-controller-key" not in serialized
-    assert "private-home-key" not in serialized
-    assert "Branch Office" not in serialized
-    assert "10.20.0.1" not in serialized
-
-
-def test_global_save_preserves_multi_controller_credentials() -> None:
-    module = _fake_module()
-    bridge.install(module)
-    current = {
-        "controller_url": "https://192.168.1.1",
-        "site_id": "auto",
-        "api_key": "",
-        "mqtt_host": "core-mosquitto",
-        "poll_interval": "30",
+def current_options() -> dict:
+    return {
+        **support_web.UNIFI2MQTT_DEFAULT_OPTIONS,
+        "local_api_key": "private-local-key",
+        "remote_api_key": "private-remote-key",
+        "mqtt_password": "private-mqtt-password",
         "controllers": [
             {
                 "id": "home",
-                "controller_url": "https://10.0.0.1",
+                "transport": "local",
+                "controller_url": "https://10.0.0.1:11443",
+                "host_id": "auto",
                 "site_id": "auto",
                 "api_key": "private-home-key",
-            }
+                "verify_ssl": "false",
+                "allow_insecure_http": "false",
+            },
+            {
+                "id": "cloud",
+                "transport": "remote",
+                "controller_url": "",
+                "host_id": "console-1",
+                "site_id": "auto",
+                "api_key": "private-cloud-key",
+                "verify_ssl": "true",
+                "allow_insecure_http": "false",
+            },
         ],
     }
 
-    result = module._validate_unifi2mqtt_options(
-        {"poll_interval": "45"},
+
+def test_bridge_is_compatibility_only() -> None:
+    module = SimpleNamespace()
+    bridge.install(module)
+    assert module._sv_unifi_multi_controller_bridge_installed is True
+    assert bridge._PAGE_PATCHES == ()
+
+
+def test_browser_controller_rows_redact_nested_secrets() -> None:
+    rows = support_web._unifi_controller_browser_rows(current_options())
+    assert len(rows) == 2
+    assert rows[0]["api_key_configured"] is True
+    assert rows[1]["transport"] == "remote"
+    serialized = repr(rows)
+    for secret in ("private-home-key", "private-cloud-key"):
+        assert secret not in serialized
+
+
+def test_blank_top_level_secrets_preserve_both_profiles() -> None:
+    current = current_options()
+    result = support_web._validate_unifi2mqtt_options(
+        {
+            "priority_transport": "local",
+            "fallback_transport": "remote",
+            "local_controller_url": "https://10.0.0.2:11443",
+            "local_site_id": "auto",
+            "local_api_key": "",
+            "remote_host_id": "console-2",
+            "remote_site_id": "auto",
+            "remote_api_key": "",
+            "mqtt_password": "",
+            "mqtt_host": "core-mosquitto",
+            "mqtt_port": "1883",
+            "mqtt_topic_prefix": "switch_vision/unifi",
+            "mqtt_discovery_prefix": "homeassistant",
+        },
         current,
     )
-    assert result["poll_interval"] == "45"
-    assert result["controllers"] == current["controllers"]
-    assert result.get("api_key", "") == ""
-    assert bridge._SENTINEL_API_KEY not in repr(result)
+    assert result["local_api_key"] == "private-local-key"
+    assert result["remote_api_key"] == "private-remote-key"
+    assert result["mqtt_password"] == "private-mqtt-password"
+    assert result["priority_transport"] == "local"
+    assert result["fallback_transport"] == "remote"
+    assert result["local_controller_url"].endswith(":11443")
 
 
-def test_browser_cannot_replace_controller_list() -> None:
-    module = _fake_module()
-    bridge.install(module)
-    current = {
-        "api_key": "",
-        "controllers": [
-            {
-                "id": "home",
-                "controller_url": "https://10.0.0.1",
-                "api_key": "private-home-key",
-            }
-        ],
-    }
-    try:
-        module._validate_unifi2mqtt_options(
-            {"controllers": []},
-            current,
-        )
-    except ValueError as exc:
-        assert "Home Assistant App configuration" in str(exc)
-    else:
-        raise AssertionError("Hub accepted a controller-list mutation")
+def test_browser_can_edit_controller_list_and_preserve_keys() -> None:
+    current = current_options()
+    result = support_web._validate_unifi2mqtt_options(
+        {
+            "controllers": [
+                {
+                    "id": "home",
+                    "transport": "local",
+                    "controller_url": "https://10.0.0.9:11443",
+                    "site_id": "auto",
+                    "api_key": "",
+                    "verify_ssl": False,
+                    "allow_insecure_http": False,
+                },
+                {
+                    "id": "cloud",
+                    "transport": "remote",
+                    "host_id": "console-9",
+                    "site_id": "auto",
+                    "api_key": "",
+                },
+            ],
+            "mqtt_host": "core-mosquitto",
+            "mqtt_port": "1883",
+            "mqtt_topic_prefix": "switch_vision/unifi",
+            "mqtt_discovery_prefix": "homeassistant",
+        },
+        current,
+    )
+    assert result["controllers"][0]["api_key"] == "private-home-key"
+    assert result["controllers"][1]["api_key"] == "private-cloud-key"
+    assert result["controllers"][0]["controller_url"] == "https://10.0.0.9:11443"
+    assert result["controllers"][1]["host_id"] == "console-9"
+
+    removed = support_web._validate_unifi2mqtt_options(
+        {
+            "controllers": [
+                {
+                    "id": "home",
+                    "transport": "local",
+                    "controller_url": "https://10.0.0.9:11443",
+                    "site_id": "auto",
+                    "api_key": "",
+                    "verify_ssl": False,
+                    "allow_insecure_http": False,
+                }
+            ],
+            "mqtt_host": "core-mosquitto",
+            "mqtt_port": "1883",
+            "mqtt_topic_prefix": "switch_vision/unifi",
+            "mqtt_discovery_prefix": "homeassistant",
+        },
+        current,
+    )
+    assert [row["id"] for row in removed["controllers"]] == ["home"]
 
 
-def test_incomplete_multi_controller_config_fails_closed() -> None:
-    module = _fake_module()
-    bridge.install(module)
-    current = {
-        "api_key": "",
-        "controllers": [
-            {
-                "id": "home",
-                "controller_url": "https://10.0.0.1",
-                "api_key": "",
-            }
-        ],
-    }
-    try:
-        module._validate_unifi2mqtt_options(
-            {"poll_interval": "45"},
-            current,
-        )
-    except ValueError as exc:
-        assert "incomplete" in str(exc).lower()
-    else:
-        raise AssertionError("incomplete controller credentials were accepted")
+def test_native_hub_contract_has_no_legacy_restriction() -> None:
+    source = (RUNTIME / "support_web.py").read_text(encoding="utf-8")
+    assert "Controller lists and per-controller API keys must be managed" not in source
+    assert '"local_api_key_configured"' in source
+    assert '"remote_api_key_configured"' in source
+    assert '"controller_credentials_configured"' in source
+    assert "https://192.168.1.1:11443" in source
 
 
 def main() -> int:
-    test_page_patch_matches_current_hub()
-    test_status_redacts_nested_controller_secrets()
-    test_global_save_preserves_multi_controller_credentials()
-    test_browser_cannot_replace_controller_list()
-    test_incomplete_multi_controller_config_fails_closed()
-    print("UniFi multi-controller Hub regressions: PASS")
+    test_bridge_is_compatibility_only()
+    test_browser_controller_rows_redact_nested_secrets()
+    test_blank_top_level_secrets_preserve_both_profiles()
+    test_browser_can_edit_controller_list_and_preserve_keys()
+    test_native_hub_contract_has_no_legacy_restriction()
+    print("UniFi native Hub configuration regressions: PASS")
     return 0
 
 

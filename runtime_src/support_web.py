@@ -50,6 +50,7 @@ from discovery_backups import (
 from discovery_history import (
     append_discovery_history,
     discovery_history_snapshot,
+    sanitize_debug_text,
 )
 
 SUPPORT_ADDRESS = "switch-vision@zemerdon.com"
@@ -67,6 +68,13 @@ DEFAULT_GENERATED_CARD = Path("/share/switch_vision/generated-dashboard-card.yam
 DEFAULT_UNIFI_SNAPSHOT = Path("/share/switch_vision/unifi/devices.json")
 DEFAULT_UNIFI_DIAGNOSTICS = Path("/share/switch_vision/unifi/diagnostics.json")
 DEFAULT_DISCOVERY_LOG = DEFAULT_SHARE_DIR / "discovery-web.log"
+_current_debug_override = os.environ.get("SV_CURRENT_DISCOVERY_DEBUG_PATH", "").strip()
+if _current_debug_override:
+    DEFAULT_CURRENT_DISCOVERY_DEBUG = Path(_current_debug_override)
+elif Path("/data").is_dir() and os.access("/data", os.W_OK):
+    DEFAULT_CURRENT_DISCOVERY_DEBUG = Path("/data/current-discovery-debug.log")
+else:
+    DEFAULT_CURRENT_DISCOVERY_DEBUG = Path("/tmp/switch-vision-current-discovery-debug.log")
 DEFAULT_SNMPWALKS_DIR = DEFAULT_SHARE_DIR / "snmpwalks"
 DEFAULT_CAPABILITIES_DIR = DEFAULT_SHARE_DIR / "capabilities"
 DEFAULT_SNMP_RETIREMENT_STATE = Path("/data/snmp2mqtt-retirement-topics.json")
@@ -81,19 +89,44 @@ SNMP_RESET_FILES = (
 )
 
 UNIFI2MQTT_DEFAULT_OPTIONS = {
+    # Legacy single-transport fields remain readable for migration compatibility.
+    "transport": "local",
     "controller_url": "https://192.168.1.1",
-    "site_id": "",
+    "host_id": "auto",
+    "site_id": "auto",
     "api_key": "",
-    "verify_ssl": "false",
+    "verify_ssl": "true",
+    "allow_insecure_http": "false",
+    # Preferred single-controller connection model.
+    "priority_transport": "local",
+    "fallback_transport": "remote",
+    "local_controller_url": "https://192.168.1.1:11443",
+    "local_site_id": "auto",
+    "local_api_key": "",
+    "local_verify_ssl": "true",
+    "local_allow_insecure_http": "false",
+    "remote_host_id": "auto",
+    "remote_site_id": "auto",
+    "remote_api_key": "",
+    # Optional first-class multi-controller configuration.
+    "controllers": [],
     "poll_interval": "30",
     "mqtt_host": "core-mosquitto",
     "mqtt_port": "1883",
     "mqtt_username": "",
     "mqtt_password": "",
+    "mqtt_tls": "false",
+    "mqtt_verify_ssl": "true",
+    "mqtt_ca": "",
     "mqtt_topic_prefix": "switch_vision/unifi",
     "mqtt_discovery_prefix": "homeassistant",
 }
-UNIFI2MQTT_SECRET_FIELDS = {"api_key", "mqtt_password"}
+UNIFI2MQTT_SECRET_FIELDS = {
+    "api_key",
+    "local_api_key",
+    "remote_api_key",
+    "mqtt_password",
+}
 
 UI_PREFERENCES_PATH = Path("/share/switch_vision/ui-preferences.json")
 UI_TEXT_SIZE_MIN_PX = 10
@@ -869,6 +902,51 @@ def _set_discovery_state(**updates: Any) -> None:
         _DISCOVERY_STATE.update(updates)
 
 
+def _reset_current_discovery_debug() -> None:
+    """Start a fresh credential-sanitized debug session for one operation."""
+    DEFAULT_CURRENT_DISCOVERY_DEBUG.parent.mkdir(parents=True, exist_ok=True)
+    DEFAULT_CURRENT_DISCOVERY_DEBUG.write_text("", encoding="utf-8")
+    os.chmod(DEFAULT_CURRENT_DISCOVERY_DEBUG, 0o600)
+
+
+def _append_current_discovery_debug(value: Any) -> str:
+    """Append one sanitized line and return the browser-safe text."""
+    safe = sanitize_debug_text(value).replace("\x00", "")
+    DEFAULT_CURRENT_DISCOVERY_DEBUG.parent.mkdir(parents=True, exist_ok=True)
+    with DEFAULT_CURRENT_DISCOVERY_DEBUG.open("a", encoding="utf-8") as handle:
+        handle.write(safe + "\n")
+    try:
+        os.chmod(DEFAULT_CURRENT_DISCOVERY_DEBUG, 0o600)
+    except OSError:
+        pass
+    return safe
+
+
+def _current_discovery_debug_snapshot() -> dict[str, Any]:
+    state = _discovery_state_snapshot()
+    try:
+        text = DEFAULT_CURRENT_DISCOVERY_DEBUG.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    # Sanitize again at the browser boundary as defence in depth.
+    safe_text = sanitize_debug_text(text).replace("\x00", "")
+    return {
+        "mode": state.get("mode") or "discovery",
+        "running": bool(state.get("running")),
+        "started_at": state.get("started_at"),
+        "finished_at": state.get("finished_at"),
+        "text": safe_text,
+        "line_count": len(safe_text.splitlines()),
+    }
+
+
+class _DiscoveryDebugLines(list[str]):
+    """Operation-local lines that are mirrored into the full sanitized session."""
+
+    def append(self, value: Any) -> None:
+        super().append(_append_current_discovery_debug(value))
+
+
 def _parse_status_marker(line: str) -> dict[str, str] | None:
     if not line.startswith("SV_STATUS|"):
         return None
@@ -980,7 +1058,7 @@ def _generate_automatic_support_bundle(
 def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
     global _DISCOVERY_PROCESS
     log_path = DEFAULT_DISCOVERY_LOG
-    lines: list[str] = []
+    lines: list[str] = _DiscoveryDebugLines()
     regenerate_yaml_only = mode == "regenerate_yaml"
     regenerate_card_only = mode == "regenerate_card"
     regenerate_only = regenerate_yaml_only or regenerate_card_only
@@ -1007,6 +1085,7 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
         preparing_message = "Preparing Discovery"
         preparing_activity = "Validating configured switches"
         waiting_message = "Waiting for Discovery to complete"
+    _reset_current_discovery_debug()
     _set_discovery_state(
         running=True,
         started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -1119,8 +1198,7 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
                     continue
                 debug_line = clean.removeprefix("SV_DEBUG|")
                 lines.append(debug_line)
-                lines = lines[-300:]
-                _set_discovery_state(log_tail=lines)
+                _set_discovery_state(log_tail=lines[-300:])
             return_code = process.wait()
         if _DISCOVERY_STOP_REQUESTED.is_set():
             stopped_label = (
@@ -1260,7 +1338,7 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
         )
     except Exception as exc:
         lines.append(str(exc))
-        _set_discovery_state(success=False, message=str(exc), log_tail=lines[-80:], phase="failed")
+        _set_discovery_state(success=False, message=str(exc), log_tail=lines[-300:], phase="failed")
         try:
             with log_path.open("a", encoding="utf-8") as log_file:
                 traceback.print_exc(file=log_file)
@@ -1745,60 +1823,85 @@ def _set_configured_device_state(options_file: Path, request_data: Any) -> dict[
 
 
 def _move_configured_device(options_file: Path, request_data: Any) -> dict[str, Any]:
-    """Persist one deterministic saved-device ordering change through Supervisor."""
+    """Persist deterministic saved-device ordering through Supervisor."""
     if not isinstance(request_data, dict):
         raise ValueError("Device order request must contain a JSON object.")
-
-    def request_index(key: str) -> int:
-        value = request_data.get(key)
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 255:
-            raise ValueError("Device order index is invalid. Refresh Devices and try again.")
-        return value
-
-    source_index = request_index("index")
-    destination_index = request_index("destination_index")
-    if source_index == destination_index:
-        raise ValueError("Device order did not change.")
-
-    expected_name = _plain_text(
-        request_data.get("switch_name", ""),
-        "switch_name",
-        max_length=64,
-        allow_empty=False,
-    ).strip()
-    expected_destination_name = _plain_text(
-        request_data.get("destination_switch_name", ""),
-        "destination_switch_name",
-        max_length=64,
-        allow_empty=False,
-    ).strip()
 
     with _OPTIONS_UPDATE_LOCK:
         options = _self_addon_options()
         rows = options.get("switches")
-        if (
-            not isinstance(rows, list)
-            or source_index >= len(rows)
-            or destination_index >= len(rows)
-        ):
-            raise ValueError("The saved device list changed. Refresh Devices and try again.")
-
-        source = rows[source_index]
-        destination = rows[destination_index]
-        if not isinstance(source, dict) or not isinstance(destination, dict):
-            raise ValueError("The saved device list changed. Refresh Devices and try again.")
-        if (
-            str(source.get("switch_name") or "").strip() != expected_name
-            or str(destination.get("switch_name") or "").strip()
-            != expected_destination_name
-        ):
+        if not isinstance(rows, list):
             raise ValueError("The saved device list changed. Refresh Devices and try again.")
 
         updated_rows = list(rows)
-        updated_rows[source_index], updated_rows[destination_index] = (
-            updated_rows[destination_index],
-            updated_rows[source_index],
-        )
+        requested_order = request_data.get("order")
+        if requested_order is not None:
+            if not isinstance(requested_order, list) or not requested_order:
+                raise ValueError("Device order must contain the complete saved switch order.")
+            normalized_order = [
+                _plain_text(value, "switch_name", max_length=64, allow_empty=False).strip()
+                for value in requested_order
+            ]
+            visible_slots: list[int] = []
+            current_by_name: dict[str, dict[str, Any]] = {}
+            current_order: list[str] = []
+            for index, raw in enumerate(rows):
+                if not isinstance(raw, dict):
+                    continue
+                name = str(raw.get("switch_name") or "").strip()
+                host = str(raw.get("switch_host") or "").strip()
+                prefix = str(raw.get("sensor_prefix") or "").strip()
+                if not (name or host or prefix):
+                    continue
+                if not name:
+                    raise ValueError("A saved device has no stable switch name. Open Discovery Settings to review it.")
+                if name in current_by_name:
+                    raise ValueError("Saved switch names must be unique before device order can be changed.")
+                visible_slots.append(index)
+                current_order.append(name)
+                current_by_name[name] = raw
+            if len(normalized_order) != len(current_order) or set(normalized_order) != set(current_order):
+                raise ValueError("The saved device list changed. Refresh Devices and try again.")
+            if normalized_order == current_order:
+                raise ValueError("Device order did not change.")
+            for slot, name in zip(visible_slots, normalized_order):
+                updated_rows[slot] = current_by_name[name]
+        else:
+            def request_index(key: str) -> int:
+                value = request_data.get(key)
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 255:
+                    raise ValueError("Device order index is invalid. Refresh Devices and try again.")
+                return value
+
+            source_index = request_index("index")
+            destination_index = request_index("destination_index")
+            if source_index == destination_index:
+                raise ValueError("Device order did not change.")
+            if source_index >= len(rows) or destination_index >= len(rows):
+                raise ValueError("The saved device list changed. Refresh Devices and try again.")
+            expected_name = _plain_text(
+                request_data.get("switch_name", ""), "switch_name", max_length=64, allow_empty=False
+            ).strip()
+            expected_destination_name = _plain_text(
+                request_data.get("destination_switch_name", ""),
+                "destination_switch_name",
+                max_length=64,
+                allow_empty=False,
+            ).strip()
+            source = rows[source_index]
+            destination = rows[destination_index]
+            if not isinstance(source, dict) or not isinstance(destination, dict):
+                raise ValueError("The saved device list changed. Refresh Devices and try again.")
+            if (
+                str(source.get("switch_name") or "").strip() != expected_name
+                or str(destination.get("switch_name") or "").strip() != expected_destination_name
+            ):
+                raise ValueError("The saved device list changed. Refresh Devices and try again.")
+            updated_rows[source_index], updated_rows[destination_index] = (
+                updated_rows[destination_index],
+                updated_rows[source_index],
+            )
+
         updated_options = dict(options)
         updated_options["switches"] = updated_rows
         _validate_inventory_identities(updated_options)
@@ -2306,7 +2409,7 @@ def _discovery_settings_status() -> dict[str, Any]:
         "settings": settings,
         "models": sorted({"auto"} | _manual_snmp_override_models()),
         "secret_policy": {
-            "snmp_community": "write_only_blank_preserves",
+            "snmp_community": "redacted_default_reveal_on_demand_blank_preserves",
             "support_contributor_value": "write_only_blank_preserves",
         },
         "effective_config": _discovery_effective_config_provenance(options),
@@ -2416,6 +2519,85 @@ def _save_discovery_settings(data: Any) -> dict[str, Any]:
     result = _discovery_settings_status()
     result.update({"saved": True, "changed": changed})
     return result
+
+
+def _reveal_hub_secret(data: Any) -> dict[str, Any]:
+    """Return exactly one saved Hub credential after an explicit operator request."""
+    if not isinstance(data, dict):
+        raise ValueError("Secret reveal request must be a JSON object.")
+    unknown = sorted(set(data) - {"scope", "kind", "identifier"})
+    if unknown:
+        raise ValueError(f"Unsupported secret reveal field: {unknown[0]}")
+    scope = _plain_text(data.get("scope", ""), "scope", max_length=64, allow_empty=False).strip().lower()
+    kind = _plain_text(data.get("kind", ""), "kind", max_length=64, allow_empty=False).strip().lower()
+    identifier = _plain_text(data.get("identifier", ""), "identifier", max_length=256).strip()
+    value = ""
+
+    if scope == "discovery":
+        if kind != "snmp_community":
+            raise ValueError("Unsupported Discovery credential type.")
+        if not identifier:
+            raise ValueError("A saved switch name is required.")
+        options = _effective_discovery_options(_self_addon_options())
+        rows = options.get("switches") if isinstance(options.get("switches"), list) else []
+        matches = [
+            row for row in rows
+            if isinstance(row, dict) and str(row.get("switch_name") or "").strip() == identifier
+        ]
+        if len(matches) != 1:
+            raise ValueError("The saved switch could not be uniquely resolved.")
+        value = str(matches[0].get("snmp_community") or "")
+
+    elif scope == "snmp2mqtt":
+        if kind != "mqtt_password":
+            raise ValueError("Unsupported SNMP2MQTT credential type.")
+        _slug, _state, options = _snmp2mqtt_addon_options()
+        mqtt = options.get("mqtt") if isinstance(options.get("mqtt"), dict) else {}
+        value = str(mqtt.get("password") or "")
+
+    elif scope == "unifi2mqtt":
+        addon = _find_unifi2mqtt_addon(include_store=True)
+        if addon is None or not addon.get("slug"):
+            raise RuntimeError("Switch Vision UniFi2MQTT is not installed.")
+        slug = str(addon.get("slug") or "").strip()
+        info = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
+        info_data = info.get("data") if isinstance(info.get("data"), dict) else info
+        options = info_data.get("options") if isinstance(info_data, dict) else None
+        if not isinstance(options, dict):
+            raise RuntimeError("Home Assistant did not expose the current UniFi2MQTT options.")
+        legacy_transport = str(options.get("transport") or "local").strip().lower()
+        legacy_value = str(options.get("api_key") or "")
+        if kind == "local_api_key":
+            value = str(options.get("local_api_key") or "")
+            if not value and legacy_transport == "local":
+                value = legacy_value
+        elif kind == "remote_api_key":
+            value = str(options.get("remote_api_key") or "")
+            if not value and legacy_transport == "remote":
+                value = legacy_value
+        elif kind == "mqtt_password":
+            value = str(options.get("mqtt_password") or "")
+        elif kind == "controller_api_key":
+            if not identifier:
+                raise ValueError("A saved controller ID is required.")
+            rows = options.get("controllers") if isinstance(options.get("controllers"), list) else []
+            matches = [
+                row for row in rows
+                if isinstance(row, dict) and str(row.get("id") or "").strip() == identifier
+            ]
+            if len(matches) != 1:
+                raise ValueError("The saved UniFi controller could not be uniquely resolved.")
+            value = str(matches[0].get("api_key") or "")
+        else:
+            raise ValueError("Unsupported UniFi2MQTT credential type.")
+    else:
+        raise ValueError("Unsupported secret reveal scope.")
+
+    if not value:
+        raise ValueError("No saved credential is configured for this field.")
+    if "\x00" in value or "\r" in value or "\n" in value:
+        raise RuntimeError("The saved credential contains invalid control characters and cannot be revealed.")
+    return {"ok": True, "secret": value}
 
 
 def _snmp2mqtt_slug(value: Any) -> str:
@@ -2726,6 +2908,12 @@ def _unifi2mqtt_diagnostics_status() -> dict[str, Any]:
             "rejected_devices": 0,
             "empty_switch_polls": 0,
             "error_type": None,
+            "connection_mode": None,
+            "priority_transport": None,
+            "fallback_transport": None,
+            "active_transport": None,
+            "failover_active": False,
+            "transports_attempted": [],
             "device_classification": [],
         }
 
@@ -2817,94 +3005,268 @@ def _unifi2mqtt_diagnostics_status() -> dict[str, Any]:
             payload.get("error_type"),
             max_length=128,
         ),
+        "connection_mode": _safe_unifi_diagnostic_text(
+            payload.get("connection_mode"),
+            max_length=32,
+        ),
+        "priority_transport": _safe_unifi_diagnostic_text(
+            payload.get("priority_transport"),
+            max_length=16,
+        ),
+        "fallback_transport": _safe_unifi_diagnostic_text(
+            payload.get("fallback_transport"),
+            max_length=16,
+        ),
+        "active_transport": _safe_unifi_diagnostic_text(
+            payload.get("active_transport"),
+            max_length=16,
+        ),
+        "failover_active": bool(payload.get("failover_active")),
+        "transports_attempted": [
+            value
+            for value in (
+                _safe_unifi_diagnostic_text(item, max_length=16)
+                for item in (payload.get("transports_attempted") or [])[:4]
+            )
+            if value in {"local", "remote"}
+        ] if isinstance(payload.get("transports_attempted"), list) else [],
         "device_classification": classifications,
     }
+
+
+def _unifi_connection_transport(value: Any, field: str, *, allow_none: bool = False) -> str:
+    text = str(value or ("none" if allow_none else "local")).strip().lower()
+    allowed = {"local", "remote"} | ({"none"} if allow_none else set())
+    if text not in allowed:
+        expected = "local, remote or none" if allow_none else "local or remote"
+        raise ValueError(f"{field} must be {expected}.")
+    return text
+
+
+def _unifi_origin(value: Any, field: str, *, allow_http: bool = False) -> str:
+    text = _plain_text(str(value or ""), field, max_length=512, allow_empty=False).strip().rstrip("/")
+    parsed = urlparse(text)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"{field} must be a valid http:// or https:// controller URL.")
+    if parsed.username or parsed.password:
+        raise ValueError(f"{field} must not contain embedded credentials.")
+    if parsed.query or parsed.fragment or parsed.path not in {"", "/"}:
+        raise ValueError(f"{field} must identify the controller origin without an extra path, query or fragment.")
+    if parsed.scheme == "http" and not allow_http:
+        raise ValueError(f"{field} uses plaintext HTTP. Enable the explicit insecure-HTTP option only when that risk is accepted.")
+    return text
+
+
+def _unifi_controller_browser_rows(options: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = options.get("controllers")
+    if not isinstance(rows, list):
+        return []
+    safe: list[dict[str, Any]] = []
+    for raw in rows[:32]:
+        if not isinstance(raw, dict):
+            continue
+        transport = str(raw.get("transport") or "local").strip().lower()
+        if transport not in {"local", "remote"}:
+            transport = "local"
+        safe.append({
+            "id": str(raw.get("id") or "")[:64],
+            "transport": transport,
+            "controller_url": str(raw.get("controller_url") or "")[:512],
+            "host_id": str(raw.get("host_id") or "auto")[:256],
+            "site_id": str(raw.get("site_id") or "auto")[:256],
+            "verify_ssl": str(raw.get("verify_ssl", "true")).lower() in {"1", "true", "yes", "on"},
+            "allow_insecure_http": str(raw.get("allow_insecure_http", "false")).lower() in {"1", "true", "yes", "on"},
+            "api_key_configured": bool(str(raw.get("api_key") or "").strip()),
+        })
+    return safe
 
 
 def _unifi2mqtt_settings_status() -> dict[str, Any]:
     addon = _find_unifi2mqtt_addon(include_store=True)
     snapshot = _unifi2mqtt_snapshot_status()
-    if addon is None:
-        return {
-            "installed": False,
-            "available": False,
-            "state": "not_installed",
-            "slug": None,
-            "config_url": None,
-            "options": {
-                key: value
-                for key, value in UNIFI2MQTT_DEFAULT_OPTIONS.items()
-                if key not in UNIFI2MQTT_SECRET_FIELDS
-            },
-            "api_key_configured": False,
-            "mqtt_password_configured": False,
-            "options_readable": False,
-            "snapshot": snapshot,
-        }
-    slug = str(addon.get("slug") or "").strip()
-    installed_value = addon.get("installed")
-    installed = (
-        addon.get("_source") == "addons"
-        or installed_value not in (False, None, "", 0)
-    )
-    state = str(addon.get("state") or ("stopped" if installed else "not_installed"))
+    diagnostics = _unifi2mqtt_diagnostics_status()
     options = dict(UNIFI2MQTT_DEFAULT_OPTIONS)
     options_readable = False
-    if installed and slug:
-        try:
-            info = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
-            info_data = info.get("data") if isinstance(info.get("data"), dict) else info
-            if isinstance(info_data, dict):
-                state = str(info_data.get("state") or state)
-                stored = info_data.get("options")
-                if isinstance(stored, dict) and "controller_url" in stored:
-                    options.update(stored)
-                    options_readable = True
-        except RuntimeError:
-            pass
+    installed = False
+    available = addon is not None
+    state = "not_installed"
+    slug: str | None = None
+
+    if addon is not None:
+        slug = str(addon.get("slug") or "").strip() or None
+        installed_value = addon.get("installed")
+        installed = addon.get("_source") == "addons" or installed_value not in (False, None, "", 0)
+        state = str(addon.get("state") or ("stopped" if installed else "not_installed"))
+        if installed and slug:
+            try:
+                info = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
+                info_data = info.get("data") if isinstance(info.get("data"), dict) else info
+                if isinstance(info_data, dict):
+                    state = str(info_data.get("state") or state)
+                    stored = info_data.get("options")
+                    if isinstance(stored, dict):
+                        options.update(stored)
+                        options_readable = True
+            except RuntimeError:
+                pass
+
     safe_options = {
-        key: value for key, value in options.items() if key not in UNIFI2MQTT_SECRET_FIELDS
+        key: value
+        for key, value in options.items()
+        if key not in UNIFI2MQTT_SECRET_FIELDS and key != "controllers"
     }
+    safe_controllers = _unifi_controller_browser_rows(options)
+    safe_options["controllers"] = safe_controllers
+
+    legacy_transport = str(options.get("transport") or "local").strip().lower()
+    legacy_key = bool(str(options.get("api_key") or "").strip())
+    local_key = bool(str(options.get("local_api_key") or "").strip()) or (
+        legacy_transport == "local" and legacy_key
+    )
+    remote_key = bool(str(options.get("remote_api_key") or "").strip()) or (
+        legacy_transport == "remote" and legacy_key
+    )
+    controller_credentials_configured = bool(safe_controllers) and all(
+        bool(row.get("api_key_configured")) for row in safe_controllers
+    )
+    multi_controller_enabled = bool(safe_controllers)
+    connection_ready = controller_credentials_configured if multi_controller_enabled else (local_key or remote_key)
+
     return {
         "installed": installed,
-        "available": True,
+        "available": available,
         "state": state,
-        "slug": slug or None,
-        "config_url": (
-            f"/config/app/{quote(slug, safe='')}/config" if installed and slug else None
-        ),
+        "slug": slug,
+        "config_url": f"/config/app/{quote(slug, safe='')}/config" if installed and slug else None,
         "options": safe_options,
-        "api_key_configured": bool(str(options.get("api_key") or "").strip()),
+        "api_key_configured": legacy_key,
+        "local_api_key_configured": local_key,
+        "remote_api_key_configured": remote_key,
         "mqtt_password_configured": bool(str(options.get("mqtt_password") or "").strip()),
+        "multi_controller_enabled": multi_controller_enabled,
+        "controller_count": len(safe_controllers),
+        "controller_credentials_configured": controller_credentials_configured,
+        "connection_ready": connection_ready,
+        "active_transport": diagnostics.get("active_transport"),
+        "failover_active": bool(diagnostics.get("failover_active")),
+        "connection_diagnostics": diagnostics,
         "options_readable": options_readable,
         "snapshot": snapshot,
     }
+
+
+def _validate_unifi_controller_rows(data: Any, current: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(data, list):
+        raise ValueError("controllers must be a list.")
+    if len(data) > 32:
+        raise ValueError("No more than 32 UniFi controller entries are supported.")
+    current_rows = current.get("controllers") if isinstance(current.get("controllers"), list) else []
+    current_by_id = {
+        str(row.get("id") or "").strip(): row
+        for row in current_rows
+        if isinstance(row, dict) and str(row.get("id") or "").strip()
+    }
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for position, raw in enumerate(data, start=1):
+        if not isinstance(raw, dict):
+            raise ValueError(f"Controller {position} must be an object.")
+        controller_id = _plain_text(str(raw.get("id") or ""), f"controllers[{position}].id", max_length=64, allow_empty=False).strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", controller_id):
+            raise ValueError(f"Controller {position} ID must use letters, digits, hyphen or underscore and start with a letter or digit.")
+        normalized = controller_id.casefold()
+        if normalized in seen:
+            raise ValueError(f"Controller ID {controller_id!r} is duplicated.")
+        seen.add(normalized)
+        previous = current_by_id.get(controller_id, {})
+        transport = _unifi_connection_transport(raw.get("transport", previous.get("transport", "local")), f"controllers[{position}].transport")
+        api_key = str(raw.get("api_key") or "") or str(previous.get("api_key") or "")
+        if not api_key:
+            raise ValueError(f"Controller {controller_id} requires an API key.")
+        api_key = _plain_text(api_key, f"controllers[{position}].api_key", max_length=4096, allow_empty=False)
+        site_id = _plain_text(str(raw.get("site_id", previous.get("site_id", "auto")) or "auto"), f"controllers[{position}].site_id", max_length=256, allow_empty=False).strip()
+        if transport == "local":
+            allow_http = _bool_string(raw.get("allow_insecure_http", previous.get("allow_insecure_http", "false")), f"controllers[{position}].allow_insecure_http")
+            controller_url = _unifi_origin(raw.get("controller_url", previous.get("controller_url", "")), f"controllers[{position}].controller_url", allow_http=allow_http == "true")
+            verify_ssl = _bool_string(raw.get("verify_ssl", previous.get("verify_ssl", "true")), f"controllers[{position}].verify_ssl")
+            host_id = "auto"
+        else:
+            controller_url = ""
+            host_id = _plain_text(str(raw.get("host_id", previous.get("host_id", "auto")) or "auto"), f"controllers[{position}].host_id", max_length=256, allow_empty=False).strip()
+            verify_ssl = "true"
+            allow_http = "false"
+        result.append({
+            "id": controller_id,
+            "transport": transport,
+            "controller_url": controller_url,
+            "host_id": host_id,
+            "site_id": site_id,
+            "api_key": api_key,
+            "verify_ssl": verify_ssl,
+            "allow_insecure_http": allow_http,
+        })
+    return result
 
 
 def _validate_unifi2mqtt_options(data: Any, current: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("UniFi2MQTT settings must be a JSON object.")
     result = dict(current)
-    controller = _plain_text(
-        data.get("controller_url", result.get("controller_url", "")),
-        "controller_url",
-        max_length=512,
-        allow_empty=False,
-    ).strip()
-    parsed = urlparse(controller)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("Controller URL must be a valid http:// or https:// URL.")
-    result["controller_url"] = controller.rstrip("/")
-    result["site_id"] = _plain_text(
-        data.get("site_id", result.get("site_id", "")),
-        "site_id",
-        max_length=160,
-        allow_empty=False,
-    ).strip()
-    result["verify_ssl"] = _bool_string(
-        data.get("verify_ssl", result.get("verify_ssl", "false")),
-        "verify_ssl",
+
+    priority = _unifi_connection_transport(
+        data.get("priority_transport", result.get("priority_transport", result.get("transport", "local"))),
+        "priority_transport",
     )
+    fallback = _unifi_connection_transport(
+        data.get("fallback_transport", result.get("fallback_transport", "none")),
+        "fallback_transport",
+        allow_none=True,
+    )
+    if fallback == priority:
+        raise ValueError("Fallback must differ from Priority, or be None.")
+    result["priority_transport"] = priority
+    result["fallback_transport"] = fallback
+
+    local_allow_http = _bool_string(
+        data.get("local_allow_insecure_http", result.get("local_allow_insecure_http", "false")),
+        "local_allow_insecure_http",
+    )
+    result["local_allow_insecure_http"] = local_allow_http
+    result["local_controller_url"] = _unifi_origin(
+        data.get("local_controller_url", result.get("local_controller_url", "https://192.168.1.1:11443")),
+        "local_controller_url",
+        allow_http=local_allow_http == "true",
+    )
+    result["local_site_id"] = _plain_text(
+        str(data.get("local_site_id", result.get("local_site_id", "auto")) or "auto"),
+        "local_site_id",
+        max_length=256,
+        allow_empty=False,
+    ).strip()
+    result["local_verify_ssl"] = _bool_string(
+        data.get("local_verify_ssl", result.get("local_verify_ssl", "true")),
+        "local_verify_ssl",
+    )
+    result["remote_host_id"] = _plain_text(
+        str(data.get("remote_host_id", result.get("remote_host_id", "auto")) or "auto"),
+        "remote_host_id",
+        max_length=256,
+        allow_empty=False,
+    ).strip()
+    result["remote_site_id"] = _plain_text(
+        str(data.get("remote_site_id", result.get("remote_site_id", "auto")) or "auto"),
+        "remote_site_id",
+        max_length=256,
+        allow_empty=False,
+    ).strip()
+
+    for key in ("local_api_key", "remote_api_key", "mqtt_password"):
+        if key in data and str(data.get(key) or ""):
+            result[key] = _plain_text(str(data[key]), key, max_length=4096)
+
+    if "controllers" in data:
+        result["controllers"] = _validate_unifi_controller_rows(data["controllers"], current)
+
     result["poll_interval"] = _bounded_int_string(
         data.get("poll_interval", result.get("poll_interval", "30")),
         "poll_interval",
@@ -2931,6 +3293,19 @@ def _validate_unifi2mqtt_options(data: Any, current: dict[str, Any]) -> dict[str
         "mqtt_username",
         max_length=256,
     )
+    result["mqtt_tls"] = _bool_string(
+        data.get("mqtt_tls", result.get("mqtt_tls", "false")),
+        "mqtt_tls",
+    )
+    result["mqtt_verify_ssl"] = _bool_string(
+        data.get("mqtt_verify_ssl", result.get("mqtt_verify_ssl", "true")),
+        "mqtt_verify_ssl",
+    )
+    result["mqtt_ca"] = _plain_text(
+        str(data.get("mqtt_ca", result.get("mqtt_ca", ""))),
+        "mqtt_ca",
+        max_length=512,
+    ).strip()
     for key in ("mqtt_topic_prefix", "mqtt_discovery_prefix"):
         value = _plain_text(
             str(data.get(key, result.get(key, ""))),
@@ -2939,23 +3314,8 @@ def _validate_unifi2mqtt_options(data: Any, current: dict[str, Any]) -> dict[str
             allow_empty=False,
         ).strip().strip("/")
         if not value or "+" in value or "#" in value:
-            raise ValueError(
-                f"{key} must be a plain MQTT topic prefix without + or # wildcards."
-            )
+            raise ValueError(f"{key} must be a plain MQTT topic prefix without + or # wildcards.")
         result[key] = value
-    # Blank secret inputs mean preserve the existing value. Secrets are never
-    # sent back to the browser by the GET endpoint.
-    for key in UNIFI2MQTT_SECRET_FIELDS:
-        if key in data and str(data.get(key) or ""):
-            result[key] = _plain_text(str(data[key]), key, max_length=2048)
-
-    # UniFi Network Integration API requests are site-scoped and authenticated.
-    # A blank API-key field is valid only when it preserves an already stored key.
-    if not isinstance(result.get("api_key"), str) or not result["api_key"].strip():
-        raise ValueError(
-            "API Key is required. Enter the read-only UniFi Integration API key "
-            "the first time you configure UniFi2MQTT."
-        )
     return result
 
 
@@ -2968,7 +3328,7 @@ def _save_unifi2mqtt_settings(data: Any) -> dict[str, Any]:
     info_data = info.get("data") if isinstance(info.get("data"), dict) else info
     current = dict(UNIFI2MQTT_DEFAULT_OPTIONS)
     stored_options = info_data.get("options") if isinstance(info_data, dict) else None
-    if not isinstance(stored_options, dict) or "controller_url" not in stored_options:
+    if not isinstance(stored_options, dict):
         raise RuntimeError(
             "Home Assistant did not expose the current UniFi2MQTT options to the Hub. "
             "To protect stored secrets, use the Home Assistant App configuration fallback for this change."
@@ -4163,7 +4523,7 @@ body.density-dense .diag-tile{padding:8px}
 body.density-dense .steps{gap:5px;margin:8px 0}
 body.density-dense .step{padding:7px 9px}
 .topbar-tools{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.theme-picker{display:flex;align-items:center;gap:7px;height:36px;padding:0 0 0 10px;border:1px solid var(--line-soft);border-radius:9px;background:var(--surface-button);color:var(--muted);font-size:var(--sv-font-small);font-weight:700;white-space:nowrap}.theme-picker select{height:34px;min-width:150px;margin:-1px -1px -1px 0;padding:7px 10px;border-radius:0 9px 9px 0;border-color:var(--line-soft);background:var(--surface-input);color:var(--text);font-weight:600}.theme-picker select:focus-visible{border-color:var(--accent);outline:none}.topbar-theme-label{pointer-events:none}@media(max-width:760px){.topbar{flex-wrap:wrap}.topbar h1{min-width:180px}.topbar-tools{width:100%;justify-content:flex-end}.theme-picker select{min-width:132px}}
-.configured-device.disabled{opacity:.62}.configured-device .result-actions{display:flex;align-items:center;gap:10px}.device-state-toggle{display:inline-flex;align-items:center;gap:8px;min-width:118px;justify-content:center;padding:8px 11px!important;font-weight:700}.device-state-toggle .toggle-track{position:relative;display:inline-block;width:34px;height:18px;border-radius:999px;background:var(--line);transition:background-color .15s ease}.device-state-toggle .toggle-knob{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--surface-input);transition:transform .15s ease}.device-state-toggle.enabled{border-color:var(--ok);background:var(--ok-soft)}.device-state-toggle.enabled .toggle-track{background:var(--ok)}.device-state-toggle.enabled .toggle-knob{transform:translateX(16px)}.device-state-toggle.disabled{border-color:var(--line);background:var(--surface-button)}.device-state-toggle:disabled{cursor:not-allowed;opacity:.55}.configured-device-note{margin:4px 0 12px}.configured-device-status{min-height:1.25em}.devices-divider{border:0;border-top:1px solid var(--line);margin:20px 0 16px}.sponsor-chip{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line-soft);border-radius:999px;background:var(--chip-bg);color:var(--text);text-decoration:none;font-size:.92rem;font-weight:700;white-space:nowrap}.sponsor-chip:hover{background:var(--chip-hover)}.sponsor-chip .heart{font-size:1rem;line-height:1;color:var(--heart)}
+.secret-control{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:6px;align-items:center;width:100%}.secret-control>input{width:100%;min-width:0}.secret-eye{width:42px;min-width:42px!important;padding:6px 8px!important;font-size:1rem;line-height:1}.secret-eye[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}.secret-eye:disabled{cursor:not-allowed;opacity:.45}.configured-device.disabled{opacity:.62}.unified-device-details{padding:0;overflow:hidden}.unified-device-details>summary{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;list-style:none}.unified-device-details>summary::-webkit-details-marker{display:none}.unified-device-details>summary::marker{content:""}.unified-device-main{min-width:0;flex:1}.unified-device-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}.unified-device-actions button{min-width:38px;padding:7px 10px}.device-drag-handle{display:inline-flex;align-items:center;justify-content:center;width:28px;min-width:28px;align-self:stretch;color:var(--muted);cursor:grab;user-select:none;font-weight:800;letter-spacing:-2px}.device-drag-handle:active{cursor:grabbing}.device-drag-handle.disabled{cursor:not-allowed;opacity:.35}.unified-device-details.dragging{opacity:.45}.unified-device-details.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}.unified-device-chevron{font-size:1.05rem;color:var(--muted);transition:transform .12s ease}.unified-device-details[open] .unified-device-chevron{transform:rotate(90deg)}.unified-device-body{border-top:1px solid var(--line-soft);padding:14px}.unified-device-body>.device-card{margin:0;padding:0;border:0;background:transparent}.device-source-chip{display:inline-flex;align-items:center;padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-size:var(--sv-font-small);font-weight:700;color:var(--muted);white-space:nowrap}.device-state-toggle{display:inline-flex;align-items:center;gap:8px;min-width:118px;justify-content:center;padding:8px 11px!important;font-weight:700}.device-state-toggle .toggle-track{position:relative;display:inline-block;width:34px;height:18px;border-radius:999px;background:var(--line);transition:background-color .15s ease}.device-state-toggle .toggle-knob{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--surface-input);transition:transform .15s ease}.device-state-toggle.enabled{border-color:var(--ok);background:var(--ok-soft)}.device-state-toggle.enabled .toggle-track{background:var(--ok)}.device-state-toggle.enabled .toggle-knob{transform:translateX(16px)}.device-state-toggle.disabled{border-color:var(--line);background:var(--surface-button)}.device-state-toggle:disabled{cursor:not-allowed;opacity:.55}.configured-device-note{margin:4px 0 12px}.configured-device-status{min-height:1.25em}@media(max-width:760px){.unified-device-details>summary{align-items:flex-start;flex-wrap:wrap}.unified-device-actions{width:100%;justify-content:flex-end}.device-drag-handle{align-self:auto;min-height:38px}}.sponsor-chip{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line-soft);border-radius:999px;background:var(--chip-bg);color:var(--text);text-decoration:none;font-size:.92rem;font-weight:700;white-space:nowrap}.sponsor-chip:hover{background:var(--chip-hover)}.sponsor-chip .heart{font-size:1rem;line-height:1;color:var(--heart)}
 #creditsCard{position:relative;overflow:hidden;isolation:isolate;border-color:rgba(69,207,255,.38);box-shadow:0 0 0 1px rgba(67,205,255,.06),0 16px 42px -34px rgba(55,210,255,.9);transition:border-color .28s ease,box-shadow .28s ease,transform .28s ease}
 #creditsCard::before{content:"";position:absolute;inset:-45%;z-index:0;background:conic-gradient(from 0deg,transparent 0 38%,rgba(54,209,255,.02) 44%,rgba(74,226,255,.85) 49%,rgba(148,242,255,.25) 53%,transparent 59% 100%);opacity:0;animation:credits-edge-orbit 7s linear infinite;pointer-events:none}
 #creditsCard::after{content:"";position:absolute;inset:1px;z-index:0;border-radius:inherit;background:linear-gradient(180deg,rgba(4,22,34,.28),rgba(2,13,22,.1)),radial-gradient(circle at 20% 30%,rgba(68,213,255,.08) 0 1px,transparent 1.6px),radial-gradient(circle at 72% 68%,rgba(111,238,255,.06) 0 1px,transparent 1.7px),linear-gradient(90deg,transparent 0 49.7%,rgba(72,213,255,.035) 49.9% 50.1%,transparent 50.3% 100%);background-size:auto,64px 64px,88px 88px,120px 120px;opacity:0;pointer-events:none}
@@ -4206,14 +4566,14 @@ body.density-dense .step{padding:7px 9px}
 <p class="muted">The Web UI stays available while Discovery is idle, running, or complete.</p>
 <div class="nav-grid">
 <button id="openDiscoveryButton" class="nav-card" type="button"><b>Discovery</b><span class="nav-points"><span>SNMP Walk</span><span>Generate Native Dashboard YAML</span><span>Generate SNMP2MQTT YAML</span></span></button>
-<button id="openDevicesButton" class="nav-card" type="button"><b>Devices</b><span class="nav-points"><span>Show detected devices &amp; status</span><span>Enable / Disable Devices</span></span></button>
+<button id="openDevicesButton" class="nav-card" type="button"><b>Devices</b><span class="nav-points"><span>Show detected devices &amp; status</span><span>Enable / Disable Devices</span><span>Reorder switches</span></span></button>
 <button id="openCalibrationProfilesButton" class="nav-card" type="button"><b>Calibration Profiles</b><span class="nav-points"><span>Manage faceplate calibrations</span><span>Copy / Import / Export profiles</span><span>Clean stale profiles</span></span></button>
 <button id="openSupportButton" class="nav-card" type="button"><b>Support My Switch</b><span class="nav-points"><span>Create contribution package to add/increase support for your switch</span></span></button>
 <button id="openConfigurationButton" class="nav-card" type="button"><b>Import / Export Configuration</b><span class="nav-points"><span>Import / export Discovery configuration</span></span></button>
 <button id="openMaintenanceButton" class="nav-card" type="button"><b>Maintenance</b><span class="nav-points"><span>Manage backups</span><span>Repair stale MQTT entities</span><span>Reset generated SNMP data</span></span></button>
 </div>
 <div class="nav-grid" style="margin-top:12px">
-<button id="openIntegrationSettingsButton" class="nav-card" type="button"><b>Switch Vision Settings</b><span class="nav-points"><span>UI Settings</span><span>Discovery Settings</span><span>SNMP2MQTT Settings</span></span></button>
+<button id="openIntegrationSettingsButton" class="nav-card" type="button"><b>Switch Vision Settings</b><span class="nav-points"><span>UI Settings</span><span>Discovery Settings</span><span>SNMP2MQTT Settings</span><span>Add / remove switches</span></span></button>
 <button id="openUnifi2mqttSettingsButton" class="nav-card unifi-unavailable" type="button" aria-disabled="true" title="UniFi2MQTT status is being checked."><b>UniFi2MQTT Settings</b><span class="nav-points"><span>UniFi controller API</span><span>MQTT connection</span><span>App &amp; snapshot status</span></span><span id="unifiHomeCardState" class="unifi-card-state">Checking…</span></button>
 <button id="openCreditsButton" class="nav-card" type="button"><b>Credits</b><span class="nav-points"><span>Switch Vision is made better by the people who contribute their time, testing, feedback, and knowledge. Thank you to everyone below for helping shape what it is today.</span></span></button>
 </div>
@@ -4242,28 +4602,49 @@ body.density-dense .step{padding:7px 9px}
 
 <section id="unifi2mqttCard" class="card hidden">
 <h2>UniFi2MQTT Settings</h2>
-<p class="lead">Configure the existing Switch Vision UniFi API support path. Home Assistant App configuration remains available as a fallback.</p>
+<p class="lead">Configure Local UniFi and UniFi Site Manager access independently. Keep both configured, choose the priority path, and optionally fall back automatically when the priority path is unavailable.</p>
 <div id="unifiStatusGrid" class="diag-summary"></div>
 <div id="unifiInstallWrap" class="warning hidden"><b>UniFi2MQTT is not installed.</b><div class="actions"><button id="installUnifi2mqttButton" class="primary" type="button">Install UniFi2MQTT</button></div><p id="unifiInstallStatus" class="muted"></p></div>
 <div id="unifiSettingsForm">
+<h3>Connection priority &amp; polling</h3>
 <div class="grid">
-<label class="field"><span><b>Controller URL</b></span><input id="unifi_controller_url" type="url" maxlength="512" required placeholder="https://192.168.1.1"></label>
-<label class="field"><span><b>Site ID</b></span><input id="unifi_site_id" type="text" maxlength="160" required placeholder="Required UniFi Network site ID"><small>Required for site-scoped UniFi Integration API requests.</small></label>
-<label class="field"><span><b>API Key</b></span><input id="unifi_api_key" type="password" maxlength="2048" autocomplete="new-password" placeholder="Leave blank to keep the current key"><small id="unifiApiKeyState">Required — not configured</small></label>
-<label class="option"><input id="unifi_verify_ssl" type="checkbox"><span><b>Verify SSL</b><br><small>Enable when the controller uses a trusted certificate.</small></span></label>
-<label class="field"><span><b>Poll interval (seconds)</b></span><input id="unifi_poll_interval" type="number" min="10" max="300" step="1"></label>
+<label class="field"><span><b>Priority connection</b></span><select id="unifi_priority_transport" title="The connection Switch Vision tries first on every poll."><option value="local">Local</option><option value="remote">Remote / Site Manager</option></select><small>The priority path is retried every poll, so Switch Vision automatically returns to it after recovery.</small></label>
+<label class="field"><span><b>Fallback connection</b></span><select id="unifi_fallback_transport" title="Used only when the priority connection fails."><option value="remote">Remote / Site Manager</option><option value="local">Local</option><option value="none">None</option></select><small>Choose None to disable automatic failover.</small></label>
+<label class="field"><span><b>Poll interval (seconds)</b></span><input id="unifi_poll_interval" type="number" min="10" max="300" step="1" title="How often UniFi2MQTT refreshes device state. Minimum 10 seconds."></label>
 </div>
+<h3>Local UniFi controller</h3>
+<div class="grid">
+<label class="field"><span><b>Local controller URL</b></span><input id="unifi_local_controller_url" type="url" maxlength="512" placeholder="https://192.168.1.1:11443" title="Address of the local UniFi Network Integration API."><small><b>Self-hosted UniFi controllers normally use HTTPS port 11443.</b> Example: <code>https://192.168.1.1:11443</code>.</small></label>
+<label class="field"><span><b>Local site ID</b></span><input id="unifi_local_site_id" type="text" maxlength="256" placeholder="auto" title="Use auto unless you need to select a specific local UniFi Network site."><small><code>auto</code> resolves the appropriate Network site automatically.</small></label>
+<label class="field"><span><b>Local Integration API Key</b></span><input id="unifi_local_api_key" type="password" maxlength="4096" autocomplete="new-password" placeholder="Leave blank to keep the current key" title="Read-only API key created on the local UniFi controller."><small id="unifiLocalApiKeyState">Not configured</small></label>
+<label class="option"><input id="unifi_local_verify_ssl" type="checkbox" title="Verify the local controller TLS certificate."><span><b>Verify local SSL</b><br><small>Enable for a trusted local certificate.</small></span></label>
+<label class="option"><input id="unifi_local_allow_insecure_http" type="checkbox" title="Explicitly permit plaintext HTTP for a local controller. HTTPS is strongly preferred."><span><b>Allow insecure local HTTP</b><br><small>Only enable when you deliberately accept an unencrypted local API-key connection.</small></span></label>
+</div>
+<h3>Remote / UniFi Site Manager</h3>
+<div class="grid">
+<label class="field"><span><b>Remote host ID</b></span><input id="unifi_remote_host_id" type="text" maxlength="256" placeholder="auto" title="Site Manager console host ID. Use auto when only one suitable host exists."><small><code>auto</code> discovers the Site Manager host when unambiguous.</small></label>
+<label class="field"><span><b>Remote site ID</b></span><input id="unifi_remote_site_id" type="text" maxlength="256" placeholder="auto" title="Network Integration site selector behind the Site Manager connector."><small>This is the Network Integration site, not the separate Site Manager /v1/sites identifier.</small></label>
+<label class="field"><span><b>UniFi Site Manager API Key</b></span><input id="unifi_remote_api_key" type="password" maxlength="4096" autocomplete="new-password" placeholder="Leave blank to keep the current key" title="API key used with the official UniFi Site Manager connector."><small id="unifiRemoteApiKeyState">Not configured</small></label>
+</div>
+<p class="muted">Remote access always uses verified HTTPS to the official Site Manager API. Username/password authentication is not used.</p>
+<h3>Additional controllers / sites</h3>
+<p class="muted">Optional multi-controller mode. Each row has its own Local or Remote transport and API key. When rows are present, they are polled concurrently and take precedence over the single Local/Remote profile above.</p>
+<div id="unifiControllersRoot"></div>
+<div class="actions"><button id="addUnifiControllerButton" type="button" title="Add another UniFi controller or site to this UniFi2MQTT instance.">Add controller</button></div>
 <h3>MQTT</h3>
 <div class="grid">
-<label class="field"><span><b>MQTT host</b></span><input id="unifi_mqtt_host" type="text" maxlength="255"></label>
-<label class="field"><span><b>MQTT port</b></span><input id="unifi_mqtt_port" type="number" min="1" max="65535" step="1"></label>
-<label class="field"><span><b>MQTT username</b></span><input id="unifi_mqtt_username" type="text" maxlength="256" autocomplete="username"></label>
-<label class="field"><span><b>MQTT password</b></span><input id="unifi_mqtt_password" type="password" maxlength="2048" autocomplete="new-password" placeholder="Leave blank to keep the current password"><small id="unifiMqttPasswordState">Not configured</small></label>
-<label class="field"><span><b>MQTT topic prefix</b></span><input id="unifi_mqtt_topic_prefix" type="text" maxlength="256"></label>
-<label class="field"><span><b>MQTT discovery prefix</b></span><input id="unifi_mqtt_discovery_prefix" type="text" maxlength="256"></label>
+<label class="field"><span><b>MQTT host</b></span><input id="unifi_mqtt_host" type="text" maxlength="255" title="MQTT broker hostname used by UniFi2MQTT. core-mosquitto uses the Home Assistant MQTT service."></label>
+<label class="field"><span><b>MQTT port</b></span><input id="unifi_mqtt_port" type="number" min="1" max="65535" step="1" title="MQTT broker TCP port."></label>
+<label class="field"><span><b>MQTT username</b></span><input id="unifi_mqtt_username" type="text" maxlength="256" autocomplete="username" title="Optional MQTT username. Supervisor MQTT credentials are used automatically with core-mosquitto."></label>
+<label class="field"><span><b>MQTT password</b></span><input id="unifi_mqtt_password" type="password" maxlength="4096" autocomplete="new-password" placeholder="Leave blank to keep the current password" title="Optional MQTT password. Saved values stay masked unless you click the eye to reveal them."><small id="unifiMqttPasswordState">Not configured</small></label>
+<label class="option"><input id="unifi_mqtt_tls" type="checkbox" title="Enable TLS for an explicitly configured MQTT broker."><span><b>MQTT TLS</b><br><small>Usually not required for the Supervisor-provided local broker.</small></span></label>
+<label class="option"><input id="unifi_mqtt_verify_ssl" type="checkbox" title="Verify the MQTT broker certificate when MQTT TLS is enabled."><span><b>Verify MQTT SSL</b></span></label>
+<label class="field"><span><b>MQTT CA file</b></span><input id="unifi_mqtt_ca" type="text" maxlength="512" placeholder="/ssl/ca.pem" title="Optional CA certificate below /ssl for MQTT TLS verification."></label>
+<label class="field"><span><b>MQTT topic prefix</b></span><input id="unifi_mqtt_topic_prefix" type="text" maxlength="256" title="Base MQTT topic used for Switch Vision UniFi state."></label>
+<label class="field"><span><b>MQTT discovery prefix</b></span><input id="unifi_mqtt_discovery_prefix" type="text" maxlength="256" title="Home Assistant MQTT Discovery prefix, normally homeassistant."></label>
 </div>
-<div class="actions"><button id="saveUnifi2mqttButton" class="primary" type="button">Save UniFi2MQTT Settings</button><button id="openUnifiAppConfigButton" type="button">Open Home Assistant App Configuration</button></div>
-<p id="unifiSettingsStatus" class="muted">Secrets are never read back into this page. Blank secret fields preserve stored values. To clear an existing optional MQTT password, use the Home Assistant App configuration fallback.</p>
+<div class="actions"><button id="saveUnifi2mqttButton" class="primary" type="button" title="Save all UniFi2MQTT settings and restart/start the app when needed.">Save UniFi2MQTT Settings</button><button id="openUnifiAppConfigButton" type="button" title="Open the native Home Assistant app configuration as a fallback editor.">Open Home Assistant App Configuration</button></div>
+<p id="unifiSettingsStatus" class="muted">Saved credentials are masked by default. Use the eye to reveal one on demand; blank API-key and password fields preserve stored values.</p>
 </div>
 </section>
 
@@ -4362,7 +4743,7 @@ body.density-dense .step{padding:7px 9px}
 </details>
 <div id="debugWrap" class="hidden"><div class="debug-head"><strong>Discovery debug output</strong><small>Commands and detailed activity; credentials remain masked.</small></div><div id="discoveryLog" class="status debug-panel"></div><div class="actions"><button id="copyDebugButton" type="button">Copy Debug Info</button></div><p id="copyDebugStatus" class="muted"></p></div>
 <details id="discoveryHistoryWrap" class="yaml-manager">
-<summary>Recent Discovery activity</summary>
+<summary><strong>Recent Discovery activity</strong></summary>
 <p class="muted">Up to 20 completed Discovery and regeneration operations are retained locally. Debug excerpts are limited to 80 credential-sanitized lines per operation.</p>
 <div id="discoveryHistory"><p class="muted">No completed Discovery operations are recorded yet.</p></div>
 </details>
@@ -4370,16 +4751,12 @@ body.density-dense .step{padding:7px 9px}
 
 <section id="devicesCard" class="card hidden">
 <h2>Devices</h2>
-<h3>Enable / Disable Devices</h3>
-<p class="muted configured-device-note">Choose which saved switches participate in Discovery. Disabled devices remain configured and can be re-enabled at any time. Each row shows the configured management IP/host and the effective value Discovery will consume after saved-field normalization.</p>
-<div id="configuredDevices"></div>
-<p id="configuredDevicesStatus" class="muted configured-device-status"></p>
-<hr class="devices-divider">
-<h3>Detected Devices</h3>
-<p class="lead">Latest detected hardware and generated configuration status. Select a device to expand its detailed detected-device information.</p>
+<h3>Switches</h3>
+<p class="muted configured-device-note">Manage saved switches from one list. Select a switch to expand its detected hardware and generated-configuration details. Drag saved switches to reorder them, or use the up/down arrows. Disabled switches remain configured and can be re-enabled at any time.</p>
 <div id="devicesDiagnosticsSummary" class="diag-summary devices-diagnostics-summary"></div>
 <div id="devicesDiagnosticsMessages"></div>
-<div id="devicesSummary"></div>
+<div id="configuredDevices"></div>
+<p id="configuredDevicesStatus" class="muted configured-device-status"></p>
 <div class="actions"><button class="primary" id="refreshDevicesButton" type="button">Refresh Devices</button><button id="devicesRegenerateCardYamlButton" type="button">Regenerate Dashboard Card YAML</button><button id="copyDiagnosticsButton" type="button">Copy Diagnostics</button><a id="downloadDiagnosticsButton" class="button" href="#">Download Diagnostics Report</a><button id="devicesRunDiscoveryButton" type="button">Run Discovery</button></div>
 <p id="devicesActionStatus" class="muted"></p>
 </section>
@@ -4481,12 +4858,22 @@ let appLinksCache=null;
 async function loadAppLinks(){if(appLinksCache)return appLinksCache;const r=await fetch(endpoint('api/app-links'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not resolve installed apps');appLinksCache=d;return d}
 async function openResolvedApp(kind){try{const links=await loadAppLinks();const item=links[kind]||{};const path=kind==='installer'?item.ingress_url:item.config_url;const labels={discovery:'Switch Vision Discovery',snmp2mqtt:'Switch Vision SNMP2MQTT',installer:'Switch Vision Installer'};if(!item.found||!path)throw new Error(`${labels[kind]||'Switch Vision app'} is not installed or could not be resolved.`);openHomeAssistantPath(path)}catch(e){alert(e.message||String(e))}}
 function setUnifiHomeCardVisibility(show){const btn=$('openUnifi2mqttSettingsButton');if(!btn)return;btn.classList.toggle('hidden',show===false);if(show===false&&currentView==='unifi2mqtt')setView('home')}
-function renderUnifiHomeCard(d){const btn=$('openUnifi2mqttSettingsButton');const label=$('unifiHomeCardState');if(!btn||!label)return;btn.classList.remove('unifi-unavailable','unifi-needs-setup','unifi-warning');const o=d?.options||{};const configured=!!(d?.installed&&String(o.controller_url||'').trim()&&String(o.site_id||'').trim()&&d?.api_key_configured&&String(o.mqtt_host||'').trim());const running=['started','running'].includes(String(d?.state||'').toLowerCase());if(!d?.installed){btn.classList.add('unifi-unavailable');btn.dataset.unifiAction='blocked';btn.setAttribute('aria-disabled','true');btn.title='UniFi2MQTT is not installed. Install it from Switch Vision Installer first.';label.textContent='Not installed';return}btn.dataset.unifiAction='open';btn.setAttribute('aria-disabled','false');if(!configured){btn.classList.add('unifi-needs-setup');btn.title='UniFi2MQTT is installed but not configured. Open settings to complete setup.';label.textContent='Needs setup';return}if(!running){btn.classList.add('unifi-warning');btn.title='UniFi2MQTT is configured but not running. Open settings to review status.';label.textContent='Configured — not running';return}btn.title='UniFi2MQTT is installed, configured, and running.';label.textContent='Ready'}
+let unifiControllersDraft=[];
+function unifiBool(value,defaultValue=false){if(value===true||value===false)return value;const text=String(value??'').trim().toLowerCase();if(['true','1','yes','on'].includes(text))return true;if(['false','0','no','off'].includes(text))return false;return defaultValue}
+function renderUnifiHomeCard(d){const btn=$('openUnifi2mqttSettingsButton');const label=$('unifiHomeCardState');if(!btn||!label)return;btn.classList.remove('unifi-unavailable','unifi-needs-setup','unifi-warning');const o=d?.options||{};const configured=!!(d?.installed&&d?.connection_ready&&String(o.mqtt_host||'').trim());const running=['started','running'].includes(String(d?.state||'').toLowerCase());if(!d?.installed){btn.classList.add('unifi-unavailable');btn.dataset.unifiAction='blocked';btn.setAttribute('aria-disabled','true');btn.title='UniFi2MQTT is not installed. Install it from Switch Vision Installer first.';label.textContent='Not installed';return}btn.dataset.unifiAction='open';btn.setAttribute('aria-disabled','false');if(!configured){btn.classList.add('unifi-needs-setup');btn.title='UniFi2MQTT is installed but no usable Local, Remote, or multi-controller API credential is configured.';label.textContent='Needs setup';return}if(!running){btn.classList.add('unifi-warning');btn.title='UniFi2MQTT is configured but not running. Open settings to review status.';label.textContent='Configured — not running';return}const active=String(d.active_transport||'').toLowerCase();if(d.failover_active&&active){btn.classList.add('unifi-warning');btn.title=`UniFi2MQTT is running on the ${active} fallback path; the priority path will be retried automatically.`;label.textContent=`Ready · ${active[0].toUpperCase()+active.slice(1)} fallback`;return}btn.title='UniFi2MQTT is installed, configured, and running.';label.textContent=active?`Ready · ${active[0].toUpperCase()+active.slice(1)}`:'Ready'}
 async function refreshUnifiHomeCard(){try{const d=await fetchUnifi2mqttSettings();renderUnifiHomeCard(d)}catch(e){const btn=$('openUnifi2mqttSettingsButton');const label=$('unifiHomeCardState');if(btn&&label){btn.classList.remove('unifi-needs-setup');btn.classList.add('unifi-warning');btn.dataset.unifiAction='open';btn.setAttribute('aria-disabled','false');btn.title=`UniFi2MQTT status could not be checked: ${e}`;label.textContent='Status unavailable'}}}
+async function fetchSavedSecret(ref){const r=await fetch(endpoint('api/secrets/reveal'),{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify(ref||{})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not reveal saved credential');return String(d.secret||'')}
+function setSecretConfigured(input,configured){if(!input)return;input.dataset.secretConfigured=configured?'true':'false';const btn=input._svSecretEye;if(btn)btn.disabled=!configured&&!input.value}
+function maskSecretInput(input){if(!input)return;input.type='password';const btn=input._svSecretEye;if(btn){btn.setAttribute('aria-pressed','false');btn.setAttribute('aria-label','Reveal saved credential');btn.title='Reveal or hide this saved credential'}}
+function secretControl(input,refProvider,configured=false){if(!input)return input;if(input.parentElement?.classList.contains('secret-control')){setSecretConfigured(input,configured);return input.parentElement}const wrap=document.createElement('span');wrap.className='secret-control';const parent=input.parentNode;if(parent)parent.insertBefore(wrap,input);wrap.append(input);const eye=document.createElement('button');eye.type='button';eye.className='secret-eye';eye.textContent='👁';eye.setAttribute('aria-label','Reveal saved credential');eye.setAttribute('aria-pressed','false');eye.title='Reveal or hide this saved credential';wrap.append(eye);input._svSecretEye=eye;input._svSecretRefProvider=refProvider;setSecretConfigured(input,configured);input.addEventListener('input',()=>setSecretConfigured(input,input.dataset.secretConfigured==='true'));eye.addEventListener('click',async event=>{event.preventDefault();event.stopPropagation();if(input.type==='text'){input.type='password';eye.setAttribute('aria-pressed','false');eye.setAttribute('aria-label','Reveal saved credential');return}if(input.value){input.type='text';eye.setAttribute('aria-pressed','true');eye.setAttribute('aria-label','Hide credential');return}const ref=typeof input._svSecretRefProvider==='function'?input._svSecretRefProvider():null;if(!ref||input.dataset.secretConfigured!=='true')return;eye.disabled=true;try{const saved=await fetchSavedSecret(ref);input.value=saved;input.type='text';eye.setAttribute('aria-pressed','true');eye.setAttribute('aria-label','Hide credential')}catch(e){eye.title=`Could not reveal saved credential: ${e.message||e}`}finally{setSecretConfigured(input,input.dataset.secretConfigured==='true')}});return wrap}
+function installStaticSecretControls(){secretControl($('unifi_local_api_key'),()=>({scope:'unifi2mqtt',kind:'local_api_key'}),false);secretControl($('unifi_remote_api_key'),()=>({scope:'unifi2mqtt',kind:'remote_api_key'}),false);secretControl($('unifi_mqtt_password'),()=>({scope:'unifi2mqtt',kind:'mqtt_password'}),false)}
 async function fetchUnifi2mqttSettings(){const r=await fetch(endpoint('api/unifi2mqtt/settings'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load UniFi2MQTT settings');return d}
-function renderUnifi2mqttSettings(d){const grid=$('unifiStatusGrid');grid.innerHTML='';const snapshot=d.snapshot||{};const state=String(d.state||'not installed');const o=d.options||{};const controllerReady=!!(String(o.controller_url||'').trim()&&String(o.site_id||'').trim()&&d.api_key_configured);grid.append(diagTile('UniFi2MQTT',d.installed?'Installed':'Not installed',d.installed?'diag-good':'diag-warn'),diagTile('App state',state,state==='started'||state==='running'?'diag-good':(d.installed?'diag-warn':'diag-warn')),diagTile('Controller',controllerReady?'Configured':'Needs setup',controllerReady?'diag-good':'diag-warn'),diagTile('Configuration access',d.options_readable?'Available':'Fallback required',d.options_readable?'diag-good':'diag-warn'),diagTile('Snapshot',snapshot.found?'Available':'Missing',snapshot.found?'diag-good':'diag-warn'),diagTile('Devices',String(snapshot.device_count||0),snapshot.device_count>0?'diag-good':'diag-warn'));$('unifiInstallWrap').classList.toggle('hidden',!!d.installed);$('unifiSettingsForm').classList.toggle('hidden',!d.installed);$('unifi_controller_url').value=o.controller_url||'';$('unifi_site_id').value=o.site_id||'';$('unifi_verify_ssl').checked=String(o.verify_ssl||'false').toLowerCase()==='true';$('unifi_poll_interval').value=o.poll_interval||30;$('unifi_mqtt_host').value=o.mqtt_host||'core-mosquitto';$('unifi_mqtt_port').value=o.mqtt_port||1883;$('unifi_mqtt_username').value=o.mqtt_username||'';$('unifi_mqtt_topic_prefix').value=o.mqtt_topic_prefix||'switch_vision/unifi';$('unifi_mqtt_discovery_prefix').value=o.mqtt_discovery_prefix||'homeassistant';$('unifi_api_key').value='';$('unifi_api_key').required=!d.api_key_configured;$('unifi_mqtt_password').value='';$('unifiApiKeyState').textContent=d.api_key_configured?'Configured — leave blank to keep':'Required — not configured';$('unifiMqttPasswordState').textContent=d.mqtt_password_configured?'Configured — leave blank to keep':'Not configured';$('openUnifiAppConfigButton').disabled=!d.config_url;window.unifi2mqttConfigUrl=d.config_url||null}
-async function loadUnifi2mqttSettings(){setView('unifi2mqtt');$('unifiSettingsStatus').textContent='Loading UniFi2MQTT settings…';try{const d=await fetchUnifi2mqttSettings();renderUnifi2mqttSettings(d);$('unifiSettingsStatus').textContent='Secrets are never read back into this page. Blank secret fields preserve the stored values.'}catch(e){$('unifiSettingsStatus').textContent=`Could not load UniFi2MQTT settings: ${e}`}}
-function unifiSettingsPayload(){return {controller_url:$('unifi_controller_url').value,site_id:$('unifi_site_id').value,api_key:$('unifi_api_key').value,verify_ssl:$('unifi_verify_ssl').checked,poll_interval:$('unifi_poll_interval').value,mqtt_host:$('unifi_mqtt_host').value,mqtt_port:$('unifi_mqtt_port').value,mqtt_username:$('unifi_mqtt_username').value,mqtt_password:$('unifi_mqtt_password').value,mqtt_topic_prefix:$('unifi_mqtt_topic_prefix').value,mqtt_discovery_prefix:$('unifi_mqtt_discovery_prefix').value}}
+function syncUnifiFallbackOptions(){const priority=$('unifi_priority_transport')?.value||'local';const fallback=$('unifi_fallback_transport');if(!fallback)return;for(const option of fallback.options)option.disabled=option.value===priority;if(fallback.value===priority)fallback.value=priority==='local'?'remote':'local'}
+function renderUnifiControllerEditor(rows){const root=$('unifiControllersRoot');if(!root)return;root.innerHTML='';if(!rows.length){const empty=document.createElement('p');empty.className='muted';empty.textContent='No additional controllers configured. The Local/Remote priority profile above is active.';root.append(empty);return}rows.forEach((row,index)=>{const card=document.createElement('div');card.className='device-card unifi-controller-editor';const head=document.createElement('div');head.className='device-head';const title=document.createElement('strong');title.textContent=`Controller ${index+1}`;const remove=document.createElement('button');remove.type='button';remove.className='danger';remove.textContent='Remove';remove.title='Remove this controller/site from UniFi2MQTT configuration.';remove.onclick=()=>{unifiControllersDraft.splice(index,1);renderUnifiControllerEditor(unifiControllersDraft)};head.append(title,remove);card.append(head);const grid=document.createElement('div');grid.className='grid';const field=(label,input,help)=>{const wrap=document.createElement('label');wrap.className='field';const span=document.createElement('span');const bold=document.createElement('b');bold.textContent=label;span.append(bold);wrap.append(span,input);const target=input.matches?.('input,select,textarea')?input:input.querySelector?.('input,select,textarea');if(help){const small=document.createElement('small');small.textContent=help;wrap.append(small);if(target)target.title=help}return wrap};const id=document.createElement('input');id.type='text';id.maxLength=64;id.value=row.id||'';id.placeholder='home';id.oninput=()=>row.id=id.value;const transport=document.createElement('select');for(const [value,label] of [['local','Local'],['remote','Remote / Site Manager']]){const option=document.createElement('option');option.value=value;option.textContent=label;option.selected=(row.transport||'local')===value;transport.append(option)}transport.onchange=()=>{row.transport=transport.value;renderUnifiControllerEditor(unifiControllersDraft)};const site=document.createElement('input');site.type='text';site.maxLength=256;site.value=row.site_id||'auto';site.oninput=()=>row.site_id=site.value;const api=document.createElement('input');api.type='password';api.maxLength=4096;api.autocomplete='new-password';api.value='';api.placeholder=row.api_key_configured?'Saved — use eye to reveal':'Required';api.oninput=()=>row.api_key=api.value;const apiControl=secretControl(api,()=>({scope:'unifi2mqtt',kind:'controller_api_key',identifier:row.original_id||row.id}),!!row.api_key_configured);grid.append(field('Controller ID',id,'Stable operator ID used only to preserve this controller configuration and private state.'),field('Transport',transport,'Choose Local Integration API or Remote Site Manager connector access.'),field('Site ID',site,'Use auto unless this controller must select a specific Network Integration site.'));if((row.transport||'local')==='local'){const url=document.createElement('input');url.type='url';url.maxLength=512;url.value=row.controller_url||'https://192.168.1.1:11443';url.oninput=()=>row.controller_url=url.value;const verify=document.createElement('input');verify.type='checkbox';verify.checked=unifiBool(row.verify_ssl,true);verify.onchange=()=>row.verify_ssl=verify.checked;const insecure=document.createElement('input');insecure.type='checkbox';insecure.checked=unifiBool(row.allow_insecure_http,false);insecure.onchange=()=>row.allow_insecure_http=insecure.checked;grid.append(field('Controller URL',url,'Self-hosted UniFi controllers normally use HTTPS port 11443.'),field('API Key',apiControl,row.api_key_configured?'Stored key is masked; use the eye to reveal it. Blank preserves it.':'Enter the local Integration API key.'),field('Verify SSL',verify,'Verify the local controller certificate.'),field('Allow insecure HTTP',insecure,'Explicitly allow plaintext local HTTP only when the risk is accepted.'))}else{const host=document.createElement('input');host.type='text';host.maxLength=256;host.value=row.host_id||'auto';host.oninput=()=>row.host_id=host.value;grid.append(field('Host ID',host,'Site Manager console host ID; use auto when unambiguous.'),field('API Key',apiControl,row.api_key_configured?'Stored key is masked; use the eye to reveal it. Blank preserves it.':'Enter the UniFi Site Manager API key.'))}card.append(grid);root.append(card)})}
+function addUnifiController(){unifiControllersDraft.push({id:'',transport:'local',controller_url:'https://192.168.1.1:11443',host_id:'auto',site_id:'auto',api_key:'',api_key_configured:false,verify_ssl:true,allow_insecure_http:false});renderUnifiControllerEditor(unifiControllersDraft)}
+function renderUnifi2mqttSettings(d){const grid=$('unifiStatusGrid');grid.innerHTML='';const snapshot=d.snapshot||{};const state=String(d.state||'not installed');const o=d.options||{};const active=String(d.active_transport||'');const connectionLabel=d.multi_controller_enabled?`${d.controller_count||0} controller${(d.controller_count||0)===1?'':'s'}`:(d.connection_ready?'Configured':'Needs setup');const activeLabel=d.failover_active&&active?`${active} fallback`:(active||'Waiting');grid.append(diagTile('UniFi2MQTT',d.installed?'Installed':'Not installed',d.installed?'diag-good':'diag-warn'),diagTile('App state',state,state==='started'||state==='running'?'diag-good':'diag-warn'),diagTile('Connection',connectionLabel,d.connection_ready?'diag-good':'diag-warn'),diagTile('Active path',activeLabel,d.failover_active?'diag-warn':(active?'diag-good':'diag-warn')),diagTile('Local API',d.local_api_key_configured?'Configured':'Not configured',d.local_api_key_configured?'diag-good':'diag-warn'),diagTile('Remote API',d.remote_api_key_configured?'Configured':'Not configured',d.remote_api_key_configured?'diag-good':'diag-warn'),diagTile('Snapshot',snapshot.found?'Available':'Missing',snapshot.found?'diag-good':'diag-warn'),diagTile('Devices',String(snapshot.device_count||0),snapshot.device_count>0?'diag-good':'diag-warn'));$('unifiInstallWrap').classList.toggle('hidden',!!d.installed);$('unifiSettingsForm').classList.toggle('hidden',!d.installed);$('unifi_priority_transport').value=o.priority_transport||o.transport||'local';$('unifi_fallback_transport').value=o.fallback_transport||'remote';syncUnifiFallbackOptions();$('unifi_poll_interval').value=o.poll_interval||30;$('unifi_local_controller_url').value=o.local_controller_url||((o.transport||'local')==='local'?(o.controller_url||'https://192.168.1.1:11443'):'https://192.168.1.1:11443');$('unifi_local_site_id').value=o.local_site_id||((o.transport||'local')==='local'?(o.site_id||'auto'):'auto');$('unifi_local_verify_ssl').checked=unifiBool(o.local_verify_ssl,(o.transport||'local')==='local'?unifiBool(o.verify_ssl,true):true);$('unifi_local_allow_insecure_http').checked=unifiBool(o.local_allow_insecure_http,(o.transport||'local')==='local'?unifiBool(o.allow_insecure_http,false):false);$('unifi_remote_host_id').value=o.remote_host_id||((o.transport||'local')==='remote'?(o.host_id||'auto'):'auto');$('unifi_remote_site_id').value=o.remote_site_id||((o.transport||'local')==='remote'?(o.site_id||'auto'):'auto');$('unifi_local_api_key').value='';$('unifi_remote_api_key').value='';maskSecretInput($('unifi_local_api_key'));maskSecretInput($('unifi_remote_api_key'));setSecretConfigured($('unifi_local_api_key'),!!d.local_api_key_configured);setSecretConfigured($('unifi_remote_api_key'),!!d.remote_api_key_configured);$('unifiLocalApiKeyState').textContent=d.local_api_key_configured?'Configured — eye reveals saved key':'Not configured';$('unifiRemoteApiKeyState').textContent=d.remote_api_key_configured?'Configured — eye reveals saved key':'Not configured';unifiControllersDraft=(Array.isArray(o.controllers)?o.controllers:[]).map(row=>({...row,api_key:'',original_id:row.id||''}));renderUnifiControllerEditor(unifiControllersDraft);$('unifi_mqtt_host').value=o.mqtt_host||'core-mosquitto';$('unifi_mqtt_port').value=o.mqtt_port||1883;$('unifi_mqtt_username').value=o.mqtt_username||'';$('unifi_mqtt_password').value='';maskSecretInput($('unifi_mqtt_password'));setSecretConfigured($('unifi_mqtt_password'),!!d.mqtt_password_configured);$('unifi_mqtt_tls').checked=unifiBool(o.mqtt_tls,false);$('unifi_mqtt_verify_ssl').checked=unifiBool(o.mqtt_verify_ssl,true);$('unifi_mqtt_ca').value=o.mqtt_ca||'';$('unifi_mqtt_topic_prefix').value=o.mqtt_topic_prefix||'switch_vision/unifi';$('unifi_mqtt_discovery_prefix').value=o.mqtt_discovery_prefix||'homeassistant';$('unifiMqttPasswordState').textContent=d.mqtt_password_configured?'Configured — eye reveals saved password':'Not configured';$('openUnifiAppConfigButton').disabled=!d.config_url;window.unifi2mqttConfigUrl=d.config_url||null}
+async function loadUnifi2mqttSettings(){setView('unifi2mqtt');$('unifiSettingsStatus').textContent='Loading UniFi2MQTT settings…';try{const d=await fetchUnifi2mqttSettings();renderUnifi2mqttSettings(d);$('unifiSettingsStatus').textContent=d.failover_active?`Priority path unavailable — currently using ${d.active_transport||'the configured'} fallback. The priority path will be retried automatically.`:'Saved credentials are masked by default. Use the eye to reveal one on demand; blank fields preserve stored values.'}catch(e){$('unifiSettingsStatus').textContent=`Could not load UniFi2MQTT settings: ${e}`}}
+function unifiSettingsPayload(){return {priority_transport:$('unifi_priority_transport').value,fallback_transport:$('unifi_fallback_transport').value,local_controller_url:$('unifi_local_controller_url').value,local_site_id:$('unifi_local_site_id').value,local_api_key:$('unifi_local_api_key').value,local_verify_ssl:$('unifi_local_verify_ssl').checked,local_allow_insecure_http:$('unifi_local_allow_insecure_http').checked,remote_host_id:$('unifi_remote_host_id').value,remote_site_id:$('unifi_remote_site_id').value,remote_api_key:$('unifi_remote_api_key').value,controllers:unifiControllersDraft.map(row=>({id:row.id||'',transport:row.transport||'local',controller_url:row.controller_url||'',host_id:row.host_id||'auto',site_id:row.site_id||'auto',api_key:row.api_key||'',verify_ssl:unifiBool(row.verify_ssl,true),allow_insecure_http:unifiBool(row.allow_insecure_http,false)})),poll_interval:$('unifi_poll_interval').value,mqtt_host:$('unifi_mqtt_host').value,mqtt_port:$('unifi_mqtt_port').value,mqtt_username:$('unifi_mqtt_username').value,mqtt_password:$('unifi_mqtt_password').value,mqtt_tls:$('unifi_mqtt_tls').checked,mqtt_verify_ssl:$('unifi_mqtt_verify_ssl').checked,mqtt_ca:$('unifi_mqtt_ca').value,mqtt_topic_prefix:$('unifi_mqtt_topic_prefix').value,mqtt_discovery_prefix:$('unifi_mqtt_discovery_prefix').value}}
 async function saveUnifi2mqttSettings(){const btn=$('saveUnifi2mqttButton');btn.disabled=true;$('unifiSettingsStatus').textContent='Saving UniFi2MQTT settings…';try{const r=await fetch(endpoint('api/unifi2mqtt/settings'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(unifiSettingsPayload())});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save UniFi2MQTT settings');renderUnifi2mqttSettings(d);$('unifiSettingsStatus').textContent=d.restarted?'Saved. UniFi2MQTT restart requested.':(d.started?'Saved. UniFi2MQTT start requested.':'Saved.');appLinksCache=null}catch(e){$('unifiSettingsStatus').textContent=`Could not save: ${e}`}finally{btn.disabled=false}}
 async function installUnifi2mqtt(){const btn=$('installUnifi2mqttButton');btn.disabled=true;$('unifiInstallStatus').textContent='Installing UniFi2MQTT…';try{const r=await fetch(endpoint('api/unifi2mqtt/install'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not install UniFi2MQTT');appLinksCache=null;renderUnifi2mqttSettings(d);$('unifiInstallStatus').textContent='Installed. Configure the controller and MQTT settings below.'}catch(e){$('unifiInstallStatus').textContent=`Could not install: ${e}`}finally{btn.disabled=false}}
 function openUnifiAppConfig(){if(window.unifi2mqttConfigUrl)openHomeAssistantPath(window.unifi2mqttConfigUrl)}
@@ -4495,15 +4882,24 @@ function showLatest(latest){if(!latest){$('readyCard').classList.add('hidden');r
 function diagTile(label,value,state=''){const tile=document.createElement('div');tile.className='diag-tile';const l=document.createElement('div');l.className='muted';l.textContent=label;const v=document.createElement('div');v.className=`diag-value ${state}`;v.textContent=value;tile.append(l,v);return tile}
 function renderDeviceDiagnosticsSummary(d){const summary=$('devicesDiagnosticsSummary');if(!summary)return;summary.innerHTML='';const discovery=d.discovery||{};const registry=d.registry||{};const files=d.files||{};summary.append(diagTile('Switch Vision version',`v${d.version||'Unknown'}`),diagTile('Discovery app',d.service||'Unknown',d.service==='Running'?'diag-good':'diag-bad'),diagTile('Discovery status',discovery.running?'Running':(discovery.message||'Idle / Ready'),discovery.success===false?'diag-bad':'diag-good'),diagTile('Device registry',registry.loaded?`Loaded · ${registry.entries||0} entries`:'Unavailable',registry.loaded?'diag-good':'diag-bad'),diagTile('SNMP2MQTT YAML',files.generated_yaml?.found?'Found':'Missing',files.generated_yaml?.found?'diag-good':'diag-warn'),diagTile('Dashboard YAML',files.generated_card?.found?'Found':'Missing',files.generated_card?.found?'diag-good':'diag-warn'),diagTile('Contribution workflow',d.contribution_workflow?.ready?'Ready':'Unavailable',d.contribution_workflow?.ready?'diag-good':'diag-bad'));const messages=$('devicesDiagnosticsMessages');messages.innerHTML='';for(const [kind,items] of [['failure',d.errors||[]],['warning',d.warnings||[]]]){if(!items.length)continue;const box=document.createElement('div');box.className=kind;const ul=document.createElement('ul');ul.className='diag-list';for(const item of items){const li=document.createElement('li');li.textContent=`${kind==='failure'?'ERROR':'WARNING'}: ${item}`;ul.appendChild(li)}box.appendChild(ul);messages.appendChild(box)}}
 let lastConfiguredDevices=null;
+let lastDevicesDiagnostics=null;
+let expandedUnifiedDevices=new Set();
+let draggedConfiguredDeviceName=null;
 function configuredDeviceTitle(item){return item.display_name||item.switch_name||item.switch_host||'Configured switch'}
-function syncConfiguredDeviceToggleAvailability(){const running=!!lastDiscoveryState?.running;document.querySelectorAll('.device-state-toggle').forEach(btn=>{const writable=btn.dataset.writable==='true';btn.disabled=running||!writable;btn.title=running?'Stop Discovery before changing device state.':(writable?'Toggle whether this saved device participates in the next Discovery run.':'Home Assistant app configuration is temporarily unavailable; use Discovery Settings as a fallback.')});document.querySelectorAll('.device-order-button').forEach(btn=>{const writable=btn.dataset.writable==='true';const boundary=btn.dataset.boundary==='true';btn.disabled=running||!writable||boundary;btn.title=running?'Stop Discovery before changing device order.':(!writable?'Home Assistant app configuration is temporarily unavailable; use Discovery Settings as a fallback.':(boundary?'Already at this end of the saved device order.':'Move this saved device in the persistent Discovery order.'))})}
-function renderConfiguredDevices(d){lastConfiguredDevices=d;const root=$('configuredDevices');root.innerHTML='';const writable=!!d?.writable;const devices=d?.devices||[];for(const [position,item] of devices.entries()){const enabled=item.enabled!=='disabled';const row=document.createElement('div');row.className=`simple-result configured-device${enabled?'':' disabled'}`;const main=document.createElement('div');main.className='result-main';const title=document.createElement('strong');title.textContent=configuredDeviceTitle(item);const line=document.createElement('div');line.className='muted';const bits=[item.switch_name,item.sensor_prefix,item.switch_model&&item.switch_model!=='auto'?item.switch_model:'Auto-detect'].filter(Boolean);line.textContent=bits.join(' · ');const management=document.createElement('div');management.className='muted configured-management';const configured=item.configured_management_target||'Not configured';const effective=item.effective_management_target||(item.effective_management_status==='invalid_saved_row'?'Unavailable — saved row needs review':'Not configured');management.textContent=`Configured management IP/host: ${configured} · Effective management IP/host: ${effective}`;main.append(title,line,management);const actions=document.createElement('div');actions.className='result-actions';const toggle=document.createElement('button');toggle.type='button';toggle.className=`device-state-toggle ${enabled?'enabled':'disabled'}`;toggle.dataset.writable=String(writable);toggle.setAttribute('role','switch');toggle.setAttribute('aria-checked',String(enabled));toggle.setAttribute('aria-label',`${enabled?'Disable':'Enable'} ${configuredDeviceTitle(item)}`);const track=document.createElement('span');track.className='toggle-track';track.setAttribute('aria-hidden','true');const knob=document.createElement('span');knob.className='toggle-knob';track.appendChild(knob);const label=document.createElement('span');label.textContent=enabled?'Enabled':'Disabled';toggle.append(track,label);toggle.addEventListener('click',()=>setConfiguredDeviceState(item,enabled?'disabled':'enabled',toggle));const up=document.createElement('button');up.type='button';up.className='device-order-button';up.textContent='↑';up.dataset.writable=String(writable);up.dataset.boundary=String(position===0);up.setAttribute('aria-label',`Move up ${configuredDeviceTitle(item)}`);if(position>0)up.addEventListener('click',()=>moveConfiguredDevice(item,devices[position-1],'up',up));const down=document.createElement('button');down.type='button';down.className='device-order-button';down.textContent='↓';down.dataset.writable=String(writable);down.dataset.boundary=String(position===devices.length-1);down.setAttribute('aria-label',`Move down ${configuredDeviceTitle(item)}`);if(position<devices.length-1)down.addEventListener('click',()=>moveConfiguredDevice(item,devices[position+1],'down',down));actions.append(up,down,toggle);row.append(main,actions);root.appendChild(row)}if(!(d?.devices||[]).length)root.innerHTML='<p class="muted">No saved switches are configured. Add devices in Discovery Settings first.</p>';const status=$('configuredDevicesStatus');if(!d?.switch_list_enabled&&(d?.devices||[]).length)status.textContent='The saved switch list is globally disabled in Discovery Settings.';else if(!writable)status.textContent='Read-only fallback: Home Assistant app configuration is unavailable. Use Discovery Settings to change device state.';else status.textContent=`${d?.count||0} saved device(s). Device order is persistent and is reused by Discovery and YAML/Card regeneration.`;syncConfiguredDeviceToggleAvailability()}
-async function moveConfiguredDevice(item,destination,direction,button){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device order.';return}button.disabled=true;const title=configuredDeviceTitle(item);$('configuredDevicesStatus').textContent=`Moving ${title} ${direction}…`;try{const r=await fetch(endpoint('api/configured-devices/order'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:item.index,switch_name:item.switch_name,destination_index:destination.index,destination_switch_name:destination.switch_name})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device order');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent=`Saved persistent device order. Discovery and YAML/Card regeneration will use this order.`}catch(e){$('configuredDevicesStatus').textContent=`Could not change device order: ${e.message||e}`;await refreshConfiguredDevices(false)}finally{syncConfiguredDeviceToggleAvailability()}}
+function normalizedDeviceIdentity(value){return String(value||'').trim().toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9._-]+/g,'_').replace(/_+/g,'_').replace(/^[_ .-]+|[_ .-]+$/g,'')}
+function detectedDeviceKey(item){return [item?.data_source||'SNMP',item?.name||'',item?.model||'Unknown model'].join('|')}
+function detectedForConfigured(item,detected,used){const identities=[item.switch_name,item.sensor_prefix].map(normalizedDeviceIdentity).filter(Boolean);let match=detected.find((candidate,index)=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&identities.includes(normalizedDeviceIdentity(candidate?.name)));if(match)return {item:match,index:detected.indexOf(match)};const configuredModel=String(item.switch_model||'').trim();if(configuredModel&&configuredModel!=='auto'){const matches=detected.map((candidate,index)=>({candidate,index})).filter(({candidate,index})=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&String(candidate?.model||'').trim()===configuredModel);if(matches.length===1)return {item:matches[0].candidate,index:matches[0].index}}return null}
+function appendDetectedDeviceBody(body,item,d){const normalized={model:item.model,vendor_name:item.name,family:item.family,registry_status:item.registry_status,registry_match:item.registry_match,registry_last_validated_version:item.last_validated_version,physical_count:item.physical_interfaces,rj45_count:item.rj45_interfaces,registry_validation:item.validation};body.appendChild(deviceCard(normalized));const extra=document.createElement('div');extra.className='muted detected-device-extra';extra.textContent=`Source: ${item.data_source||'SNMP'} · ${item.data_source==='UniFi API'?`Firmware: ${item.firmware||'Unknown'}`:`SNMP walk: ${item.walk_found?'Available':'Unavailable'}`} · Uplinks detected: ${item.uplink_interfaces||0} · Mapping profile: ${item.mapping_profile||'Not assigned'} · Calibration profile: ${item.calibration_profile||'Not assigned'}`;body.appendChild(extra)}
+function syncConfiguredDeviceToggleAvailability(){const running=!!lastDiscoveryState?.running;document.querySelectorAll('.device-state-toggle').forEach(btn=>{const writable=btn.dataset.writable==='true';btn.disabled=running||!writable;btn.title=running?'Stop Discovery before changing device state.':(writable?'Toggle whether this saved device participates in the next Discovery run.':'Home Assistant app configuration is temporarily unavailable; use Discovery Settings as a fallback.')});document.querySelectorAll('.device-order-button').forEach(btn=>{const writable=btn.dataset.writable==='true';const boundary=btn.dataset.boundary==='true';btn.disabled=running||!writable||boundary;btn.title=running?'Stop Discovery before changing device order.':(!writable?'Home Assistant app configuration is temporarily unavailable; use Discovery Settings as a fallback.':(boundary?'Already at this end of the saved device order.':'Move this saved device in the persistent Discovery order.'))});document.querySelectorAll('.device-drag-handle').forEach(handle=>{const writable=handle.dataset.writable==='true';const enabled=writable&&!running;handle.draggable=enabled;handle.classList.toggle('disabled',!enabled);handle.title=running?'Stop Discovery before dragging devices.':(writable?'Drag to change the persistent Discovery order.':'Device order is read-only while Home Assistant app configuration is unavailable.')})}
+function clearDeviceDragState(){draggedConfiguredDeviceName=null;document.querySelectorAll('.unified-device-details').forEach(row=>row.classList.remove('dragging','drag-over'))}
+async function saveConfiguredDeviceOrder(order){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device order.';return}$('configuredDevicesStatus').textContent='Saving dragged device order…';try{const r=await fetch(endpoint('api/configured-devices/order'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device order');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent='Saved persistent device order. Discovery and YAML/Card regeneration will use this order.'}catch(e){$('configuredDevicesStatus').textContent=`Could not change device order: ${e.message||e}`;await refreshConfiguredDevices(false)}finally{clearDeviceDragState();syncConfiguredDeviceToggleAvailability()}}
+function reorderConfiguredByDrag(sourceName,targetName,after){const devices=lastConfiguredDevices?.devices||[];const names=devices.map(item=>item.switch_name);const sourceIndex=names.indexOf(sourceName);if(sourceIndex<0||sourceName===targetName)return;names.splice(sourceIndex,1);const targetIndex=names.indexOf(targetName);if(targetIndex<0)return;names.splice(targetIndex+(after?1:0),0,sourceName);saveConfiguredDeviceOrder(names)}
+function renderUnifiedDevices(){const root=$('configuredDevices');if(!root)return;for(const entry of root.querySelectorAll('details[data-device-key]')){const key=entry.dataset.deviceKey||'';if(!key)continue;if(entry.open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)}root.innerHTML='';const config=lastConfiguredDevices||{};const devices=config.devices||[];const detected=lastDevicesDiagnostics?.devices||[];const used=new Set();const writable=!!config.writable;for(const [position,item] of devices.entries()){const enabled=item.enabled!=='disabled';const found=detectedForConfigured(item,detected,used);const detectedItem=found?.item||null;if(found)used.add(found.index);const key=`saved|${item.switch_name}`;const entry=document.createElement('details');entry.className=`device-card unified-device-details configured-device${enabled?'':' disabled'}`;entry.dataset.deviceKey=key;entry.open=expandedUnifiedDevices.has(key);entry.addEventListener('toggle',()=>{if(entry.open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)});entry.addEventListener('dragover',event=>{if(!draggedConfiguredDeviceName||draggedConfiguredDeviceName===item.switch_name)return;event.preventDefault();entry.classList.add('drag-over');if(event.dataTransfer)event.dataTransfer.dropEffect='move'});entry.addEventListener('dragleave',()=>entry.classList.remove('drag-over'));entry.addEventListener('drop',event=>{if(!draggedConfiguredDeviceName||draggedConfiguredDeviceName===item.switch_name)return;event.preventDefault();const rect=entry.getBoundingClientRect();const after=event.clientY>(rect.top+rect.height/2);const source=draggedConfiguredDeviceName;clearDeviceDragState();reorderConfiguredByDrag(source,item.switch_name,after)});const summary=document.createElement('summary');const handle=document.createElement('span');handle.className='device-drag-handle';handle.dataset.writable=String(writable);handle.textContent='⠿';handle.setAttribute('aria-label',`Drag ${configuredDeviceTitle(item)} to reorder`);handle.addEventListener('click',event=>event.stopPropagation());handle.addEventListener('dragstart',event=>{if(!writable||lastDiscoveryState?.running){event.preventDefault();return}draggedConfiguredDeviceName=item.switch_name;entry.classList.add('dragging');if(event.dataTransfer){event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',item.switch_name)}});handle.addEventListener('dragend',clearDeviceDragState);const main=document.createElement('div');main.className='unified-device-main';const title=document.createElement('strong');title.textContent=configuredDeviceTitle(item);const line=document.createElement('div');line.className='muted';const bits=[item.switch_name,item.sensor_prefix,item.switch_model&&item.switch_model!=='auto'?item.switch_model:'Auto-detect'].filter(Boolean);line.textContent=bits.join(' · ');const management=document.createElement('div');management.className='muted configured-management';const configured=item.configured_management_target||'Not configured';const effective=item.effective_management_target||(item.effective_management_status==='invalid_saved_row'?'Unavailable — saved row needs review':'Not configured');management.textContent=`Configured management IP/host: ${configured} · Effective management IP/host: ${effective}`;main.append(title,line,management);if(detectedItem){const detection=document.createElement('div');detection.className='muted detected-device-generated';detection.textContent=`Detected: ${detectedItem.model||'Unknown model'} · ${statusLabel(detectedItem.registry_status||'detected')} · ${detectedItem.rj45_interfaces||0} RJ45 + ${detectedItem.uplink_interfaces||0} uplinks`;main.append(detection)}else{const detection=document.createElement('div');detection.className='muted detected-device-generated';detection.textContent='Detected hardware details: not available yet';main.append(detection)}const actions=document.createElement('div');actions.className='unified-device-actions';if(detectedItem){const source=document.createElement('span');source.className='device-source-chip';source.textContent=detectedItem.data_source||'SNMP';actions.append(source)}const up=document.createElement('button');up.type='button';up.className='device-order-button';up.textContent='↑';up.dataset.writable=String(writable);up.dataset.boundary=String(position===0);up.setAttribute('aria-label',`Move up ${configuredDeviceTitle(item)}`);up.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(position>0)moveConfiguredDevice(item,devices[position-1],'up',up)});const down=document.createElement('button');down.type='button';down.className='device-order-button';down.textContent='↓';down.dataset.writable=String(writable);down.dataset.boundary=String(position===devices.length-1);down.setAttribute('aria-label',`Move down ${configuredDeviceTitle(item)}`);down.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(position<devices.length-1)moveConfiguredDevice(item,devices[position+1],'down',down)});const toggle=document.createElement('button');toggle.type='button';toggle.className=`device-state-toggle ${enabled?'enabled':'disabled'}`;toggle.dataset.writable=String(writable);toggle.setAttribute('role','switch');toggle.setAttribute('aria-checked',String(enabled));toggle.setAttribute('aria-label',`${enabled?'Disable':'Enable'} ${configuredDeviceTitle(item)}`);const track=document.createElement('span');track.className='toggle-track';track.setAttribute('aria-hidden','true');const knob=document.createElement('span');knob.className='toggle-knob';track.appendChild(knob);const label=document.createElement('span');label.textContent=enabled?'Enabled':'Disabled';toggle.append(track,label);toggle.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();setConfiguredDeviceState(item,enabled?'disabled':'enabled',toggle)});const chevron=document.createElement('span');chevron.className='unified-device-chevron';chevron.setAttribute('aria-hidden','true');chevron.textContent='▸';actions.append(up,down,toggle,chevron);summary.append(handle,main,actions);const body=document.createElement('div');body.className='unified-device-body';if(detectedItem)appendDetectedDeviceBody(body,detectedItem,lastDevicesDiagnostics||{});else{const empty=document.createElement('p');empty.className='muted';empty.textContent='No current detected-device details are available for this saved switch. Run Discovery to refresh its hardware information.';body.append(empty)}entry.append(summary,body);root.append(entry)}for(const [index,item] of detected.entries()){if(used.has(index))continue;const key=`detected|${detectedDeviceKey(item)}`;const entry=document.createElement('details');entry.className='device-card unified-device-details';entry.dataset.deviceKey=key;entry.open=expandedUnifiedDevices.has(key);entry.addEventListener('toggle',()=>{if(entry.open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)});const summary=document.createElement('summary');const main=document.createElement('div');main.className='unified-device-main';const title=document.createElement('strong');title.textContent=item.name||item.model||'Detected device';const line=document.createElement('div');line.className='muted';line.textContent=`${item.model||'Unknown model'} · ${statusLabel(item.registry_status||'detected')} · ${item.rj45_interfaces||0} RJ45 + ${item.uplink_interfaces||0} uplinks`;main.append(title,line);const side=document.createElement('div');side.className='unified-device-actions';const source=document.createElement('span');source.className='device-source-chip';source.textContent=item.data_source||'SNMP';const chevron=document.createElement('span');chevron.className='unified-device-chevron';chevron.setAttribute('aria-hidden','true');chevron.textContent='▸';side.append(source,chevron);summary.append(main,side);const body=document.createElement('div');body.className='unified-device-body';appendDetectedDeviceBody(body,item,lastDevicesDiagnostics||{});entry.append(summary,body);root.append(entry)}if(!devices.length&&!detected.length)root.innerHTML='<p class="muted">No saved or detected switches are available yet. Add a switch in Discovery Settings or run Discovery.</p>';syncConfiguredDeviceToggleAvailability()}
+function renderConfiguredDevices(d){lastConfiguredDevices=d;renderUnifiedDevices();const status=$('configuredDevicesStatus');if(!d?.switch_list_enabled&&(d?.devices||[]).length)status.textContent='The saved switch list is globally disabled in Discovery Settings.';else if(!d?.writable)status.textContent='Read-only fallback: Home Assistant app configuration is unavailable. Use Discovery Settings to change device state.';else status.textContent=`${d?.count||0} saved device(s). Device order is persistent and is reused by Discovery and YAML/Card regeneration.`}
+async function moveConfiguredDevice(item,destination,direction,button){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device order.';return}button.disabled=true;const title=configuredDeviceTitle(item);$('configuredDevicesStatus').textContent=`Moving ${title} ${direction}…`;try{const r=await fetch(endpoint('api/configured-devices/order'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:item.index,switch_name:item.switch_name,destination_index:destination.index,destination_switch_name:destination.switch_name})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device order');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent='Saved persistent device order. Discovery and YAML/Card regeneration will use this order.'}catch(e){$('configuredDevicesStatus').textContent=`Could not change device order: ${e.message||e}`;await refreshConfiguredDevices(false)}finally{syncConfiguredDeviceToggleAvailability()}}
 async function refreshConfiguredDevices(showStatus=false){if(showStatus)$('configuredDevicesStatus').textContent='Refreshing saved devices…';try{const r=await fetch(endpoint('api/configured-devices'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load saved devices');renderConfiguredDevices(d)}catch(e){$('configuredDevicesStatus').textContent=`Could not load saved devices: ${e.message||e}`}}
 async function setConfiguredDeviceState(item,nextState,button){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device state.';return}button.disabled=true;const title=configuredDeviceTitle(item);$('configuredDevicesStatus').textContent=`Saving ${title} as ${nextState}…`;try{const r=await fetch(endpoint('api/configured-devices/state'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:item.index,switch_name:item.switch_name,enabled:nextState})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device state');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent=`${title} is now ${nextState}. Regenerate Dashboard Card YAML to apply this saved state immediately; no Discovery run is required.`}catch(e){$('configuredDevicesStatus').textContent=`Could not change ${title}: ${e.message||e}`;await refreshConfiguredDevices(false)}finally{syncConfiguredDeviceToggleAvailability()}}
-let expandedDetectedDevices=new Set();
-function detectedDeviceKey(item){return [item?.data_source||'SNMP',item?.name||'',item?.model||'Unknown model'].join('|')}
-function renderDevices(d){renderDeviceDiagnosticsSummary(d);const root=$('devicesSummary');for(const entry of root.querySelectorAll('details[data-device-key]')){const key=entry.dataset.deviceKey||'';if(!key)continue;if(entry.open)expandedDetectedDevices.add(key);else expandedDetectedDevices.delete(key)}root.innerHTML='';for(const item of d.devices||[]){const key=detectedDeviceKey(item);const entry=document.createElement('details');entry.className='device-card detected-device-details';entry.dataset.deviceKey=key;entry.open=expandedDetectedDevices.has(key);entry.addEventListener('toggle',()=>{if(entry.open)expandedDetectedDevices.add(key);else expandedDetectedDevices.delete(key)});const summary=document.createElement('summary');const main=document.createElement('div');main.className='detected-device-summary-main';const title=document.createElement('strong');title.textContent=item.model||'Unknown model';const line=document.createElement('div');line.className='muted';const support=statusLabel(item.registry_status||'detected');line.textContent=`Source: ${item.data_source||'SNMP'} · ${item.data_source==='UniFi API'?(item.online?'Online':'Offline'):(item.walk_found?'Discovery passed':'Needs attention')} · Support: ${support} · Ports: ${item.rj45_interfaces||0} RJ45 + ${item.uplink_interfaces||0} uplinks`;const generated=document.createElement('div');generated.className='muted detected-device-generated';generated.textContent=`Sensor configuration: ${d.files?.generated_yaml?.found?'Ready':'Not available'} · Dashboard configuration: ${d.files?.generated_card?.found?'Ready':'Not available'}`;main.append(title,line,generated);if(item.compatibility_mode){const warning=document.createElement('div');warning.className='notice warning';warning.textContent=`Experimental model override: ${item.detected_model||item.model} → ${item.effective_model}`;main.append(warning)}const side=document.createElement('div');side.className='detected-device-summary-side';const status=String(item.registry_status||'detected').toLowerCase();const badge=document.createElement('span');badge.className=`badge badge-${status}`;badge.textContent=statusLabel(status);const chevron=document.createElement('span');chevron.className='detected-device-chevron';chevron.setAttribute('aria-hidden','true');chevron.textContent='▸';side.append(badge,chevron);summary.append(main,side);const body=document.createElement('div');body.className='detected-device-body';const normalized={model:item.model,vendor_name:item.name,family:item.family,registry_status:item.registry_status,registry_match:item.registry_match,registry_last_validated_version:item.last_validated_version,physical_count:item.physical_interfaces,rj45_count:item.rj45_interfaces,registry_validation:item.validation};const card=deviceCard(normalized);body.appendChild(card);const extra=document.createElement('div');extra.className='muted detected-device-extra';extra.textContent=`Source: ${item.data_source||'SNMP'} · ${item.data_source==='UniFi API'?`Firmware: ${item.firmware||'Unknown'}`:`SNMP walk: ${item.walk_found?'Available':'Unavailable'}`} · Uplinks detected: ${item.uplink_interfaces||0} · Mapping profile: ${item.mapping_profile||'Not assigned'} · Calibration profile: ${item.calibration_profile||'Not assigned'}`;body.appendChild(extra);entry.append(summary,body);root.appendChild(entry)}if(!(d.devices||[]).length)root.innerHTML='<p class="muted">No discovered devices are available yet. Run Discovery first.</p>'}
+function renderDevices(d){lastDevicesDiagnostics=d;renderDeviceDiagnosticsSummary(d);renderUnifiedDevices()}
 async function fetchDiagnosticsData(){const r=await fetch(endpoint('api/diagnostics'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Diagnostics request failed');return d}
 async function refreshDevicesData(showStatus=true){if(showStatus)$('devicesActionStatus').textContent='Refreshing devices…';try{const d=await fetchDiagnosticsData();window.latestDiagnostics=d;renderDevices(d);$('downloadDiagnosticsButton').href=endpoint('download/diagnostics.txt');if(showStatus)$('devicesActionStatus').textContent=`Updated ${d.generated_at||''}`}catch(e){if(showStatus)$('devicesActionStatus').textContent=`Could not load devices: ${e}`}}
 async function loadDevices(){setView('devices');await Promise.all([refreshConfiguredDevices(true),refreshDevicesData()])}
@@ -4536,43 +4932,26 @@ function sanitizeDebugText(text){
     return cleaned;
 }
 
+async function fetchCurrentDiscoveryDebug(){const r=await fetch(endpoint('api/discovery/debug'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load Discovery debug session');return d}
+async function refreshCurrentDiscoveryDebug(){if(!debugVisible)return;try{const d=await fetchCurrentDiscoveryDebug();const text=String(d.text||'');$('discoveryLog').textContent=text.trimEnd()||'No debug details are available yet.'}catch(e){$('copyDebugStatus').textContent=`Could not refresh debug information: ${e.message||e}`}}
 async function copyDebugInfo(){
     const status=$('copyDebugStatus');
     const button=$('copyDebugButton');
-    const raw=$('discoveryLog')?.textContent||'';
-
-    if(!raw.trim()){
-        status.textContent='No debug information is available to copy.';
-        return;
-    }
-
-    const text=[
-        'Switch Vision Discovery debug output',
-        '',
-        sanitizeDebugText(raw).trim()
-    ].join('\n');
-
     button.disabled=true;
-    status.textContent='Copying debug information…';
-
+    status.textContent='Loading complete current debug session…';
     try{
+        const d=await fetchCurrentDiscoveryDebug();
+        const raw=String(d.text||'');
+        if(!raw.trim()){status.textContent='No debug information is available to copy.';return}
+        const text=['Switch Vision Discovery debug output','',sanitizeDebugText(raw).trim()].join('\n');
         const copied=await copyTextWithFallback(text);
-
-        if(!copied){
-            throw new Error(
-                'Clipboard access is unavailable in this browser context'
-            );
-        }
-
+        if(!copied)throw new Error('Clipboard access is unavailable in this browser context');
         button.textContent='Copied ✓';
-        status.textContent='Debug information copied to clipboard.';
+        status.textContent=`Complete current-session debug copied (${d.line_count||raw.split('\n').length} lines).`;
     }catch(e){
-        status.textContent=`Could not copy debug information: ${e}`;
+        status.textContent=`Could not copy debug information: ${e.message||e}`;
     }finally{
-        setTimeout(()=>{
-            button.disabled=false;
-            button.textContent='Copy Debug Info';
-        },1200);
+        setTimeout(()=>{button.disabled=false;button.textContent='Copy Debug Info'},1200);
     }
 }
 function discoveryStage(state){if(!state.running)return state.success===true?5:-1;if((state.phase||'')==='preparing')return -1;const stage=String(state.stage||'').toLowerCase();if(stage.includes('generating snmp2mqtt yaml'))return 3;if(stage.includes('generating dashboard card yaml'))return 4;if(stage.includes('detecting exact models'))return 2;if(stage.includes('running snmp walks'))return 1;if(stage.includes('validating configured switches'))return 0;const text=((state.activity||'')+' '+(state.command||'')+' '+(state.message||'')+' '+(state.log_tail||[]).slice(-3).join(' ')).toLowerCase();if(text.includes('dashboard card')||text.includes('generated dashboard'))return 4;if(text.includes('generated yaml')||text.includes('snmp2mqtt')||text.includes('generator')||text.includes('write_generated_yaml'))return 3;if(text.includes('model/platform')||text.includes('interface mapping')||text.includes('parser summary')||text.includes('exact models'))return 2;if(text.includes('snmp walk')||text.includes('walking')||text.includes('oid trees'))return 1;if(text.includes('configured switches')||text.includes('validating'))return 0;return 0}
@@ -4581,18 +4960,20 @@ let debugVisible=false;
 function elapsedText(started,finished=null){if(!started)return '00:00';const start=Date.parse(started);const end=finished?Date.parse(finished):Date.now();if(!Number.isFinite(start)||!Number.isFinite(end))return '00:00';const total=Math.max(0,Math.floor((end-start)/1000));const h=Math.floor(total/3600);const m=Math.floor((total%3600)/60);const s=total%60;return h?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
 function updateElapsedClock(){const state=lastDiscoveryState||{};if(!$('liveElapsed'))return;$('liveElapsed').textContent=state.running?elapsedText(state.started_at):((state.started_at&&state.finished_at)?elapsedText(state.started_at,state.finished_at):'00:00')}
 function startElapsedTicker(){if(elapsedTicker)return;elapsedTicker=setInterval(()=>{if(!document.hidden&&lastDiscoveryState?.running)updateElapsedClock()},250)}
-function showDiscovery(d){const state=d||{};lastDiscoveryState=state;const running=!!state.running;const regenYaml=state.mode==='regenerate_yaml';const regenCard=state.mode==='regenerate_card';const regen=regenYaml||regenCard;const phase=state.phase||(running?'running':(state.success===true?'complete':(state.success===false?'failed':'idle')));const preparing=running&&phase==='preparing';const stopping=running&&phase==='stopping';const active=running&&!preparing&&!stopping;const btn=$('runDiscoveryButton');const regenBtn=$('regenerateYamlButton');const cardBtn=$('regenerateCardYamlButton');const stopBtn=$('stopDiscoveryButton');btn.disabled=running;regenBtn.disabled=running;cardBtn.disabled=running;btn.textContent=preparing&&!regen?'Preparing…':(stopping?'Stopping…':(active&&!regen?'Discovery Running…':'Run Discovery'));regenBtn.textContent=regenYaml&&preparing?'Preparing…':(regenYaml&&active?'Regenerating…':'Regenerate SNMP2MQTT YAML');cardBtn.textContent=regenCard&&preparing?'Preparing…':(regenCard&&active?'Regenerating…':'Regenerate Dashboard Card YAML');stopBtn.disabled=!running||stopping;stopBtn.textContent=stopping?'Stopping…':'Stop Discovery';const modeLabel=regenCard?'Dashboard Card YAML regeneration':(regenYaml?'SNMP2MQTT YAML regeneration':'Discovery');let label='Idle / Ready';if(preparing)label=`Preparing ${modeLabel}`;else if(stopping)label=`Stopping ${modeLabel}`;else if(active)label=regen?`${modeLabel} running`:'Discovery running';else if(phase==='stopped')label=`${modeLabel} stopped`;else if(state.success===true)label=`${modeLabel} complete`;else if(state.success===false)label=`${modeLabel} failed: ${state.message||'Unknown error'}`;$('discoveryStatus').textContent=label;$('homeStatus').textContent=preparing?'Preparing Discovery':(stopping?'Stopping Discovery':(active?'Discovery running':(phase==='stopped'?'Discovery stopped':(state.success===true?'Last discovery complete':(state.success===false?'Discovery needs attention':'Ready')))));$('homeStatusDot').className=`status-dot${running?' running':(state.success===false?' failed':'')}`;$('liveStage').textContent=preparing?`Preparing ${modeLabel}`:(state.stage||label);$('liveSwitch').textContent=preparing?'Waiting':(state.switch||(!running&&state.success===true?'All configured switches':'Not running'));$('liveTarget').textContent=preparing?'Waiting':(state.target||'Not running');$('liveActivity').textContent=preparing?(regenCard?'Loading saved Discovery state and stored walks':(regenYaml?'Loading saved Discovery data and SNMP walks':'Validating configured switches')):(state.activity||label);$('liveCommand').textContent=preparing?'Not started':(state.command||'No command running');$('liveRunStatus').textContent=preparing?'Preparing':(stopping?'Stopping':(active?'Running':(phase==='stopped'?'Stopped':(state.success===true?'Complete':(state.success===false?'Failed':'Idle / Ready')))));const snmp=state.snmp2mqtt||{};$('liveSnmp2mqtt').textContent=snmp.message||snmp.status||'Waiting for Discovery';updateElapsedClock();const lines=state.log_tail||[];$('discoveryLog').textContent=lines.length?lines.join('\n'):'No debug details are available yet.';updateSteps(state);syncConfiguredDeviceToggleAvailability()}
+function showDiscovery(d){const state=d||{};lastDiscoveryState=state;const running=!!state.running;const regenYaml=state.mode==='regenerate_yaml';const regenCard=state.mode==='regenerate_card';const regen=regenYaml||regenCard;const phase=state.phase||(running?'running':(state.success===true?'complete':(state.success===false?'failed':'idle')));const preparing=running&&phase==='preparing';const stopping=running&&phase==='stopping';const active=running&&!preparing&&!stopping;const btn=$('runDiscoveryButton');const regenBtn=$('regenerateYamlButton');const cardBtn=$('regenerateCardYamlButton');const stopBtn=$('stopDiscoveryButton');btn.disabled=running;regenBtn.disabled=running;cardBtn.disabled=running;btn.textContent=preparing&&!regen?'Preparing…':(stopping?'Stopping…':(active&&!regen?'Discovery Running…':'Run Discovery'));regenBtn.textContent=regenYaml&&preparing?'Preparing…':(regenYaml&&active?'Regenerating…':'Regenerate SNMP2MQTT YAML');cardBtn.textContent=regenCard&&preparing?'Preparing…':(regenCard&&active?'Regenerating…':'Regenerate Dashboard Card YAML');stopBtn.disabled=!running||stopping;stopBtn.textContent=stopping?'Stopping…':'Stop Discovery';const modeLabel=regenCard?'Dashboard Card YAML regeneration':(regenYaml?'SNMP2MQTT YAML regeneration':'Discovery');let label='Idle / Ready';if(preparing)label=`Preparing ${modeLabel}`;else if(stopping)label=`Stopping ${modeLabel}`;else if(active)label=regen?`${modeLabel} running`:'Discovery running';else if(phase==='stopped')label=`${modeLabel} stopped`;else if(state.success===true)label=`${modeLabel} complete`;else if(state.success===false)label=`${modeLabel} failed: ${state.message||'Unknown error'}`;$('discoveryStatus').textContent=label;$('homeStatus').textContent=preparing?'Preparing Discovery':(stopping?'Stopping Discovery':(active?'Discovery running':(phase==='stopped'?'Discovery stopped':(state.success===true?'Last discovery complete':(state.success===false?'Discovery needs attention':'Ready')))));$('homeStatusDot').className=`status-dot${running?' running':(state.success===false?' failed':'')}`;$('liveStage').textContent=preparing?`Preparing ${modeLabel}`:(state.stage||label);$('liveSwitch').textContent=preparing?'Waiting':(state.switch||(!running&&state.success===true?'All configured switches':'Not running'));$('liveTarget').textContent=preparing?'Waiting':(state.target||'Not running');$('liveActivity').textContent=preparing?(regenCard?'Loading saved Discovery state and stored walks':(regenYaml?'Loading saved Discovery data and SNMP walks':'Validating configured switches')):(state.activity||label);$('liveCommand').textContent=preparing?'Not started':(state.command||'No command running');$('liveRunStatus').textContent=preparing?'Preparing':(stopping?'Stopping':(active?'Running':(phase==='stopped'?'Stopped':(state.success===true?'Complete':(state.success===false?'Failed':'Idle / Ready')))));const snmp=state.snmp2mqtt||{};$('liveSnmp2mqtt').textContent=snmp.message||snmp.status||'Waiting for Discovery';updateElapsedClock();const lines=state.log_tail||[];if(!debugVisible)$('discoveryLog').textContent=lines.length?lines.join('\n'):'No debug details are available yet.';updateSteps(state);syncConfiguredDeviceToggleAvailability()}
 function discoveryHistoryModeLabel(mode){return mode==='regenerate_card'?'Dashboard Card YAML regeneration':(mode==='regenerate_yaml'?'SNMP2MQTT YAML regeneration':'Discovery')}
 function discoveryHistoryStatusLabel(status){return status==='complete'?'Complete':(status==='failed'?'Failed':(status==='stopped'?'Stopped':'Unknown'))}
 function discoveryHistoryDuration(seconds){const total=Number(seconds);if(!Number.isFinite(total)||total<0)return 'Unknown';const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=Math.floor(total%60);return h?`${h}h ${m}m ${s}s`:(m?`${m}m ${s}s`:`${s}s`)}
-function renderDiscoveryHistory(history){const root=$('discoveryHistory');if(!root)return;const items=Array.isArray(history?.items)?history.items:[];root.innerHTML='';if(!items.length){const empty=document.createElement('p');empty.className='muted';empty.textContent='No completed Discovery operations are recorded yet.';root.append(empty);return}for(const item of [...items].reverse()){const entry=document.createElement('details');entry.className='device-card';const summary=document.createElement('summary');summary.textContent=`${discoveryHistoryModeLabel(item.mode)} | ${discoveryHistoryStatusLabel(item.status)} | ${item.finished_at||item.started_at||'Unknown time'}`;entry.append(summary);const meta=document.createElement('div');meta.className='muted';const bits=[`Duration: ${discoveryHistoryDuration(item.duration_seconds)}`,item.stage?`Stage: ${item.stage}`:'',item.switch?`Switch: ${item.switch}`:'',item.target?`Target: ${item.target}`:''].filter(Boolean);meta.textContent=bits.join(' | ');entry.append(meta);if(item.message){const message=document.createElement('p');message.textContent=item.message;entry.append(message)}const snmp=item.snmp2mqtt||{};if(snmp.message||snmp.status){const line=document.createElement('div');line.className='muted';line.textContent=`SNMP2MQTT: ${snmp.message||snmp.status}`;entry.append(line)}const lines=Array.isArray(item.debug_tail)?item.debug_tail:[];if(lines.length){const heading=document.createElement('strong');heading.textContent='Credential-sanitized debug excerpt';const pre=document.createElement('pre');pre.className='code-preview';pre.textContent=lines.join('\n');entry.append(heading,pre)}root.append(entry)}}
+let expandedDiscoveryHistoryEntries=new Set();
+function discoveryHistoryKey(item){return [item?.mode||'discovery',item?.started_at||'',item?.finished_at||'',item?.status||''].join('|')}
+function renderDiscoveryHistory(history){const root=$('discoveryHistory');if(!root)return;for(const entry of root.querySelectorAll('details[data-history-key]')){const key=entry.dataset.historyKey||'';if(!key)continue;if(entry.open)expandedDiscoveryHistoryEntries.add(key);else expandedDiscoveryHistoryEntries.delete(key)}const items=Array.isArray(history?.items)?history.items:[];root.innerHTML='';if(!items.length){const empty=document.createElement('p');empty.className='muted';empty.textContent='No completed Discovery operations are recorded yet.';root.append(empty);return}for(const item of [...items].reverse()){const key=discoveryHistoryKey(item);const entry=document.createElement('details');entry.className='device-card discovery-history-entry';entry.dataset.historyKey=key;entry.open=expandedDiscoveryHistoryEntries.has(key);entry.addEventListener('toggle',()=>{if(entry.open)expandedDiscoveryHistoryEntries.add(key);else expandedDiscoveryHistoryEntries.delete(key)});const summary=document.createElement('summary');const title=document.createElement('strong');title.textContent=`${discoveryHistoryModeLabel(item.mode)} | ${discoveryHistoryStatusLabel(item.status)} | ${item.finished_at||item.started_at||'Unknown time'}`;summary.append(title);entry.append(summary);const meta=document.createElement('div');meta.className='muted';const bits=[`Duration: ${discoveryHistoryDuration(item.duration_seconds)}`,item.stage?`Stage: ${item.stage}`:'',item.switch?`Switch: ${item.switch}`:'',item.target?`Target: ${item.target}`:''].filter(Boolean);meta.textContent=bits.join(' | ');entry.append(meta);if(item.message){const message=document.createElement('p');message.textContent=item.message;entry.append(message)}const snmp=item.snmp2mqtt||{};if(snmp.message||snmp.status){const line=document.createElement('div');line.className='muted';line.textContent=`SNMP2MQTT: ${snmp.message||snmp.status}`;entry.append(line)}const lines=Array.isArray(item.debug_tail)?item.debug_tail:[];if(lines.length){const heading=document.createElement('strong');heading.textContent='Credential-sanitized debug excerpt';const pre=document.createElement('pre');pre.className='code-preview';pre.textContent=lines.join('\n');entry.append(heading,pre)}root.append(entry)}}
 async function loadGeneratedCardYamlStatus(){const status=$('generatedCardYamlActionStatus');const preview=$('generatedCardYamlPreview');try{const r=await fetch(endpoint('api/generated-card-yaml/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not read generated Card YAML status');const found=!!d.generated?.found;const valid=!!d.validation?.valid;const modified=d.generated?.modified||null;$('generatedCardYamlState').textContent=found?`${d.generated.path||'generated-dashboard-card.yaml'} · ${d.generated.size||0} bytes`:'Not generated';$('generatedCardYamlValidation').textContent=valid?`Valid · ${d.validation?.documents||1} YAML document${(d.validation?.documents||1)===1?'':'s'}`:`Invalid · ${d.validation?.error||'validation failed'}`;$('generatedCardYamlUpdated').textContent=modified||'Not available';$('downloadGeneratedCardYamlButton').href=endpoint('download/generated-dashboard-card.yaml');if(!found||!valid){preview.textContent='';preview.classList.add('hidden');status.textContent=!found?'Run Discovery to generate the Card YAML preview.':`Generated Card YAML is not available for preview: ${d.validation?.error||'validation failed'}`}else{if(generatedCardYamlModified&&modified!==generatedCardYamlModified&&!preview.classList.contains('hidden')){preview.textContent=await fetchGeneratedCardYaml();status.textContent='Generated Card YAML preview refreshed.'}else if(status.textContent.startsWith('Could not load')||status.textContent.startsWith('Generated Card YAML is not available'))status.textContent=''}generatedCardYamlModified=modified}catch(e){preview.textContent='';preview.classList.add('hidden');status.textContent=`Could not load generated Card YAML status: ${e}`}}
 async function fetchGeneratedCardYaml(){const r=await fetch(endpoint('api/generated-card-yaml/preview'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Card YAML preview failed');return d.text||''}
 async function previewGeneratedCardYaml(){const status=$('generatedCardYamlActionStatus');try{const text=await fetchGeneratedCardYaml();$('generatedCardYamlPreview').textContent=text;$('generatedCardYamlPreview').classList.remove('hidden');status.textContent='Generated Card YAML preview loaded.'}catch(e){status.textContent=`Could not preview generated Card YAML: ${e}`}}
 async function copyGeneratedCardYaml(){const status=$('generatedCardYamlActionStatus');status.textContent='Copying generated Card YAML…';try{const text=await fetchGeneratedCardYaml();const copied=await copyTextWithFallback(text);if(!copied)throw new Error('Clipboard access is unavailable in this browser context');$('generatedCardYamlPreview').textContent=text;$('generatedCardYamlPreview').classList.remove('hidden');status.textContent='Generated Card YAML copied to clipboard.'}catch(e){status.textContent=`Could not copy generated Card YAML: ${e}`}}
 async function loadGeneratedYamlStatus(){try{const r=await fetch(endpoint('api/generated-yaml/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not read generated YAML status');const applicable=d.applicable!==false;const found=!!d.generated?.found;const description=$('generatedYamlDescription');const actions=$('generatedYamlActions');const regen=$('regenerateYamlButton');const regenHelp=$('regenerateYamlHelp');const preview=$('generatedYamlPreview');const actionStatus=$('generatedYamlActionStatus');if(!applicable){$('generatedYamlState').textContent='Not in use';$('generatedYamlValidation').textContent=`Not applicable · ${d.reason||'No enabled SNMP targets are configured.'}`;$('generatedYamlUpdated').textContent='Not applicable';if(description)description.textContent='SNMP2MQTT YAML is only required for switches using the SNMP data path. UniFi API devices use UniFi2MQTT and do not require this file.';if(actions)actions.hidden=true;if(regen)regen.hidden=true;if(regenHelp)regenHelp.hidden=true;preview.textContent='';preview.classList.add('hidden');actionStatus.textContent='No SNMP2MQTT YAML action is required for this installation.';$('liveSnmp2mqtt').textContent='Not in use · no enabled SNMP targets';return}if(description)description.textContent='Discovery writes the file used by the SNMP2MQTT generated-YAML import option. After a successful SNMP Discovery run, Switch Vision validates the YAML and automatically starts or restarts the SNMP2MQTT app.';if(actions)actions.hidden=false;if(regen)regen.hidden=false;if(regenHelp)regenHelp.hidden=false;actionStatus.textContent='';$('generatedYamlState').textContent=found?`${d.generated.path||'generated-snmp2mqtt.yaml'} · ${d.generated.size||0} bytes`:'Not generated';$('generatedYamlValidation').textContent=d.validation?.valid?'Valid':`Invalid · ${d.validation?.error||'validation failed'}`;$('generatedYamlUpdated').textContent=d.generated?.modified||'Not available';$('downloadGeneratedYamlButton').href=endpoint('download/generated-snmp2mqtt.yaml')}catch(e){$('generatedYamlActionStatus').textContent=`Could not load generated YAML status: ${e}`}}
 async function previewGeneratedYaml(){const status=$('generatedYamlActionStatus');try{const r=await fetch(endpoint('api/generated-yaml/preview'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Preview failed');$('generatedYamlPreview').textContent=d.text||'';$('generatedYamlPreview').classList.remove('hidden');status.textContent='Generated YAML preview loaded.'}catch(e){status.textContent=`Could not preview generated YAML: ${e}`}}
-function toggleDebug(){debugVisible=!debugVisible;$('debugWrap').classList.toggle('hidden',!debugVisible);$('toggleDebugButton').textContent=debugVisible?'Hide Debug':'Show Debug'}
+async function toggleDebug(){debugVisible=!debugVisible;$('debugWrap').classList.toggle('hidden',!debugVisible);$('toggleDebugButton').textContent=debugVisible?'Hide Debug':'Show Debug';if(debugVisible)await refreshCurrentDiscoveryDebug()}
 async function startDashboardCardYamlRegeneration(btn,status){if(!btn||!status)return;btn.disabled=true;status.textContent='Preparing stored-state Dashboard Card YAML regeneration…';try{const r=await fetch(endpoint('api/discovery/regenerate-card'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start Dashboard Card YAML regeneration');status.textContent='Dashboard Card YAML regeneration started from the current saved device state. No Discovery run or new SNMP walks are required, and SNMP2MQTT will not be restarted.';await refresh()}catch(e){status.textContent=`Could not regenerate Dashboard Card YAML: ${e.message||e}`;btn.disabled=false}}
 async function regenerateDashboardCardYaml(){await startDashboardCardYamlRegeneration($('regenerateCardYamlButton'),$('regenerateCardYamlStatus'))}
 async function regenerateDashboardCardYamlFromDevices(){await startDashboardCardYamlRegeneration($('devicesRegenerateCardYamlButton'),$('devicesActionStatus'))}
@@ -4603,14 +4984,17 @@ async function resetSnmpDiscoveryData(){const btn=$('resetSnmpDiscoveryButton');
 
 async function importConfiguration(){const file=$('configurationFile').files[0];const status=$('configurationStatus');if(!file){status.textContent='Choose a configuration JSON file first.';return}if(file.size>1024*1024){status.textContent='Configuration file is too large.';return}if(!confirm('Import this Discovery configuration? The current switch list and Discovery settings will be replaced.'))return;const btn=$('importConfigurationButton');btn.disabled=true;status.textContent='Importing configuration…';try{const text=await file.text();const data=JSON.parse(text);const r=await fetch(endpoint('api/configuration/import'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Import failed');status.textContent=`Imported ${d.switch_count||0} configured switch(es). The saved Supervisor configuration is active for the next Discovery run.`}catch(e){status.textContent=`Could not import configuration: ${e.message||e}`}finally{btn.disabled=false}}
 function schedulePoll(running=lastRunning){if(polling){clearTimeout(polling);polling=null}if(document.hidden)return;polling=setTimeout(refresh,running?1000:5000)}
-async function refresh(){if(refreshInFlight)return;refreshInFlight=true;try{const r=await fetch(endpoint('api/status'),{cache:'no-store'});const d=await r.json();if(d.ui_preferences?.density)syncDensityUi(d.ui_preferences.density);setUnifiHomeCardVisibility(d.ui_preferences?.show_unifi_integration!==false);if(d.ui_preferences?.show_unifi_integration!==false)await refreshUnifiHomeCard();if(!defaultsLoaded)setForm(d.defaults);showDiscovery(d.discovery);renderDiscoveryHistory(d.discovery_history||{});const contributionRunning=!!d.job.running;const discoveryRunning=!!d.discovery?.running;lastRunning=contributionRunning||discoveryRunning;$('createButton').disabled=contributionRunning;if(contributionRunning&&currentView!=='discovery')setView('progress');$('progressMessage').textContent=d.job.message||'Working…';$('logTail').textContent=(d.job.log_tail||[]).join('\n');if(!contributionRunning&&d.job.success===false&&currentView==='progress'){$('progressMessage').textContent=`Failed: ${d.job.message}`}if(!contributionRunning){showLatest(d.latest);if(d.job.success===true&&d.latest&&currentView==='progress')setView('ready')}if(currentView==='devices')await refreshDevicesData(false);else if(currentView==='discovery')await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])}catch(e){if(currentView==='progress')$('progressMessage').textContent=`Could not contact Support My Switch: ${e}`;else $('homeStatus').textContent=`Connection problem: ${e}`}finally{refreshInFlight=false;schedulePoll(lastRunning)}}
+async function refresh(){if(refreshInFlight)return;refreshInFlight=true;try{const r=await fetch(endpoint('api/status'),{cache:'no-store'});const d=await r.json();if(d.ui_preferences?.density)syncDensityUi(d.ui_preferences.density);setUnifiHomeCardVisibility(d.ui_preferences?.show_unifi_integration!==false);if(d.ui_preferences?.show_unifi_integration!==false)await refreshUnifiHomeCard();if(!defaultsLoaded)setForm(d.defaults);showDiscovery(d.discovery);renderDiscoveryHistory(d.discovery_history||{});if(debugVisible)await refreshCurrentDiscoveryDebug();const contributionRunning=!!d.job.running;const discoveryRunning=!!d.discovery?.running;lastRunning=contributionRunning||discoveryRunning;$('createButton').disabled=contributionRunning;if(contributionRunning&&currentView!=='discovery')setView('progress');$('progressMessage').textContent=d.job.message||'Working…';$('logTail').textContent=(d.job.log_tail||[]).join('\n');if(!contributionRunning&&d.job.success===false&&currentView==='progress'){$('progressMessage').textContent=`Failed: ${d.job.message}`}if(!contributionRunning){showLatest(d.latest);if(d.job.success===true&&d.latest&&currentView==='progress')setView('ready')}if(currentView==='devices')await refreshDevicesData(false);else if(currentView==='discovery')await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])}catch(e){if(currentView==='progress')$('progressMessage').textContent=`Could not contact Support My Switch: ${e}`;else $('homeStatus').textContent=`Connection problem: ${e}`}finally{refreshInFlight=false;schedulePoll(lastRunning)}}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(polling){clearTimeout(polling);polling=null}}else{updateElapsedClock();refresh()}});window.addEventListener('focus',()=>{if(!document.hidden){updateElapsedClock();refresh()}});
 async function create(){const btn=$('createButton');btn.disabled=true;setView('progress');$('progressMessage').textContent='Starting…';try{const r=await fetch(endpoint('api/create'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start contribution');await refresh()}catch(e){$('progressMessage').textContent=`Could not start: ${e}`;btn.disabled=false}}
-$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openCalibrationProfilesButton').addEventListener('click',()=>{setView('profiles');window.SwitchVisionCalibrationProfiles?.load()});$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedCardYamlButton').addEventListener('click',previewGeneratedCardYaml);$('copyGeneratedCardYamlButton').addEventListener('click',copyGeneratedCardYaml);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('devicesRegenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYamlFromDevices);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json')});$('openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()});$('openIntegrationSettingsButton').addEventListener('click',()=>window.SwitchVisionHubSettings?.open('core'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);setView('home');startElapsedTicker();refresh();
+const DISCOVERY_TOOLTIP_HELP={runDiscoveryButton:'Contact each enabled switch, collect current evidence, identify hardware, and regenerate Switch Vision outputs.',regenerateYamlButton:'Rebuild SNMP2MQTT YAML from saved Discovery evidence without running new SNMP walks.',regenerateCardYamlButton:'Rebuild dashboard-card YAML from saved Discovery evidence without running new SNMP walks.',stopDiscoveryButton:'Request a clean stop of the active Discovery or regeneration operation.',viewResultsButton:'Open the unified Devices list and current detected hardware details.',toggleDebugButton:'Show the complete credential-sanitized debug session for the current or most recent operation.',copyDebugButton:'Copy the complete current-session credential-sanitized debug output.',devicesRunDiscoveryButton:'Start a fresh Discovery run for the currently enabled saved switches.',devicesRegenerateCardYamlButton:'Regenerate the dashboard card from current saved device order/state.',copyDiagnosticsButton:'Copy the privacy-safe Switch Vision diagnostics report.',resetSnmpDiscoveryButton:'Retire known Switch Vision SNMP MQTT entities and clear saved SNMP Discovery state for a clean rebuild.',addUnifiControllerButton:'Add another Local or Remote UniFi controller/site to this UniFi2MQTT instance.',unifi_priority_transport:'The connection path tried first on every UniFi poll.',unifi_fallback_transport:'The alternate connection used only when the priority path is unavailable.',unifi_local_controller_url:'Local UniFi Network Integration API origin. Self-hosted controllers normally use HTTPS port 11443.',unifi_remote_host_id:'UniFi Site Manager console host selector; auto is recommended when unambiguous.'};
+function installDiscoveryTooltips(root=document){const selector='button,input,select,a.button,summary';for(const el of root.querySelectorAll?root.querySelectorAll(selector):[]){if(el.title)continue;let help=DISCOVERY_TOOLTIP_HELP[el.id]||el.getAttribute('aria-label')||'';const label=el.closest?.('label');if(!help&&label){const small=label.querySelector('small');if(small)help=small.textContent.trim();if(!help){const span=label.querySelector(':scope > span');if(span)help=span.textContent.trim()}}if(!help&&(el.tagName==='BUTTON'||el.tagName==='SUMMARY'||el.matches('a.button')))help=el.textContent.trim();if(help)el.title=help}}
+const discoveryTooltipObserver=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===Node.ELEMENT_NODE){if(node.matches?.('button,input,select,a.button,summary'))installDiscoveryTooltips(node.parentElement||document);else installDiscoveryTooltips(node)}});discoveryTooltipObserver.observe(document.body,{childList:true,subtree:true});installDiscoveryTooltips(document);
+$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openCalibrationProfilesButton').addEventListener('click',()=>{setView('profiles');window.SwitchVisionCalibrationProfiles?.load()});$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedCardYamlButton').addEventListener('click',previewGeneratedCardYaml);$('copyGeneratedCardYamlButton').addEventListener('click',copyGeneratedCardYaml);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('devicesRegenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYamlFromDevices);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json')});$('openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()});$('openIntegrationSettingsButton').addEventListener('click',()=>window.SwitchVisionHubSettings?.open('core'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('addUnifiControllerButton').addEventListener('click',addUnifiController);$('unifi_priority_transport').addEventListener('change',syncUnifiFallbackOptions);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);installStaticSecretControls();setView('home');startElapsedTicker();refresh();
 </script>
 <script src="credits_v25.js"></script>
 <script>
-(()=>{'use strict';const q=id=>document.getElementById(id),clone=v=>JSON.parse(JSON.stringify(v)),dirty=new Set(),state={core:null,snmp2mqtt:null,discovery:null,models:[],order:[],activeTab:'core'};const L={show_all_switch_vision_sidebar_items:'Show all Switch Vision sidebar items',show_panel_in_sidebar:'Show native Switch Vision in sidebar',show_lovelace_dashboard_in_sidebar:'Show Switch Vision dashboard in sidebar',show_hub_in_sidebar:'Show Switch Vision Hub in sidebar',show_installer_in_sidebar:'Show Switch Vision Installer in sidebar',show_dashboard_header:'Show dashboard header',native_header_show_summary:'Show summary',native_header_show_refresh:'Show refresh',native_header_show_version:'Show version',native_header_shortcut_switch_vision_settings:'Switch Vision Settings shortcut',native_header_shortcut_hub:'Hub shortcut',native_header_shortcut_maintenance:'Maintenance shortcut',native_header_shortcut_discovery_settings:'Discovery Settings shortcut',native_header_shortcut_installer:'Installer shortcut',native_header_shortcut_installer_settings:'Installer Settings shortcut',native_header_shortcut_snmp2mqtt_settings:'SNMP2MQTT Settings shortcut',native_header_shortcut_unifi2mqtt_settings:'UniFi2MQTT Settings shortcut',show_calibration_buttons:'Show calibration buttons on cards',show_card_headers:'Show card headers'};const OL={hub:'Hub',maintenance:'Maintenance',switch_vision_settings:'Switch Vision Settings',discovery_settings:'Discovery Settings',installer:'Installer',installer_settings:'Installer Settings',snmp2mqtt_settings:'SNMP2MQTT Settings',unifi2mqtt_settings:'UniFi2MQTT Settings'};function status(t,c=''){const n=q('hubSettingsStatus');if(n){n.className=`muted hub-settings-status ${c}`.trim();n.textContent=t}}function selectTab(which='core',focus=false){const ids=['core','discovery','snmp2mqtt'];const selected=ids.includes(which)?which:'core';state.activeTab=selected;for(const id of ids){const active=id===selected,pane=q(`hubComponent-${id}`),tab=q(`hubTab-${id}`);if(pane)pane.hidden=!active;if(tab){tab.classList.toggle('is-active',active);tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1}}if(focus)q(`hubTab-${selected}`)?.focus()}function tabKeydown(e){const ids=['core','discovery','snmp2mqtt'],current=state.activeTab,i=Math.max(0,ids.indexOf(current));let next=null;if(e.key==='ArrowRight')next=ids[(i+1)%ids.length];else if(e.key==='ArrowLeft')next=ids[(i-1+ids.length)%ids.length];else if(e.key==='Home')next=ids[0];else if(e.key==='End')next=ids[ids.length-1];if(next){e.preventDefault();selectTab(next,true)}}function mark(o){dirty.add(o);q('hubSettingsSave').disabled=false;status('Unsaved changes')}function clear(o){dirty.delete(o);q('hubSettingsSave').disabled=!dirty.size}async function req(p,o={}){const r=await fetch(endpoint(p),{cache:'no-store',...o});let d={};try{d=await r.json()}catch(_e){}if(!r.ok)throw new Error(d.error||`Request failed (${r.status})`);return d}function sec(t,p=''){const x=document.createElement('section');x.className='hub-settings-section';x.innerHTML=`<h3>${t}</h3>${p?`<p class="muted">${p}</p>`:''}`;return x}function hubHelp(t){const w=document.createElement('span');w.className='hub-help';const b=document.createElement('button');b.type='button';b.className='hub-help-button';b.textContent='?';b.setAttribute('aria-label','Help: '+t);b.setAttribute('aria-expanded','false');const p=document.createElement('span');p.className='hub-help-popover';p.setAttribute('role','tooltip');p.textContent=t;p.hidden=true;let pinned=false;const show=()=>{p.hidden=false;b.setAttribute('aria-expanded','true')},hide=()=>{if(!pinned){p.hidden=true;b.setAttribute('aria-expanded','false')}};b.onmouseenter=show;b.onmouseleave=hide;b.onfocus=show;b.onblur=hide;b.onclick=e=>{e.preventDefault();pinned=!pinned;pinned?show():hide()};b.onkeydown=e=>{if(e.key==='Escape'){pinned=false;p.hidden=true;b.setAttribute('aria-expanded','false')}};w.append(b,p);return w}function attachActionHelp(id,t){const e=q(id);if(e&&!e.nextElementSibling?.classList?.contains('hub-help'))e.after(hubHelp(t))}function fld(t,c,h=''){const x=document.createElement('label');x.className='field hub-setting-field';const s=document.createElement('span');s.className='hub-field-label';s.textContent=t;if(h)s.append(hubHelp(h));c.setAttribute('aria-label',t);x.append(s,c);return x}function tog(t,v,fn,dis=false,h=''){const x=document.createElement('label');x.className='option hub-setting-toggle';const i=document.createElement('input');i.type='checkbox';i.checked=!!v;i.disabled=dis;i.onchange=()=>fn(i.checked);i.setAttribute('aria-label',t);const s=document.createElement('span');s.className='hub-option-label hub-toggle-label';s.textContent=t;if(h)s.append(hubHelp(h));x.append(i,s);return x}function sel(v,opts,fn){const s=document.createElement('select');for(const [a,b] of opts){const o=document.createElement('option');o.value=a;o.textContent=b;o.selected=String(v)===String(a);s.append(o)}s.onchange=()=>fn(s.value);return s}function inp(v,type,fn,a={}){const i=document.createElement('input');i.type=type;i.value=v??'';for(const[k,x]of Object.entries(a))if(x!==undefined&&x!==null)i.setAttribute(k,String(x));i.oninput=()=>fn(i.value);return i}function fontChoices(){return Array.from({length:11},(_,i)=>{const px=i+10;return[String(px),`${px} px`]})}function renderCore(){const r=q('hubCoreSettings');r.innerHTML='';if(!state.core?.settings){r.textContent='Core settings are unavailable.';return}const s=state.core.settings,side=sec('Sidebar & navigation'),sideTog=document.createElement('div');sideTog.className='hub-toggle-grid';for(const[k,v]of Object.entries(s.sidebar||{}))sideTog.append(tog(L[k]||k,v,x=>{s.sidebar[k]=x;mark('core')}));side.append(sideTog);r.append(side);const h=sec('Native dashboard header','Choose which controls appear in the native Switch Vision header.'),headerTog=document.createElement('div');headerTog.className='hub-toggle-grid';for(const[k,v]of Object.entries(s.native_header||{})){if(k!=='native_header_shortcut_order')headerTog.append(tog(L[k]||k,v,x=>{s.native_header[k]=x;mark('core')}))}const box=document.createElement('div');box.className='hub-order-list';box.innerHTML='<b>Shortcut order</b>';state.order=[...(s.native_header.native_header_shortcut_order||[])];const draw=()=>{box.querySelectorAll('.hub-order-row').forEach(n=>n.remove());state.order.forEach((id,n)=>{const row=document.createElement('div');row.className='hub-order-row';const nm=document.createElement('span');nm.textContent=OL[id]||id;const u=document.createElement('button'),d=document.createElement('button');u.type=d.type='button';u.textContent='↑';d.textContent='↓';u.disabled=n===0;d.disabled=n===state.order.length-1;u.onclick=()=>{[state.order[n-1],state.order[n]]=[state.order[n],state.order[n-1]];s.native_header.native_header_shortcut_order=[...state.order];mark('core');draw()};d.onclick=()=>{[state.order[n+1],state.order[n]]=[state.order[n],state.order[n+1]];s.native_header.native_header_shortcut_order=[...state.order];mark('core');draw()};row.append(nm,u,d);box.append(row)})};draw();const headerLayout=document.createElement('div');headerLayout.className='hub-header-layout';headerLayout.append(headerTog,box);h.append(headerLayout);r.append(h);const dash=sec('Dashboard presentation','Control card headers, Calibration controls, and the maximum rendered faceplate width.'),dashTog=document.createElement('div');dashTog.className='hub-toggle-grid';for(const[k,v]of Object.entries(s.dashboard||{})){if(k==='faceplate_width_mode'||k==='faceplate_custom_width')continue;dashTog.append(tog(L[k]||k,v,x=>{s.dashboard[k]=x;mark('core')}))}dash.append(dashTog);const widthGrid=document.createElement('div');widthGrid.className='grid';const widthMode=sel(s.dashboard.faceplate_width_mode||'auto',[['auto','Auto'],['800','800 px'],['1024','1024 px'],['custom','Custom']],x=>{s.dashboard.faceplate_width_mode=x;mark('core');renderCore()});widthGrid.append(fld('Faceplate width',widthMode,'Sets the maximum rendered faceplate/card width. Height and calibrated geometry scale proportionally.'));if((s.dashboard.faceplate_width_mode||'auto')==='custom')widthGrid.append(fld('Custom faceplate width (px)',inp(s.dashboard.faceplate_custom_width||800,'number',x=>{s.dashboard.faceplate_custom_width=Number(x);mark('core')},{min:320,max:4096,step:1}),'Custom width is remembered when you switch back to a preset.'));dash.append(widthGrid);r.append(dash);const a=sec('Activity LEDs'),g=document.createElement('div');g.className='grid hub-grid-dense';g.append(fld('Sensitivity preset',sel(s.activity_leds.activity_led_sensitivity_preset,[['low','Low'],['normal','Normal'],['high','High'],['custom','Custom']],x=>{s.activity_leds.activity_led_sensitivity_preset=x;mark('core')})));for(const[k,t,min,max,step]of [['activity_slow_max_utilization_pct','Slow activity maximum (%)',.001,100,.001],['activity_medium_max_utilization_pct','Medium activity maximum (%)',.001,100,.001],['activity_slow_period_ms','Slow blink period (ms)',120,2000,1],['activity_medium_period_ms','Medium blink period (ms)',120,2000,1],['activity_fast_period_ms','Fast blink period (ms)',120,2000,1],['activity_hold_seconds','Activity hold (seconds)',1,120,.1],['activity_hysteresis_pct','Hysteresis (%)',0,50,.1]])g.append(fld(t,inp(s.activity_leds[k],'number',x=>{s.activity_leds[k]=Number(x);mark('core')},{min,max,step})));a.append(g);r.append(a);const ap=document.createElement('div');ap.className='hub-settings-columns';for(const[grp,title]of[['discovery','Discovery appearance'],['installer','Installer appearance']]){const b=sec(title),v=s[grp];b.append(fld('UI density',sel(v[`${grp}_ui_density`],[['comfortable','Comfortable'],['compact','Compact'],['dense','Dense']],x=>{v[`${grp}_ui_density`]=x;mark('core')})),fld('Text size',sel(v[`${grp}_text_size`],fontChoices(),x=>{v[`${grp}_text_size`]=Number(x);mark('core')})),fld('Content width',sel(v[`${grp}_content_width`],[['standard','Standard'],['wide','Wide'],['full','Full']],x=>{v[`${grp}_content_width`]=x;mark('core')})));if(grp==='discovery')b.append(tog('Show UniFi integration',v.show_unifi_integration,x=>{v.show_unifi_integration=x;mark('core')}));ap.append(b)}r.append(ap)}function renderSnmp(){const r=q('hubSnmpSettings');r.innerHTML='';const d=state.snmp2mqtt;if(!d?.installed){r.innerHTML='<div class="warning">Switch Vision SNMP2MQTT is not installed.</div>';return}const s=d.settings,m=sec('MQTT connection'),g=document.createElement('div');g.className='grid';g.append(fld('MQTT host',inp(s.mqtt.host,'text',x=>{s.mqtt.host=x;mark('snmp2mqtt')})),fld('MQTT port',inp(s.mqtt.port,'number',x=>{s.mqtt.port=Number(x);mark('snmp2mqtt')},{min:1,max:65535,step:1})),fld('MQTT username',inp(s.mqtt.username,'text',x=>{s.mqtt.username=x;mark('snmp2mqtt')})),fld('MQTT password',inp('','password',x=>{s.mqtt.password=x;mark('snmp2mqtt')},{autocomplete:'new-password',placeholder:d.password_configured?'Saved — leave blank to keep':'Not configured'}),'The saved password is never returned to the Hub. Leave blank to preserve it.'));m.append(g,tog('Clear saved MQTT password',false,x=>{s.clear_password=x;mark('snmp2mqtt')},false,'Only enable this if the broker no longer requires the saved password.'));r.append(m);const p=sec('Target configuration'),pg=document.createElement('div');pg.className='grid';for(const[k,t]of[['targets_path','Targets path'],['switch_vision_generated_yaml_path','Generated YAML path'],['imported_targets_path','Imported targets path']])pg.append(fld(t,inp(s[k],'text',x=>{s[k]=x;mark('snmp2mqtt')})));p.append(pg,tog('Use Switch Vision generated YAML',s.use_switch_vision_generated_yaml,x=>{s.use_switch_vision_generated_yaml=x;mark('snmp2mqtt')}),tog('Back up existing config before import',s.backup_existing_config,x=>{s.backup_existing_config=x;mark('snmp2mqtt')}));r.append(p);const ha=sec('Home Assistant discovery');ha.append(tog('MQTT Discovery enabled',true,()=>{},true,'Required by Switch Vision and enforced by SNMP2MQTT.'),fld('Discovery prefix',inp('homeassistant','text',()=>{},{readonly:'readonly'}),'Required value: homeassistant.'));r.append(ha)}function bsel(v,fn){return sel(v===true||String(v).toLowerCase()==='true'?'true':'false',[['true','Enabled'],['false','Disabled']],fn)}function renderDiscovery(){const r=q('hubDiscoverySettings');r.innerHTML='';if(!state.discovery?.settings){r.textContent='Discovery settings are unavailable.';return}const s=state.discovery.settings,w=sec('Discovery workflow'),wg=document.createElement('div');wg.className='grid';for(const[k,t]of[['run_snmp_walks','Run SNMP walks'],['enable_switch_list','Use saved switch list'],['parse_all_walks','Parse all stored walks'],['generate_snmp2mqtt','Generate SNMP2MQTT YAML'],['clean_output_before_walk','Clean generated output before walk'],['generate_support_my_switch_bundle','Create Support My Switch bundle after Discovery']])wg.append(fld(t,bsel(s[k],x=>{s[k]=x;mark('discovery')})));w.append(wg);r.append(w);const sw=sec('Switches','SNMP communities are write-only. Blank preserves an existing saved community.');(s.switches||[]).forEach((row,n)=>{const c=document.createElement('div');c.className='device-card hub-setting-row';const hd=document.createElement('div');hd.className='device-head';hd.innerHTML=`<strong>Switch ${n+1}</strong>`;const rm=document.createElement('button');rm.type='button';rm.className='danger';rm.textContent='Remove';rm.onclick=()=>{s.switches.splice(n,1);mark('discovery');renderDiscovery()};hd.append(rm);c.append(hd);const g=document.createElement('div');g.className='grid';const f=(t,k,type='text',hint='')=>fld(t,inp(row[k]??'',type,x=>{row[k]=x;mark('discovery')},type==='password'?{autocomplete:'new-password',placeholder:row.snmp_community_configured?'Saved — leave blank to keep':'Required for new switch'}:{}),hint);g.append(f('Switch Name (Used internally only)','switch_name'),f('Display name','display_name'),f('Switch host','switch_host'),f('Sensor prefix','sensor_prefix'),f('SNMP community','snmp_community','password','Saved communities are never returned to the Hub.'),fld('State',sel(row.enabled||'enabled',[['enabled','Enabled'],['disabled','Disabled']],x=>{row.enabled=x;mark('discovery')})),fld('Walk mode',sel(row.walk_mode||'targeted',[['targeted','Targeted'],['full','Full']],x=>{row.walk_mode=x;mark('discovery')})),fld('Switch model',sel(row.switch_model||'auto',[['auto','Auto'],...state.models.filter(m=>m!=='auto').map(m=>[m,m])],x=>{row.switch_model=x;mark('discovery')})),f('Card header title','card_header_title'));c.append(g);sw.append(c)});const add=document.createElement('button');add.type='button';add.textContent='Add switch';add.onclick=()=>{s.switches.push({switch_name:'',display_name:'',switch_host:'',sensor_prefix:'',snmp_community:'',snmp_community_configured:false,original_switch_name:'',enabled:'enabled',walk_mode:'targeted',switch_model:'auto',card_header_title:''});mark('discovery');renderDiscovery()};sw.append(add);r.append(sw);const st=sec('Stack member display mapping');(s.stack_member_prefixes||[]).forEach((row,n)=>{const c=document.createElement('div');c.className='device-card hub-setting-row';const hd=document.createElement('div');hd.className='device-head';hd.innerHTML=`<strong>Stack member ${n+1}</strong>`;const rm=document.createElement('button');rm.type='button';rm.className='danger';rm.textContent='Remove';rm.onclick=()=>{s.stack_member_prefixes.splice(n,1);mark('discovery');renderDiscovery()};hd.append(rm);c.append(hd);const g=document.createElement('div');g.className='grid';for(const[k,t]of[['switch_name','Switch name'],['member','Member number'],['display_name','Display name'],['sensor_prefix','Sensor prefix'],['card_header_title','Card header title']])g.append(fld(t,inp(row[k]??'','text',x=>{row[k]=x;mark('discovery')})));c.append(g);st.append(c)});const as=document.createElement('button');as.type='button';as.textContent='Add stack member';as.onclick=()=>{s.stack_member_prefixes.push({switch_name:'',member:'1',display_name:'',sensor_prefix:'',card_header_title:''});mark('discovery');renderDiscovery()};st.append(as);r.append(st);const p=sec('Paths & SNMP timing'),pg=document.createElement('div');pg.className='grid';for(const[k,t]of[['input_path','Input walk path'],['snmpwalks_dir','SNMP walks directory'],['report_path','Discovery report path'],['targets_csv','Targets CSV path'],['last_run_summary_path','Last-run summary path'],['generated_yaml_path','Generated SNMP2MQTT path'],['generated_card_path','Generated dashboard path'],['snmp_log_path','SNMP log path']])pg.append(fld(t,inp(s[k]??'','text',x=>{s[k]=x;mark('discovery')})));for(const[k,t,min,max]of[['snmp_timeout','SNMP timeout',1,30],['snmp_retries','SNMP retries',0,10],['minimum_valid_walk_lines','Minimum valid walk lines',1,1000000]])pg.append(fld(t,inp(s[k]??'','number',x=>{s[k]=String(x);mark('discovery')},{min,max,step:1})));p.append(pg);r.append(p);const bk=sec('Discovery configuration backups'),bg=document.createElement('div');bg.className='grid';bg.append(fld('Automatic retention',bsel(s.backup_retention_enabled,x=>{s.backup_retention_enabled=x;mark('discovery')})),fld('Retained backups',inp(s.backup_retention_count,'number',x=>{s.backup_retention_count=Number(x);mark('discovery')},{min:1,max:10,step:1})));bk.append(bg);r.append(bk);const sp=sec('Support My Switch privacy & recognition'),sg=document.createElement('div');sg.className='grid';for(const[k,t]of[['support_mask_management_ips','Mask management IPs'],['support_mask_mac_addresses','Mask MAC addresses'],['support_mask_hostnames','Mask hostnames'],['support_mask_vlan_names','Mask VLAN names'],['support_mask_interface_descriptions','Mask interface descriptions']])sg.append(fld(t,bsel(s[k],x=>{s[k]=x;mark('discovery')})));sg.append(fld('Contributor recognition',sel(s.support_contributor_type||'anonymous',[['anonymous','Anonymous'],['first_name','First name'],['full_name','Full name'],['github','GitHub'],['forum','Forum']],x=>{s.support_contributor_type=x;mark('discovery')})),fld('Contributor value',inp('','text',x=>{s.support_contributor_value=x;mark('discovery')},{maxlength:120,placeholder:s.support_contributor_value_configured?'Saved — leave blank to keep':'Optional recognition'}),'Private and write-only in the Hub; nothing is published automatically.'));sp.append(sg);r.append(sp)}function cleanDiscovery(){const s=clone(state.discovery.settings);delete s.support_contributor_value_configured;s.switches=(s.switches||[]).map(row=>{const x={...row};delete x.snmp_community_configured;return x});return s}async function load(){status('Loading settings…');const a=await Promise.allSettled([req('api/settings/core'),req('api/settings/snmp2mqtt'),req('api/settings/discovery')]);state.core=a[0].status==='fulfilled'?clone(a[0].value):null;state.snmp2mqtt=a[1].status==='fulfilled'?clone(a[1].value):{installed:false};if(a[2].status==='fulfilled'){state.discovery=clone(a[2].value);state.models=[...(a[2].value.models||[])]}else state.discovery=null;renderCore();renderSnmp();renderDiscovery();dirty.clear();q('hubSettingsSave').disabled=true;const e=a.filter(x=>x.status==='rejected').map(x=>x.reason?.message||String(x.reason));status(e.length?`Loaded with ${e.length} unavailable section(s): ${e.join(' · ')}`:'All settings loaded from their authoritative components.',e.length?'failure':'success')}async function save(){if(!dirty.size)return;const b=q('hubSettingsSave'),done=[];b.disabled=true;try{for(const o of ['core','snmp2mqtt','discovery']){if(!dirty.has(o))continue;status(`Saving ${o==='core'?'Core':o==='snmp2mqtt'?'SNMP2MQTT':'Discovery'}…`);const body=o==='core'?{settings:state.core.settings}:o==='snmp2mqtt'?{settings:state.snmp2mqtt.settings}:{settings:cleanDiscovery()};const d=await req(`api/settings/${o}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(o==='core')state.core=clone(d);else if(o==='snmp2mqtt')state.snmp2mqtt=clone(d);else{state.discovery=clone(d);state.models=[...(d.models||state.models)]}done.push(o);clear(o)}renderCore();renderSnmp();renderDiscovery();status('Saved successfully.','success')}catch(e){status(`${done.length?`Saved ${done.join(', ')}. `:''}Save stopped: ${e.message||e}`,'failure');b.disabled=!dirty.size}}async function resetCore(){if(!confirm('Reset all Switch Vision Core settings to their factory defaults? SNMP2MQTT and Discovery settings are not changed.'))return;try{status('Resetting Core settings…');state.core=clone(await req('api/settings/core',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_to_defaults:true})}));clear('core');renderCore();status('Core settings reset to defaults.','success')}catch(e){status(`Core reset failed: ${e.message||e}`,'failure')}}function styles(){if(q('hubSettingsStyles'))return;const s=document.createElement('style');s.id='hubSettingsStyles';s.textContent='.hub-settings-page,.hub-profiles-page{margin:0;padding:0}.hub-settings-section{border:1px solid var(--line-soft);border-radius:10px;padding:12px;margin:10px 0;background:var(--surface-inset);box-shadow:inset 0 1px 0 var(--heading-soft)}.hub-settings-section:first-child{margin-top:0}.hub-settings-section h3{margin:.1rem 0 .3rem;padding-left:11px;position:relative;color:var(--heading)}.hub-settings-section h3::before{content:"";position:absolute;left:0;top:.12em;width:3px;height:1.05em;border-radius:999px;background:var(--heading-line);box-shadow:0 0 12px var(--heading-glow)}.hub-settings-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.hub-setting-toggle span{display:block}.hub-setting-field{margin:6px 0;gap:4px;align-self:start;align-content:start}.hub-setting-field>span{font-weight:600;line-height:1.2}.hub-setting-field>input,.hub-setting-field>select{width:100%;height:38px;min-height:38px;padding:6px 10px}.hub-setting-field>small{line-height:1.25;margin-top:1px}.hub-settings-section .grid{align-items:start;gap:8px 14px}.hub-order-list{border:1px solid var(--line-soft);border-radius:9px;padding:10px;margin-top:12px}.hub-order-row{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center;padding:5px 0}.hub-order-row button{padding:5px 9px}.hub-settings-actions{position:sticky;bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface-inset);border:1px solid var(--line-soft);padding:8px 10px;margin:10px 0 0;z-index:3;box-shadow:0 8px 22px -18px var(--heading-glow);border-radius:10px}.hub-settings-status{margin:0 0 0 auto;line-height:1.2}.hub-settings-status.success{color:var(--ok)}.hub-settings-status.failure{color:var(--bad)}.hub-settings-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto;padding:2px 2px 8px;margin:0 0 10px;border-bottom:1px solid var(--line-soft)}.hub-settings-tab{flex:0 0 auto;font-weight:750;color:var(--muted);background:var(--surface-button)!important;border-color:var(--line-soft)!important}.hub-settings-tab.is-active{color:var(--heading-strong)!important;border-color:var(--accent-strong)!important;background:var(--accent-soft)!important;box-shadow:inset 0 -2px 0 var(--accent)}.hub-settings-tab:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-soft),inset 0 -2px 0 var(--accent)}.hub-component{border:1px solid var(--line-soft);border-radius:12px;padding:10px;margin:10px 0;background:linear-gradient(180deg,var(--heading-soft),var(--surface-inset) 64px);box-shadow:inset 0 1px 0 var(--heading-soft)}.hub-settings-pane[hidden]{display:none!important}.hub-setting-row{margin:12px 0}.hub-field-label,.hub-toggle-label{display:inline-flex;align-items:center;gap:6px}.hub-help{position:relative;display:inline-flex;align-items:center}.hub-help-button{width:22px!important;height:22px!important;min-height:22px!important;padding:0!important;border-radius:50%!important}.hub-help-popover{position:absolute;z-index:20;left:26px;top:50%;transform:translateY(-50%);width:max-content;max-width:min(320px,72vw);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card-strong);color:var(--text);box-shadow:0 8px 24px var(--shadow);white-space:normal}.hub-help-popover[hidden]{display:none}@media(max-width:700px){.hub-settings-status{width:100%;margin:0}.hub-settings-actions{padding-bottom:4px}}#settingsCard{--hub-control-height:var(--control-height);--hub-control-radius:var(--control-radius);--hub-field-gap:4px;--hub-grid-row-gap:6px;--hub-grid-column-gap:12px;--hub-toggle-min-height:24px;--hub-sub-radius:10px}#settingsCard .grid,.hub-control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--hub-grid-row-gap) var(--hub-grid-column-gap);align-items:start}.hub-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(240px,300px));column-gap:10px;justify-content:start;align-items:start}.hub-setting-toggle{min-height:var(--hub-toggle-min-height);padding:2px 0;gap:7px;align-items:center;font-weight:400;line-height:1.2}.hub-setting-toggle input{margin:0;flex:0 0 auto}.hub-setting-toggle .hub-option-label{font-weight:400;display:block}.hub-setting-field{display:grid;margin:4px 0;gap:var(--hub-field-gap);align-self:start;align-content:start}.hub-setting-field>span{font-weight:600;line-height:1.2}.hub-setting-field>input,.hub-setting-field>select{width:100%;height:var(--hub-control-height);min-height:var(--hub-control-height);padding:var(--control-pad-y) var(--control-pad-x);border-radius:var(--hub-control-radius)}.hub-setting-field>small{line-height:1.25;margin-top:1px}.hub-header-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,420px);gap:14px;align-items:start}.hub-order-list{width:100%;max-width:420px;align-self:start;margin-top:0;padding:8px}.hub-order-row{min-height:30px;padding:1px 0;gap:5px}.hub-order-row button{width:32px;height:30px;min-height:30px;padding:0;border-radius:7px}.hub-grid-dense{grid-template-columns:repeat(4,minmax(0,1fr))!important}.hub-setting-row{border-radius:var(--hub-sub-radius);padding:12px;margin:10px 0}.hub-setting-row .grid{margin-top:8px}#settingsCard button{min-height:var(--hub-control-height);border-radius:var(--hub-control-radius);padding:6px 11px}#settingsCard .hub-order-row button{min-height:30px;padding:0}.hub-component .actions{gap:6px;margin-top:7px}@media(max-width:1050px){.hub-header-layout{grid-template-columns:1fr}.hub-order-list{max-width:420px}.hub-grid-dense{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:700px){#settingsCard .grid,.hub-control-grid,.hub-toggle-grid,.hub-grid-dense{grid-template-columns:1fr!important}.hub-header-layout{display:block}.hub-order-list{margin-top:10px;max-width:none}}';document.head.append(s)}async function open(which='core'){styles();setView('settings');await load();selectTab(which)}function init(){styles();document.querySelectorAll('[data-hub-settings-tab]').forEach(tab=>{tab.addEventListener('click',()=>selectTab(tab.dataset.hubSettingsTab));tab.addEventListener('keydown',tabKeydown)});selectTab(state.activeTab);attachActionHelp('hubSettingsSave','Save all changed Switch Vision Hub settings to their authoritative components.');attachActionHelp('hubSettingsReload','Reload authoritative component settings and discard unsaved Hub values.');attachActionHelp('hubCoreReset','Reset Switch Vision Core settings to factory defaults.');attachActionHelp('hubCoreFallback','Open native Home Assistant Switch Vision integration settings.');attachActionHelp('hubSnmpFallback','Open native SNMP2MQTT app configuration.');attachActionHelp('hubDiscoveryFallback','Open native Discovery app configuration.');q('hubSettingsSave')?.addEventListener('click',save);q('hubSettingsReload')?.addEventListener('click',load);q('hubSettingsBack')?.addEventListener('click',goBack);q('hubCoreReset')?.addEventListener('click',resetCore);q('hubCoreFallback')?.addEventListener('click',()=>openHomeAssistantPath('/config/integrations/integration/switch_vision'));q('hubSnmpFallback')?.addEventListener('click',()=>openResolvedApp('snmp2mqtt'));q('hubDiscoveryFallback')?.addEventListener('click',()=>openResolvedApp('discovery'))}window.SwitchVisionHubSettings={open,load,save};document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init,{once:true}):init()})();
+(()=>{'use strict';const q=id=>document.getElementById(id),clone=v=>JSON.parse(JSON.stringify(v)),dirty=new Set(),state={core:null,snmp2mqtt:null,discovery:null,models:[],order:[],activeTab:'core'};const L={show_all_switch_vision_sidebar_items:'Show all Switch Vision sidebar items',show_panel_in_sidebar:'Show native Switch Vision in sidebar',show_lovelace_dashboard_in_sidebar:'Show Switch Vision dashboard in sidebar',show_hub_in_sidebar:'Show Switch Vision Hub in sidebar',show_installer_in_sidebar:'Show Switch Vision Installer in sidebar',show_dashboard_header:'Show dashboard header',native_header_show_summary:'Show summary',native_header_show_refresh:'Show refresh',native_header_show_version:'Show version',native_header_shortcut_switch_vision_settings:'Switch Vision Settings shortcut',native_header_shortcut_hub:'Hub shortcut',native_header_shortcut_maintenance:'Maintenance shortcut',native_header_shortcut_discovery_settings:'Discovery Settings shortcut',native_header_shortcut_installer:'Installer shortcut',native_header_shortcut_installer_settings:'Installer Settings shortcut',native_header_shortcut_snmp2mqtt_settings:'SNMP2MQTT Settings shortcut',native_header_shortcut_unifi2mqtt_settings:'UniFi2MQTT Settings shortcut',show_calibration_buttons:'Show calibration buttons on cards',show_card_headers:'Show card headers'};const OL={hub:'Hub',maintenance:'Maintenance',switch_vision_settings:'Switch Vision Settings',discovery_settings:'Discovery Settings',installer:'Installer',installer_settings:'Installer Settings',snmp2mqtt_settings:'SNMP2MQTT Settings',unifi2mqtt_settings:'UniFi2MQTT Settings'};function status(t,c=''){const n=q('hubSettingsStatus');if(n){n.className=`muted hub-settings-status ${c}`.trim();n.textContent=t}}function selectTab(which='core',focus=false){const ids=['core','discovery','snmp2mqtt'];const selected=ids.includes(which)?which:'core';state.activeTab=selected;for(const id of ids){const active=id===selected,pane=q(`hubComponent-${id}`),tab=q(`hubTab-${id}`);if(pane)pane.hidden=!active;if(tab){tab.classList.toggle('is-active',active);tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1}}if(focus)q(`hubTab-${selected}`)?.focus()}function tabKeydown(e){const ids=['core','discovery','snmp2mqtt'],current=state.activeTab,i=Math.max(0,ids.indexOf(current));let next=null;if(e.key==='ArrowRight')next=ids[(i+1)%ids.length];else if(e.key==='ArrowLeft')next=ids[(i-1+ids.length)%ids.length];else if(e.key==='Home')next=ids[0];else if(e.key==='End')next=ids[ids.length-1];if(next){e.preventDefault();selectTab(next,true)}}function mark(o){dirty.add(o);q('hubSettingsSave').disabled=false;status('Unsaved changes')}function clear(o){dirty.delete(o);q('hubSettingsSave').disabled=!dirty.size}async function req(p,o={}){const r=await fetch(endpoint(p),{cache:'no-store',...o});let d={};try{d=await r.json()}catch(_e){}if(!r.ok)throw new Error(d.error||`Request failed (${r.status})`);return d}function sec(t,p=''){const x=document.createElement('section');x.className='hub-settings-section';x.innerHTML=`<h3>${t}</h3>${p?`<p class="muted">${p}</p>`:''}`;return x}function hubHelp(t){const w=document.createElement('span');w.className='hub-help';const b=document.createElement('button');b.type='button';b.className='hub-help-button';b.textContent='?';b.setAttribute('aria-label','Help: '+t);b.setAttribute('aria-expanded','false');const p=document.createElement('span');p.className='hub-help-popover';p.setAttribute('role','tooltip');p.textContent=t;p.hidden=true;let pinned=false;const show=()=>{p.hidden=false;b.setAttribute('aria-expanded','true')},hide=()=>{if(!pinned){p.hidden=true;b.setAttribute('aria-expanded','false')}};b.onmouseenter=show;b.onmouseleave=hide;b.onfocus=show;b.onblur=hide;b.onclick=e=>{e.preventDefault();pinned=!pinned;pinned?show():hide()};b.onkeydown=e=>{if(e.key==='Escape'){pinned=false;p.hidden=true;b.setAttribute('aria-expanded','false')}};w.append(b,p);return w}function attachActionHelp(id,t){const e=q(id);if(e&&!e.nextElementSibling?.classList?.contains('hub-help'))e.after(hubHelp(t))}function fld(t,c,h=''){const x=document.createElement('label');x.className='field hub-setting-field';const s=document.createElement('span');s.className='hub-field-label';s.textContent=t;if(h)s.append(hubHelp(h));const target=c.matches?.('input,select,textarea')?c:c.querySelector?.('input,select,textarea');if(target)target.setAttribute('aria-label',t);x.append(s,c);return x}function tog(t,v,fn,dis=false,h=''){const x=document.createElement('label');x.className='option hub-setting-toggle';const i=document.createElement('input');i.type='checkbox';i.checked=!!v;i.disabled=dis;i.onchange=()=>fn(i.checked);i.setAttribute('aria-label',t);const s=document.createElement('span');s.className='hub-option-label hub-toggle-label';s.textContent=t;if(h)s.append(hubHelp(h));x.append(i,s);return x}function sel(v,opts,fn){const s=document.createElement('select');for(const [a,b] of opts){const o=document.createElement('option');o.value=a;o.textContent=b;o.selected=String(v)===String(a);s.append(o)}s.onchange=()=>fn(s.value);return s}function inp(v,type,fn,a={}){const i=document.createElement('input');i.type=type;i.value=v??'';for(const[k,x]of Object.entries(a))if(x!==undefined&&x!==null)i.setAttribute(k,String(x));i.oninput=()=>fn(i.value);return i}function secretInp(v,fn,refProvider,configured,a={}){const i=inp(v,'password',fn,a);return secretControl(i,refProvider,configured)}function fontChoices(){return Array.from({length:11},(_,i)=>{const px=i+10;return[String(px),`${px} px`]})}function renderCore(){const r=q('hubCoreSettings');r.innerHTML='';if(!state.core?.settings){r.textContent='Core settings are unavailable.';return}const s=state.core.settings,side=sec('Sidebar & navigation'),sideTog=document.createElement('div');sideTog.className='hub-toggle-grid';for(const[k,v]of Object.entries(s.sidebar||{}))sideTog.append(tog(L[k]||k,v,x=>{s.sidebar[k]=x;mark('core')}));side.append(sideTog);r.append(side);const h=sec('Native dashboard header','Choose which controls appear in the native Switch Vision header.'),headerTog=document.createElement('div');headerTog.className='hub-toggle-grid';for(const[k,v]of Object.entries(s.native_header||{})){if(k!=='native_header_shortcut_order')headerTog.append(tog(L[k]||k,v,x=>{s.native_header[k]=x;mark('core')}))}const box=document.createElement('div');box.className='hub-order-list';box.innerHTML='<b>Shortcut order</b>';state.order=[...(s.native_header.native_header_shortcut_order||[])];const draw=()=>{box.querySelectorAll('.hub-order-row').forEach(n=>n.remove());state.order.forEach((id,n)=>{const row=document.createElement('div');row.className='hub-order-row';const nm=document.createElement('span');nm.textContent=OL[id]||id;const u=document.createElement('button'),d=document.createElement('button');u.type=d.type='button';u.textContent='↑';d.textContent='↓';u.disabled=n===0;d.disabled=n===state.order.length-1;u.onclick=()=>{[state.order[n-1],state.order[n]]=[state.order[n],state.order[n-1]];s.native_header.native_header_shortcut_order=[...state.order];mark('core');draw()};d.onclick=()=>{[state.order[n+1],state.order[n]]=[state.order[n],state.order[n+1]];s.native_header.native_header_shortcut_order=[...state.order];mark('core');draw()};row.append(nm,u,d);box.append(row)})};draw();const headerLayout=document.createElement('div');headerLayout.className='hub-header-layout';headerLayout.append(headerTog,box);h.append(headerLayout);r.append(h);const dash=sec('Dashboard presentation','Control card headers, Calibration controls, and the maximum rendered faceplate width.'),dashTog=document.createElement('div');dashTog.className='hub-toggle-grid';for(const[k,v]of Object.entries(s.dashboard||{})){if(k==='faceplate_width_mode'||k==='faceplate_custom_width')continue;dashTog.append(tog(L[k]||k,v,x=>{s.dashboard[k]=x;mark('core')}))}dash.append(dashTog);const widthGrid=document.createElement('div');widthGrid.className='grid';const widthMode=sel(s.dashboard.faceplate_width_mode||'auto',[['auto','Auto'],['800','800 px'],['1024','1024 px'],['custom','Custom']],x=>{s.dashboard.faceplate_width_mode=x;mark('core');renderCore()});widthGrid.append(fld('Faceplate width',widthMode,'Sets the maximum rendered faceplate/card width. Height and calibrated geometry scale proportionally.'));if((s.dashboard.faceplate_width_mode||'auto')==='custom')widthGrid.append(fld('Custom faceplate width (px)',inp(s.dashboard.faceplate_custom_width||800,'number',x=>{s.dashboard.faceplate_custom_width=Number(x);mark('core')},{min:320,max:4096,step:1}),'Custom width is remembered when you switch back to a preset.'));dash.append(widthGrid);r.append(dash);const a=sec('Activity LEDs'),g=document.createElement('div');g.className='grid hub-grid-dense';g.append(fld('Sensitivity preset',sel(s.activity_leds.activity_led_sensitivity_preset,[['low','Low'],['normal','Normal'],['high','High'],['custom','Custom']],x=>{s.activity_leds.activity_led_sensitivity_preset=x;mark('core')})));for(const[k,t,min,max,step]of [['activity_slow_max_utilization_pct','Slow activity maximum (%)',.001,100,.001],['activity_medium_max_utilization_pct','Medium activity maximum (%)',.001,100,.001],['activity_slow_period_ms','Slow blink period (ms)',120,2000,1],['activity_medium_period_ms','Medium blink period (ms)',120,2000,1],['activity_fast_period_ms','Fast blink period (ms)',120,2000,1],['activity_hold_seconds','Activity hold (seconds)',1,120,.1],['activity_hysteresis_pct','Hysteresis (%)',0,50,.1]])g.append(fld(t,inp(s.activity_leds[k],'number',x=>{s.activity_leds[k]=Number(x);mark('core')},{min,max,step})));a.append(g);r.append(a);const ap=document.createElement('div');ap.className='hub-settings-columns';for(const[grp,title]of[['discovery','Discovery appearance'],['installer','Installer appearance']]){const b=sec(title),v=s[grp];b.append(fld('UI density',sel(v[`${grp}_ui_density`],[['comfortable','Comfortable'],['compact','Compact'],['dense','Dense']],x=>{v[`${grp}_ui_density`]=x;mark('core')})),fld('Text size',sel(v[`${grp}_text_size`],fontChoices(),x=>{v[`${grp}_text_size`]=Number(x);mark('core')})),fld('Content width',sel(v[`${grp}_content_width`],[['standard','Standard'],['wide','Wide'],['full','Full']],x=>{v[`${grp}_content_width`]=x;mark('core')})));if(grp==='discovery')b.append(tog('Show UniFi integration',v.show_unifi_integration,x=>{v.show_unifi_integration=x;mark('core')}));ap.append(b)}r.append(ap)}function renderSnmp(){const r=q('hubSnmpSettings');r.innerHTML='';const d=state.snmp2mqtt;if(!d?.installed){r.innerHTML='<div class="warning">Switch Vision SNMP2MQTT is not installed.</div>';return}const s=d.settings,m=sec('MQTT connection'),g=document.createElement('div');g.className='grid';g.append(fld('MQTT host',inp(s.mqtt.host,'text',x=>{s.mqtt.host=x;mark('snmp2mqtt')})),fld('MQTT port',inp(s.mqtt.port,'number',x=>{s.mqtt.port=Number(x);mark('snmp2mqtt')},{min:1,max:65535,step:1})),fld('MQTT username',inp(s.mqtt.username,'text',x=>{s.mqtt.username=x;mark('snmp2mqtt')})),fld('MQTT password',secretInp('',x=>{s.mqtt.password=x;mark('snmp2mqtt')},()=>({scope:'snmp2mqtt',kind:'mqtt_password'}),!!d.password_configured,{autocomplete:'new-password',placeholder:d.password_configured?'Saved — use eye to reveal':'Not configured'}),'Saved passwords stay redacted in normal settings responses. Use the eye to reveal this one on demand; blank preserves it.'));m.append(g,tog('Clear saved MQTT password',false,x=>{s.clear_password=x;mark('snmp2mqtt')},false,'Only enable this if the broker no longer requires the saved password.'));r.append(m);const p=sec('Target configuration'),pg=document.createElement('div');pg.className='grid';for(const[k,t]of[['targets_path','Targets path'],['switch_vision_generated_yaml_path','Generated YAML path'],['imported_targets_path','Imported targets path']])pg.append(fld(t,inp(s[k],'text',x=>{s[k]=x;mark('snmp2mqtt')})));p.append(pg,tog('Use Switch Vision generated YAML',s.use_switch_vision_generated_yaml,x=>{s.use_switch_vision_generated_yaml=x;mark('snmp2mqtt')}),tog('Back up existing config before import',s.backup_existing_config,x=>{s.backup_existing_config=x;mark('snmp2mqtt')}));r.append(p);const ha=sec('Home Assistant discovery');ha.append(tog('MQTT Discovery enabled',true,()=>{},true,'Required by Switch Vision and enforced by SNMP2MQTT.'),fld('Discovery prefix',inp('homeassistant','text',()=>{},{readonly:'readonly'}),'Required value: homeassistant.'));r.append(ha)}function bsel(v,fn){return sel(v===true||String(v).toLowerCase()==='true'?'true':'false',[['true','Enabled'],['false','Disabled']],fn)}function renderDiscovery(){const r=q('hubDiscoverySettings');r.innerHTML='';if(!state.discovery?.settings){r.textContent='Discovery settings are unavailable.';return}const s=state.discovery.settings,w=sec('Discovery workflow'),wg=document.createElement('div');wg.className='grid';for(const[k,t]of[['run_snmp_walks','Run SNMP walks'],['enable_switch_list','Use saved switch list'],['parse_all_walks','Parse all stored walks'],['generate_snmp2mqtt','Generate SNMP2MQTT YAML'],['clean_output_before_walk','Clean generated output before walk'],['generate_support_my_switch_bundle','Create Support My Switch bundle after Discovery']])wg.append(fld(t,bsel(s[k],x=>{s[k]=x;mark('discovery')})));w.append(wg);r.append(w);const sw=sec('Switches','SNMP communities are masked by default. Use the eye to reveal a saved community; blank preserves it.');(s.switches||[]).forEach((row,n)=>{const c=document.createElement('div');c.className='device-card hub-setting-row';const hd=document.createElement('div');hd.className='device-head';hd.innerHTML=`<strong>Switch ${n+1}</strong>`;const rm=document.createElement('button');rm.type='button';rm.className='danger';rm.textContent='Remove';rm.onclick=()=>{s.switches.splice(n,1);mark('discovery');renderDiscovery()};hd.append(rm);c.append(hd);const g=document.createElement('div');g.className='grid';const f=(t,k,type='text',hint='')=>{if(type==='password')return fld(t,secretInp(row[k]??'',x=>{row[k]=x;mark('discovery')},()=>({scope:'discovery',kind:'snmp_community',identifier:row.original_switch_name||row.switch_name}),!!row.snmp_community_configured,{autocomplete:'new-password',placeholder:row.snmp_community_configured?'Saved — use eye to reveal':'Required for new switch'}),hint);return fld(t,inp(row[k]??'',type,x=>{row[k]=x;mark('discovery')}),hint)};g.append(f('Switch Name (Used internally only)','switch_name'),f('Display name','display_name'),f('Switch host','switch_host'),f('Sensor prefix','sensor_prefix'),f('SNMP community','snmp_community','password','Saved communities stay redacted in normal settings responses; use the eye to reveal this one on demand.'),fld('State',sel(row.enabled||'enabled',[['enabled','Enabled'],['disabled','Disabled']],x=>{row.enabled=x;mark('discovery')})),fld('Walk mode',sel(row.walk_mode||'targeted',[['targeted','Targeted'],['full','Full']],x=>{row.walk_mode=x;mark('discovery')})),fld('Switch model',sel(row.switch_model||'auto',[['auto','Auto'],...state.models.filter(m=>m!=='auto').map(m=>[m,m])],x=>{row.switch_model=x;mark('discovery')})),f('Card header title','card_header_title'));c.append(g);sw.append(c)});const add=document.createElement('button');add.type='button';add.textContent='Add switch';add.onclick=()=>{s.switches.push({switch_name:'',display_name:'',switch_host:'',sensor_prefix:'',snmp_community:'',snmp_community_configured:false,original_switch_name:'',enabled:'enabled',walk_mode:'targeted',switch_model:'auto',card_header_title:''});mark('discovery');renderDiscovery()};sw.append(add);r.append(sw);const st=sec('Stack member display mapping');(s.stack_member_prefixes||[]).forEach((row,n)=>{const c=document.createElement('div');c.className='device-card hub-setting-row';const hd=document.createElement('div');hd.className='device-head';hd.innerHTML=`<strong>Stack member ${n+1}</strong>`;const rm=document.createElement('button');rm.type='button';rm.className='danger';rm.textContent='Remove';rm.onclick=()=>{s.stack_member_prefixes.splice(n,1);mark('discovery');renderDiscovery()};hd.append(rm);c.append(hd);const g=document.createElement('div');g.className='grid';for(const[k,t]of[['switch_name','Switch name'],['member','Member number'],['display_name','Display name'],['sensor_prefix','Sensor prefix'],['card_header_title','Card header title']])g.append(fld(t,inp(row[k]??'','text',x=>{row[k]=x;mark('discovery')})));c.append(g);st.append(c)});const as=document.createElement('button');as.type='button';as.textContent='Add stack member';as.onclick=()=>{s.stack_member_prefixes.push({switch_name:'',member:'1',display_name:'',sensor_prefix:'',card_header_title:''});mark('discovery');renderDiscovery()};st.append(as);r.append(st);const p=sec('Paths & SNMP timing'),pg=document.createElement('div');pg.className='grid';for(const[k,t]of[['input_path','Input walk path'],['snmpwalks_dir','SNMP walks directory'],['report_path','Discovery report path'],['targets_csv','Targets CSV path'],['last_run_summary_path','Last-run summary path'],['generated_yaml_path','Generated SNMP2MQTT path'],['generated_card_path','Generated dashboard path'],['snmp_log_path','SNMP log path']])pg.append(fld(t,inp(s[k]??'','text',x=>{s[k]=x;mark('discovery')})));for(const[k,t,min,max]of[['snmp_timeout','SNMP timeout',1,30],['snmp_retries','SNMP retries',0,10],['minimum_valid_walk_lines','Minimum valid walk lines',1,1000000]])pg.append(fld(t,inp(s[k]??'','number',x=>{s[k]=String(x);mark('discovery')},{min,max,step:1})));p.append(pg);r.append(p);const bk=sec('Discovery configuration backups'),bg=document.createElement('div');bg.className='grid';bg.append(fld('Automatic retention',bsel(s.backup_retention_enabled,x=>{s.backup_retention_enabled=x;mark('discovery')})),fld('Retained backups',inp(s.backup_retention_count,'number',x=>{s.backup_retention_count=Number(x);mark('discovery')},{min:1,max:10,step:1})));bk.append(bg);r.append(bk);const sp=sec('Support My Switch privacy & recognition'),sg=document.createElement('div');sg.className='grid';for(const[k,t]of[['support_mask_management_ips','Mask management IPs'],['support_mask_mac_addresses','Mask MAC addresses'],['support_mask_hostnames','Mask hostnames'],['support_mask_vlan_names','Mask VLAN names'],['support_mask_interface_descriptions','Mask interface descriptions']])sg.append(fld(t,bsel(s[k],x=>{s[k]=x;mark('discovery')})));sg.append(fld('Contributor recognition',sel(s.support_contributor_type||'anonymous',[['anonymous','Anonymous'],['first_name','First name'],['full_name','Full name'],['github','GitHub'],['forum','Forum']],x=>{s.support_contributor_type=x;mark('discovery')})),fld('Contributor value',inp('','text',x=>{s.support_contributor_value=x;mark('discovery')},{maxlength:120,placeholder:s.support_contributor_value_configured?'Saved — leave blank to keep':'Optional recognition'}),'Private and write-only in the Hub; nothing is published automatically.'));sp.append(sg);r.append(sp)}function cleanDiscovery(){const s=clone(state.discovery.settings);delete s.support_contributor_value_configured;s.switches=(s.switches||[]).map(row=>{const x={...row};delete x.snmp_community_configured;return x});return s}async function load(){status('Loading settings…');const a=await Promise.allSettled([req('api/settings/core'),req('api/settings/snmp2mqtt'),req('api/settings/discovery')]);state.core=a[0].status==='fulfilled'?clone(a[0].value):null;state.snmp2mqtt=a[1].status==='fulfilled'?clone(a[1].value):{installed:false};if(a[2].status==='fulfilled'){state.discovery=clone(a[2].value);state.models=[...(a[2].value.models||[])]}else state.discovery=null;renderCore();renderSnmp();renderDiscovery();dirty.clear();q('hubSettingsSave').disabled=true;const e=a.filter(x=>x.status==='rejected').map(x=>x.reason?.message||String(x.reason));status(e.length?`Loaded with ${e.length} unavailable section(s): ${e.join(' · ')}`:'All settings loaded from their authoritative components.',e.length?'failure':'success')}async function save(){if(!dirty.size)return;const b=q('hubSettingsSave'),done=[];b.disabled=true;try{for(const o of ['core','snmp2mqtt','discovery']){if(!dirty.has(o))continue;status(`Saving ${o==='core'?'Core':o==='snmp2mqtt'?'SNMP2MQTT':'Discovery'}…`);const body=o==='core'?{settings:state.core.settings}:o==='snmp2mqtt'?{settings:state.snmp2mqtt.settings}:{settings:cleanDiscovery()};const d=await req(`api/settings/${o}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(o==='core')state.core=clone(d);else if(o==='snmp2mqtt')state.snmp2mqtt=clone(d);else{state.discovery=clone(d);state.models=[...(d.models||state.models)]}done.push(o);clear(o)}renderCore();renderSnmp();renderDiscovery();status('Saved successfully.','success')}catch(e){status(`${done.length?`Saved ${done.join(', ')}. `:''}Save stopped: ${e.message||e}`,'failure');b.disabled=!dirty.size}}async function resetCore(){if(!confirm('Reset all Switch Vision Core settings to their factory defaults? SNMP2MQTT and Discovery settings are not changed.'))return;try{status('Resetting Core settings…');state.core=clone(await req('api/settings/core',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_to_defaults:true})}));clear('core');renderCore();status('Core settings reset to defaults.','success')}catch(e){status(`Core reset failed: ${e.message||e}`,'failure')}}function styles(){if(q('hubSettingsStyles'))return;const s=document.createElement('style');s.id='hubSettingsStyles';s.textContent='.hub-settings-page,.hub-profiles-page{margin:0;padding:0}.hub-settings-section{border:1px solid var(--line-soft);border-radius:10px;padding:12px;margin:10px 0;background:var(--surface-inset);box-shadow:inset 0 1px 0 var(--heading-soft)}.hub-settings-section:first-child{margin-top:0}.hub-settings-section h3{margin:.1rem 0 .3rem;padding-left:11px;position:relative;color:var(--heading)}.hub-settings-section h3::before{content:"";position:absolute;left:0;top:.12em;width:3px;height:1.05em;border-radius:999px;background:var(--heading-line);box-shadow:0 0 12px var(--heading-glow)}.hub-settings-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.hub-setting-toggle span{display:block}.hub-setting-field{margin:6px 0;gap:4px;align-self:start;align-content:start}.hub-setting-field>span{font-weight:600;line-height:1.2}.hub-setting-field>input,.hub-setting-field>select{width:100%;height:38px;min-height:38px;padding:6px 10px}.hub-setting-field>small{line-height:1.25;margin-top:1px}.hub-settings-section .grid{align-items:start;gap:8px 14px}.hub-order-list{border:1px solid var(--line-soft);border-radius:9px;padding:10px;margin-top:12px}.hub-order-row{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center;padding:5px 0}.hub-order-row button{padding:5px 9px}.hub-settings-actions{position:sticky;bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface-inset);border:1px solid var(--line-soft);padding:8px 10px;margin:10px 0 0;z-index:3;box-shadow:0 8px 22px -18px var(--heading-glow);border-radius:10px}.hub-settings-status{margin:0 0 0 auto;line-height:1.2}.hub-settings-status.success{color:var(--ok)}.hub-settings-status.failure{color:var(--bad)}.hub-settings-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto;padding:2px 2px 8px;margin:0 0 10px;border-bottom:1px solid var(--line-soft)}.hub-settings-tab{flex:0 0 auto;font-weight:750;color:var(--muted);background:var(--surface-button)!important;border-color:var(--line-soft)!important}.hub-settings-tab.is-active{color:var(--heading-strong)!important;border-color:var(--accent-strong)!important;background:var(--accent-soft)!important;box-shadow:inset 0 -2px 0 var(--accent)}.hub-settings-tab:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-soft),inset 0 -2px 0 var(--accent)}.hub-component{border:1px solid var(--line-soft);border-radius:12px;padding:10px;margin:10px 0;background:linear-gradient(180deg,var(--heading-soft),var(--surface-inset) 64px);box-shadow:inset 0 1px 0 var(--heading-soft)}.hub-settings-pane[hidden]{display:none!important}.hub-setting-row{margin:12px 0}.hub-field-label,.hub-toggle-label{display:inline-flex;align-items:center;gap:6px}.hub-help{position:relative;display:inline-flex;align-items:center}.hub-help-button{width:22px!important;height:22px!important;min-height:22px!important;padding:0!important;border-radius:50%!important}.hub-help-popover{position:absolute;z-index:20;left:26px;top:50%;transform:translateY(-50%);width:max-content;max-width:min(320px,72vw);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card-strong);color:var(--text);box-shadow:0 8px 24px var(--shadow);white-space:normal}.hub-help-popover[hidden]{display:none}@media(max-width:700px){.hub-settings-status{width:100%;margin:0}.hub-settings-actions{padding-bottom:4px}}#settingsCard{--hub-control-height:var(--control-height);--hub-control-radius:var(--control-radius);--hub-field-gap:4px;--hub-grid-row-gap:6px;--hub-grid-column-gap:12px;--hub-toggle-min-height:24px;--hub-sub-radius:10px}#settingsCard .grid,.hub-control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--hub-grid-row-gap) var(--hub-grid-column-gap);align-items:start}.hub-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(240px,300px));column-gap:10px;justify-content:start;align-items:start}.hub-setting-toggle{min-height:var(--hub-toggle-min-height);padding:2px 0;gap:7px;align-items:center;font-weight:400;line-height:1.2}.hub-setting-toggle input{margin:0;flex:0 0 auto}.hub-setting-toggle .hub-option-label{font-weight:400;display:block}.hub-setting-field{display:grid;margin:4px 0;gap:var(--hub-field-gap);align-self:start;align-content:start}.hub-setting-field>span{font-weight:600;line-height:1.2}.hub-setting-field>input,.hub-setting-field>select{width:100%;height:var(--hub-control-height);min-height:var(--hub-control-height);padding:var(--control-pad-y) var(--control-pad-x);border-radius:var(--hub-control-radius)}.hub-setting-field>small{line-height:1.25;margin-top:1px}.hub-header-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,420px);gap:14px;align-items:start}.hub-order-list{width:100%;max-width:420px;align-self:start;margin-top:0;padding:8px}.hub-order-row{min-height:30px;padding:1px 0;gap:5px}.hub-order-row button{width:32px;height:30px;min-height:30px;padding:0;border-radius:7px}.hub-grid-dense{grid-template-columns:repeat(4,minmax(0,1fr))!important}.hub-setting-row{border-radius:var(--hub-sub-radius);padding:12px;margin:10px 0}.hub-setting-row .grid{margin-top:8px}#settingsCard button{min-height:var(--hub-control-height);border-radius:var(--hub-control-radius);padding:6px 11px}#settingsCard .hub-order-row button{min-height:30px;padding:0}.hub-component .actions{gap:6px;margin-top:7px}@media(max-width:1050px){.hub-header-layout{grid-template-columns:1fr}.hub-order-list{max-width:420px}.hub-grid-dense{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:700px){#settingsCard .grid,.hub-control-grid,.hub-toggle-grid,.hub-grid-dense{grid-template-columns:1fr!important}.hub-header-layout{display:block}.hub-order-list{margin-top:10px;max-width:none}}';document.head.append(s)}async function open(which='core'){styles();setView('settings');await load();selectTab(which)}function init(){styles();document.querySelectorAll('[data-hub-settings-tab]').forEach(tab=>{tab.addEventListener('click',()=>selectTab(tab.dataset.hubSettingsTab));tab.addEventListener('keydown',tabKeydown)});selectTab(state.activeTab);attachActionHelp('hubSettingsSave','Save all changed Switch Vision Hub settings to their authoritative components.');attachActionHelp('hubSettingsReload','Reload authoritative component settings and discard unsaved Hub values.');attachActionHelp('hubCoreReset','Reset Switch Vision Core settings to factory defaults.');attachActionHelp('hubCoreFallback','Open native Home Assistant Switch Vision integration settings.');attachActionHelp('hubSnmpFallback','Open native SNMP2MQTT app configuration.');attachActionHelp('hubDiscoveryFallback','Open native Discovery app configuration.');q('hubSettingsSave')?.addEventListener('click',save);q('hubSettingsReload')?.addEventListener('click',load);q('hubSettingsBack')?.addEventListener('click',goBack);q('hubCoreReset')?.addEventListener('click',resetCore);q('hubCoreFallback')?.addEventListener('click',()=>openHomeAssistantPath('/config/integrations/integration/switch_vision'));q('hubSnmpFallback')?.addEventListener('click',()=>openResolvedApp('snmp2mqtt'));q('hubDiscoveryFallback')?.addEventListener('click',()=>openResolvedApp('discovery'))}window.SwitchVisionHubSettings={open,load,save};document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init,{once:true}):init()})();
 </script>
 <script src="maintenance.js"></script>
 <script src="calibration_profiles.js"></script>
@@ -4713,6 +5097,8 @@ class SupportHandler(BaseHTTPRequestHandler):
                 "discovery_history": discovery_history_snapshot(),
                 "ui_preferences": _discovery_ui_preferences(),
             })
+        elif path == "/api/discovery/debug":
+            self._json(_current_discovery_debug_snapshot())
         elif path == "/api/health":
             self._json({"status": "ok", "version": self.app.version})
         elif path == "/api/app-links":
@@ -5017,6 +5403,17 @@ class SupportHandler(BaseHTTPRequestHandler):
                 )
 
                 return
+
+        if path == "/api/secrets/reveal":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0 or length > 8192:
+                    raise ValueError("Invalid secret reveal request size.")
+                data = json.loads(self.rfile.read(length).decode("utf-8"))
+                self._json(_reveal_hub_secret(data))
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
 
         if path in {"/api/settings/core", "/api/settings/snmp2mqtt", "/api/settings/discovery"}:
             try:

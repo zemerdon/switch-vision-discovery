@@ -169,6 +169,49 @@ def main() -> None:
         assert '# Detected model: USW Pro HD 24 PoE' in generated_text
         assert '# Detected model: USW Pro XG 8 PoE' in generated_text
 
+    # Regression from field Support My Switch evidence: configured device order can
+    # differ from the legacy parser's alphabetical walk-path order. Post-processing
+    # must bind by walk/switch identity rather than section position.
+    with tempfile.TemporaryDirectory(prefix='sv-model-binding-') as bind_temp_name:
+        bind_temp = Path(bind_temp_name)
+        zeta_path = bind_temp / 'ZETA' / 'live-targeted-snmpwalk.txt'
+        alpha_path = bind_temp / 'ALPHA' / 'live-targeted-snmpwalk.txt'
+        zeta_path.parent.mkdir(parents=True)
+        alpha_path.parent.mkdir(parents=True)
+        zeta_path.write_text('walk\n', encoding='utf-8')
+        alpha_path.write_text('walk\n', encoding='utf-8')
+        bind_ordered = [
+            {'destination': zeta_path, 'contract': {'device': {'model': 'MODEL-ZETA'}, 'observed': {'physical': 24}}},
+            {'destination': alpha_path, 'contract': {'device': {'model': 'MODEL-ALPHA'}, 'observed': {'physical': 12}}},
+        ]
+        bind_report = bind_temp / 'report.txt'
+        bind_report.write_text(
+            f'Device 1: ALPHA\nFile: {alpha_path}\nModel/platform: wrong\n- Physical switch interfaces detected: 0\n- Mapped physical interfaces: 0\n\n'
+            f'Device 2: ZETA\nFile: {zeta_path}\nModel/platform: wrong\n- Physical switch interfaces detected: 0\n- Mapped physical interfaces: 0\n',
+            encoding='utf-8',
+        )
+        entry._patch_report(bind_report, bind_ordered)
+        report_text = bind_report.read_text(encoding='utf-8')
+        alpha_section, zeta_section = report_text.split('Device 2: ZETA', 1)
+        assert 'Model/platform: MODEL-ALPHA' in alpha_section, report_text
+        assert '- Physical switch interfaces detected: 12' in alpha_section, report_text
+        assert 'Model/platform: MODEL-ZETA' in zeta_section, report_text
+        assert '- Physical switch interfaces detected: 24' in zeta_section, report_text
+
+        bind_yaml = bind_temp / 'generated.yaml'
+        bind_yaml.write_text(
+            '# Device source: live-targeted-snmpwalk.txt\n# Switch key: ALPHA\n# Detected model: wrong\n  device_model: wrong\n'
+            '# Device source: live-targeted-snmpwalk.txt\n# Switch key: ZETA\n# Detected model: wrong\n  device_model: wrong\n',
+            encoding='utf-8',
+        )
+        entry._patch_yaml(bind_yaml, bind_ordered)
+        yaml_text = bind_yaml.read_text(encoding='utf-8')
+        alpha_yaml, zeta_yaml = yaml_text.split('# Device source: live-targeted-snmpwalk.txt\n# Switch key: ZETA', 1)
+        assert '# Detected model: MODEL-ALPHA' in alpha_yaml, yaml_text
+        assert 'device_model: MODEL-ALPHA' in alpha_yaml, yaml_text
+        assert '# Detected model: MODEL-ZETA' in zeta_yaml, yaml_text
+        assert 'device_model: MODEL-ZETA' in zeta_yaml, yaml_text
+
     print('Switch Vision Mark current-run physical-contract regression: PASS')
 
 

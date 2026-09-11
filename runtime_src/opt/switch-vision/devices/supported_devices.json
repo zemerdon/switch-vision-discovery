@@ -471,9 +471,9 @@
       "vendor": "Cisco",
       "family": "Catalyst 3850",
       "model": "WS-C3850-12XS-E",
-      "status": "experimental",
+      "status": "community_validated",
       "confirmed_since": "2.3.46",
-      "last_validated_version": "2.3.46",
+      "last_validated_version": "2.4.5",
       "evidence": "privacy_processed_real_hardware_full_walk_factory_no_module",
       "ports": {
         "rj45": 0,
@@ -502,18 +502,21 @@
         "The twelve fixed front-panel SFP+ cages are Te<member>/0/1 through Te<member>/0/12.",
         "IOS may expose Te<member>/1/1 through Te<member>/1/4 even with the optional network-module bay empty; those rows are software-visible but non-physical and must never create Switch Vision ports or generated entities.",
         "This exact entry covers only the factory/no-module topology; no module-equipped Catalyst 3850 variant is inferred from it.",
-        "The exact Core faceplate/calibration provides twelve SFP positions using the owner-supplied 2048 x 448 render geometry."
+        "The exact Core faceplate/calibration provides twelve SFP positions using the owner-supplied 2048 x 448 render geometry.",
+        "Three separate real-hardware capture sessions materially agree on exact identity and the fixed twelve-port SFP+ topology.",
+        "Live rendered field confirmation verifies the twelve-cage alignment plus active-port link, negotiated 10G speed, and traffic activity presentation.",
+        "Cisco ENVMON temperature, fan, and power-supply state evidence is repeatable across the independent captures; non-applicable RJ45, PoE, and stack capabilities remain explicitly excluded."
       ],
       "validation": {
-        "exact_model_detection": "real_hardware_full_walk_confirmed",
+        "exact_model_detection": "community_confirmed_three_capture_sessions",
         "rj45_mapping": "not_applicable",
         "poe": "not_applicable",
-        "system_sensors": "pending",
-        "uplinks": "real_hardware_te_member_0_1_12_confirmed",
+        "system_sensors": "community_confirmed_cisco_envmon_temperature_fan_psu",
+        "uplinks": "community_confirmed_te_member_0_1_12_link_speed_activity",
         "stack": "not_applicable"
       },
       "visuals": {
-        "status": "experimental",
+        "status": "community_validated",
         "recommended_faceplate": "faceplates/cisco-3850-12xs.png",
         "optional_faceplates": [],
         "calibration_profile": "cisco_3850_12xs",
