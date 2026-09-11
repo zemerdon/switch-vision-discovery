@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.5"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.6"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1852,10 +1852,11 @@ write_walk_section() {
           compatibility_mode=true
         fi
         tmp_cap="${cap_path}.tmp"
-        jq --arg detected "$detected_model" --arg override "$model_override" --arg effective "$effective_model" --argjson compat "$compatibility_mode" '
+        jq --arg detected "$detected_model" --arg override "$model_override" --arg effective "$effective_model" --arg target "$target_ip" --argjson compat "$compatibility_mode" '
           .device.detected_model_text=$detected
           | .device.model_override=(if $override == "auto" then null else $override end)
           | .device.effective_model_text=$effective
+          | .device.management_target=(if ($target | length) > 0 and $target != "unknown" then $target else null end)
           | .device.compatibility_mode=$compat
         ' "$cap_path" > "$tmp_cap" && mv "$tmp_cap" "$cap_path"
         if [ -x /standard_sensor_scan.py ]; then

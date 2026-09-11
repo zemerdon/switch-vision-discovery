@@ -32,8 +32,8 @@ for marker in (
     assert marker in source, marker
 
 # Saved and detected devices share one expandable list. Expansion survives Hub
-# background refreshes, and saved-device order supports both drag/drop and the
-# existing arrow controls while unmatched API-only devices remain visible.
+# background refreshes, saved-device ordering uses only the persistent arrow
+# controls, and unmatched API-only devices remain visible.
 for marker in (
     "let expandedUnifiedDevices=new Set();",
     "function detectedDeviceKey(item)",
@@ -41,9 +41,9 @@ for marker in (
     "entry.className=`device-card unified-device-details configured-device",
     "entry.open=expandedUnifiedDevices.has(key)",
     "if(entry.open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)",
-    "handle.className='device-drag-handle'",
-    "reorderConfiguredByDrag(source,item.switch_name,after)",
     "className='device-order-button'",
+    "className='device-order-controls'",
+    "summary.append(orderControls,main,actions)",
     "for(const [index,item] of detected.entries())",
     "if(currentView==='devices')await refreshDevicesData(false)",
 ):
@@ -52,6 +52,29 @@ for marker in (
 for forbidden in (
     'id="devicesSummary"',
     '<h3>Detected Devices</h3>',
+):
+    assert forbidden not in source, forbidden
+
+# Saved rows correlate to detected SNMP evidence using stable identity and the
+# management target recorded in the walk header, preventing a capability-file
+# alias such as 2960x-48-rj45 from appearing as a duplicate saved switch.
+for marker in (
+    "function detectedForConfigured(item,detected,used)",
+    "candidate?.source_switch_name",
+    "candidate?.management_target",
+    "item.configured_management_target",
+    "item.effective_management_target",
+    'line.startswith("# Switch IP: ")',
+    '"source_switch_name": source_switch_name',
+    '"management_target": management_target',
+):
+    assert marker in source, marker
+
+for forbidden in (
+    "device-drag-handle",
+    "reorderConfiguredByDrag",
+    "dragstart",
+    "dragover",
 ):
     assert forbidden not in source, forbidden
 
