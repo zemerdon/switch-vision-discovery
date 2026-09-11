@@ -155,11 +155,100 @@ def test_native_hub_contract_has_no_legacy_restriction() -> None:
     assert "https://192.168.1.1:11443" in source
 
 
+
+def test_connection_test_local_remote_and_redaction() -> None:
+    current = current_options()
+    original_current = support_web._unifi2mqtt_current_options
+    original_get = support_web._unifi_test_get_json
+    support_web._unifi2mqtt_current_options = lambda: ("test-slug", current)
+    calls: list[tuple[str, str, bool]] = []
+
+    def fake_get(url: str, api_key: str, *, verify_ssl: bool, timeout: float = 12.0):
+        calls.append((url, api_key, verify_ssl))
+        if url.endswith("/v1/hosts?pageSize=100"):
+            return {"data": [{"id": "console-1", "type": "console", "isBlocked": False}]}
+        if url.endswith("/proxy/network/integration/v1/sites"):
+            return {"data": [{"id": "site-1", "name": "default", "internalReference": "default"}]}
+        if url.endswith("/proxy/network/integration/v1/sites/site-1/devices"):
+            return {"data": [{"id": "dev-1"}, {"id": "dev-2"}]}
+        raise AssertionError(url)
+
+    support_web._unifi_test_get_json = fake_get
+    try:
+        local = support_web._test_unifi2mqtt_connection({
+            "transport": "local",
+            "controller_url": "https://10.0.0.1:11443",
+            "site_id": "auto",
+            "api_key": "",
+            "verify_ssl": False,
+            "allow_insecure_http": False,
+        })
+        assert local["ok"] is True, local
+        assert local["device_count"] == 2, local
+        assert local["site_id"] == "site-1", local
+        assert calls[0][1] == "private-local-key", calls
+        assert calls[0][2] is False, calls
+
+        calls.clear()
+        remote = support_web._test_unifi2mqtt_connection({
+            "transport": "remote",
+            "host_id": "auto",
+            "site_id": "auto",
+            "api_key": "",
+        })
+        assert remote["ok"] is True, remote
+        assert remote["host_id"] == "console-1", remote
+        assert remote["device_count"] == 2, remote
+        assert calls[0][1] == "private-remote-key", calls
+        assert all(call[2] is True for call in calls), calls
+
+        secret = "typed-secret-value"
+        def failing_get(url: str, api_key: str, *, verify_ssl: bool, timeout: float = 12.0):
+            raise RuntimeError(f"authentication|HTTP 403 rejected credential {secret}")
+        support_web._unifi_test_get_json = failing_get
+        failed = support_web._test_unifi2mqtt_connection({
+            "transport": "local",
+            "controller_url": "https://10.0.0.1:11443",
+            "site_id": "auto",
+            "api_key": secret,
+            "verify_ssl": True,
+            "allow_insecure_http": False,
+        })
+        assert failed["ok"] is False, failed
+        assert failed["stage"] == "authentication", failed
+        serialized = repr(failed)
+        assert secret not in serialized, serialized
+        assert "[redacted]" in serialized, serialized
+    finally:
+        support_web._unifi2mqtt_current_options = original_current
+        support_web._unifi_test_get_json = original_get
+
+
+def test_connection_test_ui_contract() -> None:
+    source = (RUNTIME / "support_web.py").read_text(encoding="utf-8")
+    for marker in (
+        'id="testUnifiLocalButton"',
+        'id="testUnifiRemoteButton"',
+        'id="unifiConnectionTestDebug"',
+        'id="unifiConnectionTestDebugLog"',
+        'id="clearUnifiConnectionTestDebugButton"',
+        "function testUnifiConnection(transport)",
+        "function appendUnifiConnectionTestDebug(result)",
+        "endpoint('api/unifi2mqtt/test-connection')",
+        'if path == "/api/unifi2mqtt/test-connection":',
+        '.unifi-test-debug pre{display:block!important;max-height:280px;overflow:auto',
+    ):
+        assert marker in source, marker
+    # Collapsed by default: the details element must not carry the open attribute.
+    assert '<details id="unifiConnectionTestDebug" class="yaml-manager unifi-test-debug" open' not in source
+
 def main() -> int:
     test_bridge_is_compatibility_only()
     test_browser_controller_rows_redact_nested_secrets()
     test_blank_top_level_secrets_preserve_both_profiles()
     test_browser_can_edit_controller_list_and_preserve_keys()
+    test_connection_test_local_remote_and_redaction()
+    test_connection_test_ui_contract()
     test_native_hub_contract_has_no_legacy_restriction()
     print("UniFi native Hub configuration regressions: PASS")
     return 0
