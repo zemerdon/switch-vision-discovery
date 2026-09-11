@@ -75,9 +75,7 @@ def main() -> None:
             f'{sw2_targeted}{sep}SW2{sep}192.0.2.12{sep}SW2{sep}readonly\n',
             encoding='utf-8',
         )
-        entry.CURRENT_RUN_WALKS = current_walks
-        entry.CURRENT_RUN_TARGETS = current_targets
-        records = entry._read_current_run_records()
+        records = entry._read_current_run_records(current_walks, current_targets)
         assert [record['switch'] for record in records] == ['SW1', 'SW2']
 
         report = temp / 'report.txt'
