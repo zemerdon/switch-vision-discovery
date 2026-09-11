@@ -68,9 +68,13 @@ DEFAULT_GENERATED_CARD = Path("/share/switch_vision/generated-dashboard-card.yam
 DEFAULT_UNIFI_SNAPSHOT = Path("/share/switch_vision/unifi/devices.json")
 DEFAULT_UNIFI_DIAGNOSTICS = Path("/share/switch_vision/unifi/diagnostics.json")
 DEFAULT_DISCOVERY_LOG = DEFAULT_SHARE_DIR / "discovery-web.log"
-DEFAULT_CURRENT_DISCOVERY_DEBUG = Path(
-    os.environ.get("SV_CURRENT_DISCOVERY_DEBUG_PATH", "/data/current-discovery-debug.log")
-)
+_current_debug_override = os.environ.get("SV_CURRENT_DISCOVERY_DEBUG_PATH", "").strip()
+if _current_debug_override:
+    DEFAULT_CURRENT_DISCOVERY_DEBUG = Path(_current_debug_override)
+elif Path("/data").is_dir() and os.access("/data", os.W_OK):
+    DEFAULT_CURRENT_DISCOVERY_DEBUG = Path("/data/current-discovery-debug.log")
+else:
+    DEFAULT_CURRENT_DISCOVERY_DEBUG = Path("/tmp/switch-vision-current-discovery-debug.log")
 DEFAULT_SNMPWALKS_DIR = DEFAULT_SHARE_DIR / "snmpwalks"
 DEFAULT_CAPABILITIES_DIR = DEFAULT_SHARE_DIR / "capabilities"
 DEFAULT_SNMP_RETIREMENT_STATE = Path("/data/snmp2mqtt-retirement-topics.json")
