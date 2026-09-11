@@ -100,17 +100,6 @@ try:
     else:
         raise AssertionError("stale source identity must fail closed")
 
-    # Drag-and-drop sends the complete visible order. Blank/non-device option rows
-    # keep their raw slots while complete per-switch dictionaries (including
-    # secrets) move as one unit.
-    dragged = web._move_configured_device(Path("/unused/options.json"), {
-        "order": ["SW-B", "SW-A", "SW-C"],
-    })
-    assert [item["switch_name"] for item in dragged["devices"]] == ["SW-B", "SW-A", "SW-C"], dragged
-    assert [str(item.get("switch_name") or "") for item in state["switches"]] == ["SW-B", "", "SW-A", "SW-C"], state
-    assert state["switches"][0]["snmp_community"] == "private-swb"
-    assert state["switches"][2]["snmp_community"] == "private-swa"
-    assert backup_reasons.count("device_order_update") == 2, backup_reasons
 
     serialized = json.dumps(web._configured_devices_snapshot(Path("/unused/options.json")))
     assert "private-swa" not in serialized
@@ -130,6 +119,18 @@ for literal in (
     "device_order_update",
 ):
     assert literal in source, literal
+
+for forbidden in (
+    "device-drag-handle",
+    "draggedConfiguredDeviceName",
+    "reorderConfiguredByDrag",
+    "saveConfiguredDeviceOrder",
+    "dragstart",
+    "dragover",
+):
+    assert forbidden not in source, forbidden
+assert "device-order-controls" in source
+assert "summary.append(orderControls,main,actions)" in source
 
 job = Path(web.__file__).with_name("discovery_job.sh").read_text(encoding="utf-8")
 walk_fn = job.split("multi_switch_walk_rows() {", 1)[1].split("\n}\n", 1)[0]

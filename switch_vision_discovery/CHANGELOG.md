@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.6
+
+- Remove Devices drag-and-drop ordering and make the existing **up/down arrows** the sole reorder control. Move those reorder buttons to the left of each saved switch row and keep Dashboard Card regeneration bound to the persisted saved-switch order.
+- Prevent saved SNMP switches from appearing a second time as detected-only rows when capability filenames differ from configured names. Correlate detected evidence by stable switch identity and the management target recorded in the walk header, while refusing ambiguous matches.
+- Keep the configured **Display name** as the primary Devices-row title; raw capability/profile identities remain technical details rather than the main user-facing label.
+- Make **Discovery Settings -> Switches** compact by default: switch 1 opens initially, later switches start collapsed, and each row has up/down controls that reorder the same saved switch list committed by **Save**.
+
 ## 2.4.5
 
 - Merge saved and detected hardware into one expandable **Devices** list. Saved switches keep Enable/Disable plus the existing up/down arrows, gain drag-and-drop persistent ordering, and expose detected/diagnostic details inline; duplicate lower detected-device content is removed while detected-only devices remain visible.
