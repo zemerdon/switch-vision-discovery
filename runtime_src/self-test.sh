@@ -341,7 +341,7 @@ PY_INGRESS_GATE
 # v2.2.0 Maintenance Hub MQTT ownership/reconciliation regression
 python3 -m py_compile "$BASE_DIR/discovery_backups.py" "$BASE_DIR/discovery_backups_regression.py" "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py" "$BASE_DIR/walk_correlation.py"
 grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
-grep -Fq '<span>Manage backups</span>' "$BASE_DIR/support_web.py"
+grep -Fq '<span>Manage Backups</span>' "$BASE_DIR/support_web.py"
 grep -Fq 'id="maintenanceCard"' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/scan' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/repair' "$BASE_DIR/support_web.py"
@@ -1723,8 +1723,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.6"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.6"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.7"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.7"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"

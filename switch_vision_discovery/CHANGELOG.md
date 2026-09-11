@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.4.7
+
+- Expand shared management appearance controls to a **10-position Content Width slider** (Narrower → Wider) and **5-position UI Density slider** (Spacious → Ultra Dense). Discovery live-previews unsaved changes immediately; Installer gets the same persisted scale through Core plus an in-Hub live preview before Save.
+- Add a shared sticky Switch Vision action bar to the main Hub working views so Discovery, Devices, Support My Switch, Import / Export Configuration, Maintenance, Calibration Profiles, and UniFi2MQTT keep their page-specific primary action, Reload, Back, and status controls available at the bottom.
+- Normalize Hub navigation action bullets to consistent title-style capitalization while leaving normal explanatory sentences in sentence case.
+
+- Add independent **Test Local Connection** and **Test Remote Connection** actions to UniFi2MQTT Settings. Tests use the currently displayed profile values without saving, preserve a stored API key when its field is blank, report stage-specific sanitized failures, and write a credential-free current-session trace to a collapsed scrollable **Connection Test Debug** panel.
+- Make Discovery Settings switch reordering browser-reliable by moving the up/down controls out of the collapsible disclosure control. Arrow clicks now reorder the editable saved-switch list immediately; Save persists that exact order for Discovery and Dashboard Card regeneration.
+- Hide orphaned SNMP capability-cache records from the current Devices view when their recorded source walk no longer exists. This prevents pre-rename aliases such as `2960x-48-rj45` from appearing as duplicate detected-only switches beside the current saved row, while retaining the capability file itself for diagnostics/provenance.
+- Keep every enabled saved switch in generated **Dashboard Card YAML** during mixed Discovery runs even when that switch's current SNMP attempt fails. This prevents a temporarily unreachable saved device such as SW7 / a 2960X 48P from disappearing from the dashboard.
+- Keep telemetry safety strict: failed/unreachable targets are still excluded from generated **SNMP2MQTT YAML**, while switches that responded with unsupported/conflicting evidence continue through the existing physical-contract best-fit/support-guidance path instead of being duplicated.
+- Align Dashboard Card cardinality validation with the saved presentation inventory while preserving the legacy single-walk evidence-count fallback, and add an end-to-end partial-run regression proving two saved cards can coexist with telemetry for only the one validated target.
+
 ## 2.4.6
 
 - Remove Devices drag-and-drop ordering and make the existing **up/down arrows** the sole reorder control. Move those reorder buttons to the left of each saved switch row and keep Dashboard Card regeneration bound to the persisted saved-switch order.
