@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.13
+
+- Fix Discovery Settings switch collapse/expand rendering by making the switch-row body `hidden` state authoritative even when the shared grid layout applies `display:grid`.
+- Preserve the existing browser-reliable sibling up/down controls, remove action, editable row state, and ARIA expansion contract while adding a permanent packaged regression for the hidden-body CSS rule.
+
 ## 2.4.12
 
 - Publish the reviewed public Credits roster using only the approved aliases `Finni`, `Paul B`, `Timb320`, `Brendan P`, and `iangr`, with concise Switch Vision component-only contribution scopes.
