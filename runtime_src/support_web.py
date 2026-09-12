@@ -4885,11 +4885,28 @@ body.density-ultra_dense .step{padding:5px 7px}
 <div class="credits-spot-soft" aria-hidden="true"></div>
 <div class="credits-spot-narrow" aria-hidden="true"></div>
 <div id="creditsSweepLight" class="credits-sweep-light" aria-hidden="true"></div>
-<div id="creditsContent" class="credits-content">
-<h2 class="credits-title">Credits</h2>
-<p class="credits-thanks">Switch Vision is made better by the people who contribute their time, testing, feedback, and knowledge. Thank you to everyone below for helping shape what it is today.</p>
+<div id="creditsContent" class="credits-content credits-roll-mask">
+<div id="creditsRollTrack" class="credits-roll-track">
+<div id="creditsBuildSource" class="credits-roll-block">
+<h2 class="credits-title">Switch Vision Credits</h2>
 <div id="creditsList" class="credits-list-v25">
-<div class="credit-entry" style="--credit-index:0"><span class="credit-name">Finni</span><span class="credit-components">UniFi multi-controller, field testing, port telemetry and UI feedback</span></div>
+<div class="credit-entry"><span class="credit-name">Finni</span><span class="credit-components">Discovery / Hub • UniFi2MQTT</span></div>
+<div class="credit-entry"><span class="credit-name">Paul B</span><span class="credit-components">Discovery / Hub • SNMP2MQTT • Support My Switch</span></div>
+<div class="credit-entry"><span class="credit-name">Timb320</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT</span></div>
+<div class="credit-entry"><span class="credit-name">Brendan P</span><span class="credit-components">Discovery / Hub • UniFi2MQTT • Support My Switch</span></div>
+<div class="credit-entry"><span class="credit-name">iangr</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT • Support My Switch</span></div>
+</div>
+</div>
+<div class="credits-roll-block" aria-hidden="true">
+<h2 class="credits-title">Switch Vision Credits</h2>
+<div class="credits-list-v25">
+<div class="credit-entry"><span class="credit-name">Finni</span><span class="credit-components">Discovery / Hub • UniFi2MQTT</span></div>
+<div class="credit-entry"><span class="credit-name">Paul B</span><span class="credit-components">Discovery / Hub • SNMP2MQTT • Support My Switch</span></div>
+<div class="credit-entry"><span class="credit-name">Timb320</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT</span></div>
+<div class="credit-entry"><span class="credit-name">Brendan P</span><span class="credit-components">Discovery / Hub • UniFi2MQTT • Support My Switch</span></div>
+<div class="credit-entry"><span class="credit-name">iangr</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT • Support My Switch</span></div>
+</div>
+</div>
 </div>
 </div>
 <div class="credits-progress" aria-hidden="true"><span id="creditsProgress"></span></div>

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.12
+
+- Publish the reviewed public Credits roster using only the approved aliases `Finni`, `Paul B`, `Timb320`, `Brendan P`, and `iangr`, with concise Switch Vision component-only contribution scopes.
+- Replace boxed/narrative credit rows with the locked centered single-line presentation: the exact final credits layout assembles from four-pixel fragments, holds briefly, then that same layout scrolls upward indefinitely with no fade, crossfade, scene swap, or geometry morph.
+- Keep protected contributor provenance private and add permanent runtime/privacy checks for the exact public aliases, component scopes, and Credits presentation contract.
+
 ## 2.4.11
 
 - Align the exact Experimental `US-8-150W` dashboard visual with Core 2.7.6's existing owner-calibrated UniFi 8-RJ45 + 2-SFP faceplate/profile instead of the oversized stock 24+2 fallback.
