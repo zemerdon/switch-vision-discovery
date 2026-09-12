@@ -47,7 +47,10 @@ PERMANENT_CHECKS = (
     "tools/test_calibration_core_bridge_contract.py",
     "tools/test_registry_roundtrip.py",
 )
-SHELL_CHECKS = ("tools/test_contributor_interface_batch.sh",)
+SHELL_CHECKS = (
+    "tools/test_contributor_interface_batch.sh",
+    "tools/test_unifi_entrypoint_source_matrix.sh",
+)
 
 
 def release_env() -> dict[str, str]:

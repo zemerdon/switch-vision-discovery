@@ -29,6 +29,9 @@ REGISTRY = Path(os.environ.get("SWITCH_VISION_DEVICE_REGISTRY", "/opt/switch-vis
 DEFAULT_OPTIONS = Path(os.environ.get("SWITCH_VISION_OPTIONS_FILE", "/data/options.json"))
 DEFAULT_CAPABILITIES = Path(os.environ.get("SWITCH_VISION_CAPABILITIES_DIR", "/share/switch_vision/capabilities"))
 DEFAULT_WALK_ROOT = Path("/share/switch_vision/snmpwalks")
+DEFAULT_SHARE_DIR = Path(os.environ.get("SWITCH_VISION_SHARE_DIR", "/share/switch_vision"))
+UNIFI_SNAPSHOT = Path(os.environ.get("SWITCH_VISION_UNIFI_SNAPSHOT", str(DEFAULT_SHARE_DIR / "unifi/devices.json")))
+UNIFI_HELPER = Path(os.environ.get("SWITCH_VISION_UNIFI_DASHBOARD_HELPER", str(Path(__file__).with_name("unifi_dashboard_cards.py"))))
 CURRENT_RUN_SEPARATOR = "\x1c"
 
 
@@ -743,6 +746,64 @@ def _ensure_dashboard_card_base(path: Path) -> None:
     )
 
 
+def _append_unifi_dashboard_cards(path: Path) -> tuple[int, int]:
+    """Append source-independent UniFi cards without touching SNMP telemetry.
+
+    The physical-contract wrapper must preserve UniFi dashboard output even when
+    there are zero accepted SNMP walks. The UniFi helper owns exact topology and
+    registry validation; this wrapper only supplies the standard card container
+    and appends the helper's YAML-safe output.
+    """
+    if not UNIFI_SNAPSHOT.is_file():
+        return 0, 0
+    if not UNIFI_HELPER.is_file():
+        raise DegradedDiscoveryError(
+            "UniFi snapshot is available, but the dashboard-card helper is missing."
+        )
+
+    _ensure_dashboard_card_base(path)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(UNIFI_HELPER),
+            "--snapshot",
+            str(UNIFI_SNAPSHOT),
+            "--registry",
+            str(REGISTRY),
+            "--indent",
+            "6",
+            "--summary",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    output = result.stdout.rstrip()
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("\n      # UniFi API devices (Switch Vision UniFi2MQTT)\n")
+        if output:
+            handle.write(output + "\n")
+        elif result.returncode != 0:
+            handle.write("      # ERROR: UniFi dashboard card generation failed without diagnostic output.\n")
+
+    emitted = 0
+    issues = 0
+    match = re.search(
+        r"# UniFi cards emitted: (\d+); exact cards: \d+; generic fallbacks: \d+; "
+        r"exact support pending: \d+; issues: (\d+)",
+        output,
+    )
+    if match:
+        emitted = int(match.group(1))
+        issues = int(match.group(2))
+    elif result.returncode != 0:
+        issues = 1
+    return emitted, issues
+
+
 def _append_report_fallback_notices(
     path: Path,
     accepted_evidence: list[dict[str, Any]],
@@ -982,24 +1043,43 @@ def main() -> int:
             # Switch contribution. The existing generated SNMP2MQTT YAML is not
             # replaced or activated because there are no trusted bindings.
             notices = _append_report_fallback_notices(report, accepted_evidence, replace=True)
+            # Dashboard sources are independent. Rebuild the presentation file
+            # from current source data instead of treating zero accepted SNMP
+            # walks as permission to erase valid UniFi cards. SNMP2MQTT YAML is
+            # deliberately untouched on this branch because there are no trusted
+            # SNMP bindings to publish.
             generated_card.unlink(missing_ok=True)
+            unifi_cards, unifi_issues = _append_unifi_dashboard_cards(generated_card)
             fallback_cards, card_notices = _append_display_fallbacks(generated_card, accepted_evidence, options)
-            if not notices and not card_notices:
+            _ensure_dashboard_card_base(generated_card)
+
+            if not report.is_file():
                 report.parent.mkdir(parents=True, exist_ok=True)
                 report.write_text(
                     "Switch Vision Discovery\n"
                     "=======================\n"
-                    "Discovery completed with no exact displayable switch contract.\n"
-                    "If the switch is reachable but no card can be shown, use Support My Switch to submit a contribution so support can be added.\n",
+                    "No exact SNMP telemetry contract was available for this run.\n",
                     encoding="utf-8",
                 )
-                _ensure_dashboard_card_base(generated_card)
+            with report.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    f"UniFi API dashboard cards emitted: {unifi_cards}; issues: {unifi_issues}.\n"
+                    f"Display-only SNMP fallback cards emitted: {fallback_cards}.\n"
+                )
+                if not unifi_cards and not fallback_cards:
+                    handle.write(
+                        "No current device card could be emitted. Use Support My Switch for reachable hardware that still lacks a safe visual contract.\n"
+                    )
+
             print(
                 "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"
                 "target=|command=Physical contract|"
-                "activity=Discovery communication succeeded, but exact telemetry generation was unavailable; best-fit display/contribution guidance was preserved"
+                "activity=No exact SNMP telemetry contract was available; independent UniFi cards and safe display fallbacks were preserved"
             )
-            print(f"SV_DEBUG|Physical contract authority: display-only fallback cards={fallback_cards}; support notices={max(notices, card_notices)}")
+            print(
+                f"SV_DEBUG|Physical contract authority: unifi cards={unifi_cards}; unifi issues={unifi_issues}; "
+                f"display-only fallback cards={fallback_cards}; support notices={max(notices, card_notices)}"
+            )
             print("SV_RESULT|warnings=true|degraded=true")
             return 0
 

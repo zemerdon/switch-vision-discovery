@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.7"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.8"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -4099,9 +4099,9 @@ write_generated_dashboard_card() {
     # UniFi2MQTT is an independent normalized discovery source. It does not
     # require a duplicate SNMP target row. Devices with an exact registry match
     # and an available generic visual profile are appended as live cards.
-    unifi_snapshot="/share/switch_vision/unifi/devices.json"
-    unifi_registry="/opt/switch-vision/devices/supported_devices.json"
-    unifi_helper="/unifi_dashboard_cards.py"
+    unifi_snapshot="${SWITCH_VISION_UNIFI_SNAPSHOT:-${SWITCH_VISION_SHARE_DIR:-/share/switch_vision}/unifi/devices.json}"
+    unifi_registry="${SWITCH_VISION_DEVICE_REGISTRY:-/opt/switch-vision/devices/supported_devices.json}"
+    unifi_helper="${SWITCH_VISION_UNIFI_DASHBOARD_HELPER:-/unifi_dashboard_cards.py}"
     [ -f "$unifi_helper" ] || unifi_helper="$(dirname "$0")/unifi_dashboard_cards.py"
     if [ -f "$unifi_snapshot" ] && [ -f "$unifi_registry" ] && [ -f "$unifi_helper" ]; then
       echo ""

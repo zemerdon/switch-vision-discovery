@@ -23,5 +23,6 @@ jobs:
           set -euo pipefail
           sh tools/test_production_physical_contract.sh
           sh tools/test_discovery_contract_entrypoint.sh
+          sh tools/test_unifi_entrypoint_source_matrix.sh
           python3 tools/test_unifi_physical_contract.py
           python3 tools/test_mark_current_run_physical_contract.py
