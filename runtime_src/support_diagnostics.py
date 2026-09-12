@@ -7,6 +7,7 @@ attributes, unrelated entities, or raw MQTT discovery payloads.
 """
 from __future__ import annotations
 
+import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -43,6 +44,20 @@ MAX_PROVENANCE_FILES = 512
 HA_STATES_URL = os.environ.get(
     "SWITCH_VISION_HA_STATES_URL", "http://supervisor/core/api/states"
 )
+HA_WS_URL = os.environ.get(
+    "SWITCH_VISION_HA_WS_URL", "ws://supervisor/core/websocket"
+)
+MAX_CALIBRATION_PROFILES = 256
+SAFE_CALIBRATION_STRING_KEYS = {
+    "anchor", "fit", "source", "shape", "port_led_shape",
+    "port_status_output", "font_weight", "title_mode", "title_field",
+    "supported_speed", "profile", "schema", "model",
+}
+PRIVATE_CALIBRATION_KEYS = {
+    "management", "switch_ip", "management_ip", "host_ip",
+    "profile_name", "base_profile_name", "display_name", "custom_title",
+    "file", "logo_file", "faceplate_file",
+}
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -912,6 +927,254 @@ def build_configuration_snapshot(root: Path) -> dict[str, Any]:
         payload["warnings"] = warnings
     return payload
 
+def _opaque_storage_id(value: Any, prefix: str = "profile") -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    digest = hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()[:16]
+    return f"{prefix}-{digest}"
+
+
+def _safe_calibration_string(key: str, value: str) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if key in {"model", "profile", "schema"}:
+        # Technical model/profile/schema identifiers are useful for geometry
+        # triage, but reject arbitrary prose or path-like values.
+        if re.fullmatch(r"[A-Za-z0-9_.+ -]{1,96}", text):
+            return text
+        return None
+    if key == "supported_speed":
+        return text if re.fullmatch(r"[A-Za-z0-9_.+/-]{1,32}", text) else None
+    if key in SAFE_CALIBRATION_STRING_KEYS:
+        return text if re.fullmatch(r"[A-Za-z0-9_.+ -]{1,48}", text) else None
+    # Colours are geometry/presentation evidence and cannot carry arbitrary text.
+    if key.endswith("_color"):
+        if re.fullmatch(r"#[0-9A-Fa-f]{3,8}", text):
+            return text
+        if text == "transparent" or re.fullmatch(r"rgba?\([0-9., %]+\)", text):
+            return text
+    return None
+
+
+def _safe_calibration_geometry(value: Any, *, key: str = "", depth: int = 0) -> Any:
+    """Return privacy-scoped calibration geometry with user text/paths removed."""
+    if depth > 10:
+        return None
+    if key in PRIVATE_CALIBRATION_KEYS:
+        return None
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return _safe_calibration_string(key, value)
+    if isinstance(value, list):
+        out = []
+        for item in value[:512]:
+            safe = _safe_calibration_geometry(item, key=key, depth=depth + 1)
+            if safe is not None:
+                out.append(safe)
+        return out
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for raw_key, item in list(value.items())[:1024]:
+            item_key = str(raw_key)
+            if item_key in PRIVATE_CALIBRATION_KEYS:
+                continue
+            # Geometry keys are normally numeric port IDs or project-owned field
+            # identifiers. Hash anything outside that technical alphabet so a
+            # user-authored dictionary key cannot become identifying metadata.
+            if re.fullmatch(r"[A-Za-z0-9_.+/-]{1,64}", item_key):
+                safe_key = item_key
+            else:
+                safe_key = _opaque_storage_id(item_key, "key")
+            safe = _safe_calibration_geometry(item, key=item_key, depth=depth + 1)
+            if safe is not None:
+                out[safe_key] = safe
+        return out
+    return None
+
+
+def _calibration_geometry_payload(calibration: Any) -> dict[str, Any]:
+    if not isinstance(calibration, dict):
+        return {}
+    selected: dict[str, Any] = {}
+    for key in ("schema_version", "schema", "model", "profile", "ports", "sfp", "status_leds"):
+        if key in calibration:
+            safe = _safe_calibration_geometry(calibration.get(key), key=key)
+            if safe is not None:
+                selected[key] = safe
+    ui = calibration.get("ui")
+    if isinstance(ui, dict):
+        safe_ui = _safe_calibration_geometry(ui, key="ui")
+        if isinstance(safe_ui, dict):
+            # The raw asset/logo filenames and custom titles are stripped by the
+            # generic filter; numeric UI geometry remains available for triage.
+            selected["ui"] = safe_ui
+    if "user_topology_authoritative" in calibration:
+        selected["user_topology_authoritative"] = bool(
+            calibration.get("user_topology_authoritative")
+        )
+    canonical = json.dumps(selected, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    selected["geometry_sha256"] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return selected
+
+
+def build_calibration_storage_snapshot(
+    listing: Any,
+    exact_fetcher,
+) -> dict[str, Any]:
+    """Build a privacy-safe diagnostic projection of Switch Vision HA storage."""
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "generated_at": _now(),
+        "status": "ok",
+        "storage_key": "switch_vision_calibrations",
+        "storage_path": ".storage/switch_vision_calibrations",
+        "raw_storage_included": False,
+        "profile_names_exposed": False,
+        "management_fields_included": False,
+        "profiles": [],
+        "active_profile_links": [],
+    }
+    if not isinstance(listing, dict):
+        result["status"] = "error"
+        result["error_type"] = "invalid_list_response"
+        return result
+
+    items = listing.get("items")
+    if not isinstance(items, list):
+        items = []
+    raw_profiles = listing.get("profiles")
+    if not isinstance(raw_profiles, list):
+        raw_profiles = []
+    item_by_profile = {
+        str(item.get("profile") or ""): item
+        for item in items
+        if isinstance(item, dict) and str(item.get("profile") or "")
+    }
+
+    for raw_profile in raw_profiles[:MAX_CALIBRATION_PROFILES]:
+        profile = str(raw_profile or "").strip()
+        if not profile:
+            continue
+        item = item_by_profile.get(profile, {})
+        base_profile = str(item.get("base_profile") or "").strip()
+        row: dict[str, Any] = {
+            "profile_id": _opaque_storage_id(profile),
+            "base_profile_id": _opaque_storage_id(base_profile),
+            "scope": str(item.get("scope") or "unknown")[:24],
+            "active": bool(item.get("active")),
+            "faceplate_profile": bool(item.get("faceplate_profile")),
+            "faceplate_exists": bool(item.get("faceplate_exists", True)),
+            "stale": bool(item.get("stale")),
+            "model": str(item.get("model") or "")[:96],
+            "port_count": int(item.get("port_count") or 0),
+            "sfp_count": int(item.get("sfp_count") or 0),
+            "faceplate_content_sha256": str(item.get("faceplate_sha256") or "")[:64],
+            "faceplate_size": item.get("faceplate_size") if isinstance(item.get("faceplate_size"), int) else None,
+            "duplicate_faceplate_content": bool(item.get("duplicate_faceplate_content")),
+        }
+        try:
+            detail = exact_fetcher(profile)
+        except Exception as exc:  # diagnostic capture must remain fail-soft
+            row["detail_status"] = "error"
+            row["detail_error_type"] = type(exc).__name__
+        else:
+            if isinstance(detail, dict):
+                row["detail_status"] = "ok"
+                row["exists"] = bool(detail.get("exists"))
+                row["invalid"] = bool(detail.get("invalid"))
+                row["calibration"] = _calibration_geometry_payload(detail.get("calibration"))
+            else:
+                row["detail_status"] = "error"
+                row["detail_error_type"] = "invalid_detail_response"
+        result["profiles"].append(row)
+
+    active_profiles = listing.get("active_profiles")
+    if isinstance(active_profiles, dict):
+        for raw_base, raw_active in list(active_profiles.items())[:MAX_CALIBRATION_PROFILES]:
+            result["active_profile_links"].append(
+                {
+                    "base_profile_id": _opaque_storage_id(raw_base),
+                    "active_profile_id": _opaque_storage_id(raw_active),
+                }
+            )
+
+    result["profile_count"] = len(result["profiles"])
+    result["active_profile_count"] = len(result["active_profile_links"])
+    result["truncated"] = len(raw_profiles) > MAX_CALIBRATION_PROFILES
+    return result
+
+
+def _switch_vision_ws(command: dict[str, Any]) -> Any:
+    """Call one read-only Switch Vision Home Assistant WebSocket command."""
+    command_type = str(command.get("type") or "").strip()
+    if command_type not in {"switch_vision/list_calibrations", "switch_vision/get_calibration"}:
+        raise ValueError("unsupported Switch Vision diagnostic WebSocket command")
+    token = read_supervisor_token()
+    if not token:
+        raise RuntimeError("Home Assistant API token unavailable")
+    from websockets.sync.client import connect as websocket_connect
+
+    with websocket_connect(
+        HA_WS_URL,
+        open_timeout=12,
+        close_timeout=5,
+        max_size=4 * 1024 * 1024,
+    ) as connection:
+        required = json.loads(connection.recv(timeout=12))
+        if required.get("type") != "auth_required":
+            raise RuntimeError("Home Assistant WebSocket auth protocol mismatch")
+        connection.send(json.dumps({"type": "auth", "access_token": token}))
+        authenticated = json.loads(connection.recv(timeout=12))
+        if authenticated.get("type") != "auth_ok":
+            raise RuntimeError("Home Assistant WebSocket authentication failed")
+        payload = dict(command)
+        payload["id"] = 1
+        connection.send(json.dumps(payload))
+        while True:
+            response = json.loads(connection.recv(timeout=12))
+            if response.get("id") != 1:
+                continue
+            if response.get("type") != "result" or response.get("success") is not True:
+                raise RuntimeError("Switch Vision WebSocket command failed")
+            return response.get("result")
+
+
+def capture_calibration_storage_snapshot() -> dict[str, Any]:
+    """Capture storage-backed calibration state without reading raw .storage."""
+    try:
+        listing = _switch_vision_ws({"type": "switch_vision/list_calibrations"})
+        return build_calibration_storage_snapshot(
+            listing,
+            lambda profile: _switch_vision_ws(
+                {
+                    "type": "switch_vision/get_calibration",
+                    "profile": profile,
+                    "exact": True,
+                }
+            ),
+        )
+    except Exception as exc:
+        return {
+            "schema_version": 1,
+            "generated_at": _now(),
+            "status": "unavailable",
+            "storage_key": "switch_vision_calibrations",
+            "storage_path": ".storage/switch_vision_calibrations",
+            "raw_storage_included": False,
+            "profile_names_exposed": False,
+            "management_fields_included": False,
+            "error_type": type(exc).__name__,
+            "profiles": [],
+            "active_profile_links": [],
+            "profile_count": 0,
+            "active_profile_count": 0,
+            "truncated": False,
+        }
+
+
 def build_runtime_versions() -> dict[str, Any]:
     payload = {
         "schema_version": 1,
@@ -964,6 +1227,7 @@ def build_summary(
     model_provenance: dict[str, Any],
     card_bindings: dict[str, Any],
     mqtt_scan: dict[str, Any],
+    calibration_storage: dict[str, Any],
 ) -> dict[str, Any]:
     entity_summary = entity_snapshot.get("summary", {}) if isinstance(entity_snapshot, dict) else {}
     return {
@@ -990,12 +1254,17 @@ def build_summary(
             "model_device_count": model_provenance.get("device_count"),
             "generated_card_binding_count": len(card_bindings.get("cards", [])),
             "generated_target_count": len(card_bindings.get("targets", [])),
+            "calibration_storage_status": calibration_storage.get("status"),
+            "calibration_storage_profile_count": calibration_storage.get("profile_count"),
+            "calibration_storage_active_profile_count": calibration_storage.get("active_profile_count"),
         },
         "privacy": {
             "home_assistant_attributes_included": False,
             "unrelated_home_assistant_entities_included": False,
             "raw_mqtt_discovery_payloads_included": False,
             "credentials_included": False,
+            "raw_home_assistant_storage_included": False,
+            "calibration_profile_names_exposed": False,
         },
     }
 
@@ -1016,6 +1285,7 @@ def capture_support_diagnostics(root: Path) -> None:
     mqtt_scan = capture_mqtt_maintenance(root)
     runtime_versions = build_runtime_versions()
     configuration_snapshot = build_configuration_snapshot(root)
+    calibration_storage = capture_calibration_storage_snapshot()
     if ha_error:
         runtime_versions.setdefault("warnings", []).append(ha_error)
 
@@ -1025,8 +1295,32 @@ def capture_support_diagnostics(root: Path) -> None:
     _write(root, DIAG_DIR / "generated-file-provenance.json", file_provenance)
     _write(root, DIAG_DIR / "runtime-versions.json", runtime_versions)
     _write(root, DIAG_DIR / "configuration-snapshot.json", configuration_snapshot)
+    _write(root, DIAG_DIR / "calibration-storage.json", calibration_storage)
     _write(
         root,
         DIAG_DIR / "diagnostic-summary.json",
-        build_summary(entity_snapshot, port_pipeline, model_provenance, card_bindings, mqtt_scan),
+        build_summary(
+            entity_snapshot, port_pipeline, model_provenance, card_bindings, mqtt_scan, calibration_storage
+        ),
     )
+
+def refresh_model_provenance(root: Path) -> dict[str, Any]:
+    """Rebuild model provenance from the capability files currently in *root*."""
+    payload = build_model_provenance(root)
+    _write(root, DIAG_DIR / "model-provenance.json", payload)
+    return payload
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Switch Vision support diagnostics helper")
+    parser.add_argument("--refresh-model-provenance", type=Path)
+    args = parser.parse_args()
+    if args.refresh_model_provenance is not None:
+        refresh_model_provenance(args.refresh_model_provenance.resolve())
+        return 0
+    parser.error("an operation is required")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -746,6 +746,12 @@ PY_DIAGNOSTIC_CORRELATION
 # alone cannot detect.
 grep -Fq 'SANITIZER_SCRIPT="${SUPPORT_SANITIZER_SCRIPT:-/ha_entity_snapshot_sanitizer.py}"' "$BASE_DIR/support_my_switch.sh"
 grep -Fq 'BASE_SANITIZER_SCRIPT="${SUPPORT_BASE_SANITIZER_SCRIPT:-/sanitize_support_bundle.py}"' "$BASE_DIR/support_my_switch.sh"
+if grep -Fq '/config/.storage' "$BASE_DIR/support_my_switch.sh"; then
+  echo 'Support My Switch must not copy raw Home Assistant .storage files' >&2
+  exit 1
+fi
+grep -Fq 'SUPPORT_DIAGNOSTICS_SCRIPT="${SUPPORT_DIAGNOSTICS_SCRIPT:-/support_diagnostics.py}"' "$BASE_DIR/support_my_switch.sh"
+grep -Fq 'python3 "$SUPPORT_DIAGNOSTICS_SCRIPT" --refresh-model-provenance "$DATA_COPY"' "$BASE_DIR/support_my_switch.sh"
 grep -Fq 'BASE_SANITIZER = Path(os.environ.get("SWITCH_VISION_BASE_SANITIZER", "/sanitize_support_bundle.py"))' "$BASE_DIR/ha_entity_snapshot_sanitizer.py"
 
 support_test_dir=$(mktemp -d)
@@ -784,6 +790,7 @@ SWITCH_VISION_BASE_SANITIZER="$BASE_DIR/sanitize_support_bundle.py" \
 SUPPORT_EMAIL_BUILDER_SCRIPT="$BASE_DIR/make_support_email.py" \
 SUPPORT_REGISTRY_LOOKUP_SCRIPT="$BASE_DIR/registry_lookup.py" \
 SUPPORT_REGISTRY_FILE="$support_test_dir/missing-registry.json" \
+SUPPORT_DIAGNOSTICS_SCRIPT="$BASE_DIR/support_diagnostics.py" \
 SUPPORT_MASK_MANAGEMENT_IPS=true \
 SUPPORT_MASK_MAC_ADDRESSES=true \
 SUPPORT_MASK_HOSTNAMES=true \
@@ -808,6 +815,7 @@ expected = (
     "generated-file-provenance.json",
     "runtime-versions.json",
     "configuration-snapshot.json",
+    "calibration-storage.json",
     "diagnostic-summary.json",
 )
 with zipfile.ZipFile(path) as archive:
@@ -832,10 +840,107 @@ with zipfile.ZipFile(path) as archive:
         "home_assistant_attributes_included": False,
         "raw_mqtt_discovery_payloads_included": False,
         "unrelated_home_assistant_entities_included": False,
+        "raw_home_assistant_storage_included": False,
+        "calibration_profile_names_exposed": False,
     }
 print("Switch Vision Discovery v2.2.2 Support My Switch packaged diagnostics integration: PASS")
 PY_SUPPORT_ZIP
 rm -rf "$support_test_dir"
+
+# Storage-backed calibration diagnostics must never package raw .storage,
+# switch-scoped profile names, management IPs, custom titles or asset filenames.
+python3 - "$BASE_DIR" <<'PY_CALIBRATION_STORAGE_PRIVACY'
+import json
+import sys
+sys.path.insert(0, sys.argv[1])
+import support_diagnostics
+
+private_profile = "native_Server-Room-A__faceplate__Private-Faceplate-Alice-1234abcd"
+private_base = "native_Server-Room-A"
+listing = {
+    "profiles": [private_profile],
+    "items": [{
+        "profile": private_profile,
+        "base_profile": private_base,
+        "scope": "native",
+        "active": True,
+        "faceplate_profile": True,
+        "faceplate": "Private-Faceplate-Alice.png",
+        "faceplate_source": "custom",
+        "faceplate_exists": True,
+        "stale": False,
+        "model": "USW-Pro-24-PoE",
+        "port_count": 2,
+        "sfp_count": 1,
+        "faceplate_sha256": "a" * 64,
+        "faceplate_size": 123456,
+        "duplicate_faceplate_content": False,
+    }],
+    "active_profiles": {private_base: private_profile},
+}
+
+def exact_fetcher(profile):
+    assert profile == private_profile
+    return {
+        "exists": True,
+        "invalid": False,
+        "calibration": {
+            "schema_version": 1,
+            "schema": "switch-vision-interactive-calibration-v1",
+            "profile_name": private_profile,
+            "base_profile_name": private_base,
+            "model": "USW-Pro-24-PoE",
+            "profile": "unifi_24_rj45_2sfp_inline",
+            "image": {"file": "Private-Faceplate-Alice.png", "width": 2048, "height": 448},
+            "ports": {
+                "1": {"center": [100, 200], "display_name": "Alice NAS", "supported_speed": "1G"},
+                "2": {"center": [200, 200], "supported_speed": "2.5G"},
+            },
+            "sfp": {"1": {"center": [1800, 200], "display_name": "Private uplink"}},
+            "status_leds": {"STAT": [55, 44]},
+            "ui": {
+                "faceplate": {"file": "Private-Faceplate-Alice.png", "source": "custom", "fit": "fill", "opacity": 1},
+                "logo": {"file": "Alice-Logo.png", "x": 1, "y": 2, "width": 3, "height": 4},
+                "status_panel": {"x": 10, "y": 20, "width": 300, "height": 120, "custom_title": "Alice Core"},
+            },
+            "management": {"switch_ip": "10.23.45.67"},
+            "user_topology_authoritative": True,
+        },
+    }
+
+snapshot = support_diagnostics.build_calibration_storage_snapshot(listing, exact_fetcher)
+raw = json.dumps(snapshot, sort_keys=True)
+for secret in (
+    private_profile,
+    private_base,
+    "Server-Room-A",
+    "Private-Faceplate-Alice.png",
+    "Alice-Logo.png",
+    "Alice NAS",
+    "Private uplink",
+    "Alice Core",
+    "10.23.45.67",
+):
+    assert secret not in raw, (secret, raw)
+assert snapshot["status"] == "ok", snapshot
+assert snapshot["profile_names_exposed"] is False, snapshot
+assert snapshot["raw_storage_included"] is False, snapshot
+assert snapshot["management_fields_included"] is False, snapshot
+assert snapshot["profile_count"] == 1, snapshot
+row = snapshot["profiles"][0]
+assert row["profile_id"].startswith("profile-"), row
+assert row["base_profile_id"].startswith("profile-"), row
+assert row["faceplate_content_sha256"] == "a" * 64, row
+assert row["calibration"]["ports"]["1"]["center"] == [100, 200], row
+assert "display_name" not in row["calibration"]["ports"]["1"], row
+assert row["calibration"]["ui"]["status_panel"]["x"] == 10, row
+assert "custom_title" not in row["calibration"]["ui"]["status_panel"], row
+assert "file" not in row["calibration"]["ui"]["faceplate"], row
+assert "management" not in row["calibration"], row
+assert len(row["calibration"]["geometry_sha256"]) == 64, row
+assert snapshot["active_profile_links"][0]["base_profile_id"] == row["base_profile_id"], snapshot
+print("Switch Vision Support My Switch storage-backed calibration privacy regression: PASS")
+PY_CALIBRATION_STORAGE_PRIVACY
 
 
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_MQTT_MAINTENANCE'
@@ -1604,7 +1709,8 @@ cat > "$privacy_vlan_root/options.json" <<'JSON'
     "vmVlanName": "Guest",
     "keep_boolean": false
   },
-  "label": "VLAN20"
+  "label": "VLAN20",
+  "history": "VLAN / trunk summary: VLAN name: Office"
 }
 JSON
 python3 "$BASE_DIR/sanitize_support_bundle.py" \
@@ -1623,14 +1729,73 @@ assert document["vlan_name"] == "masked-vlan", document
 assert document["nested"]["vmVlanName"] == "masked-vlan", document
 assert document["nested"]["keep_boolean"] is False, document
 assert document["label"] == "masked-vlan-20", document
+assert document["history"] == "VLAN / trunk summary: VLAN name: masked-vlan", document
 
 with open(sys.argv[2], encoding="utf-8") as handle:
     report = json.load(handle)
-assert report["sanitization_version"] >= 14, report
+assert report["sanitization_version"] >= 15, report
 assert report["enabled_category_leaks_found"] is False, report
-assert report["counts"]["vlan_names_masked"] >= 3, report
+assert report["processing_complete"] is True, report
+assert report["json_structure_complete"] is True, report
+assert report["counts"]["json_files_invalid"] == 0, report
+assert report["counts"]["json_files_validated"] >= 1, report
+assert report["counts"]["vlan_names_masked"] >= 4, report
 PY_VLAN_JSON
 printf '%s\n' "Switch Vision Discovery v2.3.33 Support My Switch JSON VLAN sanitizer regression: PASS"
+
+# Current bundle quality must fail closed when any JSON evidence is malformed.
+privacy_invalid_json_root="$privacy_hard_root/invalid-json"
+mkdir -p "$privacy_invalid_json_root"
+printf '{"broken": [1,}\n' > "$privacy_invalid_json_root/broken.json"
+python3 "$BASE_DIR/sanitize_support_bundle.py" \
+  "$privacy_invalid_json_root" \
+  "$privacy_invalid_json_root-report.json" >/dev/null
+python3 - "$privacy_invalid_json_root-report.json" <<'PY_INVALID_JSON_GATE'
+import json, sys
+report = json.load(open(sys.argv[1], encoding="utf-8"))
+assert report["processing_complete"] is False, report
+assert report["json_structure_complete"] is False, report
+assert report["counts"]["json_files_invalid"] == 1, report
+assert any(item["reason"] == "invalid_json_after_sanitization" for item in report["processing_issues"]), report
+PY_INVALID_JSON_GATE
+
+# Final model provenance must be rebuilt from the same enriched capability
+# copies that are packaged, not stale pre-enrichment diagnostics.
+provenance_root="$privacy_hard_root/provenance-refresh"
+mkdir -p "$provenance_root/capabilities" "$provenance_root/diagnostics"
+cat > "$provenance_root/capabilities/test-capabilities.json" <<'JSON_PROVENANCE'
+{
+  "device": {
+    "vendor": "generic",
+    "vendor_name": "Unknown / standard MIB only",
+    "family": "Unknown",
+    "model_text": "US-24-250W",
+    "support_status": "experimental",
+    "sys_object_id": "1.3.6.1.4.1.4413"
+  },
+  "summary": {"interface_count": 53, "physical_count": 26, "rj45_count": 24, "sfp_count": 2, "sfp_plus_count": 0, "sfp28_count": 0, "uplink_count": 2, "stack_count": 0},
+  "registry": {
+    "match": true,
+    "status": "experimental",
+    "family": "UniFi Switch 24 250W",
+    "exact_model": "US-24-250W",
+    "validation": {"exact_model_detection": "real_hardware_snmp_confirmed"}
+  }
+}
+JSON_PROVENANCE
+printf '{"schema_version":1,"device_count":1,"devices":[{"registry_match":false}]}\n' > "$provenance_root/diagnostics/model-provenance.json"
+python3 "$BASE_DIR/support_diagnostics.py" --refresh-model-provenance "$provenance_root"
+python3 - "$provenance_root/diagnostics/model-provenance.json" <<'PY_PROVENANCE_REFRESH'
+import json, sys
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+assert doc["device_count"] == 1, doc
+row = doc["devices"][0]
+assert row["registry_match"] is True, row
+assert row["model"] == "US-24-250W", row
+assert row["family"] == "UniFi Switch 24 250W", row
+assert row["support_status"] == "experimental", row
+PY_PROVENANCE_REFRESH
+printf '%s\n' "Switch Vision Support My Switch JSON integrity/model-provenance regressions: PASS"
 
 printf '%s\n' "Switch Vision privacy hardening regression: PASS"
 
@@ -1799,8 +1964,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.9"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.9"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.10"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.10"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
