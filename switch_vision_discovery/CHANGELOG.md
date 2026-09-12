@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.9
+
+- Update Support My Switch configuration diagnostics for the UniFi2MQTT 3.1.x priority/fallback and multi-controller option schema while retaining legacy single-controller compatibility.
+- Keep controller URLs, API keys, controller IDs, site IDs, host IDs and private MQTT values out of bundles while reporting only configured/mode/count state.
+- Preserve bounded UniFi2MQTT connection failure categories and per-transport/controller result rows so future contributions can distinguish TLS, authentication/authorization, site/host resolution, HTTP and network failures without exposing private identifiers.
+
 ## 2.4.8
 
 - Fix a Discovery 2.4.7 regression where the physical-contract wrapper deleted `generated-dashboard-card.yaml` whenever there were zero accepted SNMP walks, erasing otherwise valid UniFi-only dashboard cards.

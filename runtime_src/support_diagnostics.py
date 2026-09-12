@@ -606,29 +606,147 @@ def _safe_snmp2mqtt_options(options: Any) -> dict[str, Any]:
 def _safe_unifi2mqtt_options(options: Any) -> dict[str, Any]:
     data = options if isinstance(options, dict) else {}
     known = {
-        "controller_url", "site_id", "api_key", "verify_ssl",
-        "allow_insecure_http", "poll_interval", "mqtt_host", "mqtt_port",
-        "mqtt_username", "mqtt_password", "mqtt_tls", "mqtt_verify_ssl",
-        "mqtt_ca", "mqtt_topic_prefix", "mqtt_discovery_prefix",
+        # Legacy single-transport schema retained for upgrade compatibility.
+        "transport", "controller_url", "host_id", "site_id", "api_key",
+        "verify_ssl", "allow_insecure_http",
+        # Current priority/fallback and multi-controller schema.
+        "priority_transport", "fallback_transport",
+        "local_controller_url", "local_site_id", "local_api_key",
+        "local_verify_ssl", "local_allow_insecure_http",
+        "remote_host_id", "remote_site_id", "remote_api_key", "controllers",
+        # Shared poll/MQTT options.
+        "poll_interval", "mqtt_host", "mqtt_port", "mqtt_username",
+        "mqtt_password", "mqtt_tls", "mqtt_verify_ssl", "mqtt_ca",
+        "mqtt_topic_prefix", "mqtt_discovery_prefix",
     }
-    controller = str(data.get("controller_url") or "").strip().casefold()
-    controller_mode = (
-        "missing" if not controller
-        else "https" if controller.startswith("https://")
-        else "http" if controller.startswith("http://")
-        else "custom"
+
+    def enum(value: Any, allowed: set[str], default: str | None = None) -> str | None:
+        text = str(value or "").strip().casefold()
+        return text if text in allowed else default
+
+    def endpoint_mode(value: Any) -> str:
+        text = str(value or "").strip().casefold()
+        if not text:
+            return "missing"
+        if text.startswith("https://"):
+            return "https"
+        if text.startswith("http://"):
+            return "http"
+        return "custom"
+
+    def selector_mode(value: Any) -> str:
+        text = str(value or "").strip().casefold()
+        return "auto" if text in {"", "auto", "default"} else "custom"
+
+    legacy_transport = enum(data.get("transport"), {"local", "remote"}, "local") or "local"
+    current_schema = any(
+        key in data
+        for key in (
+            "priority_transport", "fallback_transport", "local_controller_url",
+            "local_site_id", "local_api_key", "remote_host_id",
+            "remote_site_id", "remote_api_key", "controllers",
+        )
     )
-    site = str(data.get("site_id") or "").strip().casefold()
-    site_mode = "auto" if site in {"", "auto", "default"} else "custom"
+
+    local_url = data.get("local_controller_url")
+    local_site = data.get("local_site_id")
+    local_key = data.get("local_api_key")
+    local_verify = data.get("local_verify_ssl")
+    local_http = data.get("local_allow_insecure_http")
+    remote_host = data.get("remote_host_id")
+    remote_site = data.get("remote_site_id")
+    remote_key = data.get("remote_api_key")
+
+    if legacy_transport == "local":
+        if not _configured(local_url):
+            local_url = data.get("controller_url")
+        if not _configured(local_site):
+            local_site = data.get("site_id")
+        if not _configured(local_key):
+            local_key = data.get("api_key")
+        if local_verify is None:
+            local_verify = data.get("verify_ssl")
+        if local_http is None:
+            local_http = data.get("allow_insecure_http")
+    else:
+        if not _configured(remote_host):
+            remote_host = data.get("host_id")
+        if not _configured(remote_site):
+            remote_site = data.get("site_id")
+        if not _configured(remote_key):
+            remote_key = data.get("api_key")
+
+    raw_controllers = data.get("controllers")
+    safe_controllers: list[dict[str, Any]] = []
+    for position, row in enumerate(
+        raw_controllers if isinstance(raw_controllers, list) else [], start=1
+    ):
+        if not isinstance(row, dict):
+            safe_controllers.append({"position": position, "valid_row": False})
+            continue
+        transport = enum(row.get("transport"), {"local", "remote"}, "local") or "local"
+        safe_row: dict[str, Any] = {
+            "position": position,
+            "valid_row": True,
+            "transport": transport,
+            "api_key_configured": _configured(row.get("api_key")),
+            "site_mode": selector_mode(row.get("site_id")),
+        }
+        if transport == "local":
+            safe_row.update({
+                "controller_transport": endpoint_mode(row.get("controller_url")),
+                "verify_ssl": _boolish(row.get("verify_ssl")),
+                "allow_insecure_http": _boolish(row.get("allow_insecure_http")),
+            })
+        else:
+            safe_row["host_mode"] = selector_mode(row.get("host_id"))
+        safe_controllers.append(safe_row)
+
+    mode = (
+        "multi_controller"
+        if safe_controllers
+        else "priority_fallback"
+        if current_schema
+        else "legacy_single"
+    )
+    priority = enum(
+        data.get("priority_transport"), {"local", "remote"}, legacy_transport
+    ) or legacy_transport
+    fallback = enum(data.get("fallback_transport"), {"none", "local", "remote"}, "none") or "none"
+
+    legacy_controller = str(data.get("controller_url") or "").strip().casefold()
+    legacy_site = str(data.get("site_id") or "").strip().casefold()
     return {
+        # Keep the legacy summary stable for older bundle readers.
         "controller": {
             "configured": _configured(data.get("controller_url")),
-            "transport": controller_mode,
+            "transport": endpoint_mode(legacy_controller),
             "api_key_configured": _configured(data.get("api_key")),
-            "site_mode": site_mode,
+            "site_mode": "auto" if legacy_site in {"", "auto", "default"} else "custom",
             "verify_ssl": _boolish(data.get("verify_ssl")),
             "allow_insecure_http": _boolish(data.get("allow_insecure_http")),
             "poll_interval": _intish(data.get("poll_interval")),
+        },
+        "connection": {
+            "mode": mode,
+            "priority_transport": priority,
+            "fallback_transport": fallback,
+            "local": {
+                "configured": _configured(local_url) or _configured(local_key),
+                "controller_transport": endpoint_mode(local_url),
+                "api_key_configured": _configured(local_key),
+                "site_mode": selector_mode(local_site),
+                "verify_ssl": _boolish(local_verify),
+                "allow_insecure_http": _boolish(local_http),
+            },
+            "remote": {
+                "configured": _configured(remote_key),
+                "api_key_configured": _configured(remote_key),
+                "host_mode": selector_mode(remote_host),
+                "site_mode": selector_mode(remote_site),
+            },
+            "controller_count": len(safe_controllers),
+            "controllers": safe_controllers,
         },
         "mqtt": {
             "host_mode": _mqtt_host_mode(data.get("mqtt_host")),

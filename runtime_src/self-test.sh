@@ -563,16 +563,61 @@ assert snmp["mqtt"]["password_configured"] is True
 
 unifi = _safe_unifi2mqtt_options({
     "controller_url": private_values["controller"],
-    "site_id": "private-site",
+    "site_id": "fixture-legacy-site",
     "api_key": private_values["api_key"],
     "verify_ssl": "true",
+    "priority_transport": "local",
+    "fallback_transport": "remote",
+    "local_controller_url": "https://fixture-local.example:11443",
+    "local_site_id": "fixture-local-site",
+    "local_verify_ssl": "false",
+    "local_allow_insecure_http": "false",
+    "remote_host_id": "fixture-host-id",
+    "remote_site_id": "fixture-remote-site",
+    "controllers": [
+        {
+            "id": "fixture-controller-a",
+            "transport": "local",
+            "controller_url": "https://fixture-extra.example:11443",
+            "site_id": "fixture-controller-site",
+            "verify_ssl": "true",
+            "allow_insecure_http": "false",
+        },
+        {
+            "id": "fixture-controller-b",
+            "transport": "remote",
+            "host_id": "fixture-extra-host",
+            "site_id": "fixture-extra-site",
+        },
+    ],
     "poll_interval": "30",
     "mqtt_discovery_prefix": private_values["custom_prefix"],
 })
 assert unifi["controller"]["transport"] == "https"
 assert unifi["controller"]["api_key_configured"] is True
 assert unifi["controller"]["site_mode"] == "custom"
+assert unifi["connection"]["mode"] == "multi_controller"
+assert unifi["connection"]["priority_transport"] == "local"
+assert unifi["connection"]["fallback_transport"] == "remote"
+assert unifi["connection"]["local"]["controller_transport"] == "https"
+assert unifi["connection"]["local"]["verify_ssl"] is False
+assert unifi["connection"]["remote"]["host_mode"] == "custom"
+assert unifi["connection"]["controller_count"] == 2
+assert unifi["connection"]["controllers"][0]["transport"] == "local"
+assert unifi["connection"]["controllers"][0]["controller_transport"] == "https"
+assert unifi["connection"]["controllers"][1]["transport"] == "remote"
+assert unifi["connection"]["controllers"][1]["host_mode"] == "custom"
+assert unifi["unknown_option_keys"] == []
 assert unifi["mqtt"]["discovery_prefix_mode"] == "custom"
+
+legacy_unifi = _safe_unifi2mqtt_options({
+    "controller_url": private_values["controller"],
+    "site_id": "fixture-site",
+    "api_key": private_values["api_key"],
+    "verify_ssl": "true",
+})
+assert legacy_unifi["connection"]["mode"] == "legacy_single"
+assert legacy_unifi["unknown_option_keys"] == []
 
 installer = _safe_installer_options({
     "release_api_url": "https://private-release.example/api",
@@ -618,6 +663,16 @@ with tempfile.TemporaryDirectory() as tmp:
     assert "private/base/topic" not in rendered
     assert "private-user" not in rendered
     assert "/private/custom-targets.yaml" not in rendered
+    for value in (
+        "https://fixture-local.example:11443",
+        "https://fixture-extra.example:11443",
+        "fixture-host-id",
+        "fixture-extra-host",
+        "fixture-extra-site",
+        "fixture-controller-a",
+        "fixture-controller-b",
+    ):
+        assert value not in rendered, value
 
 print("Switch Vision Discovery v2.3.2 privacy-safe configuration snapshot regression: PASS")
 PY_CONFIGURATION_SNAPSHOT
@@ -1411,9 +1466,20 @@ cat > "$privacy_root/unifi/diagnostics.json" <<'JSON'
 {
   "schema_version": 1,
   "product": "Switch Vision UniFi2MQTT",
-  "version": "2.0.43",
-  "status": "success",
-  "stage": "complete",
+  "version": "3.1.3",
+  "status": "error",
+  "stage": "connection",
+  "connection_mode": "priority_fallback",
+  "priority_transport": "local",
+  "fallback_transport": "remote",
+  "active_transport": "none",
+  "failover_active": false,
+  "transports_attempted": ["local", "remote", "invalid"],
+  "error_type": "authentication_or_authorization_failed",
+  "connection_results": [
+    {"transport": "local", "status": "error", "error_type": "tls_verification_failed", "operator_note": "drop-me"},
+    {"transport": "remote", "status": "error", "error_type": "authentication_or_authorization_failed"}
+  ],
   "adopted_devices": 3,
   "switching_devices": 2,
   "rejected_devices": 1,
@@ -1447,9 +1513,18 @@ YAML
 python3 "$BASE_DIR/sanitize_support_bundle.py" "$privacy_root" "$privacy_root/report.json" --mask-hostnames true >/dev/null
 jq -e '(.devices[0].id | startswith("masked-device-")) and (.devices[0].name == "masked-switch") and (.devices[0].model == "USW Pro 24 PoE")' "$privacy_root/unifi/devices.json" >/dev/null
 jq -e '
-  (.version == "2.0.43")
-  and (.status == "success")
-  and (.stage == "complete")
+  (.version == "3.1.3")
+  and (.status == "error")
+  and (.stage == "connection")
+  and (.connection_mode == "priority_fallback")
+  and (.priority_transport == "local")
+  and (.fallback_transport == "remote")
+  and (.active_transport == "none")
+  and (.failover_active == false)
+  and (.transports_attempted == ["local", "remote"])
+  and (.error_type == "authentication_or_authorization_failed")
+  and (.connection_results[0] == {"error_type":"tls_verification_failed","status":"error","transport":"local"})
+  and (.connection_results[1] == {"error_type":"authentication_or_authorization_failed","status":"error","transport":"remote"})
   and (.adopted_devices == 3)
   and (.switching_devices == 2)
   and (.rejected_devices == 1)
@@ -1458,6 +1533,7 @@ jq -e '
   and (has("api_key") | not)
   and (has("device_name") | not)
   and (has("controller_url") | not)
+  and ((.connection_results[0] | has("operator_note")) | not)
 ' "$privacy_root/unifi/diagnostics.json" >/dev/null
 ! grep -q 'DO_NOT_KEEP_API_KEY\|Private Diagnostic Switch\|192.168.50.1' "$privacy_root/unifi/diagnostics.json"
 grep -q '^        title: masked-switch$' "$privacy_root/generated-dashboard-card.yaml"
@@ -1723,8 +1799,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.8"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.8"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.9"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.9"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
