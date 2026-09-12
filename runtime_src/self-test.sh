@@ -265,6 +265,7 @@ grep -Fq '.hub-settings-section h3::before{content:"";position:absolute;left:0;t
 grep -Fq '.hub-settings-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto' "$BASE_DIR/support_web.py"
 grep -Fq '.hub-settings-tab.is-active{color:var(--heading-strong)!important' "$BASE_DIR/support_web.py"
 grep -Fq '.hub-settings-pane[hidden]{display:none!important}' "$BASE_DIR/support_web.py"
+grep -Fq '.hub-switch-setting-body[hidden]{display:none!important}' "$BASE_DIR/support_web.py"
 grep -Fq 'box-shadow:0 0 0 3px var(--accent-soft)' "$BASE_DIR/support_web.py"
 grep -Fq '.nav-card::before{content:"";position:absolute;left:0;top:0;right:0;height:2px' "$BASE_DIR/support_web.py"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_HUB_SETTINGS'
@@ -1978,8 +1979,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.12"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.12"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.13"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.13"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
