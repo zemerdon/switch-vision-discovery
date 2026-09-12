@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.10
+
+- Add a privacy-scoped Support My Switch diagnostic for Home Assistant-backed Switch Vision calibration state. It reads through the existing Switch Vision WebSocket API, preserves numeric port/SFP/status/UI geometry and content fingerprints needed for calibration triage, hashes switch-scoped profile identities, and excludes raw `.storage` files, management addresses, custom titles, port labels, logo/faceplate filenames, credentials, and unrelated Home Assistant state.
+- Validate every JSON evidence file after sanitization and fail the Support My Switch processing-complete gate if any JSON is malformed; also preserve quoted JSON strings correctly when line-oriented privacy masking rewrites embedded VLAN-name text.
+- Rebuild packaged model-provenance diagnostics after final registry enrichment so the diagnostic summary reflects the same capability evidence that is actually included in the contribution bundle.
+
 ## 2.4.9
 
 - Update Support My Switch configuration diagnostics for the UniFi2MQTT 3.1.x priority/fallback and multi-controller option schema while retaining legacy single-controller compatibility.

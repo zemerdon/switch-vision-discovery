@@ -465,8 +465,20 @@ def replace_value_line(match: re.Match[str], placeholder: str) -> str:
     stripped = raw.strip()
     suffix = "," if stripped.endswith(",") else ""
     stripped = stripped[:-1].rstrip() if suffix else stripped
-    quote = '"' if stripped.startswith('"') else "'" if stripped.startswith("'") else ""
-    replacement = f"{quote}{placeholder}{quote}" if quote else placeholder
+    leading_quote = stripped[:1] if stripped[:1] in {"\"", "'"} else ""
+    trailing_quote = stripped[-1:] if stripped[-1:] in {"\"", "'"} else ""
+    if leading_quote:
+        replacement = leading_quote + placeholder
+        if trailing_quote == leading_quote:
+            replacement += trailing_quote
+    elif trailing_quote:
+        # A broad line-oriented matcher can consume the opening quote into its
+        # prefix (for example an explanatory JSON string containing
+        # ``VLAN name:``). Preserve the closing quote so sanitization cannot
+        # turn otherwise-valid JSON into malformed evidence.
+        replacement = placeholder + trailing_quote
+    else:
+        replacement = placeholder
     return match.group("prefix") + replacement + suffix
 
 
@@ -820,6 +832,8 @@ def main() -> int:
         "symlinks_skipped": 0,
         "special_files_skipped": 0,
         "files_excluded": 0,
+        "json_files_validated": 0,
+        "json_files_invalid": 0,
     }
 
     root = args.root.resolve()
@@ -908,6 +922,27 @@ def main() -> int:
                 counts["write_errors"] += 1
                 exclude_file(path, "write_error_excluded", size)
 
+    # A contribution must never be called complete if sanitization has made
+    # (or inherited) malformed JSON. Validate every JSON evidence file after
+    # all transformations and feed failures into the same processing-complete
+    # gate used by Support My Switch bundle quality.
+    for path in sorted(root.rglob("*.json")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        counts["json_files_validated"] += 1
+        try:
+            json.loads(path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            counts["json_files_invalid"] += 1
+            try:
+                size = path.stat().st_size
+            except OSError:
+                size = None
+            add_issue(path, "invalid_json_after_sanitization", size)
+        except OSError:
+            counts["read_errors"] += 1
+            add_issue(path, "json_validation_read_error")
+
     raw_residuals = residual_audit(root, options)
     residuals = {
         "credential_values_remaining": raw_residuals["credential_values_remaining"],
@@ -946,7 +981,7 @@ def main() -> int:
     }
     processing_complete = issue_count == 0
     report = {
-        "sanitization_version": 14,
+        "sanitization_version": 15,
         "secrets_always_removed": True,
         "serial_numbers_always_masked": True,
         "options": options,
@@ -955,6 +990,7 @@ def main() -> int:
         "processing_issue_count": issue_count,
         "processing_issues": issue_samples,
         "processing_issues_truncated": max(0, issue_count - len(issue_samples)),
+        "json_structure_complete": counts["json_files_invalid"] == 0,
         "residual_audit": residuals,
         "audit_categories": audit_categories,
         "enabled_category_leaks_found": any(

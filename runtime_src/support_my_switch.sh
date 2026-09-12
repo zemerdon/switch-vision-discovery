@@ -15,6 +15,7 @@ BASE_SANITIZER_SCRIPT="${SUPPORT_BASE_SANITIZER_SCRIPT:-/sanitize_support_bundle
 EMAIL_BUILDER_SCRIPT="${SUPPORT_EMAIL_BUILDER_SCRIPT:-/make_support_email.py}"
 REGISTRY_LOOKUP_SCRIPT="${SUPPORT_REGISTRY_LOOKUP_SCRIPT:-/registry_lookup.py}"
 REGISTRY_FILE="${SUPPORT_REGISTRY_FILE:-/opt/switch-vision/devices/supported_devices.json}"
+SUPPORT_DIAGNOSTICS_SCRIPT="${SUPPORT_DIAGNOSTICS_SCRIPT:-/support_diagnostics.py}"
 CONTRIBUTOR_TYPE="${SUPPORT_CONTRIBUTOR_TYPE:-anonymous}"
 CONTRIBUTOR_VALUE="${SUPPORT_CONTRIBUTOR_VALUE:-}"
 EVIDENCE_QUALITY="${SUPPORT_EVIDENCE_QUALITY:-complete}"
@@ -195,6 +196,16 @@ if [ -n "$CAP_FILES" ]; then
 else
   printf '[]\n' > "$DEVICE_SUMMARY_FILE"
 fi
+
+# Diagnostics are captured before bundle sanitization, while registry enrichment
+# above intentionally updates the copied capability files. Refresh model
+# provenance from those final copies so the packaged diagnostic cannot disagree
+# with the evidence it summarizes.
+if [ ! -f "$SUPPORT_DIAGNOSTICS_SCRIPT" ]; then
+  log "ERROR: Support diagnostics helper was not found: $SUPPORT_DIAGNOSTICS_SCRIPT"
+  exit 1
+fi
+python3 "$SUPPORT_DIAGNOSTICS_SCRIPT" --refresh-model-provenance "$DATA_COPY"
 
 # Add normalized UniFi2MQTT devices from the already-sanitized snapshot so a
 # UniFi-only contribution still has complete device summary/fingerprint data.
