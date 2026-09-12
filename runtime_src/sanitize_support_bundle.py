@@ -217,6 +217,73 @@ def sanitize_unifi_diagnostics(
     if error_type:
         output["error_type"] = error_type
 
+    for key in ("mode", "connection_mode"):
+        value = safe_text(
+            source.get(key),
+            64,
+            r"(?:multi_controller|priority_fallback)",
+        )
+        if value:
+            output[key] = value
+
+    for key in ("priority_transport", "fallback_transport", "active_transport"):
+        value = safe_text(source.get(key), 16, r"(?:local|remote|none)")
+        if value:
+            output[key] = value
+
+    if isinstance(source.get("failover_active"), bool):
+        output["failover_active"] = source["failover_active"]
+    if isinstance(source.get("private_identifiers_included"), bool):
+        output["private_identifiers_included"] = source["private_identifiers_included"]
+
+    attempted = source.get("transports_attempted")
+    if isinstance(attempted, list):
+        output["transports_attempted"] = [
+            value
+            for value in (
+                safe_text(item, 16, r"(?:local|remote)")
+                for item in attempted[:8]
+            )
+            if value
+        ]
+
+    for key in (
+        "controllers_configured", "controllers_successful", "controllers_failed"
+    ):
+        if key in source:
+            output[key] = safe_count(key)
+
+    def safe_result_rows(name: str, *, include_transport: bool, include_position: bool) -> None:
+        rows_value = source.get(name)
+        if not isinstance(rows_value, list):
+            return
+        safe_rows: list[dict[str, object]] = []
+        for raw in rows_value[:64]:
+            if not isinstance(raw, dict):
+                continue
+            row: dict[str, object] = {}
+            if include_position and isinstance(raw.get("position"), int):
+                row["position"] = max(1, min(raw["position"], 100000))
+            if include_transport:
+                transport = safe_text(raw.get("transport"), 16, r"(?:local|remote)")
+                if transport:
+                    row["transport"] = transport
+            status = safe_text(raw.get("status"), 32, r"[A-Za-z0-9_.:+-]+")
+            stage = safe_text(raw.get("stage"), 64, r"[A-Za-z0-9_.:+-]+")
+            row_error = safe_text(raw.get("error_type"), 128, r"[A-Za-z0-9_.:+-]+")
+            if status:
+                row["status"] = status
+            if stage:
+                row["stage"] = stage
+            if row_error:
+                row["error_type"] = row_error
+            if row:
+                safe_rows.append(row)
+        output[name] = safe_rows
+
+    safe_result_rows("connection_results", include_transport=True, include_position=False)
+    safe_result_rows("controller_results", include_transport=False, include_position=True)
+
     rows = source.get("device_classification")
     if isinstance(rows, list):
         safe_rows = []
