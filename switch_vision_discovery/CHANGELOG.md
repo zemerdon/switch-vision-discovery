@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.8
+
+- Fix a Discovery 2.4.7 regression where the physical-contract wrapper deleted `generated-dashboard-card.yaml` whenever there were zero accepted SNMP walks, erasing otherwise valid UniFi-only dashboard cards.
+- Treat UniFi dashboard generation as an independent presentation source on the zero-SNMP path while leaving SNMP2MQTT telemetry untouched when no trusted SNMP bindings exist.
+- Add permanent full-entrypoint source-matrix coverage for UniFi-only, mixed UniFi+SNMP, all-SNMP-failed with UniFi, genuinely empty, and mixed valid/conflicting UniFi topology cases.
+- Make the UniFi snapshot/helper paths testable through bounded environment overrides while preserving the production defaults.
+
 ## 2.4.7
 
 - Expand shared management appearance controls to a **10-position Content Width slider** (Narrower → Wider) and **5-position UI Density slider** (Spacious → Ultra Dense). Discovery live-previews unsaved changes immediately; Installer gets the same persisted scale through Core plus an in-Hub live preview before Save.
