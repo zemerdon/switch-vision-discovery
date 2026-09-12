@@ -12,6 +12,13 @@ CONTRIBUTION_BREADCRUMB = re.compile(
     r"(?i)(?:unifi[-_]contrib|community[-_]validation)[/_-]\d{6}"
 )
 PACKAGE_NAME = re.compile(r"(?i)Switch[_ -]Vision[_ -]Contribution")
+PUBLIC_CREDITS = [
+    ("Finni", "Discovery / Hub • UniFi2MQTT"),
+    ("Paul B", "Discovery / Hub • SNMP2MQTT • Support My Switch"),
+    ("Timb320", "Core • Discovery / Hub • UniFi2MQTT"),
+    ("Brendan P", "Discovery / Hub • UniFi2MQTT • Support My Switch"),
+    ("iangr", "Core • Discovery / Hub • UniFi2MQTT • Support My Switch"),
+]
 
 
 def check_structured(value: object, path: Path) -> None:
@@ -56,7 +63,28 @@ def check_structured(value: object, path: Path) -> None:
             raise SystemExit(f"Contribution package reference remains in structured public metadata: {path}")
 
 
+def check_public_credits() -> None:
+    path = ROOT / "runtime_src/support_web.py"
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    start = text.index('<section id="creditsCard"')
+    end = text.index('<section id="calibrationProfilesCard"', start)
+    block = text[start:end]
+    names = re.findall(r'<span class="credit-name">([^<]+)</span>', block)
+    expected_names = [name for name, _scope in PUBLIC_CREDITS] * 2
+    if names != expected_names:
+        raise SystemExit(f"Public Credits roster/order mismatch: {names!r}")
+    for name, scope in PUBLIC_CREDITS:
+        row = f'<span class="credit-name">{name}</span><span class="credit-components">{scope}</span>'
+        if block.count(row) != 2:
+            raise SystemExit(f"Public Credits row mismatch for {name!r}")
+    forbidden = ("@hotmail.com", "Timothy B Green", "Brendan Pratt")
+    for value in forbidden:
+        if value.casefold() in block.casefold():
+            raise SystemExit(f"Private/non-approved Credits attribution remains public: {value!r}")
+
+
 def main() -> None:
+    check_public_credits()
     registries = [
         path
         for path in ROOT.rglob("supported_devices.json")
