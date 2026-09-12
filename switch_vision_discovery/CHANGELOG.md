@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.11
+
+- Align the exact Experimental `US-8-150W` dashboard visual with Core 2.7.6's existing owner-calibrated UniFi 8-RJ45 + 2-SFP faceplate/profile instead of the oversized stock 24+2 fallback.
+- Align the exact Experimental `US 8 60W` dashboard visual with Core 2.7.6's existing UniFi 8-RJ45 faceplate/profile instead of the stock 24+2 fallback.
+- Keep physical topology, telemetry mappings and support confidence unchanged; model-specific live rendered alignment remains pending and these visual corrections do not promote either model.
+- Refresh the exact pinned Core faceplate catalog to the reviewed Core 2.7.6 source and add permanent cross-component visual regressions for both models.
+
 ## 2.4.10
 
 - Add a privacy-scoped Support My Switch diagnostic for Home Assistant-backed Switch Vision calibration state. It reads through the existing Switch Vision WebSocket API, preserves numeric port/SFP/status/UI geometry and content fingerprints needed for calibration triage, hashes switch-scoped profile identities, and excludes raw `.storage` files, management addresses, custom titles, port labels, logo/faceplate filenames, credentials, and unrelated Home Assistant state.

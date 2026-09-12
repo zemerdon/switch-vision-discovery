@@ -1580,7 +1580,7 @@
       "model": "US-8-150W",
       "status": "experimental",
       "confirmed_since": "2.3.32",
-      "last_validated_version": "2.3.31",
+      "last_validated_version": "2.4.11",
       "evidence": "privacy_processed_real_hardware_snmp_contribution",
       "ports": {
         "rj45": 8,
@@ -1594,8 +1594,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-us-8-150w-snmp",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
+      "calibration_profile": "unifi_8_rj45_2sfp",
+      "default_faceplate": "faceplates/unifi-8-rj45-2sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [
         "7.5.15.17146"
@@ -1607,7 +1607,8 @@
       "notes": [
         "Privacy-processed real-hardware SNMP evidence confirms exact US-8-150W identity and interfaces 0/1 through 0/10.",
         "Ports 0/1 through 0/8 are RJ45 and 0/9 through 0/10 are 1G SFP positions.",
-        "PoE hardware capability is retained as Experimental; detailed Switch Vision PoE presentation remains pending a focused current-build confirmation."
+        "PoE hardware capability is retained as Experimental; detailed Switch Vision PoE presentation remains pending a focused current-build confirmation.",
+        "Discovery 2.4.11 aligns this exact model to Core 2.7.6's existing canonical unifi_8_rj45_2sfp visual/profile; support status remains Experimental and model-specific live rendered alignment remains pending."
       ],
       "validation": {
         "exact_model_detection": "real_hardware_snmp_confirmed",
@@ -1619,9 +1620,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
+        "recommended_faceplate": "faceplates/unifi-8-rj45-2sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "calibration_profile": "unifi_8_rj45_2sfp",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -1688,7 +1689,7 @@
       "model": "US 8 60W",
       "status": "experimental",
       "confirmed_since": "2.1.19",
-      "last_validated_version": "2.1.19",
+      "last_validated_version": "2.4.11",
       "evidence": "support_my_switch_community validation_unifi_api",
       "ports": {
         "rj45": 8,
@@ -1702,8 +1703,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-us-8-60w-api",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
+      "calibration_profile": "default_unifi_8_rj45",
+      "default_faceplate": "faceplates/unifi-8rj45.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -1733,11 +1734,11 @@
         "PoE output capability is exposed only on ports 5 through 8, using 802.3af metadata.",
         "The contribution proves link state and PoE-active state are independent.",
         "Per-port RX/TX traffic is not exposed by the current UniFi API path.",
-        "The universal temporary faceplate is used while preserving the real eight-port count.",
         "Rendered dashboard validation remains pending before promotion beyond Experimental.",
         "UniFi visual selection is explicit for this exact model and follows its validated API port geometry; no Cisco-specific profile fallback is used.",
         "community validation from community contributor independently reconfirms one 8x 1G RJ45 unit with PoE capability limited to physical/API ports 5-8 using 802.3af.",
-        "community validation was captured with UniFi2MQTT 2.0.47 and did not include explicit Switch Vision dashboard/card validation, so Experimental status is unchanged."
+        "community validation was captured with UniFi2MQTT 2.0.47 and did not include explicit Switch Vision dashboard/card validation, so Experimental status is unchanged.",
+        "Discovery 2.4.11 aligns this exact model to Core 2.7.6's existing canonical default_unifi_8_rj45 visual/profile; support status remains Experimental and model-specific live rendered alignment remains pending."
       ],
       "validation": {
         "exact_model_detection": "live_api_confirmed",
@@ -1749,9 +1750,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
+        "recommended_faceplate": "faceplates/unifi-8rj45.png",
         "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "calibration_profile": "default_unifi_8_rj45",
         "canvas": {
           "width": 2048,
           "height": 448
