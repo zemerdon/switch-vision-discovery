@@ -1979,8 +1979,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.13"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.13"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.14"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.14"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -3145,9 +3145,11 @@ start = text.index("function discoveryStage(state)")
 end = text.index("function updateSteps(state)", start)
 fn = text[start:end]
 assert "const stage=String(state.stage||'').toLowerCase()" in fn
+assert "if(stage.includes('snmp2mqtt handoff')||stage.includes('support my switch')||stage.includes('finaliz'))return 5" in fn
 assert "if(stage.includes('generating snmp2mqtt yaml'))return 3" in fn
 assert "if(stage.includes('generating dashboard card yaml'))return 4" in fn
 assert fn.index("const stage=") < fn.index("const text=")
+assert fn.index("snmp2mqtt handoff") < fn.index("generating snmp2mqtt yaml")
 assert fn.index("generating snmp2mqtt yaml") < fn.index("dashboard card')||text.includes")
 assert ".slice(-3).join(' ')" in fn
 print("Switch Vision Discovery v2.1.30 structured progress-stage regression: PASS")

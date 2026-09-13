@@ -15,6 +15,29 @@ cv_cap_extract_model_text() {
   fi
 }
 
+cv_cap_extract_bridge_mac() {
+  walk_file="$1"
+  awk '
+    function normalise_oid(s){sub(/^\./,"",s);sub(/^iso\./,"1.",s);return s}
+    {
+      oid=normalise_oid($1)
+      if (oid != "1.3.6.1.2.1.17.1.1.0") next
+      line=$0
+      sub(/^[^=]*=[[:space:]]*/,"",line)
+      sub(/^[A-Za-z-]+:[[:space:]]*/,"",line)
+      gsub(/[\"[:space:].:-]/,"",line)
+      if (length(line) != 12 || line !~ /^[0-9A-Fa-f]+$/) exit
+      out=""
+      for (i=1; i<=12; i+=2) {
+        if (out != "") out=out ":"
+        out=out tolower(substr(line,i,2))
+      }
+      print out
+      exit
+    }
+  ' "$walk_file"
+}
+
 cv_cap_set_front_panel_profile() {
   walk_file="$1"
   CV_CAP_RJ45_LIMIT="48"
@@ -301,6 +324,7 @@ cv_write_capabilities_json() {
 
   cv_detect_vendor_identity "$walk_file"
   cv_cap_set_front_panel_profile "$walk_file"
+  CV_CAP_DEVICE_MAC=$(cv_cap_extract_bridge_mac "$walk_file")
 
   tmp_ports=$(mktemp)
   CV_CAP_IFNAME_LIST=$(mktemp)
@@ -363,8 +387,9 @@ cv_write_capabilities_json() {
     --arg sys_object_id "$CV_ID_SYS_OBJECT_ID" \
     --arg sys_name "$CV_ID_SYS_NAME" \
     --arg model_text "$CV_CAP_MODEL_TEXT" \
+    --arg mac_address "$CV_CAP_DEVICE_MAC" \
     --arg walk_file "$walk_file" \
-    '{schema_version:($schema|tonumber),product:$product,release:$version,generated_at:(now|todateiso8601),source_walk:$walk_file,device:{vendor:$vendor,vendor_name:$vendor_name,adapter:$adapter,family:$family,model_text:$model_text,support_status:$support,sys_object_id:$sys_object_id,sys_name:$sys_name},capabilities:{standard_interfaces:true,identity:true,stack:null,vlan_trunk:null,environment:null,poe:null},interfaces:.,summary:{interface_count:length,physical_count:(map(select(.physical))|length),rj45_count:(map(select(.media=="rj45"))|length),sfp_count:(map(select(.media=="sfp"))|length),sfp_plus_count:(map(select(.media=="sfp_plus"))|length),sfp28_count:(map(select(.media=="sfp28"))|length),uplink_count:(map(select(.media=="sfp" or .media=="sfp_plus" or .media=="sfp28" or .media=="uplink"))|length),stack_count:(map(select(.media=="stack"))|length),virtual_count:(map(select(.media=="virtual"))|length)}}' \
+    '{schema_version:($schema|tonumber),product:$product,release:$version,generated_at:(now|todateiso8601),source_walk:$walk_file,device:{vendor:$vendor,vendor_name:$vendor_name,adapter:$adapter,family:$family,model_text:$model_text,support_status:$support,sys_object_id:$sys_object_id,sys_name:$sys_name,mac_address:(if ($mac_address|length)>0 then $mac_address else null end)},capabilities:{standard_interfaces:true,identity:true,stack:null,vlan_trunk:null,environment:null,poe:null},interfaces:.,summary:{interface_count:length,physical_count:(map(select(.physical))|length),rj45_count:(map(select(.media=="rj45"))|length),sfp_count:(map(select(.media=="sfp"))|length),sfp_plus_count:(map(select(.media=="sfp_plus"))|length),sfp28_count:(map(select(.media=="sfp28"))|length),uplink_count:(map(select(.media=="sfp" or .media=="sfp_plus" or .media=="sfp28" or .media=="uplink"))|length),stack_count:(map(select(.media=="stack"))|length),virtual_count:(map(select(.media=="virtual"))|length)}}' \
     "$tmp_ports" > "$output_path"
 
   if [ -n "${latest_path:-}" ]; then cp "$output_path" "$latest_path"; fi
