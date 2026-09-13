@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.14
+
+- Reconcile SNMP and UniFi2MQTT observations into one generated card when they uniquely identify the same physical switch, preferring an authoritative bridge MAC and falling back to a unique management IP.
+- Suppress only the exact reconciled UniFi device ID so address changes cannot hide a different device; ambiguous MAC/IP matches fail safe and remain separate.
+- Preserve SNMP link/activity/counter behavior on reconciled cards while adding a bounded UniFi binding for API-only metadata.
+- Collect the standard BRIDGE-MIB base MAC as an internal reconciliation signal and keep Support My Switch privacy masking unchanged.
+- Keep post-Stage-5 SNMP2MQTT handoff, Support My Switch capture and finalization visually on Stage 5 instead of appearing to restart Discovery at Stage 1.
+- Keep stock faceplate/profile labels presentation-owned; generated telemetry/entity mappings no longer emit presentation label offsets.
+- Add permanent reconciliation, bridge-MAC and progress-stage regressions.
+
 ## 2.4.13
 
 - Fix Discovery Settings switch collapse/expand rendering by making the switch-row body `hidden` state authoritative even when the shared grid layout applies `display:grid`.

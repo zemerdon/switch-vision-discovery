@@ -10,6 +10,7 @@ contract.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import re
 from pathlib import Path
@@ -73,6 +74,90 @@ def registry_match(devices: list[dict[str, Any]], model: str) -> dict[str, Any] 
         if canonical_model(item.get("model")) == wanted:
             return item
     return None
+
+
+def normalized_ip(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        return ipaddress.ip_address(text).compressed
+    except ValueError:
+        return ""
+
+
+def normalized_mac(value: Any) -> str:
+    compact = re.sub(r"[^0-9a-f]", "", str(value or "").strip().casefold())
+    if len(compact) != 12 or not re.fullmatch(r"[0-9a-f]{12}", compact):
+        return ""
+    return ":".join(compact[index : index + 2] for index in range(0, 12, 2))
+
+
+def unique_device_for_ip(snapshot: dict[str, Any], host: str) -> dict[str, Any] | None:
+    wanted = normalized_ip(host)
+    if not wanted:
+        return None
+    rows = [
+        row for row in snapshot.get("devices", [])
+        if isinstance(row, dict) and normalized_ip(row.get("ip_address")) == wanted
+    ]
+    return rows[0] if len(rows) == 1 else None
+
+
+def unique_device_for_identity(
+    snapshot: dict[str, Any], *, device_mac: str = "", host: str = ""
+) -> tuple[dict[str, Any] | None, str]:
+    wanted_mac = normalized_mac(device_mac)
+    if wanted_mac:
+        mac_rows = [
+            row for row in snapshot.get("devices", [])
+            if isinstance(row, dict) and normalized_mac(row.get("mac_address")) == wanted_mac
+        ]
+        if len(mac_rows) == 1:
+            return mac_rows[0], "hardware_mac"
+        if len(mac_rows) > 1:
+            return None, ""
+    device = unique_device_for_ip(snapshot, host)
+    return (device, "management_ip") if device else (None, "")
+
+
+def binding_card_fields(
+    snapshot: dict[str, Any], registry: dict[str, Any], host: str, device_mac: str = ""
+) -> dict[str, Any] | None:
+    device, match_basis = unique_device_for_identity(
+        snapshot, device_mac=device_mac, host=host
+    )
+    if not device:
+        return None
+    device_id = str(device.get("id") or "").strip()
+    if not device_id:
+        return None
+    reg_devices = registry.get("devices") if isinstance(registry.get("devices"), list) else []
+    reg = registry_match(reg_devices, str(device.get("model") or ""))
+    ports = device.get("ports") if isinstance(device.get("ports"), list) else []
+    if reg:
+        rj45, sfp, conflict = resolve_registered_unifi_ports(reg, ports)
+        if conflict:
+            return None
+    else:
+        rj45, sfp = _observed_ports(ports)
+    if not rj45 and not sfp:
+        return None
+    caps = device.get("api_capabilities") if isinstance(device.get("api_capabilities"), dict) else {}
+    result: dict[str, Any] = {
+        "unifi_device_id": device_id,
+        "unifi_hybrid": True,
+        "unifi_match_basis": match_basis,
+        "unifi_rj45_ports": len(rj45),
+        "unifi_sfp_port_offset": len(rj45),
+        "unifi_port_detail": bool(caps.get("port_detail")),
+        "unifi_per_port_traffic": bool(caps.get("per_port_traffic")),
+        "unifi_refresh_seconds": 30,
+    }
+    api_port_map = reg.get("unifi_api_port_map") if isinstance((reg or {}).get("unifi_api_port_map"), dict) else None
+    if api_port_map is not None:
+        result["unifi_api_port_map"] = api_port_map
+    return result
 
 
 def visual_geometry_matches(faceplate: str, rj45_count: int, sfp_count: int) -> bool:
@@ -233,7 +318,9 @@ def resolve_registered_unifi_ports(
 
 
 def render(
-    snapshot: dict[str, Any], registry: dict[str, Any], indent: int = 6
+    snapshot: dict[str, Any], registry: dict[str, Any], indent: int = 6,
+    exclude_ips: set[str] | None = None,
+    exclude_device_ids: set[str] | None = None,
 ) -> tuple[str, int, int, int, int, int]:
     pad = " " * indent
     devices = snapshot.get("devices")
@@ -249,6 +336,8 @@ def render(
     generic = 0
     pending_exact = 0
     invalid = 0
+    excluded = {normalized_ip(value) for value in (exclude_ips or set()) if normalized_ip(value)}
+    excluded_ids = {str(value).strip() for value in (exclude_device_ids or set()) if str(value).strip()}
     if not devices:
         lines.append(f"{pad}# UniFi snapshot contains 0 normalized switching devices.")
 
@@ -263,6 +352,8 @@ def render(
         if not device_id:
             lines.append(f"{pad}# UniFi {json.dumps(model)} skipped because normalized device ID is missing.")
             invalid += 1
+            continue
+        if device_id in excluded_ids or normalized_ip(device.get("ip_address")) in excluded:
             continue
 
         ports = device.get("ports") if isinstance(device.get("ports"), list) else []
@@ -400,16 +491,57 @@ def main() -> int:
     parser.add_argument("--registry", type=Path, required=True)
     parser.add_argument("--indent", type=int, default=6)
     parser.add_argument("--summary", action="store_true")
+    parser.add_argument("--binding-ip", default="")
+    parser.add_argument("--binding-mac", default="")
+    parser.add_argument("--binding-id-only", action="store_true")
+    parser.add_argument("--exclude-ip-file", type=Path)
+    parser.add_argument("--exclude-id-file", type=Path)
     args = parser.parse_args()
     indent = max(0, args.indent)
 
     try:
         snapshot = load_json(args.snapshot, "UniFi2MQTT snapshot")
         registry = load_json(args.registry, "supported-device registry")
+        if args.binding_ip or args.binding_mac:
+            if args.binding_id_only:
+                device, _match_basis = unique_device_for_identity(
+                    snapshot, device_mac=args.binding_mac, host=args.binding_ip
+                )
+                device_id = str((device or {}).get("id") or "").strip()
+                if not device_id:
+                    return 4
+                print(device_id)
+                return 0
+            fields = binding_card_fields(
+                snapshot, registry, args.binding_ip, args.binding_mac
+            )
+            if not fields:
+                return 4
+            dumped = yaml.safe_dump(
+                fields, sort_keys=False, allow_unicode=True, default_flow_style=False
+            ).rstrip().splitlines()
+            for line in dumped:
+                print((" " * indent) + line)
+            return 0
+
+        excluded: set[str] = set()
+        if args.exclude_ip_file and args.exclude_ip_file.is_file():
+            excluded = {
+                normalized_ip(line)
+                for line in args.exclude_ip_file.read_text(encoding="utf-8").splitlines()
+                if normalized_ip(line)
+            }
+        excluded_ids: set[str] = set()
+        if args.exclude_id_file and args.exclude_id_file.is_file():
+            excluded_ids = {
+                line.strip()
+                for line in args.exclude_id_file.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            }
         text, emitted, exact, generic, pending_exact, issues = render(
-            snapshot, registry, indent
+            snapshot, registry, indent, excluded, excluded_ids
         )
-    except JsonInputError as exc:
+    except (JsonInputError, OSError, UnicodeDecodeError) as exc:
         # stdout is intentional: Discovery embeds this helper output inside the
         # generated YAML and historically suppresses helper stderr. Keep the
         # error as a YAML comment so the preview tells users why cards vanished.

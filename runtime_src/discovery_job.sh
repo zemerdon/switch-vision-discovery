@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.13"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.14"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -2215,6 +2215,7 @@ run_live_snmpwalk_current() {
 1.3.6.1.2.1.31.1.1.1
 1.3.6.1.2.1.10.7
 1.3.6.1.2.1.26
+1.3.6.1.2.1.17.1.1
 1.3.6.1.2.1.17.1.4.1.2
 1.3.6.1.2.1.17.7.1.4.3
 1.3.6.1.2.1.17.7.1.4.5.1.1
@@ -3765,6 +3766,15 @@ exact_model_for_generated_card() {
   model_metadata_for_generated_card "$1" effective
 }
 
+device_mac_for_generated_card() {
+  selected_name="$1"
+  [ -n "$selected_name" ] || return 0
+  safe_name=$(printf '%s' "$selected_name" | sed 's/[^A-Za-z0-9._-]/_/g')
+  cap_file="$CAPABILITIES_DIR/${safe_name}-capabilities.json"
+  [ -f "$cap_file" ] || return 0
+  jq -r '.device.mac_address // empty' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" { print; exit }'
+}
+
 calibration_profile_for_generated_card() {
   selected_name="$1"
   [ -n "$selected_name" ] || return 0
@@ -3866,6 +3876,12 @@ yaml_quote() {
 write_generated_dashboard_card() {
   port_mode_metadata="/tmp/switch_vision_generated_port_modes_$$.tsv"
   build_juniper_port_mode_metadata "$port_mode_metadata"
+  unifi_snapshot="${SWITCH_VISION_UNIFI_SNAPSHOT:-${SWITCH_VISION_SHARE_DIR:-/share/switch_vision}/unifi/devices.json}"
+  unifi_registry="${SWITCH_VISION_DEVICE_REGISTRY:-/opt/switch-vision/devices/supported_devices.json}"
+  unifi_helper="${SWITCH_VISION_UNIFI_DASHBOARD_HELPER:-/unifi_dashboard_cards.py}"
+  [ -f "$unifi_helper" ] || unifi_helper="$(dirname "$0")/unifi_dashboard_cards.py"
+  unifi_bound_ids="/tmp/switch_vision_unifi_bound_ids_$$.txt"
+  : > "$unifi_bound_ids"
   # This is a review/copy helper only. Discovery does not write Lovelace dashboards.
   {
     echo "# Switch Vision generated dashboard card examples"
@@ -3975,9 +3991,8 @@ write_generated_dashboard_card() {
         emit_generated_card_port_counts "$selected"
         case "${effective_model:-${detected_model:-}}" in
           *Juniper*EX3300-48P*)
-            # EX3300 copper interfaces and physical faceplate labels are zero-based.
-            # Keep the 48 calibrated positions, but map slot 1..48 to label/entity 0..47.
-            echo "        port_label_offset: -1"
+            # Data/entity numbering may differ from the stock faceplate labels.
+            # Keep presentation owned by the selected profile/calibration.
             echo "        port_entity_offset: -1"
             ;;
         esac
@@ -3999,6 +4014,22 @@ write_generated_dashboard_card() {
         if [ -n "$host" ]; then
           printf "        switch_ip: %s\n" "$(printf '%s' "$host" | yaml_quote)"
           printf "        management_ip: %s\n" "$(printf '%s' "$host" | yaml_quote)"
+          if [ -f "$unifi_snapshot" ] && [ -f "$unifi_registry" ] && [ -f "$unifi_helper" ]; then
+            unifi_binding_tmp="/tmp/switch_vision_unifi_binding_$$.yaml"
+            device_mac=$(device_mac_for_generated_card "$selected")
+            if python3 "$unifi_helper" --snapshot "$unifi_snapshot" --registry "$unifi_registry" --binding-ip "$host" --binding-mac "$device_mac" --indent 8 > "$unifi_binding_tmp" 2>/dev/null; then
+              # One UniFi controller device can describe the whole management
+              # address, but an SNMP stack renders one card per member. Suppress
+              # the duplicate standalone UniFi card in either case, and only
+              # bind API telemetry onto a non-stack SNMP card.
+              if [ -z "$member_num" ]; then
+                cat "$unifi_binding_tmp"
+              fi
+              matched_unifi_id=$(python3 "$unifi_helper" --snapshot "$unifi_snapshot" --registry "$unifi_registry" --binding-ip "$host" --binding-mac "$device_mac" --binding-id-only 2>/dev/null || true)
+              [ -n "$matched_unifi_id" ] && printf '%s\n' "$matched_unifi_id" >> "$unifi_bound_ids"
+            fi
+            rm -f "$unifi_binding_tmp"
+          fi
         fi
         configured_member_count=$(awk -v FS="$card_row_separator" -v sel="$selected" '$2 == sel && $5 != "" { count++ } END { print count+0 }' "$tmp_cards")
         has_primary_member=$(awk -v FS="$card_row_separator" -v sel="$selected" '$2 == sel && $5 == "1" { found=1 } END { print found+0 }' "$tmp_cards")
@@ -4073,7 +4104,6 @@ write_generated_dashboard_card() {
       emit_generated_card_port_counts "$profile"
       case "${exact_model:-}" in
         *Juniper*EX3300-48P*)
-          echo "        port_label_offset: -1"
           echo "        port_entity_offset: -1"
           ;;
       esac
@@ -4093,23 +4123,33 @@ write_generated_dashboard_card() {
       emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"
       if [ -n "$host" ]; then
         echo "        switch_ip: ${host}"
+        echo "        management_ip: ${host}"
+        if [ -f "$unifi_snapshot" ] && [ -f "$unifi_registry" ] && [ -f "$unifi_helper" ]; then
+          unifi_binding_tmp="/tmp/switch_vision_unifi_binding_$$.yaml"
+          device_mac=$(device_mac_for_generated_card "$profile")
+          if python3 "$unifi_helper" --snapshot "$unifi_snapshot" --registry "$unifi_registry" --binding-ip "$host" --binding-mac "$device_mac" --indent 8 > "$unifi_binding_tmp" 2>/dev/null; then
+            cat "$unifi_binding_tmp"
+            matched_unifi_id=$(python3 "$unifi_helper" --snapshot "$unifi_snapshot" --registry "$unifi_registry" --binding-ip "$host" --binding-mac "$device_mac" --binding-id-only 2>/dev/null || true)
+            [ -n "$matched_unifi_id" ] && printf '%s\n' "$matched_unifi_id" >> "$unifi_bound_ids"
+          fi
+          rm -f "$unifi_binding_tmp"
+        fi
       fi
     fi
 
-    # UniFi2MQTT is an independent normalized discovery source. It does not
-    # require a duplicate SNMP target row. Devices with an exact registry match
-    # and an available generic visual profile are appended as live cards.
-    unifi_snapshot="${SWITCH_VISION_UNIFI_SNAPSHOT:-${SWITCH_VISION_SHARE_DIR:-/share/switch_vision}/unifi/devices.json}"
-    unifi_registry="${SWITCH_VISION_DEVICE_REGISTRY:-/opt/switch-vision/devices/supported_devices.json}"
-    unifi_helper="${SWITCH_VISION_UNIFI_DASHBOARD_HELPER:-/unifi_dashboard_cards.py}"
-    [ -f "$unifi_helper" ] || unifi_helper="$(dirname "$0")/unifi_dashboard_cards.py"
+    # UniFi2MQTT is a normalized discovery/telemetry source. A device already
+    # reconciled into an SNMP card by unique hardware MAC, or unique management
+    # IP when no MAC match is available, is excluded by its exact UniFi device
+    # ID so one physical switch produces one card. Unmatched API devices remain
+    # live standalone cards.
     if [ -f "$unifi_snapshot" ] && [ -f "$unifi_registry" ] && [ -f "$unifi_helper" ]; then
       echo ""
       echo "      # UniFi API devices (Switch Vision UniFi2MQTT)"
-      python3 "$unifi_helper" --snapshot "$unifi_snapshot" --registry "$unifi_registry" --indent 6 --summary 2>/dev/null || \
+      python3 "$unifi_helper" --snapshot "$unifi_snapshot" --registry "$unifi_registry" --exclude-id-file "$unifi_bound_ids" --indent 6 --summary 2>/dev/null || \
         echo "      # UniFi snapshot was present but could not be converted into dashboard cards."
     fi
   } > "$GENERATED_CARD_PATH"
+  rm -f "$port_mode_metadata" "$unifi_bound_ids"
 }
 
 quarantine_invalid_generated_live_yaml() {

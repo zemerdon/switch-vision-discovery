@@ -30,6 +30,10 @@ jobs:
         run: sh tools/materialize_runtime.sh
       - name: Check local model identity isolation
         run: python3 tools/test_local_model_identity.py
+      - name: Check SNMP bridge-MAC reconciliation identity
+        run: python3 tools/test_bridge_mac_identity.py
+      - name: Check SNMP-UniFi source reconciliation
+        run: python3 tools/test_unifi_source_reconciliation.py
       - name: Check HA entity resolution snapshot privacy
         run: python3 tools/test_ha_entity_snapshot.py
       - name: Check public attribution and submission privacy
