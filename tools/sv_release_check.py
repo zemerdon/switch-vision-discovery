@@ -44,6 +44,7 @@ PERMANENT_CHECKS = (
     "tools/audit_functional_contracts.py",
     "tools/audit_hub_control_inventory.py",
     "tools/test_hub_save_reset_contracts.py",
+    "tools/test_hub_motd_contract.py",
     "tools/test_unifi_multi_controller_hub.py",
     "tools/test_calibration_core_bridge_contract.py",
     "tools/test_registry_roundtrip.py",
