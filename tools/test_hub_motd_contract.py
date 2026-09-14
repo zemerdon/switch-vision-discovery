@@ -30,8 +30,15 @@ def motd_env(value: str | None):
 
 
 def test_motd_default_and_bounded_normalisation() -> None:
+    expected_default = (
+        "Thank you for your continued support. Please use Support My Switch and submit your "
+        "contribution package to switch-vision@zemerdon.com. Even if nothing is wrong, a "
+        "contribution package validates correctness. Also feel free to express any feedback, "
+        "ideas, or bugs."
+    )
+    assert hub.HUB_MOTD_DEFAULT == expected_default
     with motd_env(None):
-        assert hub._hub_motd_text() == hub.HUB_MOTD_DEFAULT
+        assert hub._hub_motd_text() == expected_default
 
     with motd_env("   Planned   maintenance\n tonight   "):
         assert hub._hub_motd_text() == "Planned maintenance tonight"

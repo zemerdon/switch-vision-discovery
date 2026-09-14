@@ -58,7 +58,12 @@ SUPPORT_ADDRESS = "switch-vision@zemerdon.com"
 SUPERVISOR_INGRESS_IP = "172.30.32.2"
 GITHUB_SPONSORS_URL = "https://github.com/sponsors/zemerdon"
 HUB_MOTD_ENV_VAR = "SWITCH_VISION_HUB_MOTD"
-HUB_MOTD_DEFAULT = "No active notices. Switch Vision Hub is ready."
+HUB_MOTD_DEFAULT = (
+    "Thank you for your continued support. Please use Support My Switch and submit your "
+    "contribution package to switch-vision@zemerdon.com. Even if nothing is wrong, a "
+    "contribution package validates correctness. Also feel free to express any feedback, "
+    "ideas, or bugs."
+)
 HUB_MOTD_MAX_CHARS = 500
 DEFAULT_CONTRIBUTIONS_DIR = Path("/share/switch_vision/contributions")
 DEFAULT_OPTIONS_FILE = Path("/data/options.json")
