@@ -41,12 +41,16 @@ assert c3850["validation"]["system_sensors"].startswith("community_confirmed_cis
 assert c3850["validation"]["uplinks"].startswith("community_confirmed_te_member_0_1_12"), c3850["validation"]
 assert c3850["visuals"]["status"] == "community_validated", c3850["visuals"]
 
-# Owner-confirmed hold: the 24-port 2960X remains Experimental until its four
-# physical uplinks are field-confirmed, even though SNMP sees candidate positions.
+# Owner field validation: all four 1G SFP uplinks on the 24PS-L are now
+# confirmed with a real 1G DAC. The model remains Experimental under the
+# acceptance workflow; the separate 24TS-L hardware still has pending uplinks.
 c2960 = rows["WS-C2960X-24PS-L"]
 assert c2960["status"] == "experimental", c2960
 assert c2960["ports"]["rj45"] == 24 and c2960["ports"]["uplinks"] == 4, c2960["ports"]
-assert c2960["validation"]["uplinks"] == "pending", c2960["validation"]
+assert c2960["validation"]["uplinks"] == "confirmed", c2960["validation"]
+c2960ts = rows["WS-C2960X-24TS-L"]
+assert c2960ts["status"] == "experimental", c2960ts
+assert c2960ts["validation"]["uplinks"] == "pending", c2960ts["validation"]
 
 products = json.loads((RUNTIME / "opt/switch-vision/mib_database/vendors/cisco/products.json").read_text(encoding="utf-8"))
 product = next(row for row in products["products"] if row.get("sys_object_id") == "1.3.6.1.4.1.9.1.1745")
