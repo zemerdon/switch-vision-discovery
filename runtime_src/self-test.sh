@@ -1979,8 +1979,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.15"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.15"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.16"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.16"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -3012,7 +3012,7 @@ for model in pending_experimental:
 
 c2960x24ps = models["WS-C2960X-24PS-L"]
 assert c2960x24ps["status"] == "experimental"
-assert c2960x24ps["last_validated_version"] == "2.4.15"
+assert c2960x24ps["last_validated_version"] == "2.4.16"
 assert c2960x24ps["validation"]["uplinks"] == "confirmed"
 assert c2960x24ps["ports"]["gigabit_sfp"] == 4
 assert c2960x24ps["ports"]["ten_gigabit_sfp_plus"] == 0

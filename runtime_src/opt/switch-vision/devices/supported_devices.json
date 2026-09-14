@@ -247,7 +247,7 @@
       "model": "WS-C2960X-24PS-L",
       "status": "experimental",
       "confirmed_since": "1.4.2",
-      "last_validated_version": "2.4.15",
+      "last_validated_version": "2.4.16",
       "evidence": "test_rack_contribution",
       "ports": {
         "rj45": 24,

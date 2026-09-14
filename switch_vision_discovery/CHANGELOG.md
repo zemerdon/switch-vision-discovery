@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.16
+
+- Fix Cisco Catalyst 2960X 24-port uplink presentation so source interfaces `Gi1/0/25` through `Gi1/0/28` are bound to logical 1G faceplate/entity positions **SFP1** through **SFP4** for the reviewed 24PS-L and 24TS-L contracts.
+- Record live owner validation that all four 1G SFP uplinks on `WS-C2960X-24PS-L` operate with a real 1G DAC while keeping the model Experimental under the model-acceptance workflow; `WS-C2960X-24TS-L` uplink validation remains pending.
+- Correct `USW Flex Mini` to the existing five-port UniFi visual `unifi-5rj45.png` / `default_unifi_5_rj45` instead of the oversized 24-RJ45 + 2-SFP fallback.
+- Split live SNMP collection from physical-contract parsing/generation so a normal Discovery job collects network evidence once and performs model parsing, SNMP2MQTT generation, dashboard-card generation, and final reporting only once after contract validation.
+- Replace the premature first-pass **Discovery complete** message with **Evidence collection complete**, preserve the original live-walk summary and `SNMP walks enabled` state in the final report, and retain truthful failure reporting without overwriting the previous good generated output when all live targets fail.
+- Add permanent regressions for the collection-only boundary, final summary propagation, all-target failure handling, 2960X 1G SFP logical bindings, exact 24PS/24TS validation state, and Flex Mini visual selection.
+
 ## 2.4.15
 
 - Add a Hub **Message of the Day** area above the main navigation with an adjacent **Hide / Show** control that preserves each browser's visibility preference without obscuring Hub controls.
