@@ -634,6 +634,35 @@ except RuntimeError as exc:
 else:
     raise AssertionError("unexpected non-zero was accepted")
 
+# An all-target live failure still leaves a truthful user-facing report and
+# last-run summary without invoking the parser/generator or replacing outputs.
+fail_options = {
+    "run_snmp_walks": True,
+    "report_path": str(root/"all-fail-report.txt"),
+    "last_run_summary_path": str(root/"all-fail-last.txt"),
+}
+m._stream_legacy = lambda *a, **k: 2
+m._read_current_run_records = lambda *args, **kwargs: []
+work = root/"all-fail-user-state"
+work.mkdir(parents=True, exist_ok=True)
+(work/"live_collection_walk_summary.txt").write_text(
+    "Switch-list SNMP walk result: FAILED\n- FAIL/SKIP: 2\n", encoding="utf-8"
+)
+try:
+    m._stage_live_collection(fail_options, work)
+except RuntimeError as exc:
+    assert "code 2" in str(exc)
+else:
+    raise AssertionError("all-target live failure was accepted")
+report = Path(fail_options["report_path"]).read_text(encoding="utf-8")
+last = Path(fail_options["last_run_summary_path"]).read_text(encoding="utf-8")
+assert "Status: live SNMP collection failed" in report
+assert "Existing generated dashboard/SNMP2MQTT output was not replaced." in report
+assert "Switch-list SNMP walk result: FAILED" in report
+assert "SNMP walks enabled: true" in last
+assert "Result: FAILED" in last
+assert "Switch-list SNMP walk result: FAILED" in last
+
 # Main path converts a reachable live PARTIAL into successful Discovery with warnings.
 m.LEGACY = root/"legacy"; m.PREPARE = root/"prepare"; m.REGISTRY = root/"registry"
 for path in (m.LEGACY, m.PREPARE, m.REGISTRY): path.write_text("x", encoding="utf-8")

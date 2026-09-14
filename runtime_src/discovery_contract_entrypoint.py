@@ -980,6 +980,51 @@ def _generated_snmp_card_count(path: Path) -> int:
     )
 
 
+def _write_live_collection_failure_outputs(
+    options: dict[str, Any],
+    collection_summary: Path,
+    detail: str,
+) -> None:
+    """Persist user-facing failure state without running the parser/generator."""
+    report = Path(str(options.get("report_path") or "/share/switch_vision/discovery-report.txt"))
+    last_run = Path(str(options.get("last_run_summary_path") or "/share/switch_vision/last-discovery-run.txt"))
+    summary = ""
+    if collection_summary.is_file():
+        summary = collection_summary.read_text(encoding="utf-8", errors="replace").strip()
+    generated = datetime.now().astimezone().isoformat(timespec="seconds")
+    runtime_seconds = max(0, int(time.time()) - ENTRYPOINT_STARTED_EPOCH)
+
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report_lines = [
+        "Switch Vision Discovery",
+        "=======================",
+        "",
+        "Status: live SNMP collection failed",
+        f"Detail: {detail}",
+        "SNMP walks enabled: true",
+        "Physical-contract parsing/generation: not run",
+        "Existing generated dashboard/SNMP2MQTT output was not replaced.",
+    ]
+    if summary:
+        report_lines.extend(["", summary])
+    report.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+
+    last_run.parent.mkdir(parents=True, exist_ok=True)
+    last_lines = [
+        "Switch Vision Discovery last run",
+        f"Discovery app loaded: {ENTRYPOINT_STARTED_ISO}",
+        f"Generated: {generated}",
+        f"Discovery runtime so far: {runtime_seconds}s",
+        "SNMP walks enabled: true",
+        "Result: FAILED",
+        f"Detail: {detail}",
+        f"Report: {report}",
+    ]
+    if summary:
+        last_lines.extend(["", summary])
+    last_run.write_text("\n".join(last_lines) + "\n", encoding="utf-8")
+
+
 def _stage_live_collection(
     options: dict[str, Any],
     work: Path,
@@ -1010,17 +1055,20 @@ def _stage_live_collection(
             "SWITCH_VISION_DISCOVERY_STARTED_EPOCH": str(ENTRYPOINT_STARTED_EPOCH),
         },
     )
+    current_run = _read_current_run_records(current_run_walks, current_run_targets)
     if return_code == 10:
         raise DegradedDiscoveryError(
             "Live SNMP collection produced useful evidence, but safe downstream generation cannot be trusted."
         )
     if return_code not in {0, 11}:
-        raise RuntimeError(f"Live SNMP collection exited with code {return_code}.")
-    current_run = _read_current_run_records(current_run_walks, current_run_targets)
+        detail = f"Live SNMP collection exited with code {return_code}."
+        if return_code == 2 and not current_run:
+            _write_live_collection_failure_outputs(options, collection_summary, detail)
+        raise RuntimeError(detail)
     if return_code == 11 and not current_run:
-        raise RuntimeError(
-            "Live SNMP collection reported PARTIAL without any successful current-run walk."
-        )
+        detail = "Live SNMP collection reported PARTIAL without any successful current-run walk."
+        _write_live_collection_failure_outputs(options, collection_summary, detail)
+        raise RuntimeError(detail)
     return current_run, return_code == 11
 
 
