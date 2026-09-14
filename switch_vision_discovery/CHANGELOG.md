@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.15
+
+- Add a Hub **Message of the Day** area above the main navigation with an adjacent **Hide / Show** control that preserves each browser's visibility preference without obscuring Hub controls.
+- Ship the default MOTD thanking users for their continued support, encouraging **Support My Switch** contribution packages to `switch-vision@zemerdon.com`, and inviting feedback, ideas, and bug reports.
+- Keep MOTD content safely server-configurable through `SWITCH_VISION_HUB_MOTD`, normalize whitespace, bound content to 500 characters, and HTML-escape it before rendering.
+- Add permanent MOTD regression coverage for exact default content, escaping, layout placement, accessibility state, browser-local persistence, and non-overlay positioning.
+
 ## 2.4.14
 
 - Reconcile SNMP and UniFi2MQTT observations into one generated card when they uniquely identify the same physical switch, preferring an authoritative bridge MAC and falling back to a unique management IP.
