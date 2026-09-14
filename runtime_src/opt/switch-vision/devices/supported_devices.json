@@ -247,7 +247,7 @@
       "model": "WS-C2960X-24PS-L",
       "status": "experimental",
       "confirmed_since": "1.4.2",
-      "last_validated_version": "1.8.0",
+      "last_validated_version": "2.4.15",
       "evidence": "test_rack_contribution",
       "ports": {
         "rj45": 24,
@@ -274,8 +274,9 @@
       "notes": [
         "Exact model detected and mapped from a real test-rack contribution.",
         "RJ45 mapping, generated entities, dashboard operation, PoE, and system sensors validated on real hardware.",
-        "SFP/SFP+ uplink validation remains pending.",
-        "Remains Experimental pending SFP/uplink port validation.",
+        "All four Gigabit SFP uplinks were validated on real WS-C2960X-24PS-L hardware with a 1G DAC.",
+        "Gi1/0/25 through Gi1/0/28 are presented as logical faceplate/entity SFP1 through SFP4.",
+        "Remains Experimental under the model-acceptance workflow; live uplink validation is now complete.",
         "Model-specific 24-port faceplate and calibration geometry added in v1.8.9."
       ],
       "validation": {
@@ -283,7 +284,7 @@
         "rj45_mapping": "confirmed",
         "poe": "confirmed",
         "system_sensors": "confirmed",
-        "uplinks": "pending",
+        "uplinks": "confirmed",
         "stack": "not_applicable"
       },
       "visuals": {

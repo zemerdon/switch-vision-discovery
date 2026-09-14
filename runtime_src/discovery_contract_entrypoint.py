@@ -21,6 +21,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+from datetime import datetime
 from typing import Any
 
 LEGACY = Path(os.environ.get("SWITCH_VISION_LEGACY_DISCOVERY_SCRIPT", "/discovery_job.sh"))
@@ -33,6 +35,8 @@ DEFAULT_SHARE_DIR = Path(os.environ.get("SWITCH_VISION_SHARE_DIR", "/share/switc
 UNIFI_SNAPSHOT = Path(os.environ.get("SWITCH_VISION_UNIFI_SNAPSHOT", str(DEFAULT_SHARE_DIR / "unifi/devices.json")))
 UNIFI_HELPER = Path(os.environ.get("SWITCH_VISION_UNIFI_DASHBOARD_HELPER", str(Path(__file__).with_name("unifi_dashboard_cards.py"))))
 CURRENT_RUN_SEPARATOR = "\x1c"
+ENTRYPOINT_STARTED_EPOCH = int(time.time())
+ENTRYPOINT_STARTED_ISO = datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 class DegradedDiscoveryError(RuntimeError):
@@ -992,6 +996,7 @@ def _stage_live_collection(
     stage_path = work / "live_collection_options.json"
     current_run_walks = work / "current_run_walks.txt"
     current_run_targets = work / "current_run_targets.txt"
+    collection_summary = work / "live_collection_walk_summary.txt"
     _write_options(stage_path, stage)
     return_code = _stream_legacy(
         stage_path,
@@ -999,6 +1004,10 @@ def _stage_live_collection(
         env_overrides={
             "SWITCH_VISION_CURRENT_RUN_WALKS": str(current_run_walks),
             "SWITCH_VISION_CURRENT_RUN_TARGETS": str(current_run_targets),
+            "SWITCH_VISION_COLLECTION_ONLY": "true",
+            "SWITCH_VISION_COLLECTION_SUMMARY_PATH": str(collection_summary),
+            "SWITCH_VISION_DISCOVERY_STARTED_ISO": ENTRYPOINT_STARTED_ISO,
+            "SWITCH_VISION_DISCOVERY_STARTED_EPOCH": str(ENTRYPOINT_STARTED_EPOCH),
         },
     )
     if return_code == 10:
@@ -1085,7 +1094,20 @@ def main() -> int:
 
         stage_path = work / "resolved_options.json"
         _write_options(stage_path, staged)
-        return_code = _stream_legacy(stage_path, capabilities_dir=work / "runtime_capabilities")
+        generation_env = {
+            "SWITCH_VISION_DISCOVERY_STARTED_ISO": ENTRYPOINT_STARTED_ISO,
+            "SWITCH_VISION_DISCOVERY_STARTED_EPOCH": str(ENTRYPOINT_STARTED_EPOCH),
+        }
+        if current_run:
+            generation_env.update({
+                "SWITCH_VISION_ORIGINAL_RUN_SNMP_WALKS": "true",
+                "SWITCH_VISION_ORIGINAL_LIVE_WALK_SUMMARY": str(work / "live_collection_walk_summary.txt"),
+            })
+        return_code = _stream_legacy(
+            stage_path,
+            capabilities_dir=work / "runtime_capabilities",
+            env_overrides=generation_env,
+        )
         if return_code != 0:
             raise DegradedDiscoveryError(
                 f"Downstream Discovery generation exited with code {return_code} after validated physical evidence was collected."

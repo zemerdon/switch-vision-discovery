@@ -3010,6 +3010,14 @@ pending_experimental = {
 for model in pending_experimental:
     assert models[model]["status"] == "experimental", model
 
+c2960x24ps = models["WS-C2960X-24PS-L"]
+assert c2960x24ps["status"] == "experimental"
+assert c2960x24ps["last_validated_version"] == "2.4.15"
+assert c2960x24ps["validation"]["uplinks"] == "confirmed"
+assert c2960x24ps["ports"]["gigabit_sfp"] == 4
+assert c2960x24ps["ports"]["ten_gigabit_sfp_plus"] == 0
+assert models["WS-C2960X-24TS-L"]["validation"]["uplinks"] == "pending"
+
 p3560 = next(p for p in profiles.values() if "WS-C3560CG-8PC-S" in (p.get("model_patterns") or []))
 assert p3560["layout"]["rj45_ports"] == 8
 assert p3560["layout"]["sfp_1g_ports"] == 2

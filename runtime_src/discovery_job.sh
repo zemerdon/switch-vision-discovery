@@ -31,8 +31,9 @@ LIVE_OUTPUT_PATH=""
 LIVE_LOG_PATH="/share/switch_vision/live-snmpwalk.log"
 LIVE_MIN_VALID_LINES="100"
 MULTI_SWITCH_WALKS_ENABLED="false"
-DISCOVERY_STARTED_ISO=$(date -Iseconds)
-DISCOVERY_STARTED_EPOCH=$(date +%s)
+DISCOVERY_STARTED_ISO="${SWITCH_VISION_DISCOVERY_STARTED_ISO:-$(date -Iseconds)}"
+DISCOVERY_STARTED_EPOCH="${SWITCH_VISION_DISCOVERY_STARTED_EPOCH:-$(date +%s)}"
+COLLECTION_ONLY="${SWITCH_VISION_COLLECTION_ONLY:-false}"
 CURRENT_RUN_WALKS="${SWITCH_VISION_CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks_$$.txt}"
 CURRENT_RUN_TARGETS="${SWITCH_VISION_CURRENT_RUN_TARGETS:-/tmp/switch_vision_current_run_targets_$$.txt}"
 LIVE_WALK_SUMMARY="/tmp/switch_vision_live_walk_summary_$$.txt"
@@ -1993,10 +1994,14 @@ should_skip_walk_file() {
 }
 
 write_live_summary_if_present() {
-  if [ -f "$LIVE_WALK_SUMMARY" ]; then
+  original_summary="${SWITCH_VISION_ORIGINAL_LIVE_WALK_SUMMARY:-}"
+  if [ -n "$original_summary" ] && [ -f "$original_summary" ]; then
+    cat "$original_summary"
+    echo ""
+  elif [ -f "$LIVE_WALK_SUMMARY" ]; then
     cat "$LIVE_WALK_SUMMARY"
     echo ""
-  elif truthy "$RUN_LIVE_SNMPWALK"; then
+  elif truthy "${SWITCH_VISION_ORIGINAL_RUN_SNMP_WALKS:-$RUN_LIVE_SNMPWALK}"; then
     echo "SNMP walk result: not run"
     echo "- Expected summary file missing; check: $LIVE_LOG_PATH"
     echo ""
@@ -2659,12 +2664,25 @@ run_live_snmpwalk_if_enabled() {
     0|11|2)
       {
         echo ""
-        echo "Post-walk execution: switch-list walk complete; running parser/generator now"
+        echo "Post-walk execution: switch-list walk complete"
         echo "Post-walk execution: current-run walk list: ${CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks_$$.txt}"
       } >> "$LIVE_LOG_PATH" 2>/dev/null || true
-      # Run the post-walk parser/generator from current-run evidence even for a
-      # partial collection. Failed targets were never queued, and the user's
-      # stored-walk preference has already been restored.
+      # The physical-contract wrapper uses collection-only mode for the first
+      # phase. In that mode, stop after live evidence collection so model parsing,
+      # card generation and last-run reporting happen exactly once after the
+      # current-run physical contracts have been validated.
+      if truthy "$COLLECTION_ONLY"; then
+        echo "Post-walk execution: collection-only mode; parser/generator deferred to physical-contract authority" >> "$LIVE_LOG_PATH" 2>/dev/null || true
+        POST_WALK_ALREADY_DONE="true"
+        if [ "$multi_status" -ne 0 ]; then
+          DISCOVERY_EXIT_STATUS="$multi_status"
+        fi
+        return 0
+      fi
+
+      # Legacy/direct execution still owns its complete post-walk path.
+      # Failed targets were never queued, and the user's stored-walk preference
+      # has already been restored.
       write_report
       write_last_run_summary
       POST_WALK_ALREADY_DONE="true"
@@ -4274,6 +4292,7 @@ write_generated_yaml() {
 }
 
 write_report() {
+  report_snmp_walks_enabled="${SWITCH_VISION_ORIGINAL_RUN_SNMP_WALKS:-$RUN_LIVE_SNMPWALK}"
   sv_status "Identifying exact models and interfaces" "All configured switches" "multiple" "Parser and registry lookup" "Reading completed SNMP walk files"
   sv_debug "STAGE: Identifying exact models and interfaces"
   tmp_walks="/tmp/switch_vision_walk_files_$$.txt"
@@ -4337,7 +4356,7 @@ write_report() {
     echo "SNMP2MQTT generator enabled: $GENERATE_SNMP2MQTT"
     echo "Generated YAML path: $GENERATED_YAML_PATH"
     echo "Generated dashboard card path: $GENERATED_CARD_PATH"
-    echo "SNMP walks enabled: $RUN_LIVE_SNMPWALK"
+    echo "SNMP walks enabled: $report_snmp_walks_enabled"
     echo "Multi-switch walks enabled: $MULTI_SWITCH_WALKS_ENABLED"
     echo "SNMP walk mode: $LIVE_SNMPWALK_MODE"
     if json_has_configured_switch_rows; then
@@ -4476,6 +4495,7 @@ write_report() {
 
 
 write_last_run_summary() {
+  summary_snmp_walks_enabled="${SWITCH_VISION_ORIGINAL_RUN_SNMP_WALKS:-$RUN_LIVE_SNMPWALK}"
   {
     summary_generated_iso=$(date -Iseconds)
     summary_duration=$(( $(now_epoch) - DISCOVERY_STARTED_EPOCH ))
@@ -4488,7 +4508,7 @@ write_last_run_summary() {
       echo "Current target: switch list"
       echo "Target mapping matched: switch-list rows"
       echo "Walk mode: per-switch"
-      echo "SNMP walks enabled: $RUN_LIVE_SNMPWALK"
+      echo "SNMP walks enabled: $summary_snmp_walks_enabled"
       echo "Multi-switch walks enabled: $MULTI_SWITCH_WALKS_ENABLED"
       echo "Management IP: per switch row"
       echo "Output folder: per switch row"
@@ -4498,7 +4518,7 @@ write_last_run_summary() {
       echo "Current target: ${SELECTED_SWITCH:-not set}"
       echo "Target mapping matched: $SELECTED_SWITCH_MATCHED"
       echo "Walk mode: $LIVE_SNMPWALK_MODE"
-      echo "SNMP walks enabled: $RUN_LIVE_SNMPWALK"
+      echo "SNMP walks enabled: $summary_snmp_walks_enabled"
       echo "Multi-switch walks enabled: $MULTI_SWITCH_WALKS_ENABLED"
       echo "Management IP: ${LIVE_SWITCH_IP:-not set}"
       echo "Output folder: ${LIVE_SWITCH_LABEL:-live}"
@@ -4509,14 +4529,51 @@ write_last_run_summary() {
     echo "Report: $REPORT_PATH"
     echo "Generated YAML: $GENERATED_YAML_PATH"
     echo "Generated dashboard card: $GENERATED_CARD_PATH"
-    if [ -f "$LIVE_WALK_SUMMARY" ]; then
+    summary_source="${SWITCH_VISION_ORIGINAL_LIVE_WALK_SUMMARY:-$LIVE_WALK_SUMMARY}"
+    if [ -f "$summary_source" ]; then
       echo ""
-      cat "$LIVE_WALK_SUMMARY"
+      cat "$summary_source"
     fi
   } > "$LAST_RUN_SUMMARY_PATH"
 }
 
 run_live_snmpwalk_if_enabled
+
+# The physical-contract entrypoint deliberately separates live evidence
+# collection from authoritative parsing/generation. Collection-only mode must
+# not emit a report/card, a last-run summary, a Support My Switch bundle, or the
+# user-facing "Discovery complete" marker; the second authority pass owns those.
+if truthy "$COLLECTION_ONLY"; then
+  collection_summary_path="${SWITCH_VISION_COLLECTION_SUMMARY_PATH:-}"
+  if [ -n "$collection_summary_path" ] && [ -f "$LIVE_WALK_SUMMARY" ]; then
+    mkdir -p "$(dirname "$collection_summary_path")"
+    cp "$LIVE_WALK_SUMMARY" "$collection_summary_path"
+  fi
+  if [ "$DISCOVERY_EXIT_STATUS" = "0" ] && [ ! -s "$CURRENT_RUN_WALKS" ]; then
+    DISCOVERY_EXIT_STATUS="2"
+  fi
+  case "$DISCOVERY_EXIT_STATUS" in
+    0)
+      sv_status "Evidence collection complete" "All configured switches" "complete" "SNMP collection" "Live SNMP evidence collected; validating physical contracts"
+      sv_debug "STAGE: Evidence collection complete"
+      echo "Switch Vision live evidence collection complete. Physical-contract validation is next."
+      exit 0
+      ;;
+    11)
+      sv_status "Evidence collection complete with warnings" "All configured switches" "partial" "SNMP collection" "Useful live evidence collected; failed targets excluded from authority processing"
+      sv_debug "STAGE: Evidence collection partial"
+      echo "Switch Vision live evidence collection completed with PARTIAL results. Safe current-run evidence was preserved."
+      exit 11
+      ;;
+    *)
+      sv_status "Evidence collection failed" "All configured switches" "failed" "SNMP collection" "No safe current-run evidence is available for authority processing"
+      sv_debug "STAGE: Evidence collection failed"
+      echo "Switch Vision live evidence collection failed."
+      exit "$DISCOVERY_EXIT_STATUS"
+      ;;
+  esac
+fi
+
 if [ "${POST_WALK_ALREADY_DONE:-false}" != "true" ]; then
   echo "Post-walk execution: running standard parser/generator path" >> "$LIVE_LOG_PATH" 2>/dev/null || true
   if json_has_enabled_switch_rows; then

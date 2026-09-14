@@ -548,6 +548,27 @@ run_live_case mixed yes
 run_live_case all-fail no
 echo 'entrypoint live PARTIAL/all-fail stale-walk contract: PASS'
 
+# The physical-contract first pass is collection-only. It must never run the
+# parser/generator, write final report/card/summary output, or emit the final
+# "Discovery complete" marker before authority processing.
+collection="$live/collection-only"
+mkdir -p "$collection/walks/one" "$collection/caps" "$collection/share"
+cat > "$collection/options.json" <<EOF_COLLECTION
+{"snmpwalks_dir":"$collection/walks","report_path":"$collection/report.txt","run_snmp_walks":"true","enable_switch_list":"true","parse_all_walks":"false","generate_snmp2mqtt":"true","switches":[{"switch_name":"one","switch_host":"192.0.2.31","sensor_prefix":"ONE","snmp_community":"readonly","enabled":true}],"last_run_summary_path":"$collection/summary.txt","generated_yaml_path":"$collection/generated.yaml","generated_card_path":"$collection/card.yaml","snmp_log_path":"$collection/discovery.log","minimum_valid_walk_lines":"1","clean_output_before_walk":"false","generate_support_my_switch_bundle":"false"}
+EOF_COLLECTION
+PATH="$live/bin:$PATH" SV_TEST_SNMP_SOURCE="$live/dell.txt" SWITCH_VISION_COLLECTION_ONLY=true SWITCH_VISION_COLLECTION_SUMMARY_PATH="$collection/walk-summary.txt" SWITCH_VISION_OPTIONS_FILE="$collection/options.json" SWITCH_VISION_CAPABILITIES_DIR="$collection/caps" SWITCH_VISION_SHARE_DIR="$collection/share" "$RUNTIME/discovery_job.sh" >"$collection/stdout" 2>"$collection/stderr"
+grep -Fq 'STAGE: Evidence collection complete' "$collection/stdout"
+! grep -Fq 'STAGE: Identifying exact models and interfaces' "$collection/stdout"
+! grep -Fq 'STAGE: Generating dashboard card YAML' "$collection/stdout"
+! grep -Fq 'STAGE: Discovery complete' "$collection/stdout"
+test ! -e "$collection/report.txt"
+test ! -e "$collection/card.yaml"
+test ! -e "$collection/generated.yaml"
+test ! -e "$collection/summary.txt"
+test -f "$collection/walk-summary.txt"
+grep -Fq 'Switch-list SNMP walk result: completed' "$collection/walk-summary.txt"
+echo 'entrypoint live collection-only split: PASS'
+
 # Physical-contract collection classification: legacy 11 is accepted as a warning, legacy 10
 # remains a degraded software classification, and unexpected non-zero remains fatal.
 python3 - "$ENTRYPOINT" "$TMP" <<'PY_LIVE_CODES'
@@ -569,7 +590,14 @@ Path(record["walk"]).write_text('.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"\n
 
 m._read_current_run_records = lambda *args, **kwargs: [record]
 for code, expected_partial in ((0, False), (11, True)):
-    m._stream_legacy = lambda *a, _code=code, **k: _code
+    def fake_stream(*args, _code=code, **kwargs):
+        env = kwargs.get("env_overrides") or {}
+        assert env.get("SWITCH_VISION_COLLECTION_ONLY") == "true"
+        assert env.get("SWITCH_VISION_COLLECTION_SUMMARY_PATH", "").endswith("live_collection_walk_summary.txt")
+        assert env.get("SWITCH_VISION_DISCOVERY_STARTED_ISO")
+        assert env.get("SWITCH_VISION_DISCOVERY_STARTED_EPOCH", "").isdigit()
+        return _code
+    m._stream_legacy = fake_stream
     work = root/f"stage-{code}"
     work.mkdir(parents=True, exist_ok=True)
     rows, partial = m._stage_live_collection(options, work)
@@ -620,7 +648,14 @@ def stage(options, work, current):
     return options, [info], [info]
 m._stage_options = stage
 m._publish_contracts = lambda *a, **k: None
-m._stream_legacy = lambda *a, **k: 0
+def final_stream(*args, **kwargs):
+    env = kwargs.get("env_overrides") or {}
+    assert env.get("SWITCH_VISION_ORIGINAL_RUN_SNMP_WALKS") == "true"
+    assert env.get("SWITCH_VISION_ORIGINAL_LIVE_WALK_SUMMARY", "").endswith("live_collection_walk_summary.txt")
+    assert env.get("SWITCH_VISION_DISCOVERY_STARTED_ISO")
+    assert env.get("SWITCH_VISION_DISCOVERY_STARTED_EPOCH", "").isdigit()
+    return 0
+m._stream_legacy = final_stream
 m._expected_generated_dashboard_cards = lambda staged: 1
 m._generated_snmp_card_count = lambda path: 1
 m._patch_report = lambda *a: None
