@@ -33,10 +33,31 @@ VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {
         "Discovery owns the approved stock 24+2 visual fallback; the shared "
         "physical 16 RJ45 + 2 SFP topology remains identical to Core."
     ),
+    "USW Flex Mini": (
+        "Discovery now selects Core's already-shipped unifi-5rj45.png / "
+        "default_unifi_5_rj45 presentation for the exact five-RJ45 topology; "
+        "Core 2.7.8's derivative model recommendation still carries the older "
+        "stock 24+2 fallback, but no new faceplate or geometry authority is invented."
+    ),
     "USW Pro Aggregation": (
         "Discovery consumes the exact Core 2.6.32 32-position optical canvas; "
         "the shared physical 28 SFP+ + 4 SFP28 topology remains identical to Core."
     ),
+}
+
+# Discovery's exact-model registry owns support confidence. Core's embedded
+# registry is a derivative consumer and may lag a newly reviewed field check.
+# Keep these exceptions narrow: status/evidence drift is still an error, and
+# only the listed support fields may differ from the current public Core baseline.
+SUPPORT_CONTRACT_EXCEPTIONS: dict[str, dict[str, object]] = {
+    "WS-C2960X-24PS-L": {
+        "fields": ("validation",),
+        "reason": (
+            "Discovery records newer owner field validation that all four 1G SFP "
+            "uplinks work with a real 1G DAC; Core 2.7.8's derivative registry "
+            "still marks that validation pending while topology/status/evidence remain aligned."
+        ),
+    },
 }
 
 FACEPLATE_CATALOG_SCHEMA = "switch-vision-faceplate-catalog-v1"
@@ -366,6 +387,23 @@ def main() -> int:
             errors.append(
                 f"Visual contract exception {model!r} must include a non-empty reason"
             )
+    for model, rule in sorted(SUPPORT_CONTRACT_EXCEPTIONS.items()):
+        reason = str(rule.get("reason") or "").strip() if isinstance(rule, dict) else ""
+        fields = rule.get("fields") if isinstance(rule, dict) else ()
+        if model not in shared_models:
+            errors.append(
+                f"Support contract exception {model!r} is stale or not a shared exact model"
+            )
+        if not reason:
+            errors.append(
+                f"Support contract exception {model!r} must include a non-empty reason"
+            )
+        if not isinstance(fields, (tuple, list)) or not fields or any(
+            field not in {"status", "evidence", "validation"} for field in fields
+        ):
+            errors.append(
+                f"Support contract exception {model!r} has invalid allowed fields"
+            )
 
     hardware_fields = (
         "vendor",
@@ -397,9 +435,19 @@ def main() -> int:
             if core.get(field) != discovery.get(field)
         ]
         if changed_support:
-            errors.append(
-                f"{model}: support-status contract drift in " + ", ".join(changed_support)
-            )
+            support_rule = SUPPORT_CONTRACT_EXCEPTIONS.get(model)
+            allowed = set(support_rule.get("fields") or ()) if isinstance(support_rule, dict) else set()
+            reason = str(support_rule.get("reason") or "").strip() if isinstance(support_rule, dict) else ""
+            if reason and set(changed_support).issubset(allowed):
+                warnings.append(
+                    f"{model}: explicitly allowed Discovery-owned support contract drift in "
+                    + ", ".join(changed_support)
+                    + f"; reason: {reason}"
+                )
+            else:
+                errors.append(
+                    f"{model}: support-status contract drift in " + ", ".join(changed_support)
+                )
 
         if model == "N2128PX-ON":
             core_notes = core.get("notes") if isinstance(core.get("notes"), list) else []

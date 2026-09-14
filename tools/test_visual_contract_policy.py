@@ -31,6 +31,12 @@ expected_exceptions = {
         "Discovery owns the approved stock 24+2 visual fallback; the shared "
         "physical 16 RJ45 + 2 SFP topology remains identical to Core."
     ),
+    "USW Flex Mini": (
+        "Discovery now selects Core's already-shipped unifi-5rj45.png / "
+        "default_unifi_5_rj45 presentation for the exact five-RJ45 topology; "
+        "Core 2.7.8's derivative model recommendation still carries the older "
+        "stock 24+2 fallback, but no new faceplate or geometry authority is invented."
+    ),
     "USW Pro Aggregation": (
         "Discovery consumes the exact Core 2.6.32 32-position optical canvas; "
         "the shared physical 28 SFP+ + 4 SFP28 topology remains identical to Core."
@@ -47,6 +53,22 @@ module.VISUAL_CONTRACT_EXCEPTIONS["EMPTY-REASON"] = "   "
 policy, reason = module.classify_visual_contract_drift("EMPTY-REASON")
 assert policy == "invalid"
 assert reason is None
+
+
+expected_support_exceptions = {
+    "WS-C2960X-24PS-L": {
+        "fields": ("validation",),
+        "reason": (
+            "Discovery records newer owner field validation that all four 1G SFP "
+            "uplinks work with a real 1G DAC; Core 2.7.8's derivative registry "
+            "still marks that validation pending while topology/status/evidence remain aligned."
+        ),
+    },
+}
+assert module.SUPPORT_CONTRACT_EXCEPTIONS == expected_support_exceptions, module.SUPPORT_CONTRACT_EXCEPTIONS
+assert set(module.SUPPORT_CONTRACT_EXCEPTIONS["WS-C2960X-24PS-L"]["fields"]) == {"validation"}
+assert "status" not in module.SUPPORT_CONTRACT_EXCEPTIONS["WS-C2960X-24PS-L"]["fields"]
+assert "evidence" not in module.SUPPORT_CONTRACT_EXCEPTIONS["WS-C2960X-24PS-L"]["fields"]
 
 source = MODULE_PATH.read_text(encoding="utf-8")
 assert "strict_visual_models" not in source
