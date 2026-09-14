@@ -1899,8 +1899,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-flex-mini-api",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
+      "calibration_profile": "default_unifi_5_rj45",
+      "default_faceplate": "faceplates/unifi-5rj45.png",
       "optional_faceplates": [],
       "tested_firmware": [
         "2.1.6"
@@ -1947,7 +1947,7 @@
         "Three independent live UniFi API devices expose the same five 1G RJ45-port topology.",
         "No per-port PoE output capability is exposed by the contributed normalized API data.",
         "Per-port RX/TX traffic is not exposed by the current UniFi API path.",
-        "The universal temporary faceplate is used while preserving the real five-port count.",
+        "The exact five-port UniFi faceplate is assigned while preserving the authoritative five-port 1G RJ45 topology.",
         "Rendered dashboard validation remains pending before promotion beyond Experimental.",
         "UniFi visual selection is explicit for this exact model and follows its validated API port geometry; no Cisco-specific profile fallback is used.",
         "community validation from community contributor independently reconfirms two additional units with the same five-port 1G RJ45 topology.",
@@ -1964,9 +1964,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
+        "recommended_faceplate": "faceplates/unifi-5rj45.png",
         "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "calibration_profile": "default_unifi_5_rj45",
         "canvas": {
           "width": 2048,
           "height": 448

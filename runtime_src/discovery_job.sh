@@ -2913,9 +2913,16 @@ write_generated_yaml_for_walk() {
       member = parts[1] + 0
       port = parts[3] + 0
       label = member_label(member)
-      if (is_2960(model) && (name ~ /^Gi/ || name ~ /^GigabitEthernet/) && parts[2] == "0" && port > c2960_rj45_limit(model)) return label " Uplink " (port - c2960_rj45_limit(model))
+      if (is_2960(model) && (name ~ /^Gi/ || name ~ /^GigabitEthernet/) && parts[2] == "0" && port > c2960_rj45_limit(model)) {
+        # 24-port Catalyst 2960X models expose Gi1/0/25-28 as four physical
+        # 1G SFP cages. Preserve the IOS source identity, but publish them in
+        # the card/entity namespace as SFP 1G 1-4 to match the faceplate.
+        if (model ~ /^(WS-)?C2960X-24/) return label " SFP 1G " (port - c2960_rj45_limit(model))
+        return label " Uplink " (port - c2960_rj45_limit(model))
+      }
       if (is_2960(model) && (name ~ /^Te/ || name ~ /^TenGigabitEthernet/) && parts[2] == "0") return label " SFP 10G " port
       if ((name ~ /^Gi/ || name ~ /^GigabitEthernet/) && parts[2] == "0") return label " Port " port
+      if (model ~ /^(WS-)?C2960X-24/ && (name ~ /^Gi/ || name ~ /^GigabitEthernet/) && parts[2] == "1") return label " SFP 1G " port
       if ((name ~ /^Gi/ || name ~ /^GigabitEthernet/) && parts[2] == "1") return label " Uplink " port
       if ((name ~ /^Te/ || name ~ /^TenGigabitEthernet/) && parts[2] == "1") return label " SFP 10G " port
       return label " Interface " idx
@@ -4081,7 +4088,7 @@ write_generated_dashboard_card() {
         echo "        status_entity_suffix: _status"
         case "${effective_model:-${detected_model:-}}" in
           *J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
-          *S5720-12TP-LI-AC*|*WS-C3750-48P*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
+          *S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
           *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
         esac
         emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"
@@ -4117,7 +4124,7 @@ write_generated_dashboard_card() {
       echo "        status_entity_suffix: _status"
       case "${exact_model:-}" in
         *J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
-        *S5720-12TP-LI-AC*|*WS-C3750-48P*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
+        *S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
         *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
       esac
       emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"

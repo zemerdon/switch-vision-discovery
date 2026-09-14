@@ -138,6 +138,48 @@ i=1
 while [ "$i" -le 48 ]; do append_iface "$hp" "$i" "$i"; i=$((i + 1)); done
 run_case hp-control "$hp" HP 'HP J8693A Switch 3500yl-48G' 48
 
+
+# zemerdon live check: 24-port Catalyst 2960X exposes Gi1/0/25-28, but the
+# four physical faceplate cages are logical SFP1-SFP4. Generated entity names
+# and card bindings must use that logical 1-4 namespace rather than 25-28 or
+# generic uplink labels.
+c2960x24="$TMP/cisco-2960x-24ps.txt"
+make_walk "$c2960x24" 'Cisco IOS Software, C2960X Software, WS-C2960X-24PS-L' '1.3.6.1.4.1.9.1.1834'
+printf '.1.3.6.1.2.1.47.1.1.1.1.13.1 = STRING: "WS-C2960X-24PS-L"\n' >> "$c2960x24"
+idx=1
+i=1
+while [ "$i" -le 28 ]; do append_iface "$c2960x24" "$idx" "Gi1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+run_case cisco-2960x-24ps "$c2960x24" C2960 'WS-C2960X-24PS-L' 28
+c2960x24_yaml="$TMP/cisco-2960x-24ps/generated.yaml"
+i=1
+while [ "$i" -le 4 ]; do
+  grep -Fq "    name: C2960 SFP 1G $i Status" "$c2960x24_yaml" || note_failure "cisco-2960x-24ps: missing logical SFP 1G $i status entity"
+  i=$((i + 1))
+done
+if grep -Eq 'name: C2960 (Uplink [1-4]|SFP 1G (25|26|27|28)|SFP 10G [1-4]) Status' "$c2960x24_yaml"; then
+  note_failure "cisco-2960x-24ps: source interface numbering leaked into logical SFP faceplate namespace"
+fi
+grep -Fq '*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;' "$RUNTIME/discovery_job.sh" || note_failure "cisco-2960x-24: generated-card binding is not pinned to logical SFP 1G 1-4 entities"
+
+# The non-PoE 24TS variant uses the same Gi1/0/25-28 -> logical SFP1-4
+# front-panel mapping and must remain covered by the same contract.
+c2960x24ts="$TMP/cisco-2960x-24ts.txt"
+make_walk "$c2960x24ts" 'Cisco IOS Software, C2960X Software, WS-C2960X-24TS-L' '1.3.6.1.4.1.9.1.1833'
+printf '.1.3.6.1.2.1.47.1.1.1.1.13.1 = STRING: "WS-C2960X-24TS-L"\n' >> "$c2960x24ts"
+idx=1
+i=1
+while [ "$i" -le 28 ]; do append_iface "$c2960x24ts" "$idx" "Gi1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+run_case cisco-2960x-24ts "$c2960x24ts" C2960TS 'WS-C2960X-24TS-L' 28
+c2960x24ts_yaml="$TMP/cisco-2960x-24ts/generated.yaml"
+i=1
+while [ "$i" -le 4 ]; do
+  grep -Fq "    name: C2960TS SFP 1G $i Status" "$c2960x24ts_yaml" || note_failure "cisco-2960x-24ts: missing logical SFP 1G $i status entity"
+  i=$((i + 1))
+done
+if grep -Eq 'name: C2960TS (Uplink [1-4]|SFP 1G (25|26|27|28)|SFP 10G [1-4]) Status' "$c2960x24ts_yaml"; then
+  note_failure "cisco-2960x-24ts: source interface numbering leaked into logical SFP faceplate namespace"
+fi
+
 # Bernard: 48 lowercase Gi access ports + two lowercase Te uplinks.
 dell="$TMP/dell-5548p.txt"
 make_walk "$dell" 'Dell Networking PowerConnect 5548P' '1.3.6.1.4.1.674.10895.3057'
