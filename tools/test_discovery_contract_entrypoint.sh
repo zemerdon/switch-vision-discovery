@@ -584,7 +584,11 @@ spec = importlib.util.spec_from_file_location("sv_live_codes", entrypoint)
 assert spec and spec.loader
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
-options = {"run_snmp_walks": True}
+options = {
+    "run_snmp_walks": True,
+    "report_path": str(root/"live-codes-report.txt"),
+    "last_run_summary_path": str(root/"live-codes-last.txt"),
+}
 record = {"walk": str(root/"ok.txt"), "switch":"ok", "host":"192.0.2.51", "prefix":"OK", "community":"readonly"}
 Path(record["walk"]).write_text('.1.3.6.1.2.1.31.1.1.1.1.1 = STRING: "Gi1/0/1"\n', encoding="utf-8")
 
