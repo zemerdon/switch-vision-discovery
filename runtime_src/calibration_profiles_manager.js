@@ -130,7 +130,8 @@
 
       .sv-profile-section-unused .sv-profile-card{
         grid-template-columns:30px minmax(90px,auto) minmax(0,1fr)!important;
-        grid-template-areas:"select title meta"!important
+        grid-template-areas:"select title meta"!important;
+        cursor:default
       }
 
       .sv-profile-section-unused .sv-profile-select{
@@ -544,28 +545,32 @@
         "click",
         () => {
           managerState.activeIndex = null;
-          $("svProfilesClearSelection")?.click();
 
-          window.setTimeout(() => {
-            const inputs = [
-              ...document.querySelectorAll(
-                ".sv-profile-section-unused [data-profile-select]:not(:disabled)"
-              ),
-            ];
+          // Do not clear/re-render first: the base Clear Selection action
+          // rebuilds the profile list, which can race the manager grouping and
+          // leave this handler with no inactive rows to select. Select the
+          // currently rendered eligible inactive rows in place, then delegate
+          // the actual protected deletion/confirmation to the base manager.
+          const inputs = [
+            ...document.querySelectorAll(
+              ".sv-profile-section-unused [data-profile-select]:not(:disabled)"
+            ),
+          ];
 
-            for (const input of inputs) {
+          for (const input of inputs) {
+            if (!input.checked) {
               input.checked = true;
               input.dispatchEvent(
                 new Event("change", { bubbles: true })
               );
             }
+          }
 
-            const hidden = $("svProfilesDeleteSelected");
-            if (inputs.length && hidden && !hidden.disabled) {
-              hidden.click();
-            }
-            scheduleEnhance();
-          }, 0);
+          const hidden = $("svProfilesDeleteSelected");
+          if (inputs.length && hidden && !hidden.disabled) {
+            hidden.click();
+          }
+          scheduleEnhance();
         }
       );
   }
@@ -582,54 +587,20 @@
         "[data-profile-select]"
       );
 
-    const alreadySelected =
-      Boolean(input?.checked) ||
-      managerState.activeIndex === index;
-
-    managerState.activeIndex = null;
-
-    const clear =
-      $("svProfilesClearSelection");
-
-    if (clear) {
-      clear.click();
+    // Inactive/custom profiles are selected only by their checkbox. Clicking
+    // elsewhere on one of those rows must never clear or rebuild an existing
+    // multi-selection. Protected active/factory rows can still be focused for
+    // single-profile Export/Import without touching checkbox state.
+    if (input && !input.disabled) {
+      return;
     }
 
-    window.setTimeout(
-      () => {
-        if (alreadySelected) {
-          scheduleEnhance();
-          return;
-        }
+    managerState.activeIndex =
+      managerState.activeIndex === index
+        ? null
+        : index;
 
-        const current =
-          cardByIndex(index);
-
-        const currentInput =
-          current?.querySelector(
-            "[data-profile-select]"
-          );
-
-        if (
-          currentInput &&
-          !currentInput.disabled
-        ) {
-          currentInput.checked = true;
-          currentInput.dispatchEvent(
-            new Event(
-              "change",
-              { bubbles: true }
-            )
-          );
-        } else {
-          managerState.activeIndex =
-            index;
-        }
-
-        scheduleEnhance();
-      },
-      0
-    );
+    syncActions();
   }
 
   function wireCard(card) {
@@ -641,11 +612,33 @@
     }
 
     card.dataset.managerReady = "true";
-    card.setAttribute(
-      "role",
-      "button"
-    );
-    card.tabIndex = 0;
+
+    const selectionInput =
+      card.querySelector(
+        "[data-profile-select]"
+      );
+    const selectableInactive =
+      Boolean(selectionInput && !selectionInput.disabled);
+
+    if (selectableInactive) {
+      // Inactive rows are checkbox-owned, not row buttons. Keep the visible
+      // manager actions synchronized with the base manager's selection state.
+      card.removeAttribute("role");
+      card.removeAttribute("tabindex");
+      selectionInput.addEventListener(
+        "change",
+        () => {
+          managerState.activeIndex = null;
+          syncActions();
+        }
+      );
+    } else {
+      card.setAttribute(
+        "role",
+        "button"
+      );
+      card.tabIndex = 0;
+    }
 
     const summary =
       card.querySelector(
@@ -707,6 +700,14 @@
     card.addEventListener(
       "keydown",
       (event) => {
+        if (
+          event.target.closest(
+            "button,select,input,[data-profile-summary]"
+          )
+        ) {
+          return;
+        }
+
         if (
           event.key === "Enter" ||
           event.key === " "

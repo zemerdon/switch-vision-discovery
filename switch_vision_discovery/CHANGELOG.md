@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.18
+
+- Align the Installer appearance preview with the real shared 64%-to-100% ten-step content-width scale so the Hub preview matches Installer rendering exactly.
+- Fix Calibration Profiles `Delete All Inactive` so it selects the currently rendered inactive profiles in place and reliably delegates to the protected bulk-delete confirmation instead of racing a selection-clear re-render.
+- Preserve inactive-profile checkbox multi-selection when the user clicks elsewhere on an inactive profile row; inactive rows are now checkbox-owned while protected active/factory rows can still be focused for single-profile Import/Export.
+- Add permanent regression coverage for both inactive-profile selection behaviors.
+
 ## 2.4.17
 
 - Fix saved-device up/down controls in the Devices view by separating reorder buttons from the disclosure interaction so Home Assistant ingress/browser summary behavior cannot swallow the click.
