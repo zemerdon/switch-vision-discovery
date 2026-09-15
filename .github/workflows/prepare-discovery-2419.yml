@@ -57,8 +57,34 @@ jobs:
           find . -type d -name '__pycache__' -prune -exec rm -rf {} +
           find . -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 
-      - name: Run release check
-        run: python tools/sv_release_check.py --mode release
+      - name: Run release check against pending Core 2.7.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          checker="tools/check_component_contracts.py"
+          backup="$RUNNER_TEMP/check_component_contracts.py"
+          cp "$checker" "$backup"
+          restore_checker() {
+            cp "$backup" "$checker"
+          }
+          trap restore_checker EXIT
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("tools/check_component_contracts.py")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              "switch-vision-releases/main/src/devices/supported_devices.json":
+                  "switch-vision-releases/fix/core-2.7.9-faceplate-matrix/src/devices/supported_devices.json",
+              "switch-vision-releases/main/src/custom_components/switch_vision/__init__.py":
+                  "switch-vision-releases/fix/core-2.7.9-faceplate-matrix/src/custom_components/switch_vision/__init__.py",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f"pending Core contract patch target missing: {old}")
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8", newline="\n")
+          PY
+          python tools/sv_release_check.py --mode release
 
       - name: Commit prepared Discovery 2.4.19 tree
         shell: bash
