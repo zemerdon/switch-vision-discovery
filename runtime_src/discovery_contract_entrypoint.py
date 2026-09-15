@@ -652,6 +652,27 @@ def _expected_generated_snmp_cards(ordered: list[dict[str, Any]]) -> int:
     return expected
 
 
+def _physical_member_summary(ordered: list[dict[str, Any]]) -> tuple[int, int, int]:
+    """Return physical members, stack targets, and members belonging to stacks."""
+    physical_members = 0
+    stack_targets = 0
+    stack_members = 0
+    for info in ordered:
+        contract = info.get("contract") if isinstance(info, dict) else None
+        if not isinstance(contract, dict) or str(contract.get("status") or "") != "resolved":
+            continue
+        observed = contract.get("observed") if isinstance(contract.get("observed"), dict) else {}
+        try:
+            members = max(1, int(observed.get("members") or 1))
+        except (TypeError, ValueError):
+            members = 1
+        physical_members += members
+        if members > 1:
+            stack_targets += 1
+            stack_members += members
+    return physical_members, stack_targets, stack_members
+
+
 def _expected_generated_dashboard_cards(options: dict[str, Any]) -> int | None:
     rows = options.get("dashboard_switches")
     if not isinstance(rows, list):
@@ -1195,11 +1216,22 @@ def main() -> int:
         partial_result = live_collection_partial or fallback_notices > 0 or (
             bool(current_run) and len(ordered) != len(current_run)
         )
+        physical_members, stack_targets, stack_members = _physical_member_summary(ordered)
         if current_run:
-            print(f"SV_DEBUG|Physical contract authority: accepted {len(ordered)} exact walk(s) of {len(current_run)} current-run walk(s) for normalized telemetry generation")
+            print(
+                f"SV_DEBUG|Physical contract authority: accepted SNMP targets={len(ordered)} of {len(current_run)} current-run target walk(s) for normalized telemetry generation"
+            )
         if live_collection_partial:
             print("SV_DEBUG|Physical contract authority: one or more configured targets were unreachable/auth-failed while other targets remained usable")
-        print(f"SV_DEBUG|Physical contract authority: resolved exact models={len(ordered)}; display-only fallback cards={fallback_cards}; support notices={max(fallback_notices, card_notices)}")
+        print(
+            "SV_DEBUG|Physical contract authority: "
+            f"exact target contracts={len(ordered)}; "
+            f"physical switch members={physical_members}; "
+            f"stack targets={stack_targets}; stack members={stack_members}; "
+            f"generated SNMP dashboard cards={actual_cards}; "
+            f"display-only fallback cards={fallback_cards}; "
+            f"support notices={max(fallback_notices, card_notices)}"
+        )
         if partial_result:
             print(
                 "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"

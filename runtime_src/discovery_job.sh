@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.16"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.17"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1810,7 +1810,7 @@ parser_report() {
       print "- Report is read-only. No Home Assistant, MQTT, SNMP2MQTT, or dashboard files are changed."
       print "- Trunk values are decoded as a first-pass helper and still reported for review."
       print "- Stack-aware recommendation is based on detected interface member numbering."
-      if (generator_enabled == "true") print "- SNMP2MQTT YAML generation is review-only. The generated file is not installed automatically."
+      if (generator_enabled == "true") print "- Generated SNMP2MQTT YAML is the authoritative Discovery handoff consumed by Switch Vision SNMP2MQTT after a successful handoff."
       else print "- SNMP2MQTT YAML generation remains disabled by default."
     }
   ' "$walk_file"
@@ -3907,12 +3907,12 @@ write_generated_dashboard_card() {
   [ -f "$unifi_helper" ] || unifi_helper="$(dirname "$0")/unifi_dashboard_cards.py"
   unifi_bound_ids="/tmp/switch_vision_unifi_bound_ids_$$.txt"
   : > "$unifi_bound_ids"
-  # This is a review/copy helper only. Discovery does not write Lovelace dashboards.
+  # This is the native Switch Vision dashboard source; manual Lovelace use remains optional.
   {
     echo "# Switch Vision generated dashboard card examples"
     echo "# Generated: $(date -Iseconds)"
     echo "# Source: Switch Vision Discovery v$SWITCH_VISION_DISCOVERY_VERSION"
-    echo "# Review/copy only. This file is not installed automatically."
+    echo "# Native Switch Vision dashboard source. The native panel reads this file automatically; manual Lovelace use remains optional."
     echo "# Card visuals are selected from the model registry; generic faceplates are reusable across vendors."
     echo "views:"
     echo "  - title: Switch Vision"
@@ -3926,7 +3926,7 @@ write_generated_dashboard_card() {
     echo "        content: |"
     echo "          ## Switch Vision"
     echo ""
-    echo "          Generated review-only card examples."
+    echo "          Generated Native Switch Vision dashboard source. Manual YAML/Lovelace use is optional."
 
     if truthy "${GENERATED_CARD_SNMP_ENABLED:-false}" && command -v jq >/dev/null 2>&1 && [ -f "$CONFIG_FILE" ] && json_has_configured_switch_rows; then
       tmp_cards="/tmp/switch_vision_generated_card_rows_$$.tsv"
@@ -4243,7 +4243,7 @@ write_generated_yaml() {
     echo "# Product: Switch Vision"
     echo "# Product source: Switch Vision Discovery v$SWITCH_VISION_DISCOVERY_VERSION"
     echo "# Generated: $(date -Iseconds)"
-    echo "# Review before use. This file is not installed automatically."
+    echo "# Authoritative Discovery handoff. Switch Vision SNMP2MQTT imports this file after a successful Discovery run."
     echo "# Output path: $GENERATED_YAML_PATH"
     echo "# App/container path: /share/switch_vision"
     echo "# HAOS host/SSH path may appear as: /root/share/switch_vision"
@@ -4412,7 +4412,7 @@ write_report() {
             echo "- FAIL: generated YAML candidate did not contain a valid non-empty target list."
             report_generated_yaml_failure_state
           fi
-          echo "- Review-only output; it has not been installed."
+          echo "- Handoff source: Switch Vision SNMP2MQTT imports this generated file after Discovery completes."
           echo "- Polling groups: chunked status 30s, chunked traffic 10s, walk-aware VLAN/trunk 30s, slow system/interface 300s"
           if grep -q "CHANGE_ME" "$GENERATED_YAML_PATH" 2>/dev/null; then
             echo "- FAIL: CHANGE_ME found in generated YAML; do not use this file."
@@ -4455,7 +4455,7 @@ write_report() {
             echo "- FAIL: generated YAML candidate did not contain a valid non-empty target list."
             report_generated_yaml_failure_state
           fi
-          echo "- Review-only output; it has not been installed."
+          echo "- Handoff source: Switch Vision SNMP2MQTT imports this generated file after Discovery completes."
         fi
         echo ""
       fi
@@ -4489,7 +4489,7 @@ write_report() {
     else
       echo "- UniFi API snapshot: not available"
     fi
-    echo "- Review/copy only; it has not been installed."
+    echo "- Native panel source: automatically consumed by Switch Vision; manual YAML/Lovelace use is optional."
   } >> "$REPORT_PATH"
 }
 

@@ -44,6 +44,10 @@ for marker in (
     "if(debugVisible)await refreshCurrentDiscoveryDebug()",
     "expandedDiscoveryHistoryEntries",
     "entry.open=expandedDiscoveryHistoryEntries.has(key)",
+    "function discoveryHistoryFriendlyTime(value)",
+    "new Intl.DateTimeFormat(undefined",
+    "discoveryHistoryFriendlyTime(rawTime)",
+    "Raw timestamp: ${rawTime}",
     "<summary><strong>Recent Discovery activity</strong></summary>",
 ):
     assert marker in source, marker

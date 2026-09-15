@@ -23,6 +23,50 @@ for pixels in range(10, 21):
 for invalid in (9, 21, "9", "21px", "", "giant", None, True, 14.5):
     assert support_web._normalise_ui_text_size(invalid) == 16
 
+# Discovery content width must use ten distinct viewport-relative steps. Fixed
+# pixel caps collapse together inside Home Assistant ingress once the viewport
+# is narrower than the cap, so only position 10 may be full width.
+width_steps = (
+    ("standard", 64),
+    ("standard_plus", 68),
+    ("wide", 72),
+    ("wide_plus", 76),
+    ("extra_wide", 80),
+    ("extra_wide_plus", 84),
+    ("ultra_wide", 88),
+    ("ultra_wide_plus", 92),
+    ("max_wide", 96),
+    ("full", 100),
+)
+for name, percent in width_steps:
+    assert f"body.width-{name} main{{max-width:none;width:{percent}%}}" in SOURCE
+assert [percent for _, percent in width_steps] == list(range(64, 101, 4))
+width_start = SOURCE.index("body.width-standard main")
+width_end = SOURCE.index("body.density-spacious", width_start)
+width_block = SOURCE[width_start:width_end]
+assert width_block.count("width:100%") == 1
+for legacy_cap in (880, 990, 1100, 1220, 1340, 1460, 1600, 1740, 1880):
+    assert f"max-width:{legacy_cap}px" not in width_block
+
+
+# Discovery Settings density must visibly scale all five positions, including
+# nested switch rows that previously remained near Comfortable spacing.
+density_contract = {
+    "spacious": (16, 14, "14px 16px", "14px 16px 16px", 12, 12, 42),
+    "comfortable": (12, 10, "10px 12px", "10px 12px 12px", 10, 10, 38),
+    "compact": (10, 8, "8px 10px", "8px 10px 10px", 8, 8, 36),
+    "dense": (8, 7, "6px 8px", "6px 8px 8px", 6, 7, 34),
+    "ultra_dense": (6, 6, "4px 6px", "4px 6px 6px", 4, 5, 32),
+}
+for name, (section, component, header, body, between, gap, height) in density_contract.items():
+    assert f"body.density-{name} #settingsCard{{--hub-control-height:{height}px;--hub-grid-row-gap:{gap}px}}" in SOURCE
+    assert f"body.density-{name} .hub-settings-section{{padding:{section}px}}" in SOURCE
+    assert f"body.density-{name} .hub-component{{padding:{component}px}}" in SOURCE
+    assert f"body.density-{name} .hub-switch-setting-summary" in SOURCE
+    assert f"padding:{header}" in SOURCE
+    assert f"body.density-{name} .hub-switch-setting-body{{padding:{body}}}" in SOURCE
+    assert f"body.density-{name} .hub-setting-row{{margin:{between}px 0}}" in SOURCE
+
 # One component geometry contract must drive every Core/SNMP2MQTT/Discovery Hub
 # settings subsection. Sections may choose a denser column count, but not their
 # own input/select/button dimensions.
@@ -128,13 +172,13 @@ for marker in (
     "svProfileManagerActions",
     "svProfileManagerExport",
     "svProfileManagerImport",
-    "svProfileManagerCopyTarget",
     "svProfileManagerDelete",
+    "svProfileManagerDeleteAllUnused",
     "ACTIVE PROFILES",
     "UNUSED PROFILES",
     "manager-selected",
     ".sv-profiles-toolbar-actions{",
-    ".sv-profile-select,",
+    ".sv-profile-section-unused .sv-profile-select{",
     ".sv-profile-meta-actions{",
     "max-width:clamp(90px,30vw,420px)!important",
     "max-width:clamp(88px,30vw,210px)!important",
@@ -143,9 +187,21 @@ for marker in (
     "new MutationObserver",
     "[data-profile-export]",
     "[data-profile-import]",
-    "[data-profile-copy]",
 ):
     assert marker in PROFILE_MANAGER, marker
+
+assert "svProfileManagerCopyTarget" not in PROFILE_MANAGER
+assert "svProfileManagerCopy" not in PROFILE_MANAGER
+assert "Copy Profile" not in PROFILE_MANAGER
+assert "Copy to…" not in PROFILE_MANAGER
+assert "data-profile-copy" not in PROFILES
+assert "Copy Profile" not in PROFILES
+assert "Copy to…" not in PROFILES
+assert ".sv-profile-section-unused .sv-profile-select{" in PROFILE_MANAGER
+assert "Delete All Inactive" in PROFILE_MANAGER
+assert "Select inactive calibration profile" in PROFILE_MANAGER
+assert '<span>Import / Export Profiles</span>' in SOURCE
+assert '<span>Copy / Import / Export Profiles</span>' not in SOURCE
 assert 'subgroup(\n          "CUSTOM"' in PROFILE_MANAGER
 assert 'subgroup(\n          "NATIVE"' in PROFILE_MANAGER
 assert "opacity:.42;" in PROFILE_MANAGER

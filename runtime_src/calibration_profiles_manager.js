@@ -128,6 +128,28 @@
         display:none!important
       }
 
+      .sv-profile-section-unused .sv-profile-card{
+        grid-template-columns:30px minmax(90px,auto) minmax(0,1fr)!important;
+        grid-template-areas:"select title meta"!important
+      }
+
+      .sv-profile-section-unused .sv-profile-select{
+        grid-area:select!important;
+        display:flex!important;
+        align-items:center;
+        justify-content:center;
+        font-size:0;
+        cursor:pointer
+      }
+
+      .sv-profile-section-unused .sv-profile-select input{
+        width:18px;
+        height:18px;
+        margin:0;
+        accent-color:var(--accent);
+        cursor:pointer
+      }
+
       .sv-profile-title{
         grid-area:title!important;
         min-width:0!important;
@@ -185,6 +207,10 @@
           grid-template-columns:minmax(78px,110px) minmax(0,1fr)!important;
           column-gap:7px!important;
           padding:9px!important
+        }
+
+        .sv-profile-section-unused .sv-profile-card{
+          grid-template-columns:28px minmax(72px,100px) minmax(0,1fr)!important
         }
 
         .sv-profile-top-meta{
@@ -358,20 +384,6 @@
         disabled
       >Import</button>
 
-      <select
-        id="svProfileManagerCopyTarget"
-        class="sv-profile-manager-copy-target"
-        disabled
-      >
-        <option value="">Copy to…</option>
-      </select>
-
-      <button
-        id="svProfileManagerCopy"
-        class="sv-profile-manager-context"
-        type="button"
-        disabled
-      >Copy Profile</button>
 
       <button
         id="svProfileManagerSelectStale"
@@ -400,6 +412,13 @@
         type="button"
         disabled
       >Delete Selected</button>
+
+      <button
+        id="svProfileManagerDeleteAllUnused"
+        class="danger sv-profile-manager-context"
+        type="button"
+        disabled
+      >Delete All Inactive</button>
     `;
 
     toolbar.appendChild(actions);
@@ -473,48 +492,6 @@
         }
       );
 
-    $("svProfileManagerCopyTarget")
-      .addEventListener(
-        "change",
-        () => {
-          const selected =
-            selectedCards();
-
-          if (selected.length === 1) {
-            const hidden =
-              selected[0]
-                .querySelector(
-                  "[data-profile-copy-target]"
-                );
-
-            if (hidden) {
-              hidden.value =
-                $("svProfileManagerCopyTarget")
-                  .value;
-            }
-          }
-
-          syncActions();
-        }
-      );
-
-    $("svProfileManagerCopy")
-      .addEventListener(
-        "click",
-        () => {
-          const selected =
-            selectedCards();
-
-          if (selected.length === 1) {
-            selected[0]
-              .querySelector(
-                "[data-profile-copy]"
-              )
-              ?.click();
-          }
-        }
-      );
-
     $("svProfileManagerSelectStale")
       .addEventListener(
         "click",
@@ -559,6 +536,36 @@
           ) {
             hidden.click();
           }
+        }
+      );
+
+    $("svProfileManagerDeleteAllUnused")
+      .addEventListener(
+        "click",
+        () => {
+          managerState.activeIndex = null;
+          $("svProfilesClearSelection")?.click();
+
+          window.setTimeout(() => {
+            const inputs = [
+              ...document.querySelectorAll(
+                ".sv-profile-section-unused [data-profile-select]:not(:disabled)"
+              ),
+            ];
+
+            for (const input of inputs) {
+              input.checked = true;
+              input.dispatchEvent(
+                new Event("change", { bubbles: true })
+              );
+            }
+
+            const hidden = $("svProfilesDeleteSelected");
+            if (inputs.length && hidden && !hidden.disabled) {
+              hidden.click();
+            }
+            scheduleEnhance();
+          }, 0);
         }
       );
   }
@@ -844,6 +851,16 @@
           activeNative.push(card);
         }
       } else {
+        const input = card.querySelector("[data-profile-select]");
+        const name = String(
+          card.querySelector(".sv-profile-title")?.textContent || "profile"
+        ).trim();
+        if (input && !input.disabled) {
+          input.setAttribute(
+            "aria-label",
+            `Select inactive calibration profile ${name}`
+          );
+        }
         unused.push(card);
       }
     }
@@ -890,7 +907,7 @@
     const unusedSection =
       document.createElement("section");
     unusedSection.className =
-      "sv-profile-section";
+      "sv-profile-section sv-profile-section-unused";
     unusedSection.appendChild(
       sectionHeading(
         "UNUSED PROFILES",
@@ -948,53 +965,6 @@
     }
   }
 
-  function syncCopyTarget(card) {
-    const manager =
-      $("svProfileManagerCopyTarget");
-
-    if (!manager) return false;
-
-    const source =
-      card?.querySelector(
-        "[data-profile-copy-target]"
-      );
-
-    const preferred =
-      manager.value ||
-      source?.value ||
-      "";
-
-    manager.innerHTML =
-      '<option value="">Copy to…</option>';
-
-    if (!source) {
-      manager.disabled = true;
-      return false;
-    }
-
-    for (const option of source.options) {
-      if (!option.value) continue;
-
-      manager.appendChild(
-        option.cloneNode(true)
-      );
-    }
-
-    if (
-      [...manager.options].some(
-        (option) =>
-          option.value === preferred
-      )
-    ) {
-      manager.value = preferred;
-    }
-
-    manager.disabled =
-      manager.options.length <= 1;
-
-    return !manager.disabled;
-  }
-
   function syncActions() {
     installToolbar();
 
@@ -1009,10 +979,6 @@
       $("svProfileManagerExport");
     const importButton =
       $("svProfileManagerImport");
-    const copyButton =
-      $("svProfileManagerCopy");
-    const copyTarget =
-      $("svProfileManagerCopyTarget");
     const selectStale =
       $("svProfileManagerSelectStale");
     const cleanStale =
@@ -1021,6 +987,8 @@
       $("svProfileManagerClear");
     const deleteButton =
       $("svProfileManagerDelete");
+    const deleteAllUnused =
+      $("svProfileManagerDeleteAllUnused");
 
     if (exportButton) {
       exportButton.disabled =
@@ -1038,25 +1006,6 @@
         );
     }
 
-    const copyAvailable =
-      single
-        ? syncCopyTarget(single)
-        : (
-            copyTarget
-              ? (
-                  copyTarget.innerHTML =
-                    '<option value="">Copy to…</option>',
-                  copyTarget.disabled = true,
-                  false
-                )
-              : false
-          );
-
-    if (copyButton) {
-      copyButton.disabled =
-        !copyAvailable ||
-        !copyTarget?.value;
-    }
 
     const hiddenSelectStale =
       $("svProfilesSelectStale");
@@ -1092,6 +1041,16 @@
         selected.length === 1
           ? "Delete Profile"
           : "Delete Selected";
+    }
+
+    if (deleteAllUnused) {
+      const eligible = document.querySelectorAll(
+        ".sv-profile-section-unused [data-profile-select]:not(:disabled)"
+      ).length;
+      deleteAllUnused.disabled = eligible === 0 || !hiddenDelete;
+      deleteAllUnused.textContent = eligible
+        ? `Delete All Inactive (${eligible})`
+        : "Delete All Inactive";
     }
 
     syncVisualSelection();
