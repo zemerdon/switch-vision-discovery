@@ -12,6 +12,8 @@ permissions:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
@@ -47,6 +49,13 @@ jobs:
 
       - name: Run functional audit
         run: python tools/audit_functional_contracts.py
+
+      - name: Remove generated Python cache material
+        shell: bash
+        run: |
+          set -euo pipefail
+          find . -type d -name '__pycache__' -prune -exec rm -rf {} +
+          find . -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 
       - name: Run release check
         run: python tools/sv_release_check.py --mode release
