@@ -42,7 +42,14 @@ jobs:
         run: python3 tools/test_visual_contract_policy.py
       - name: Check exact Core faceplate catalog contract
         run: python3 tools/test_faceplate_catalog_contract.py
+      - name: Check cross-component contracts against coordinated Core 2.7.9
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/discovery-2.4.19-faceplate-matrix'
+        run: >-
+          python3 tools/check_component_contracts.py
+          --core-registry-url https://raw.githubusercontent.com/zemerdon/switch-vision-releases/fix/core-2.7.9-faceplate-matrix/src/devices/supported_devices.json
+          --core-settings-url https://raw.githubusercontent.com/zemerdon/switch-vision-releases/fix/core-2.7.9-faceplate-matrix/src/custom_components/switch_vision/__init__.py
       - name: Check cross-component contracts
+        if: github.event_name != 'pull_request' || github.head_ref != 'fix/discovery-2.4.19-faceplate-matrix'
         run: python3 tools/check_component_contracts.py
       - name: Check interface speed contracts
         run: python3 tools/check_speed_contracts.py
