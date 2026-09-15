@@ -1,3 +1,11 @@
+## 2.4.19 — Exact-model faceplate matrix alignment
+
+- Align Discovery visual recommendations with Switch Vision Core 2.7.9 for reviewed UniFi exact models.
+- Use the dedicated 5-RJ45, 8-RJ45, 8+2, 24+4 and 32-optical profiles where those exact layouts are already owned by Core.
+- Keep `US 16 PoE 150W` on the safe 24+2 stock canvas while preserving its true 16+2 physical topology.
+- Preserve physical port counts, support-confidence states and API mapping profiles; this is a presentation-contract correction only.
+- Add an exact-model regression so Discovery cannot silently drift from the approved faceplate/profile matrix again.
+
 # Changelog
 
 ## 2.4.18
