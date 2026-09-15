@@ -1,3 +1,12 @@
+## 2.4.20 — Manual dashboard YAML export
+
+- Add **Preview Dashboard YAML**, **Copy Dashboard YAML**, **Copy Cards Only**, and **Download Dashboard YAML** to Hub → Discovery → Generated Dashboard YAML.
+- Generate the full manual dashboard export from the validated Native source without mutating that source, removing the generated `custom:vertical-layout` wrapper and layout metadata so the pasted dashboard does not require Layout Card.
+- Add a cards-only export for inserting the generated Switch Vision card list beneath an existing Home Assistant view's `cards:` key.
+- Keep manual exports explicitly snapshot-based: later Discovery runs update the Native generated source, not YAML previously pasted into another dashboard.
+- Keep the legacy raw generated-dashboard download endpoint for compatibility and fail closed on unknown future custom view dependencies.
+- Add permanent export, UI/endpoints, immutability, fail-closed, JavaScript syntax, runtime-parity, and full Discovery self-test coverage.
+
 ## 2.4.19 — Exact-model faceplate matrix alignment
 
 - Align Discovery visual recommendations with Switch Vision Core 2.7.9 for reviewed UniFi exact models.
