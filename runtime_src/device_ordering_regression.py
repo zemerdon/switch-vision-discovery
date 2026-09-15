@@ -131,6 +131,13 @@ for forbidden in (
     assert forbidden not in source, forbidden
 assert "device-order-controls" in source
 assert "summary.append(orderControls,main,actions)" in source
+render_start = source.index("function renderUnifiedDevices(){")
+detected_start = source.index("for(const [index,item] of detected.entries())", render_start)
+saved_block = source[render_start:detected_start]
+assert "document.createElement('summary')" not in saved_block
+assert "document.createElement('details')" not in saved_block
+assert "const summary=document.createElement('div');summary.className='unified-device-summary'" in saved_block
+assert "actions.append(toggle,disclosure)" in saved_block
 
 job = Path(web.__file__).with_name("discovery_job.sh").read_text(encoding="utf-8")
 walk_fn = job.split("multi_switch_walk_rows() {", 1)[1].split("\n}\n", 1)[0]

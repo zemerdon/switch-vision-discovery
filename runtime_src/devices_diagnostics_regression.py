@@ -42,10 +42,12 @@ for marker in (
     "function detectedDeviceKey(item)",
     "function renderUnifiedDevices()",
     "entry.className=`device-card unified-device-details configured-device",
-    "entry.open=expandedUnifiedDevices.has(key)",
-    "if(entry.open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)",
+    "entry.dataset.expanded=String(expanded)",
+    "const summary=document.createElement('div');summary.className='unified-device-summary'",
+    "const disclosure=document.createElement('button');disclosure.type='button';disclosure.className='unified-device-disclosure'",
     "className='device-order-button'",
     "className='device-order-controls'",
+    "actions.append(toggle,disclosure)",
     "summary.append(orderControls,main,actions)",
     "for(const [index,item] of detected.entries())",
     "if(currentView==='devices')await refreshDevicesData(false)",
@@ -73,6 +75,17 @@ for marker in (
     'if source_walk_value and not walk_found:',
 ):
     assert marker in source, marker
+
+# Saved rows must not place reorder/state buttons inside a native <summary>.
+# Home Assistant ingress/Chrome can swallow those nested interactive clicks.
+render_start = source.index("function renderUnifiedDevices(){")
+detected_start = source.index("for(const [index,item] of detected.entries())", render_start)
+saved_block = source[render_start:detected_start]
+assert "document.createElement('summary')" not in saved_block
+assert "document.createElement('details')" not in saved_block
+assert "const summary=document.createElement('div');summary.className='unified-device-summary'" in saved_block
+assert "actions.append(toggle,disclosure)" in saved_block
+assert ".unified-device-body[hidden]{display:none!important}" in source
 
 for forbidden in (
     "device-drag-handle",

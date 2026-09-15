@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.4.17
+
+- Fix saved-device up/down controls in the Devices view by separating reorder buttons from the disclosure interaction so Home Assistant ingress/browser summary behavior cannot swallow the click.
+- Make all 10 Hub content-width positions viewport-relative and visibly distinct from 64% through 100%, with only position 10 using full width.
+- Apply the five Hub density positions to Switch Vision Settings section/component padding, saved-switch row spacing, internal grid gaps, and control height so Spacious through Ultra Dense remain visibly progressive.
+- Render Discovery history timestamps in the viewer's local browser locale/timezone while retaining the raw timestamp as a diagnostic tooltip.
+- Remove Calibration Profiles Copy-to/Copy-Profile UI and implementation in favor of the existing Export/Import workflow.
+- Show selection checkboxes on unused calibration profiles and add guarded Delete Selected plus Delete All Inactive actions while active/factory profile deletion remains protected.
+- Replace stale review-only dashboard/SNMP2MQTT output wording with the current native-panel and generated-handoff semantics.
+- Report physical-contract cardinality explicitly as SNMP targets, exact target contracts, physical switch members, stack targets/members, and generated SNMP dashboard cards so a multi-member stack is not misreported as one physical switch.
+- Keep exact SNMP2MQTT generated-configuration verification and pair it with the SNMP2MQTT 1.0.1 generation-ID runtime marker contract.
+- Add permanent regressions for width/density scaling, profile-manager selection/deletion safety, friendly history timestamps, device reordering, native-output wording, and stack-aware cardinality.
+
 ## 2.4.16
 
 - Fix Cisco Catalyst 2960X 24-port uplink presentation so source interfaces `Gi1/0/25` through `Gi1/0/28` are bound to logical 1G faceplate/entity positions **SFP1** through **SFP4** for the reviewed 24PS-L and 24TS-L contracts.

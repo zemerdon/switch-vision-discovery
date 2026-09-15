@@ -100,7 +100,7 @@ for marker in (
     'Show Detected Devices &amp; Status',
     'Reorder Switches',
     'Manage Faceplate Calibrations',
-    'Copy / Import / Export Profiles',
+    'Import / Export Profiles',
     'Manage Backups',
     'Repair Stale MQTT Entities',
     'Add / Remove Switches',
