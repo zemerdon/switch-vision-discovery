@@ -35,6 +35,7 @@ PERMANENT_CHECKS = (
     "tools/test_visual_contract_policy.py",
     "tools/test_faceplate_catalog_contract.py",
     "tools/test_faceplate_matrix_2419.py",
+    "tools/test_unifi_activity_refresh_contract.py",
     "tools/check_component_contracts.py",
     "tools/check_speed_contracts.py",
     "tools/check_hub_identity.py",

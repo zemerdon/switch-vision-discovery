@@ -152,7 +152,7 @@ def binding_card_fields(
         "unifi_sfp_port_offset": len(rj45),
         "unifi_port_detail": bool(caps.get("port_detail")),
         "unifi_per_port_traffic": bool(caps.get("per_port_traffic")),
-        "unifi_refresh_seconds": 30,
+        "unifi_refresh_seconds": 10,
     }
     api_port_map = reg.get("unifi_api_port_map") if isinstance((reg or {}).get("unifi_api_port_map"), dict) else None
     if api_port_map is not None:
@@ -462,7 +462,7 @@ def render(
             "calibration_button": True,
             "activity_hold_seconds": 12,
             "auto_speed_entity": False,
-            "unifi_refresh_seconds": 30,
+            "unifi_refresh_seconds": 10,
             "support_status": status,
             "generic_faceplate": visual_fallback,
         }
