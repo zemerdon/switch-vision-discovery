@@ -230,6 +230,8 @@ assert 'card.removeAttribute("tabindex")' in wire_card_block
 assert 'event.target.closest(' in wire_card_block
 assert ".sv-profile-section-unused .sv-profile-card{" in PROFILE_MANAGER
 assert "cursor:default" in PROFILE_MANAGER
+assert "root.style.setProperty('--preview-width',`${64+wi*4}%`)" in SOURCE
+assert "root.style.setProperty('--preview-width',`${55+wi*5}%`)" not in SOURCE
 assert '<span>Import / Export Profiles</span>' in SOURCE
 assert '<span>Copy / Import / Export Profiles</span>' not in SOURCE
 assert 'subgroup(\n          "CUSTOM"' in PROFILE_MANAGER
