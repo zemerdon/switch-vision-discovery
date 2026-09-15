@@ -200,6 +200,36 @@ assert "Copy to…" not in PROFILES
 assert ".sv-profile-section-unused .sv-profile-select{" in PROFILE_MANAGER
 assert "Delete All Inactive" in PROFILE_MANAGER
 assert "Select inactive calibration profile" in PROFILE_MANAGER
+
+# v2.4.18: inactive profile multi-selection is checkbox-owned. Row clicks must
+# not clear/re-render a user's existing selection, and Delete All Inactive must
+# select the current inactive rows in place rather than racing Clear Selection.
+delete_all_block = PROFILE_MANAGER.split(
+    '$("svProfileManagerDeleteAllUnused")', 1
+)[1].split("function selectCard", 1)[0]
+assert '$("svProfilesClearSelection")' not in delete_all_block
+assert "window.setTimeout" not in delete_all_block
+assert "if (!input.checked)" in delete_all_block
+assert 'hidden.click();' in delete_all_block
+
+select_card_block = PROFILE_MANAGER.split("function selectCard", 1)[1].split(
+    "function wireCard", 1
+)[0]
+assert "if (input && !input.disabled)" in select_card_block
+assert '$("svProfilesClearSelection")' not in select_card_block
+assert "window.setTimeout" not in select_card_block
+assert "syncActions();" in select_card_block
+wire_card_block = PROFILE_MANAGER.split("function wireCard", 1)[1].split(
+    "function sectionHeading", 1
+)[0]
+assert "selectableInactive" in wire_card_block
+assert 'selectionInput.addEventListener(' in wire_card_block
+assert '"change",' in wire_card_block
+assert 'card.removeAttribute("role")' in wire_card_block
+assert 'card.removeAttribute("tabindex")' in wire_card_block
+assert 'event.target.closest(' in wire_card_block
+assert ".sv-profile-section-unused .sv-profile-card{" in PROFILE_MANAGER
+assert "cursor:default" in PROFILE_MANAGER
 assert '<span>Import / Export Profiles</span>' in SOURCE
 assert '<span>Copy / Import / Export Profiles</span>' not in SOURCE
 assert 'subgroup(\n          "CUSTOM"' in PROFILE_MANAGER
