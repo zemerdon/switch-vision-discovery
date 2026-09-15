@@ -49,7 +49,7 @@ jobs:
         run: python tools/audit_functional_contracts.py
 
       - name: Run release check
-        run: python tools/sv_release_check.py
+        run: python tools/sv_release_check.py --mode release
 
       - name: Commit prepared Discovery 2.4.19 tree
         shell: bash
