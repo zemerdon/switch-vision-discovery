@@ -71,7 +71,14 @@ Per-switch walks are stored under a stable folder based on **Switch Name (Used i
 
 When Switch Vision UniFi2MQTT is installed, **Switch Vision Hub → UniFi2MQTT Settings** exposes its controller/MQTT configuration, install/running state, snapshot availability, and normalized device count. API keys and MQTT passwords are never read back into the browser; blank secret fields preserve the stored values. Home Assistant App configuration remains available as a fallback.
 
-The Discovery Web UI presents **Generated Card YAML** above **Generated SNMP2MQTT YAML**. The card section validates the file and provides preview, copy, and download actions. Generated dashboard YAML remains review/copy only and is not installed automatically.
+The Discovery Web UI presents **Generated Dashboard YAML** above **Generated SNMP2MQTT YAML**. Discovery keeps `/share/switch_vision/generated-dashboard-card.yaml` as the Native dashboard source and validates it before any manual export. The visible export actions are:
+
+- **Preview Dashboard YAML** — preview the manual full-dashboard export;
+- **Copy Dashboard YAML** — copy a complete standard Home Assistant dashboard for a new dashboard's **Raw configuration editor**;
+- **Copy Cards Only** — copy only the generated card list for pasting beneath an existing view's `cards:` key;
+- **Download Dashboard YAML** — download the same complete manual dashboard export as `switch-vision-dashboard.yaml`.
+
+The full manual export removes the generated `custom:vertical-layout` view wrapper and its `layout:` metadata, so the pasted dashboard does not require Layout Card. It does not alter the Native generated source. Manual exports are snapshots: later Discovery runs refresh the Native source, not YAML already pasted into another Home Assistant dashboard. The legacy raw generated-file download remains available for compatibility, and no manual export is installed automatically.
 
 Discovery treats stored SNMP walks as explicit offline input only: they are parsed when `parse_all_walks` is enabled, not as an automatic fallback when a current run has no SNMP data. Dashboard-card generation is independent, so UniFi API-only installations can generate fresh cards without SNMP.
 

@@ -3931,3 +3931,8 @@ sv_require_literal 'Hub Settings Save action' 'id="hubSettingsSave" class="prima
 sv_require_literal 'Hub Settings Reload action' 'id="hubSettingsReload" type="button">Reload</button>' "$BASE_DIR/support_web.py"
 sv_require_literal 'Hub Settings Back action' 'id="hubSettingsBack" type="button">Back</button>' "$BASE_DIR/support_web.py"
 sv_require_literal 'Hub Settings Back goBack binding' "q('hubSettingsBack')?.addEventListener('click',goBack);" "$BASE_DIR/support_web.py"
+
+# Manual dashboard export regression. Native generated YAML remains unchanged;
+# full export removes the known Layout Card wrapper, cards-only preserves cards,
+# and unknown future custom view dependencies fail closed.
+python3 "$BASE_DIR/dashboard_yaml_export_regression.py"
