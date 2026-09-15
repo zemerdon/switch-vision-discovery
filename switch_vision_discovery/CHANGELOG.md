@@ -5,6 +5,7 @@
 - Keep `US 16 PoE 150W` on the safe 24+2 stock canvas while preserving its true 16+2 physical topology.
 - Preserve physical port counts, support-confidence states and API mapping profiles; this is a presentation-contract correction only.
 - Add an exact-model regression so Discovery cannot silently drift from the approved faceplate/profile matrix again.
+- Refresh native UniFi dashboard snapshots every 10 seconds so UniFi2MQTT 4.0 counter activity follows the controller telemetry cadence; keep the 12-second activity hold so sustained traffic remains visibly active between samples.
 
 # Changelog
 
