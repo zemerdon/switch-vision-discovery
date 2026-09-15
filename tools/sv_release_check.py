@@ -34,6 +34,7 @@ PERMANENT_CHECKS = (
     "tools/test_c3850_community_validation.py",
     "tools/test_visual_contract_policy.py",
     "tools/test_faceplate_catalog_contract.py",
+    "tools/test_faceplate_matrix_2419.py",
     "tools/check_component_contracts.py",
     "tools/check_speed_contracts.py",
     "tools/check_hub_identity.py",
