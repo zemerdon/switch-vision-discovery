@@ -39,8 +39,11 @@ jobs:
       - name: Run runtime parity
         run: python tools/check_runtime_parity.py
 
-      - name: Run component contracts
-        run: python tools/check_component_contracts.py
+      - name: Run component contracts against pending Core 2.7.9
+        run: >-
+          python tools/check_component_contracts.py
+          --core-registry-url https://raw.githubusercontent.com/zemerdon/switch-vision-releases/fix/core-2.7.9-faceplate-matrix/src/devices/supported_devices.json
+          --core-settings-url https://raw.githubusercontent.com/zemerdon/switch-vision-releases/fix/core-2.7.9-faceplate-matrix/src/custom_components/switch_vision/__init__.py
 
       - name: Run functional audit
         run: python tools/audit_functional_contracts.py
