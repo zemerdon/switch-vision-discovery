@@ -1,3 +1,10 @@
+## 2.4.25 — Devices controls follow-up
+
+- Apply saved mixed-device order directly to the existing Native dashboard source instead of launching Dashboard Card regeneration as a Discovery operation. This removes the one-move-then-lock behavior and lets repeated reorder actions remain available.
+- Move reorder controls outside the device expand/collapse hit area. The middle device summary alone expands/collapses; Enabled/Disabled remains an independent right-side control.
+- Hide impossible reorder actions entirely: the first device has no Up arrow, the last device has no Down arrow, and a single-device list has no reorder arrows.
+- Keep the persisted mixed SNMP/UniFi order authoritative for both the Devices list and Native dashboard card sequence.
+
 ## 2.4.24 — Unified device control and polling state
 
 - Unify saved SNMP and detected UniFi devices into one persistent Devices-page ordering contract with working up/down controls and whole-row expansion.

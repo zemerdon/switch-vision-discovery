@@ -41,6 +41,7 @@ original_supervisor = web._supervisor_json
 original_backup = web.create_pre_mutation_backup
 original_snapshot = web.DEFAULT_UNIFI_SNAPSHOT
 original_control = web.DEFAULT_DEVICE_CONTROL
+original_card = web.DEFAULT_GENERATED_CARD
 
 
 def read_options() -> dict:
@@ -181,9 +182,9 @@ try:
 """,
             encoding="utf-8",
         )
-        result = dashboard_device_order.apply_dashboard_order(
-            dashboard, web.DEFAULT_DEVICE_CONTROL
-        )
+        web.DEFAULT_GENERATED_CARD = dashboard
+        result = web._apply_saved_device_order_to_dashboard()
+        assert result["updated"] is True, result
         assert result["disabled_cards_removed"] == 1, result
         text = dashboard.read_text(encoding="utf-8")
         assert "unifi_device_id: u-flex" not in text
@@ -201,6 +202,7 @@ finally:
     web.create_pre_mutation_backup = original_backup
     web.DEFAULT_UNIFI_SNAPSHOT = original_snapshot
     web.DEFAULT_DEVICE_CONTROL = original_control
+    web.DEFAULT_GENERATED_CARD = original_card
 
 source = Path(web.__file__).read_text(encoding="utf-8")
 for literal in (
@@ -212,6 +214,7 @@ for literal in (
     "_start_device_state_application",
     "apply_device_state",
     "dashboard_refresh_started",
+    "_apply_saved_device_order_to_dashboard",
     "polling_refresh_started",
 ):
     assert literal in source, literal
@@ -221,6 +224,13 @@ assert "event.preventDefault();event.stopPropagation()" in source
 assert "item?.data_source==='UniFi API'&&item?.unifi_device_id" in source
 assert "controllable:true" in source
 assert "Toggle whether this device is actively polled" in source
+
+
+# Reorder must apply directly to the existing dashboard source and must not start
+# a Discovery/card-regeneration operation that disables subsequent row actions.
+order_handler = source.split('if path == "/api/configured-devices/order":', 1)[1].split('if path == "/api/configuration/import":', 1)[0]
+assert "_apply_saved_device_order_to_dashboard()" in order_handler
+assert "_start_dashboard_card_regeneration" not in order_handler
 
 job = Path(web.__file__).with_name("discovery_job.sh").read_text(encoding="utf-8")
 assert "dashboard_device_order.py" in job

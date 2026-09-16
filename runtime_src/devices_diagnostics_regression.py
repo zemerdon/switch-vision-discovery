@@ -47,8 +47,11 @@ for marker in (
     "className='device-order-button'",
     "className='device-order-controls'",
     "actions.append(toggle)",
-    "actions.append(chevron)",
-    "summary.append(orderControls,main,actions)",
+    "const rowTop=document.createElement('div');rowTop.className='unified-device-row'",
+    "summary.append(main,chevron)",
+    "rowTop.append(orderControls,summary,actions)",
+    "if(ci>0){const up=document.createElement('button')",
+    "if(ci<controllable.length-1){const down=document.createElement('button')",
     "function buildUnifiedDeviceRows()",
     "for(const [index,item] of detected.entries())",
     "if(currentView==='devices')await refreshDevicesData(false)",
@@ -77,9 +80,9 @@ for marker in (
 ):
     assert marker in source, marker
 
-# All unified rows use whole-row expansion without native <summary> because
-# Home Assistant ingress/Chrome can swallow nested interactive controls there.
-# Reorder/state controls explicitly stop propagation so they remain independent.
+# The device summary alone owns expansion. Reorder controls sit to its left and
+# state/source controls sit to its right, so action buttons are outside the
+# expand/collapse hit area. Native <summary> remains intentionally unused.
 render_start = source.index("function renderUnifiedDevices(){")
 render_end = source.index("function renderConfiguredDevices", render_start)
 render_block = source[render_start:render_end]
@@ -91,8 +94,12 @@ assert "summary.addEventListener('click'" in render_block
 assert "summary.addEventListener('keydown'" in render_block
 assert "event.target===summary" in render_block
 assert render_block.count("event.preventDefault();event.stopPropagation()") >= 3
+assert "if(ci>0){const up=document.createElement('button')" in render_block
+assert "if(ci<controllable.length-1){const down=document.createElement('button')" in render_block
+assert "orderControls.append(up,down)" not in render_block
 assert "actions.append(toggle)" in render_block
-assert "actions.append(chevron)" in render_block
+assert "summary.append(main,chevron)" in render_block
+assert "rowTop.append(orderControls,summary,actions)" in render_block
 assert "const disclosure=document.createElement('button')" not in render_block
 assert ".unified-device-body[hidden]{display:none!important}" in source
 
