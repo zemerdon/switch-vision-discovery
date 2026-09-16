@@ -6184,19 +6184,27 @@ class SupportHandler(BaseHTTPRequestHandler):
                         raise ValueError("Invalid device state request size.")
                     data = json.loads(self.rfile.read(length).decode("utf-8"))
                     result = _set_configured_device_state(self.app.options_file, data)
+                key = str(data.get("device_key") or "") if isinstance(data, dict) else ""
                 try:
-                    key = str(data.get("device_key") or "") if isinstance(data, dict) else ""
-                    if key.startswith("snmp:"):
-                        _start_device_state_application(self.app.discovery_script)
-                        result["polling_refresh_started"] = True
-                    else:
-                        _start_dashboard_card_regeneration(self.app.discovery_script)
-                        result["polling_refresh_started"] = key.startswith("unifi:")
-                    result["dashboard_refresh_started"] = True
-                except OperationConflict:
+                    dashboard = _apply_saved_device_order_to_dashboard()
+                    result["dashboard_refresh_started"] = bool(dashboard.get("updated"))
+                    result["dashboard_refresh_pending"] = not bool(dashboard.get("updated"))
+                    result["dashboard_projection"] = dashboard
+                except (OSError, RuntimeError, ValueError) as exc:
                     result["dashboard_refresh_started"] = False
                     result["dashboard_refresh_pending"] = True
-                    result["polling_refresh_started"] = False
+                    result["dashboard_refresh_warning"] = str(exc)[:240]
+                result["polling_refresh_started"] = False
+                if key.startswith("snmp:"):
+                    try:
+                        _start_device_state_application(self.app.discovery_script)
+                        result["polling_refresh_started"] = True
+                    except OperationConflict:
+                        result["polling_refresh_pending"] = True
+                elif key.startswith("unifi:"):
+                    # UniFi2MQTT reads the shared control file on its normal poll loop;
+                    # no Discovery/card-regeneration operation is required here.
+                    result["polling_refresh_pending"] = True
                 self._json(result)
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)

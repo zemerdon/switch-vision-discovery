@@ -59,7 +59,7 @@ def apply_dashboard_order(path: Path, control_path: Path) -> dict[str, int]:
 
     for index, (card, block) in enumerate(zip(cards, blocks, strict=True)):
         key = _card_key(card)
-        if key and key.startswith("unifi:") and not state_for(control, key, True):
+        if key and not state_for(control, key, True):
             disabled += 1
             continue
         if key is None:

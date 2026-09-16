@@ -185,12 +185,13 @@ try:
         web.DEFAULT_GENERATED_CARD = dashboard
         result = web._apply_saved_device_order_to_dashboard()
         assert result["updated"] is True, result
-        assert result["disabled_cards_removed"] == 1, result
+        assert result["disabled_cards_removed"] == 2, result
         text = dashboard.read_text(encoding="utf-8")
         assert "unifi_device_id: u-flex" not in text
+        assert "discovery_selected_switch: SW-C" not in text
         assert text.index("discovery_selected_switch: SW-A") < text.index(
-            "discovery_selected_switch: SW-C"
-        ) < text.index("discovery_selected_switch: SW-B"), text
+            "discovery_selected_switch: SW-B"
+        ), text
 
         serialized = json.dumps(web._configured_devices_snapshot(Path("/unused/options.json")))
         assert "private-swa" not in serialized
@@ -228,6 +229,11 @@ assert "Toggle whether this device is actively polled" in source
 
 # Reorder must apply directly to the existing dashboard source and must not start
 # a Discovery/card-regeneration operation that disables subsequent row actions.
+state_handler = source.split('if path == "/api/configured-devices/state":', 1)[1].split('if path == "/api/configured-devices/order":', 1)[0]
+assert "_apply_saved_device_order_to_dashboard()" in state_handler
+assert "_start_dashboard_card_regeneration" not in state_handler
+assert "_start_device_state_application" in state_handler
+
 order_handler = source.split('if path == "/api/configured-devices/order":', 1)[1].split('if path == "/api/configuration/import":', 1)[0]
 assert "_apply_saved_device_order_to_dashboard()" in order_handler
 assert "_start_dashboard_card_regeneration" not in order_handler

@@ -1,3 +1,10 @@
+## 2.4.26 — Immediate dashboard disable projection
+
+- Apply Enabled/Disabled state synchronously to the current Native dashboard source so a disabled device card disappears immediately instead of depending on a background Discovery regeneration.
+- Apply the same disabled-card filtering to both SNMP and UniFi device identities.
+- Keep SNMP polling reconfiguration as the existing background stored-state apply, while UniFi2MQTT consumes the shared device-control state on its normal polling loop.
+- Add regressions proving both disabled SNMP and disabled UniFi cards are removed and that the state endpoint no longer starts Dashboard Card YAML regeneration.
+
 ## 2.4.25 — Devices controls follow-up
 
 - Apply saved mixed-device order directly to the existing Native dashboard source instead of launching Dashboard Card regeneration as a Discovery operation. This removes the one-move-then-lock behavior and lets repeated reorder actions remain available.
