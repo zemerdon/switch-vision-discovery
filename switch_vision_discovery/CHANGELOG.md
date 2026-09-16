@@ -1,3 +1,11 @@
+## 2.4.21 — Hub UI/UX refinement
+
+- Improve Hub device-card hierarchy with clearer detected/not-detected state, model, support status, last refresh, port summary, source, and an explicit **Details** control while preserving device enable/disable and persistent ordering behavior.
+- Standardize high-value Hub feedback for Discovery, saved-device changes, diagnostics, UniFi2MQTT settings, and Hub settings with consistent loading, success, warning, and error presentation plus polite live-region accessibility.
+- Group only genuinely low-level controls such as Activity LED tuning, Discovery paths/SNMP timing, and Discovery backup retention behind closed-by-default **Advanced** disclosures without removing or simplifying any existing capability.
+- Improve narrow-screen and touch ergonomics with responsive reflow, full-width action handling where appropriate, and 44-pixel minimum touch targets while preserving the existing desktop density and content-width controls.
+- Add permanent regression coverage that locks in the presentation-only scope and explicitly forbids introducing a Discovery wizard, basic mode, or simple mode.
+
 ## 2.4.20 — Manual dashboard YAML export
 
 - Add **Preview Dashboard YAML**, **Copy Dashboard YAML**, **Copy Cards Only**, and **Download Dashboard YAML** to Hub → Discovery → Generated Dashboard YAML.
