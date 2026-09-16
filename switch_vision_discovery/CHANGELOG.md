@@ -1,3 +1,9 @@
+## 2.4.22 — Restore 2.4.20 Hub/UI behavior
+
+- Restore the Discovery/Hub interface and presentation behavior from 2.4.20, superseding the 2.4.21 Hub UI/UX refinement.
+- Keep the 2.4.20 manual dashboard YAML export functionality and all pre-existing Discovery capabilities unchanged.
+- Preserve release history with a forward patch release rather than rewriting or deleting 2.4.21.
+
 ## 2.4.21 — Hub UI/UX refinement
 
 - Improve Hub device-card hierarchy with clearer detected/not-detected state, model, support status, last refresh, port summary, source, and an explicit **Details** control while preserving device enable/disable and persistent ordering behavior.
