@@ -77,6 +77,12 @@ DEFAULT_INSTALLER_MAINTENANCE_RESPONSE = DEFAULT_SHARE_DIR / "installer-maintena
 DEFAULT_REGISTRY_FILE = Path("/opt/switch-vision/devices/supported_devices.json")
 DEFAULT_GENERATED_SNMP2MQTT = Path("/share/switch_vision/generated-snmp2mqtt.yaml")
 DEFAULT_GENERATED_CARD = Path("/share/switch_vision/generated-dashboard-card.yaml")
+DEFAULT_GENERATED_CARD_FULL = Path(
+    os.environ.get(
+        "SWITCH_VISION_GENERATED_CARD_FULL_PATH",
+        str(dashboard_device_order.full_dashboard_path(DEFAULT_GENERATED_CARD)),
+    )
+)
 DEFAULT_UNIFI_SNAPSHOT = Path("/share/switch_vision/unifi/devices.json")
 DEFAULT_UNIFI_DIAGNOSTICS = Path("/share/switch_vision/unifi/diagnostics.json")
 DEFAULT_DEVICE_CONTROL = Path(
@@ -97,6 +103,7 @@ SNMP_RESET_FILES = (
     DEFAULT_SHARE_DIR / "snmpwalk.txt",
     DEFAULT_SHARE_DIR / "generated-snmp2mqtt.yaml",
     DEFAULT_SHARE_DIR / "generated-dashboard-card.yaml",
+    DEFAULT_GENERATED_CARD_FULL,
     DEFAULT_SHARE_DIR / "discovery-report.txt",
     DEFAULT_SHARE_DIR / "last-discovery-run.txt",
     DEFAULT_SHARE_DIR / "snmpwalk.log",
@@ -2119,15 +2126,46 @@ def _move_configured_device(options_file: Path, request_data: Any) -> dict[str, 
     return _configured_devices_snapshot(options_file)
 
 
-def _apply_saved_device_order_to_dashboard() -> dict[str, Any]:
-    """Apply the persisted mixed-device order directly to the current dashboard source."""
+def _ensure_full_dashboard_source() -> tuple[Path | None, bool]:
+    """Ensure a non-destructive full-card source exists for dashboard projection."""
+    if DEFAULT_GENERATED_CARD_FULL.is_file():
+        return DEFAULT_GENERATED_CARD_FULL, False
     if not DEFAULT_GENERATED_CARD.is_file():
+        return None, False
+    try:
+        DEFAULT_GENERATED_CARD_FULL.parent.mkdir(parents=True, exist_ok=True)
+        temporary = DEFAULT_GENERATED_CARD_FULL.with_name(
+            f".{DEFAULT_GENERATED_CARD_FULL.name}.{os.getpid()}.tmp"
+        )
+        shutil.copyfile(DEFAULT_GENERATED_CARD, temporary)
+        os.chmod(temporary, 0o600)
+        temporary.replace(DEFAULT_GENERATED_CARD_FULL)
+        os.chmod(DEFAULT_GENERATED_CARD_FULL, 0o600)
+    except OSError as exc:
+        try:
+            temporary.unlink(missing_ok=True)
+        except (OSError, UnboundLocalError):
+            pass
+        raise RuntimeError(f"Could not preserve the full Native dashboard source: {exc}") from exc
+    return DEFAULT_GENERATED_CARD_FULL, True
+
+
+def _apply_saved_device_order_to_dashboard() -> dict[str, Any]:
+    """Project current order/state from the preserved full-card dashboard source."""
+    source, seeded = _ensure_full_dashboard_source()
+    if source is None:
         return {"updated": False, "reason": "generated_dashboard_missing"}
+    try:
+        options = _self_addon_options()
+    except RuntimeError:
+        options = _load_options(DEFAULT_OPTIONS_FILE)
     result = dashboard_device_order.apply_dashboard_order(
         DEFAULT_GENERATED_CARD,
         DEFAULT_DEVICE_CONTROL,
+        source_path=source,
+        snmp_states=dashboard_device_order.snmp_states_from_options(options),
     )
-    return {"updated": True, **result}
+    return {"updated": True, "full_source_seeded": seeded, **result}
 
 
 def _home_assistant_service(domain: str, service: str, payload: dict[str, Any]) -> None:
@@ -6197,7 +6235,7 @@ class SupportHandler(BaseHTTPRequestHandler):
                 result["polling_refresh_started"] = False
                 if key.startswith("snmp:"):
                     try:
-                        _start_device_state_application(self.app.discovery_script)
+                        _start_device_state_application()
                         result["polling_refresh_started"] = True
                     except OperationConflict:
                         result["polling_refresh_pending"] = True

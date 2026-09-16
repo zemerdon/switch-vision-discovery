@@ -1,3 +1,12 @@
+## 2.4.27 — Reversible live dashboard projection
+
+- Keep a private full-card Native dashboard source in app-owned `/data` and project the visible dashboard from it, so disabling a device hides its card without destroying the exact card needed for re-enable.
+- Restore disabled SNMP and UniFi cards immediately when re-enabled, without requiring a new Discovery run or manual Dashboard Card regeneration.
+- Keep reorder non-destructive: device order changes affect only the visible projection while the private full-card source remains intact.
+- During stored-state SNMP apply, retain exact cards for currently disabled saved SNMP devices while dropping stale enabled SNMP and stale UniFi cards that disappear from fresh authoritative generation.
+- Route SNMP enable/disable polling updates through the stored-state `discovery_job.sh` apply path instead of the physical-contract entrypoint, so no new SNMP walk is performed.
+- Add regressions covering disable, re-enable, exact-card restoration, non-destructive reorder, stale-card pruning, empty dashboards, and physical-contract source parity.
+
 ## 2.4.26 — Immediate dashboard disable projection
 
 - Apply Enabled/Disabled state synchronously to the current Native dashboard source so a disabled device card disappears immediately instead of depending on a background Discovery regeneration.

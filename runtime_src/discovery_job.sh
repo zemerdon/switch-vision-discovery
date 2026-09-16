@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.26"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.27"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -18,6 +18,7 @@ PARSE_ALL_WALKS="false"
 LAST_RUN_SUMMARY_PATH="/share/switch_vision/last-discovery-run.txt"
 GENERATED_YAML_PATH="/share/switch_vision/generated-snmp2mqtt.yaml"
 GENERATED_CARD_PATH="/share/switch_vision/generated-dashboard-card.yaml"
+GENERATED_CARD_FULL_PATH="${SWITCH_VISION_GENERATED_CARD_FULL_PATH:-}"
 RUN_LIVE_SNMPWALK="false"
 LIVE_SNMPWALK_MODE="targeted"
 LIVE_SWITCH_IP=""
@@ -58,6 +59,7 @@ cleanup_discovery_scratch() {
     "/tmp/switch_vision_dashboard_mode_walks_$$.txt" \
     "/tmp/switch_vision_generated_port_modes_$$.tsv" \
     "/tmp/switch_vision_generated_card_rows_$$.tsv" \
+    "/tmp/switch_vision_generated_dashboard_raw_$$.yaml" \
     "/tmp/switch_vision_walk_files_$$.txt" \
     "$LIVE_WALK_SUMMARY" \
     "$LIVE_WALK_SUMMARY_ALL" \
@@ -327,6 +329,13 @@ REPORT_PATH=$(printf '%s' "$REPORT_PATH" | sed 's#//*#/#g')
 TARGETS_CSV=$(printf '%s' "$TARGETS_CSV" | sed 's#//*#/#g')
 GENERATED_YAML_PATH=$(printf '%s' "$GENERATED_YAML_PATH" | sed 's#//*#/#g')
 GENERATED_CARD_PATH=$(printf '%s' "$GENERATED_CARD_PATH" | sed 's#//*#/#g')
+if [ -z "${GENERATED_CARD_FULL_PATH:-}" ]; then
+  case "$GENERATED_CARD_PATH" in
+    *.yaml) GENERATED_CARD_FULL_PATH="${GENERATED_CARD_PATH%.yaml}.full.yaml" ;;
+    *) GENERATED_CARD_FULL_PATH="${GENERATED_CARD_PATH}.full" ;;
+  esac
+fi
+GENERATED_CARD_FULL_PATH=$(printf '%s' "$GENERATED_CARD_FULL_PATH" | sed 's#//*#/#g')
 LIVE_LOG_PATH=$(printf '%s' "$LIVE_LOG_PATH" | sed 's#//*#/#g')
 LAST_RUN_SUMMARY_PATH=$(printf '%s' "$LAST_RUN_SUMMARY_PATH" | sed 's#//*#/#g')
 
@@ -347,7 +356,7 @@ if [ -z "${LIVE_OUTPUT_PATH:-}" ]; then
 fi
 LIVE_OUTPUT_PATH=$(printf '%s' "$LIVE_OUTPUT_PATH" | sed 's#//*#/#g')
 REPORT_DIR=$(dirname "$REPORT_PATH")
-mkdir -p "$REPORT_DIR" "${SWITCH_VISION_SHARE_DIR:-/share/switch_vision}" "$CAPABILITIES_DIR" "$SNMPWALKS_DIR" "$(dirname "$GENERATED_YAML_PATH")" "$(dirname "$GENERATED_CARD_PATH")" "$(dirname "$LIVE_LOG_PATH")"
+mkdir -p "$REPORT_DIR" "${SWITCH_VISION_SHARE_DIR:-/share/switch_vision}" "$CAPABILITIES_DIR" "$SNMPWALKS_DIR" "$(dirname "$GENERATED_YAML_PATH")" "$(dirname "$GENERATED_CARD_PATH")" "$(dirname "$GENERATED_CARD_FULL_PATH")" "$(dirname "$LIVE_LOG_PATH")"
 if ! json_has_configured_switch_rows; then
   mkdir -p "$LIVE_OUTPUT_DIR" "$(dirname "$LIVE_OUTPUT_PATH")"
 fi
@@ -4173,16 +4182,23 @@ write_generated_dashboard_card() {
       python3 "$unifi_helper" --snapshot "$unifi_snapshot" --registry "$unifi_registry" --exclude-id-file "$unifi_bound_ids" --indent 6 --summary 2>/dev/null || \
         echo "      # UniFi snapshot was present but could not be converted into dashboard cards."
     fi
-  } > "$GENERATED_CARD_PATH"
+  } > "/tmp/switch_vision_generated_dashboard_raw_$$.yaml"
 
   device_control_path="${SWITCH_VISION_DEVICE_CONTROL_PATH:-${SWITCH_VISION_SHARE_DIR:-/share/switch_vision}/device-control.json}"
   device_order_helper="${SWITCH_VISION_DASHBOARD_DEVICE_ORDER_HELPER:-/dashboard_device_order.py}"
   [ -f "$device_order_helper" ] || device_order_helper="$(dirname "$0")/dashboard_device_order.py"
   if [ -f "$device_order_helper" ]; then
-    python3 "$device_order_helper" --dashboard "$GENERATED_CARD_PATH" --control "$device_control_path"
+    python3 "$device_order_helper" \
+      --fresh "/tmp/switch_vision_generated_dashboard_raw_$$.yaml" \
+      --source "$GENERATED_CARD_FULL_PATH" \
+      --dashboard "$GENERATED_CARD_PATH" \
+      --control "$device_control_path" \
+      --options "$CONFIG_FILE"
+  else
+    cp "/tmp/switch_vision_generated_dashboard_raw_$$.yaml" "$GENERATED_CARD_PATH"
   fi
 
-  rm -f "$port_mode_metadata" "$unifi_bound_ids"
+  rm -f "$port_mode_metadata" "$unifi_bound_ids" "/tmp/switch_vision_generated_dashboard_raw_$$.yaml"
 }
 
 quarantine_invalid_generated_live_yaml() {

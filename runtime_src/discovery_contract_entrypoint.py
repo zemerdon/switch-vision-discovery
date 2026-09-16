@@ -25,6 +25,11 @@ import time
 from datetime import datetime
 from typing import Any
 
+RUNTIME_DIR = Path(__file__).resolve().parent
+if str(RUNTIME_DIR) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_DIR))
+import dashboard_device_order
+
 LEGACY = Path(os.environ.get("SWITCH_VISION_LEGACY_DISCOVERY_SCRIPT", "/discovery_job.sh"))
 PREPARE = Path(os.environ.get("SWITCH_VISION_PHYSICAL_PREPARE", "/physical_contract_prepare.sh"))
 REGISTRY = Path(os.environ.get("SWITCH_VISION_DEVICE_REGISTRY", "/opt/switch-vision/devices/supported_devices.json"))
@@ -34,6 +39,9 @@ DEFAULT_WALK_ROOT = Path("/share/switch_vision/snmpwalks")
 DEFAULT_SHARE_DIR = Path(os.environ.get("SWITCH_VISION_SHARE_DIR", "/share/switch_vision"))
 UNIFI_SNAPSHOT = Path(os.environ.get("SWITCH_VISION_UNIFI_SNAPSHOT", str(DEFAULT_SHARE_DIR / "unifi/devices.json")))
 UNIFI_HELPER = Path(os.environ.get("SWITCH_VISION_UNIFI_DASHBOARD_HELPER", str(Path(__file__).with_name("unifi_dashboard_cards.py"))))
+DEVICE_CONTROL_PATH = Path(
+    os.environ.get("SWITCH_VISION_DEVICE_CONTROL_PATH", str(DEFAULT_SHARE_DIR / "device-control.json"))
+)
 CURRENT_RUN_SEPARATOR = "\x1c"
 ENTRYPOINT_STARTED_EPOCH = int(time.time())
 ENTRYPOINT_STARTED_ISO = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -771,6 +779,39 @@ def _ensure_dashboard_card_base(path: Path) -> None:
     )
 
 
+def _project_generated_dashboard(
+    generated_card: Path,
+    options: dict[str, Any],
+    *,
+    fresh_path: Path | None = None,
+) -> dict[str, Any]:
+    """Maintain private full-card source then project current visible dashboard."""
+    full_path = dashboard_device_order.full_dashboard_path(generated_card)
+    states = dashboard_device_order.snmp_states_from_options(options)
+    refresh: dict[str, Any] = {}
+    if fresh_path is not None:
+        refresh = dashboard_device_order.refresh_full_dashboard_source(
+            fresh_path,
+            full_path,
+            snmp_states=states,
+        )
+    elif not full_path.is_file():
+        if not generated_card.is_file():
+            return {"updated": False, "reason": "generated_dashboard_missing"}
+        dashboard_device_order.refresh_full_dashboard_source(
+            generated_card,
+            full_path,
+            snmp_states=states,
+        )
+    result = dashboard_device_order.apply_dashboard_order(
+        generated_card,
+        DEVICE_CONTROL_PATH,
+        source_path=full_path,
+        snmp_states=states,
+    )
+    return {"updated": True, "full_path": str(full_path), **refresh, **result}
+
+
 def _append_unifi_dashboard_cards(path: Path) -> tuple[int, int]:
     """Append source-independent UniFi cards without touching SNMP telemetry.
 
@@ -1134,10 +1175,12 @@ def main() -> int:
             # walks as permission to erase valid UniFi cards. SNMP2MQTT YAML is
             # deliberately untouched on this branch because there are no trusted
             # SNMP bindings to publish.
-            generated_card.unlink(missing_ok=True)
-            unifi_cards, unifi_issues = _append_unifi_dashboard_cards(generated_card)
-            fallback_cards, card_notices = _append_display_fallbacks(generated_card, accepted_evidence, options)
-            _ensure_dashboard_card_base(generated_card)
+            fresh_card = work / "fresh_dashboard.yaml"
+            fresh_card.unlink(missing_ok=True)
+            unifi_cards, unifi_issues = _append_unifi_dashboard_cards(fresh_card)
+            fallback_cards, card_notices = _append_display_fallbacks(fresh_card, accepted_evidence, options)
+            _ensure_dashboard_card_base(fresh_card)
+            _project_generated_dashboard(generated_card, options, fresh_path=fresh_card)
 
             if not report.is_file():
                 report.parent.mkdir(parents=True, exist_ok=True)
@@ -1220,7 +1263,9 @@ def main() -> int:
                     f"Generated YAML post-contract validation failed: {detail}"
                 )
         fallback_notices = _append_report_fallback_notices(report, accepted_evidence)
-        fallback_cards, card_notices = _append_display_fallbacks(generated_card, accepted_evidence, options)
+        full_card = dashboard_device_order.full_dashboard_path(generated_card)
+        fallback_cards, card_notices = _append_display_fallbacks(full_card, accepted_evidence, options)
+        _project_generated_dashboard(generated_card, options)
         partial_result = live_collection_partial or fallback_notices > 0 or (
             bool(current_run) and len(ordered) != len(current_run)
         )

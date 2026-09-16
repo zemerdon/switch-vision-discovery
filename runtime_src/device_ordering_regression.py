@@ -42,6 +42,7 @@ original_backup = web.create_pre_mutation_backup
 original_snapshot = web.DEFAULT_UNIFI_SNAPSHOT
 original_control = web.DEFAULT_DEVICE_CONTROL
 original_card = web.DEFAULT_GENERATED_CARD
+original_card_full = web.DEFAULT_GENERATED_CARD_FULL
 
 
 def read_options() -> dict:
@@ -183,15 +184,93 @@ try:
             encoding="utf-8",
         )
         web.DEFAULT_GENERATED_CARD = dashboard
+        web.DEFAULT_GENERATED_CARD_FULL = root / "dashboard-full.yaml"
         result = web._apply_saved_device_order_to_dashboard()
         assert result["updated"] is True, result
+        assert result["full_source_seeded"] is True, result
         assert result["disabled_cards_removed"] == 2, result
         text = dashboard.read_text(encoding="utf-8")
+        full_text = web.DEFAULT_GENERATED_CARD_FULL.read_text(encoding="utf-8")
         assert "unifi_device_id: u-flex" not in text
         assert "discovery_selected_switch: SW-C" not in text
+        assert "unifi_device_id: u-flex" in full_text
+        assert "discovery_selected_switch: SW-C" in full_text
         assert text.index("discovery_selected_switch: SW-A") < text.index(
             "discovery_selected_switch: SW-B"
         ), text
+
+        # Re-enable both sources without regenerating cards. Projection must
+        # restore the exact retained cards from the private full source.
+        web._set_configured_device_state(
+            Path("/unused/options.json"),
+            {"device_key": "snmp:SW-C", "enabled": "enabled"},
+        )
+        web._set_configured_device_state(
+            Path("/unused/options.json"),
+            {"device_key": "unifi:u-flex", "enabled": "enabled"},
+        )
+        restored = web._apply_saved_device_order_to_dashboard()
+        assert restored["disabled_cards_removed"] == 0, restored
+        restored_text = dashboard.read_text(encoding="utf-8")
+        assert "unifi_device_id: u-flex" in restored_text
+        assert "discovery_selected_switch: SW-C" in restored_text
+        assert restored_text.index("discovery_selected_switch: SW-A") < restored_text.index(
+            "discovery_selected_switch: SW-C"
+        ) < restored_text.index("unifi_device_id: u-flex") < restored_text.index(
+            "discovery_selected_switch: SW-B"
+        ), restored_text
+        assert web.DEFAULT_GENERATED_CARD_FULL.read_text(encoding="utf-8") == full_text
+
+        # Fresh generation may omit a disabled SNMP row. Retain its old exact
+        # card, but do not retain stale enabled SNMP or stale UniFi cards that
+        # disappeared from the fresh authoritative source.
+        merge_full = root / "merge-full.yaml"
+        merge_full.write_text(
+            """views:
+  - title: Switch Vision
+    cards:
+      - type: markdown
+        content: header
+      - type: custom:switch-vision-3650
+        title: Keep disabled
+        discovery_selected_switch: SW-DISABLED
+      - type: custom:switch-vision-3650
+        title: Drop enabled stale
+        discovery_selected_switch: SW-STALE
+      - type: custom:switch-vision-3650
+        title: Drop stale UniFi
+        unifi_device_id: stale-u
+""",
+            encoding="utf-8",
+        )
+        fresh = root / "fresh.yaml"
+        fresh.write_text(
+            """views:
+  - title: Switch Vision
+    cards:
+      - type: markdown
+        content: header
+      - type: custom:switch-vision-3650
+        title: Fresh
+        discovery_selected_switch: SW-FRESH
+""",
+            encoding="utf-8",
+        )
+        merge = dashboard_device_order.refresh_full_dashboard_source(
+            fresh,
+            merge_full,
+            snmp_states={
+                "snmp:SW-DISABLED": False,
+                "snmp:SW-STALE": True,
+                "snmp:SW-FRESH": True,
+            },
+        )
+        merged_text = merge_full.read_text(encoding="utf-8")
+        assert merge["retained_disabled_snmp_keys"] == 1, merge
+        assert "SW-DISABLED" in merged_text
+        assert "SW-FRESH" in merged_text
+        assert "SW-STALE" not in merged_text
+        assert "stale-u" not in merged_text
 
         serialized = json.dumps(web._configured_devices_snapshot(Path("/unused/options.json")))
         assert "private-swa" not in serialized
@@ -204,6 +283,7 @@ finally:
     web.DEFAULT_UNIFI_SNAPSHOT = original_snapshot
     web.DEFAULT_DEVICE_CONTROL = original_control
     web.DEFAULT_GENERATED_CARD = original_card
+    web.DEFAULT_GENERATED_CARD_FULL = original_card_full
 
 source = Path(web.__file__).read_text(encoding="utf-8")
 for literal in (
@@ -232,7 +312,8 @@ assert "Toggle whether this device is actively polled" in source
 state_handler = source.split('if path == "/api/configured-devices/state":', 1)[1].split('if path == "/api/configured-devices/order":', 1)[0]
 assert "_apply_saved_device_order_to_dashboard()" in state_handler
 assert "_start_dashboard_card_regeneration" not in state_handler
-assert "_start_device_state_application" in state_handler
+assert "_start_device_state_application()" in state_handler
+assert "_start_device_state_application(self.app.discovery_script)" not in state_handler
 
 order_handler = source.split('if path == "/api/configured-devices/order":', 1)[1].split('if path == "/api/configuration/import":', 1)[0]
 assert "_apply_saved_device_order_to_dashboard()" in order_handler
@@ -241,6 +322,16 @@ assert "_start_dashboard_card_regeneration" not in order_handler
 job = Path(web.__file__).with_name("discovery_job.sh").read_text(encoding="utf-8")
 assert "dashboard_device_order.py" in job
 assert "device-control.json" in job
+assert '--fresh "/tmp/switch_vision_generated_dashboard_raw_$$.yaml"' in job
+assert '--source "$GENERATED_CARD_FULL_PATH"' in job
+assert '--options "$CONFIG_FILE"' in job
+run_source = Path(web.__file__).with_name("run.sh").read_text(encoding="utf-8")
+assert 'SWITCH_VISION_GENERATED_CARD_FULL_PATH' in run_source
+assert '/data/generated-dashboard-card-full.yaml' in run_source
+entrypoint = Path(web.__file__).with_name("discovery_contract_entrypoint.py").read_text(encoding="utf-8")
+assert "refresh_full_dashboard_source" in entrypoint
+assert "_project_generated_dashboard(generated_card, options, fresh_path=fresh_card)" in entrypoint
+assert "_append_display_fallbacks(full_card, accepted_evidence, options)" in entrypoint
 walk_fn = job.split("multi_switch_walk_rows() {", 1)[1].split("\n}\n", 1)[0]
 assert '(.switches // .multi_switch_walks // [])[]?' in walk_fn, walk_fn[:1000]
 assert "sort_by" not in walk_fn and "sort " not in walk_fn, walk_fn[:1000]

@@ -1,8 +1,9 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.26"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.27"
 export SWITCH_VISION_DISCOVERY_VERSION
+export SWITCH_VISION_GENERATED_CARD_FULL_PATH="${SWITCH_VISION_GENERATED_CARD_FULL_PATH:-/data/generated-dashboard-card-full.yaml}"
 
 # Persistent app options are owned by Home Assistant Supervisor. Never edit
 # /data/options.json directly; startup migration uses the authoritative API.
