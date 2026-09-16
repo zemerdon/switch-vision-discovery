@@ -1985,8 +1985,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.23"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.23"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.24"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.24"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -2274,6 +2274,9 @@ module._supervisor_json = fake_supervisor
 fallback = tmp / "hub-toggle-options.json"
 fallback.write_text("{}", encoding="utf-8")
 
+module.DEFAULT_DEVICE_CONTROL = tmp / "device-control.json"
+module.DEFAULT_UNIFI_SNAPSHOT = tmp / "unifi-devices.json"
+
 snapshot = module._configured_devices_snapshot(fallback)
 assert snapshot["writable"] is True, snapshot
 assert snapshot["count"] == 1, snapshot
@@ -2282,8 +2285,7 @@ assert snapshot["devices"][0]["display_name"] == "Juniper EX3300 48P", snapshot
 assert "snmp_community" not in snapshot["devices"][0], snapshot
 
 updated = module._set_configured_device_state(fallback, {
-    "index": 0,
-    "switch_name": "SW10",
+    "device_key": "snmp:SW10",
     "enabled": "disabled",
 })
 assert posts, "Supervisor options endpoint was not called"
@@ -2291,9 +2293,10 @@ assert stored["switches"][0]["enabled"] == "disabled", stored
 assert stored["switches"][0]["snmp_community"] == "do-not-expose", stored
 assert stored["support_mask_management_ips"] == "true", stored
 assert updated["devices"][0]["enabled"] == "disabled", updated
+assert updated["device_states"]["snmp:SW10"] == "disabled", updated
 
 try:
-    module._set_configured_device_state(fallback, {"index": 0, "switch_name": "WRONG", "enabled": "enabled"})
+    module._set_configured_device_state(fallback, {"device_key": "snmp:WRONG", "enabled": "enabled"})
 except ValueError:
     pass
 else:

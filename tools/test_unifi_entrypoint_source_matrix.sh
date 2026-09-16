@@ -108,11 +108,18 @@ write_options "$two/options.json" "$two" "$two/dell.txt" true false
 run_entrypoint "$two" "$two/options.json" > "$two/stdout.txt" 2> "$two/stderr.txt"
 python3 - "$two/card.yaml" <<'PY'
 from pathlib import Path
+import re
 import sys
 text=Path(sys.argv[1]).read_text(encoding='utf-8')
-snmp=text.split('# UniFi API devices',1)[0].count('- type: custom:switch-vision-3650')
+starts=list(re.finditer(r'(?m)^\s*-\s*type:\s*custom:switch-vision-3650\s*$', text))
+snmp=0
+for index, match in enumerate(starts):
+    end=starts[index+1].start() if index+1 < len(starts) else len(text)
+    block=text[match.start():end]
+    if not re.search(r'(?m)^\s*data_source:\s*unifi_api\s*$', block):
+        snmp += 1
 if snmp != 1:
-    raise SystemExit(f'FAIL: mixed run expected one SNMP card before UniFi section, found {snmp}')
+    raise SystemExit(f'FAIL: mixed run expected one SNMP card, found {snmp}')
 PY
 grep -Fq 'title: UCG Good' "$two/card.yaml" || { echo 'FAIL: mixed run lost UniFi card' >&2; cat "$two/card.yaml" >&2; exit 1; }
 echo 'entrypoint source matrix: mixed SNMP + UniFi PASS'

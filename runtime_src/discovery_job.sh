@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.23"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.24"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -4174,6 +4174,14 @@ write_generated_dashboard_card() {
         echo "      # UniFi snapshot was present but could not be converted into dashboard cards."
     fi
   } > "$GENERATED_CARD_PATH"
+
+  device_control_path="${SWITCH_VISION_DEVICE_CONTROL_PATH:-${SWITCH_VISION_SHARE_DIR:-/share/switch_vision}/device-control.json}"
+  device_order_helper="${SWITCH_VISION_DASHBOARD_DEVICE_ORDER_HELPER:-/dashboard_device_order.py}"
+  [ -f "$device_order_helper" ] || device_order_helper="$(dirname "$0")/dashboard_device_order.py"
+  if [ -f "$device_order_helper" ]; then
+    python3 "$device_order_helper" --dashboard "$GENERATED_CARD_PATH" --control "$device_control_path"
+  fi
+
   rm -f "$port_mode_metadata" "$unifi_bound_ids"
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression for persistent deterministic configured-device ordering."""
+"""Regression for unified SNMP/UniFi device state, order and dashboard projection."""
 from __future__ import annotations
 
 import copy
@@ -7,6 +7,8 @@ import json
 import tempfile
 from pathlib import Path
 
+import dashboard_device_order
+import discovery_backups
 import support_web as web
 
 
@@ -22,6 +24,8 @@ def row(name: str, host: str, prefix: str) -> dict:
     }
 
 
+assert "device_order_update" in discovery_backups._ALLOWED_REASONS
+
 state = {
     "enable_switch_list": True,
     "switches": [
@@ -35,9 +39,13 @@ backup_reasons: list[str] = []
 original_options = web._self_addon_options
 original_supervisor = web._supervisor_json
 original_backup = web.create_pre_mutation_backup
+original_snapshot = web.DEFAULT_UNIFI_SNAPSHOT
+original_control = web.DEFAULT_DEVICE_CONTROL
+
 
 def read_options() -> dict:
     return copy.deepcopy(state)
+
 
 def write_options(path: str, *, method: str = "GET", timeout: float = 0, payload=None):
     assert path == "/addons/self/options", path
@@ -47,108 +55,178 @@ def write_options(path: str, *, method: str = "GET", timeout: float = 0, payload
     state.update(copy.deepcopy(payload["options"]))
     return {}
 
+
 web._self_addon_options = read_options
 web._supervisor_json = write_options
 web.create_pre_mutation_backup = lambda options, *, reason: backup_reasons.append(reason)
 
 try:
-    before = web._configured_devices_snapshot(Path("/unused/options.json"))
-    assert [item["switch_name"] for item in before["devices"]] == ["SW-A", "SW-B", "SW-C"], before
-
-    moved = web._move_configured_device(Path("/unused/options.json"), {
-        # Deliberately stale indexes prove stable names are authoritative.
-        "index": 0,
-        "switch_name": "SW-C",
-        "destination_index": 1,
-        "destination_switch_name": "SW-B",
-    })
-    assert [item["switch_name"] for item in moved["devices"]] == ["SW-A", "SW-C", "SW-B"], moved
-    assert [str(item.get("switch_name") or "") for item in state["switches"]] == ["SW-A", "", "SW-C", "SW-B"], state
-    assert backup_reasons == ["device_order_update"], backup_reasons
-
-    # A normal enable/disable save must retain the persisted row order.
-    after_state = web._set_configured_device_state(Path("/unused/options.json"), {
-        "index": 2,
-        "switch_name": "SW-C",
-        "enabled": "disabled",
-    })
-    assert [item["switch_name"] for item in after_state["devices"]] == ["SW-A", "SW-C", "SW-B"], after_state
-
-    effective = web._effective_discovery_options(read_options())
-    assert [str(item.get("switch_name") or "") for item in effective["switches"]] == ["SW-A", "", "SW-C", "SW-B"], effective
-
-    with tempfile.TemporaryDirectory(prefix="sv-ordering-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="sv-unified-device-order-") as tmp:
         root = Path(tmp)
-        authoritative_path = web._write_authoritative_discovery_options_snapshot(
-            root / "discovery.json",
-            options=read_options(),
+        web.DEFAULT_DEVICE_CONTROL = root / "device-control.json"
+        web.DEFAULT_UNIFI_SNAPSHOT = root / "unifi-devices.json"
+        web.DEFAULT_UNIFI_SNAPSHOT.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "devices": [
+                        {
+                            "id": "u-flex",
+                            "name": "USW Flex Mini",
+                            "model": "USW Flex Mini",
+                            "state": "ONLINE",
+                            "ports": [],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
         )
-        yaml_path = web._write_snmp2mqtt_regeneration_options_snapshot(root / "yaml.json")
-        card_path = web._write_dashboard_card_regeneration_options_snapshot(root / "card.json")
-        for path in (authoritative_path, yaml_path, card_path):
-            saved = json.loads(path.read_text(encoding="utf-8"))
-            assert [str(item.get("switch_name") or "") for item in saved["switches"]] == ["SW-A", "", "SW-C", "SW-B"], (path, saved)
 
-    try:
-        web._move_configured_device(Path("/unused/options.json"), {
-            "index": 2,
-            "switch_name": "STALE",
-            "destination_index": 3,
-            "destination_switch_name": "SW-B",
-        })
-    except ValueError as exc:
-        assert "changed" in str(exc).lower(), exc
-    else:
-        raise AssertionError("stale source identity must fail closed")
+        before = web._configured_devices_snapshot(Path("/unused/options.json"))
+        assert [item["switch_name"] for item in before["devices"]] == ["SW-A", "SW-B", "SW-C"], before
+        assert before["device_order"] == [
+            "snmp:SW-A",
+            "snmp:SW-B",
+            "snmp:SW-C",
+            "unifi:u-flex",
+        ], before
 
+        # A mixed move changes only the unified order. It must never force a
+        # UniFi row into the authoritative SNMP switch list.
+        mixed = web._move_configured_device(
+            Path("/unused/options.json"),
+            {"device_key": "unifi:u-flex", "destination_device_key": "snmp:SW-C"},
+        )
+        assert mixed["device_order"] == [
+            "snmp:SW-A",
+            "snmp:SW-B",
+            "unifi:u-flex",
+            "snmp:SW-C",
+        ], mixed
+        assert [str(item.get("switch_name") or "") for item in state["switches"]] == [
+            "SW-A", "", "SW-B", "SW-C"
+        ], state
+        assert backup_reasons == [], backup_reasons
 
-    serialized = json.dumps(web._configured_devices_snapshot(Path("/unused/options.json")))
-    assert "private-swa" not in serialized
-    assert "private-swb" not in serialized
-    assert "private-swc" not in serialized
+        # SNMP-to-SNMP reordering also preserves Discovery's own target order.
+        moved = web._move_configured_device(
+            Path("/unused/options.json"),
+            {"device_key": "snmp:SW-C", "destination_device_key": "snmp:SW-B"},
+        )
+        assert [str(item.get("switch_name") or "") for item in state["switches"]] == [
+            "SW-A", "", "SW-C", "SW-B"
+        ], state
+        assert backup_reasons == ["device_order_update"], backup_reasons
+        assert moved["device_order"] == [
+            "snmp:SW-A", "snmp:SW-C", "unifi:u-flex", "snmp:SW-B"
+        ], moved
+
+        # SNMP state remains authoritative in Supervisor and is mirrored into
+        # the shared control state for one consistent Hub/dashboard contract.
+        after_snmp_state = web._set_configured_device_state(
+            Path("/unused/options.json"),
+            {"device_key": "snmp:SW-C", "enabled": "disabled"},
+        )
+        assert next(
+            item for item in after_snmp_state["devices"] if item["switch_name"] == "SW-C"
+        )["enabled"] == "disabled"
+        assert after_snmp_state["device_states"]["snmp:SW-C"] == "disabled"
+        assert backup_reasons == ["device_order_update", "device_state_update"]
+
+        # UniFi state is local operational state. It must not mutate the SNMP
+        # switch list and is consumed by UniFi2MQTT to gate per-device polling.
+        before_rows = copy.deepcopy(state["switches"])
+        after_unifi_state = web._set_configured_device_state(
+            Path("/unused/options.json"),
+            {"device_key": "unifi:u-flex", "enabled": "disabled"},
+        )
+        assert state["switches"] == before_rows
+        assert after_unifi_state["device_states"]["unifi:u-flex"] == "disabled"
+
+        # Stored-state apply must regenerate both real live outputs without a
+        # new SNMP walk so disabling an SNMP device changes polling immediately.
+        apply_snapshot = web._write_device_state_application_options_snapshot(
+            root / "apply.json"
+        )
+        apply_options = json.loads(apply_snapshot.read_text(encoding="utf-8"))
+        assert apply_options["run_snmp_walks"] is False
+        assert apply_options["run_live_snmpwalk"] is False
+        assert apply_options["parse_all_walks"] is True
+        assert apply_options["generate_snmp2mqtt"] is True
+        assert apply_options["generated_yaml_path"] == str(web.DEFAULT_GENERATED_SNMP2MQTT)
+        assert apply_options["generated_card_path"] == str(web.DEFAULT_GENERATED_CARD)
+
+        # The dashboard projection uses the same mixed order and removes a
+        # disabled standalone UniFi card while preserving the header/card text.
+        dashboard = root / "dashboard.yaml"
+        dashboard.write_text(
+            """views:
+  - title: Switch Vision
+    cards:
+      - type: markdown
+        content: header
+      - type: custom:switch-vision-3650
+        title: A
+        discovery_selected_switch: SW-A
+      - type: custom:switch-vision-3650
+        title: Flex
+        unifi_device_id: u-flex
+      - type: custom:switch-vision-3650
+        title: B
+        discovery_selected_switch: SW-B
+      - type: custom:switch-vision-3650
+        title: C
+        discovery_selected_switch: SW-C
+""",
+            encoding="utf-8",
+        )
+        result = dashboard_device_order.apply_dashboard_order(
+            dashboard, web.DEFAULT_DEVICE_CONTROL
+        )
+        assert result["disabled_cards_removed"] == 1, result
+        text = dashboard.read_text(encoding="utf-8")
+        assert "unifi_device_id: u-flex" not in text
+        assert text.index("discovery_selected_switch: SW-A") < text.index(
+            "discovery_selected_switch: SW-C"
+        ) < text.index("discovery_selected_switch: SW-B"), text
+
+        serialized = json.dumps(web._configured_devices_snapshot(Path("/unused/options.json")))
+        assert "private-swa" not in serialized
+        assert "private-swb" not in serialized
+        assert "private-swc" not in serialized
 finally:
     web._self_addon_options = original_options
     web._supervisor_json = original_supervisor
     web.create_pre_mutation_backup = original_backup
+    web.DEFAULT_UNIFI_SNAPSHOT = original_snapshot
+    web.DEFAULT_DEVICE_CONTROL = original_control
 
 source = Path(web.__file__).read_text(encoding="utf-8")
 for literal in (
     "/api/configured-devices/order",
-    "Move up",
-    "Move down",
-    "_move_configured_device",
     "device_order_update",
+    "unifi:${item.unifi_device_id}",
+    "device-state-toggle",
+    "device-order-button",
+    "_start_device_state_application",
+    "apply_device_state",
+    "dashboard_refresh_started",
+    "polling_refresh_started",
 ):
     assert literal in source, literal
 
-for forbidden in (
-    "device-drag-handle",
-    "draggedConfiguredDeviceName",
-    "reorderConfiguredByDrag",
-    "saveConfiguredDeviceOrder",
-    "dragstart",
-    "dragover",
-):
-    assert forbidden not in source, forbidden
-assert "device-order-controls" in source
-assert "summary.append(orderControls,main,actions)" in source
-render_start = source.index("function renderUnifiedDevices(){")
-detected_start = source.index("for(const [index,item] of detected.entries())", render_start)
-saved_block = source[render_start:detected_start]
-assert "const entry=document.createElement('div')" in saved_block
-assert "const summary=document.createElement('div');summary.className='unified-device-summary'" in saved_block
-assert "summary.addEventListener('click'" in saved_block
-assert "summary.addEventListener('keydown'" in saved_block
-assert "event.target===summary" in saved_block
-assert "actions.append(toggle,chevron)" in saved_block
-assert saved_block.count("event.preventDefault();event.stopPropagation()") >= 3
-assert "destination_index" not in saved_block
-assert "const failure=`Could not change device order:" in source
-assert "await refreshConfiguredDevices(false);$('configuredDevicesStatus').textContent=failure" in source
+# All interactive device controls stop row-expansion propagation.
+assert "event.preventDefault();event.stopPropagation()" in source
+assert "item?.data_source==='UniFi API'&&item?.unifi_device_id" in source
+assert "controllable:true" in source
+assert "Toggle whether this device is actively polled" in source
 
 job = Path(web.__file__).with_name("discovery_job.sh").read_text(encoding="utf-8")
+assert "dashboard_device_order.py" in job
+assert "device-control.json" in job
 walk_fn = job.split("multi_switch_walk_rows() {", 1)[1].split("\n}\n", 1)[0]
 assert '(.switches // .multi_switch_walks // [])[]?' in walk_fn, walk_fn[:1000]
 assert "sort_by" not in walk_fn and "sort " not in walk_fn, walk_fn[:1000]
 
-print("Switch Vision Discovery persistent device ordering regression: PASS")
+print("Switch Vision Discovery unified device control/order regression: PASS")

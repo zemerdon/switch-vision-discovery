@@ -84,7 +84,7 @@ for marker in (
     ".hub-setting-toggle .hub-option-label{font-weight:400",
     ".hub-setting-field>input,.hub-setting-field>select{width:100%;height:var(--hub-control-height)",
     "#settingsCard button{min-height:var(--hub-control-height)",
-    ".hub-order-list{width:100%;max-width:420px",
+    ".hub-order-list{width:100%;max-width:none",
     "function fontChoices()",
     "Array.from({length:11}",
 ):
@@ -102,12 +102,14 @@ toggle_source = SOURCE[toggle_start:toggle_end]
 assert "hub-option-label" in toggle_source
 assert "createElement('b')" not in toggle_source
 
-# The shortcut sequence stays a single vertical sequence, but it must share the
-# desktop row with the toggle group instead of stretching an empty full-width
-# box underneath it.
+# Native-header settings use a compact three-part desktop layout: display toggles,
+# enabled shortcuts, and persistent shortcut order. It collapses responsively.
 assert "headerLayout.className='hub-header-layout'" in SOURCE
-assert "headerLayout.append(headerTog,box)" in SOURCE
-assert "grid-template-columns:minmax(0,1fr) minmax(320px,420px)" in SOURCE
+assert "headerLayout.append(displayGroup,shortcutGroup,box)" in SOURCE
+assert "grid-template-columns:minmax(210px,.7fr) minmax(400px,1.35fr) minmax(300px,.9fr)" in SOURCE
+assert ".hub-header-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr))" in SOURCE
+assert "@media(max-width:1250px){.hub-header-layout" in SOURCE
+assert "@media(max-width:800px)" in SOURCE
 assert "border:1px solid var(--line-soft);border-radius:10px;padding:12px;margin:10px 0;background:var(--surface-inset)" in SOURCE
 
 # The Hub homepage has one consolidated Switch Vision Settings entry. Discovery

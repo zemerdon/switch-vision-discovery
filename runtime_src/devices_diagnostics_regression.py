@@ -41,13 +41,15 @@ for marker in (
     "let expandedUnifiedDevices=new Set();",
     "function detectedDeviceKey(item)",
     "function renderUnifiedDevices()",
-    "entry.className=`device-card unified-device-details configured-device",
+    "entry.className=`device-card unified-device-details${item?' configured-device':''}${enabled?'':' disabled'}`",
     "entry.dataset.expanded=String(expanded)",
     "const summary=document.createElement('div');summary.className='unified-device-summary'",
     "className='device-order-button'",
     "className='device-order-controls'",
-    "actions.append(toggle,chevron)",
+    "actions.append(toggle)",
+    "actions.append(chevron)",
     "summary.append(orderControls,main,actions)",
+    "function buildUnifiedDeviceRows()",
     "for(const [index,item] of detected.entries())",
     "if(currentView==='devices')await refreshDevicesData(false)",
 ):
@@ -75,22 +77,23 @@ for marker in (
 ):
     assert marker in source, marker
 
-# Saved rows use whole-row expansion without native <summary> because Home
-# Assistant ingress/Chrome can swallow nested interactive controls there.
+# All unified rows use whole-row expansion without native <summary> because
+# Home Assistant ingress/Chrome can swallow nested interactive controls there.
 # Reorder/state controls explicitly stop propagation so they remain independent.
 render_start = source.index("function renderUnifiedDevices(){")
-detected_start = source.index("for(const [index,item] of detected.entries())", render_start)
-saved_block = source[render_start:detected_start]
-assert "document.createElement('details')" not in saved_block
-assert "document.createElement('summary')" not in saved_block
-assert "const entry=document.createElement('div')" in saved_block
-assert "const summary=document.createElement('div');summary.className='unified-device-summary'" in saved_block
-assert "summary.addEventListener('click'" in saved_block
-assert "summary.addEventListener('keydown'" in saved_block
-assert "event.target===summary" in saved_block
-assert saved_block.count("event.preventDefault();event.stopPropagation()") >= 3
-assert "actions.append(toggle,chevron)" in saved_block
-assert "const disclosure=document.createElement('button')" not in saved_block
+render_end = source.index("function renderConfiguredDevices", render_start)
+render_block = source[render_start:render_end]
+assert "document.createElement('details')" not in render_block
+assert "document.createElement('summary')" not in render_block
+assert "const entry=document.createElement('div')" in render_block
+assert "const summary=document.createElement('div');summary.className='unified-device-summary'" in render_block
+assert "summary.addEventListener('click'" in render_block
+assert "summary.addEventListener('keydown'" in render_block
+assert "event.target===summary" in render_block
+assert render_block.count("event.preventDefault();event.stopPropagation()") >= 3
+assert "actions.append(toggle)" in render_block
+assert "actions.append(chevron)" in render_block
+assert "const disclosure=document.createElement('button')" not in render_block
 assert ".unified-device-body[hidden]{display:none!important}" in source
 
 for forbidden in (

@@ -989,16 +989,24 @@ def _append_display_fallbacks(
 
 
 def _generated_snmp_card_count(path: Path) -> int:
+    """Count generated SNMP cards independently of mixed dashboard ordering."""
     if not path.is_file():
         return 0
     text = path.read_text(encoding="utf-8", errors="replace")
-    snmp_only = text.split("# UniFi API devices", 1)[0]
-    return len(
-        re.findall(
+    starts = list(
+        re.finditer(
             r"(?m)^\s*-\s*type:\s*custom:switch-vision-3650\s*$",
-            snmp_only,
+            text,
         )
     )
+    count = 0
+    for index, match in enumerate(starts):
+        end = starts[index + 1].start() if index + 1 < len(starts) else len(text)
+        block = text[match.start():end]
+        if re.search(r"(?m)^\s*data_source:\s*unifi_api\s*$", block):
+            continue
+        count += 1
+    return count
 
 
 def _write_live_collection_failure_outputs(

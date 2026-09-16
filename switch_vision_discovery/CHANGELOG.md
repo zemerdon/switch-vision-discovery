@@ -1,3 +1,12 @@
+## 2.4.24 — Unified device control and polling state
+
+- Unify saved SNMP and detected UniFi devices into one persistent Devices-page ordering contract with working up/down controls and whole-row expansion.
+- Make Enabled/Disabled authoritative for active polling: SNMP state automatically rebuilds and applies stored-state SNMP2MQTT configuration without a new walk, while UniFi state is shared with UniFi2MQTT so disabled devices stop per-device detail/statistics/activity polling and resume when re-enabled.
+- Automatically regenerate the Native dashboard after device state/order changes and project the same mixed SNMP/UniFi order into generated dashboard YAML. Disabled standalone UniFi cards are removed until re-enabled.
+- Tighten Devices-row spacing and keep toggle/reorder controls independent from row expansion.
+- Reorganize Native dashboard header settings into compact Header display, Enabled shortcuts, and Shortcut order groups with responsive layout.
+- Preserve exact pre-mutation Discovery backups for SNMP state/order changes and keep reorder failures visible instead of being overwritten by a refresh.
+
 ## 2.4.23 — Consistent Devices row interaction
 
 - Make saved SNMP device rows expand and collapse from the whole row, matching detected/UniFi device interaction while keeping reorder and enable/disable controls independent.

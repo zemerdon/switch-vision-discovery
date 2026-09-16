@@ -194,7 +194,7 @@ for marker in (
     'async function regenerateDashboardCardYamlFromDevices()',
     "$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml)",
     "$('devicesRegenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYamlFromDevices)",
-    'Regenerate Dashboard Card YAML to apply this saved state immediately; no Discovery run is required.',
+    'Polling and Native dashboard state are being applied automatically.',
     'Dashboard Card YAML regeneration started from the current saved device state. No Discovery run or new SNMP walks are required',
     'SNMP2MQTT was not started or restarted during Dashboard Card YAML regeneration.',
 ):
