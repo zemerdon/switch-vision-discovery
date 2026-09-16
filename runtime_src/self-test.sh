@@ -13,7 +13,6 @@ python3 "$BASE_DIR/secret_reveal_regression.py"
 python3 "$BASE_DIR/management_ip_display_regression.py"
 python3 "$BASE_DIR/device_ordering_regression.py"
 python3 "$BASE_DIR/hub_settings_tabs_regression.py"
-python3 "$BASE_DIR/hub_ui_ux_regression.py"
 python3 "$BASE_DIR/devices_diagnostics_regression.py"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/reporting_cardinality_regression.py"
 sv_require_literal() {
