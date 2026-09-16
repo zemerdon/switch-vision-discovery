@@ -44,10 +44,9 @@ for marker in (
     "entry.className=`device-card unified-device-details configured-device",
     "entry.dataset.expanded=String(expanded)",
     "const summary=document.createElement('div');summary.className='unified-device-summary'",
-    "const disclosure=document.createElement('button');disclosure.type='button';disclosure.className='unified-device-disclosure'",
     "className='device-order-button'",
     "className='device-order-controls'",
-    "actions.append(toggle,disclosure)",
+    "actions.append(toggle,chevron)",
     "summary.append(orderControls,main,actions)",
     "for(const [index,item] of detected.entries())",
     "if(currentView==='devices')await refreshDevicesData(false)",
@@ -76,15 +75,22 @@ for marker in (
 ):
     assert marker in source, marker
 
-# Saved rows must not place reorder/state buttons inside a native <summary>.
-# Home Assistant ingress/Chrome can swallow those nested interactive clicks.
+# Saved rows use whole-row expansion without native <summary> because Home
+# Assistant ingress/Chrome can swallow nested interactive controls there.
+# Reorder/state controls explicitly stop propagation so they remain independent.
 render_start = source.index("function renderUnifiedDevices(){")
 detected_start = source.index("for(const [index,item] of detected.entries())", render_start)
 saved_block = source[render_start:detected_start]
-assert "document.createElement('summary')" not in saved_block
 assert "document.createElement('details')" not in saved_block
+assert "document.createElement('summary')" not in saved_block
+assert "const entry=document.createElement('div')" in saved_block
 assert "const summary=document.createElement('div');summary.className='unified-device-summary'" in saved_block
-assert "actions.append(toggle,disclosure)" in saved_block
+assert "summary.addEventListener('click'" in saved_block
+assert "summary.addEventListener('keydown'" in saved_block
+assert "event.target===summary" in saved_block
+assert saved_block.count("event.preventDefault();event.stopPropagation()") >= 3
+assert "actions.append(toggle,chevron)" in saved_block
+assert "const disclosure=document.createElement('button')" not in saved_block
 assert ".unified-device-body[hidden]{display:none!important}" in source
 
 for forbidden in (

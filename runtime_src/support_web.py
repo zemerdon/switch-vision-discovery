@@ -1857,18 +1857,6 @@ def _move_configured_device(options_file: Path, request_data: Any) -> dict[str, 
             raise ValueError("The saved device list changed. Refresh Devices and try again.")
 
         updated_rows = list(rows)
-        def request_index(key: str) -> int:
-            value = request_data.get(key)
-            if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 255:
-                raise ValueError("Device order index is invalid. Refresh Devices and try again.")
-            return value
-
-        source_index = request_index("index")
-        destination_index = request_index("destination_index")
-        if source_index == destination_index:
-            raise ValueError("Device order did not change.")
-        if source_index >= len(rows) or destination_index >= len(rows):
-            raise ValueError("The saved device list changed. Refresh Devices and try again.")
         expected_name = _plain_text(
             request_data.get("switch_name", ""), "switch_name", max_length=64, allow_empty=False
         ).strip()
@@ -1878,15 +1866,26 @@ def _move_configured_device(options_file: Path, request_data: Any) -> dict[str, 
             max_length=64,
             allow_empty=False,
         ).strip()
-        source = rows[source_index]
-        destination = rows[destination_index]
-        if not isinstance(source, dict) or not isinstance(destination, dict):
+        if expected_name == expected_destination_name:
+            raise ValueError("Device order did not change.")
+
+        # Saved switch_name is the stable identity. Resolve both rows from the
+        # latest authoritative Supervisor options so a harmless stale browser
+        # index cannot make the arrow controls fail silently.
+        def identity_indexes(name: str) -> list[int]:
+            return [
+                index
+                for index, item in enumerate(rows)
+                if isinstance(item, dict)
+                and str(item.get("switch_name") or "").strip() == name
+            ]
+
+        source_matches = identity_indexes(expected_name)
+        destination_matches = identity_indexes(expected_destination_name)
+        if len(source_matches) != 1 or len(destination_matches) != 1:
             raise ValueError("The saved device list changed. Refresh Devices and try again.")
-        if (
-            str(source.get("switch_name") or "").strip() != expected_name
-            or str(destination.get("switch_name") or "").strip() != expected_destination_name
-        ):
-            raise ValueError("The saved device list changed. Refresh Devices and try again.")
+        source_index = source_matches[0]
+        destination_index = destination_matches[0]
         updated_rows[source_index], updated_rows[destination_index] = (
             updated_rows[destination_index],
             updated_rows[source_index],
@@ -4948,6 +4947,15 @@ body.density-ultra_dense .step{padding:5px 7px}
 @keyframes credits-name-shimmer{from{background-position:100% 0}to{background-position:-110% 0}}
 @media(max-width:700px){.credit-entry{align-items:flex-start;flex-direction:column;gap:3px}.credit-components{text-align:left}}
 @media(prefers-reduced-motion:reduce){#creditsCard::before,#creditsCard::after,#creditsCard .credits-energy,.credits-title,.credits-thanks,.credits-test-badge,.credit-entry,.credit-entry:hover .credit-name{animation:none!important;transition:none!important}.credits-title,.credits-thanks,.credits-test-badge,.credit-entry{opacity:1!important;transform:none!important;filter:none!important}#creditsMatrix{display:none!important}}
+
+/* Device rows intentionally use a tighter list rhythm than general Hub cards. */
+.unified-device-details{margin:5px 0!important}
+.unified-device-summary,.unified-device-details>summary{padding:7px 10px!important;cursor:pointer}
+.unified-device-body{padding:10px!important}
+body.density-spacious .unified-device-summary,body.density-spacious .unified-device-details>summary{padding:9px 12px!important}
+body.density-compact .unified-device-summary,body.density-compact .unified-device-details>summary{padding:6px 9px!important}
+body.density-dense .unified-device-summary,body.density-dense .unified-device-details>summary{padding:5px 8px!important}
+body.density-ultra_dense .unified-device-summary,body.density-ultra_dense .unified-device-details>summary{padding:4px 7px!important}
 </style>
 <link rel="stylesheet" href="credits_v25.css">
 </head>
@@ -5329,9 +5337,81 @@ function detectedDeviceKey(item){return [item?.data_source||'SNMP',item?.name||'
 function detectedForConfigured(item,detected,used){const identities=[item.switch_name,item.sensor_prefix,item.display_name].map(normalizedDeviceIdentity).filter(Boolean);let matches=detected.map((candidate,index)=>({candidate,index})).filter(({candidate,index})=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&[candidate?.source_switch_name,candidate?.name].map(normalizedDeviceIdentity).some(value=>value&&identities.includes(value)));if(matches.length===1)return {item:matches[0].candidate,index:matches[0].index};const targets=[item.configured_management_target,item.effective_management_target,item.switch_host].map(value=>String(value||'').trim().toLowerCase()).filter(Boolean);matches=detected.map((candidate,index)=>({candidate,index})).filter(({candidate,index})=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&targets.includes(String(candidate?.management_target||'').trim().toLowerCase()));if(matches.length===1)return {item:matches[0].candidate,index:matches[0].index};const configuredModel=String(item.switch_model||'').trim();if(configuredModel&&configuredModel!=='auto'){matches=detected.map((candidate,index)=>({candidate,index})).filter(({candidate,index})=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&String(candidate?.model||'').trim()===configuredModel);if(matches.length===1)return {item:matches[0].candidate,index:matches[0].index}}return null}
 function appendDetectedDeviceBody(body,item,d){const normalized={model:item.model,vendor_name:item.name,family:item.family,registry_status:item.registry_status,registry_match:item.registry_match,registry_last_validated_version:item.last_validated_version,physical_count:item.physical_interfaces,rj45_count:item.rj45_interfaces,registry_validation:item.validation};body.appendChild(deviceCard(normalized));const extra=document.createElement('div');extra.className='muted detected-device-extra';extra.textContent=`Source: ${item.data_source||'SNMP'} · ${item.data_source==='UniFi API'?`Firmware: ${item.firmware||'Unknown'}`:`SNMP walk: ${item.walk_found?'Available':'Unavailable'}`} · Uplinks detected: ${item.uplink_interfaces||0} · Mapping profile: ${item.mapping_profile||'Not assigned'} · Calibration profile: ${item.calibration_profile||'Not assigned'}`;body.appendChild(extra)}
 function syncConfiguredDeviceToggleAvailability(){const running=!!lastDiscoveryState?.running;document.querySelectorAll('.device-state-toggle').forEach(btn=>{const writable=btn.dataset.writable==='true';btn.disabled=running||!writable;btn.title=running?'Stop Discovery before changing device state.':(writable?'Toggle whether this saved device participates in the next Discovery run.':'Home Assistant app configuration is temporarily unavailable; use Discovery Settings as a fallback.')});document.querySelectorAll('.device-order-button').forEach(btn=>{const writable=btn.dataset.writable==='true';const boundary=btn.dataset.boundary==='true';btn.disabled=running||!writable||boundary;btn.title=running?'Stop Discovery before changing device order.':(!writable?'Home Assistant app configuration is temporarily unavailable; use Discovery Settings as a fallback.':(boundary?'Already at this end of the saved device order.':'Move this saved device in the persistent Discovery order.'))})}
-function renderUnifiedDevices(){const root=$('configuredDevices');if(!root)return;for(const entry of root.querySelectorAll('[data-device-key]')){const key=entry.dataset.deviceKey||'';if(!key)continue;const open=entry.tagName==='DETAILS'?entry.open:entry.dataset.expanded==='true';if(open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)}root.innerHTML='';const config=lastConfiguredDevices||{};const devices=config.devices||[];const detected=lastDevicesDiagnostics?.devices||[];const used=new Set();const writable=!!config.writable;for(const [position,item] of devices.entries()){const enabled=item.enabled!=='disabled';const found=detectedForConfigured(item,detected,used);const detectedItem=found?.item||null;if(found)used.add(found.index);const key=`saved|${item.switch_name}`;const expanded=expandedUnifiedDevices.has(key);const entry=document.createElement('div');entry.className=`device-card unified-device-details configured-device${enabled?'':' disabled'}`;entry.dataset.deviceKey=key;entry.dataset.expanded=String(expanded);const summary=document.createElement('div');summary.className='unified-device-summary';const main=document.createElement('div');main.className='unified-device-main';const title=document.createElement('strong');title.textContent=configuredDeviceTitle(item);const line=document.createElement('div');line.className='muted';const bits=[item.switch_name,item.sensor_prefix,item.switch_model&&item.switch_model!=='auto'?item.switch_model:'Auto-detect'].filter(Boolean);line.textContent=bits.join(' · ');const management=document.createElement('div');management.className='muted configured-management';const configured=item.configured_management_target||'Not configured';const effective=item.effective_management_target||(item.effective_management_status==='invalid_saved_row'?'Unavailable — saved row needs review':'Not configured');management.textContent=`Configured management IP/host: ${configured} · Effective management IP/host: ${effective}`;main.append(title,line,management);if(detectedItem){const detection=document.createElement('div');detection.className='muted detected-device-generated';detection.textContent=`Detected: ${detectedItem.model||'Unknown model'} · ${statusLabel(detectedItem.registry_status||'detected')} · ${detectedItem.rj45_interfaces||0} RJ45 + ${detectedItem.uplink_interfaces||0} uplinks`;main.append(detection)}else{const detection=document.createElement('div');detection.className='muted detected-device-generated';detection.textContent='Detected hardware details: not available yet';main.append(detection)}const actions=document.createElement('div');actions.className='unified-device-actions';if(detectedItem){const source=document.createElement('span');source.className='device-source-chip';source.textContent=detectedItem.data_source||'SNMP';actions.append(source)}const up=document.createElement('button');up.type='button';up.className='device-order-button';up.textContent='↑';up.dataset.writable=String(writable);up.dataset.boundary=String(position===0);up.setAttribute('aria-label',`Move up ${configuredDeviceTitle(item)}`);up.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(position>0)moveConfiguredDevice(item,devices[position-1],'up',up)});const down=document.createElement('button');down.type='button';down.className='device-order-button';down.textContent='↓';down.dataset.writable=String(writable);down.dataset.boundary=String(position===devices.length-1);down.setAttribute('aria-label',`Move down ${configuredDeviceTitle(item)}`);down.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(position<devices.length-1)moveConfiguredDevice(item,devices[position+1],'down',down)});const toggle=document.createElement('button');toggle.type='button';toggle.className=`device-state-toggle ${enabled?'enabled':'disabled'}`;toggle.dataset.writable=String(writable);toggle.setAttribute('role','switch');toggle.setAttribute('aria-checked',String(enabled));toggle.setAttribute('aria-label',`${enabled?'Disable':'Enable'} ${configuredDeviceTitle(item)}`);const track=document.createElement('span');track.className='toggle-track';track.setAttribute('aria-hidden','true');const knob=document.createElement('span');knob.className='toggle-knob';track.appendChild(knob);const label=document.createElement('span');label.textContent=enabled?'Enabled':'Disabled';toggle.append(track,label);toggle.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();setConfiguredDeviceState(item,enabled?'disabled':'enabled',toggle)});const chevron=document.createElement('span');chevron.className='unified-device-chevron';chevron.setAttribute('aria-hidden','true');chevron.textContent='▸';const disclosure=document.createElement('button');disclosure.type='button';disclosure.className='unified-device-disclosure';disclosure.setAttribute('aria-expanded',String(expanded));disclosure.setAttribute('aria-label',`${expanded?'Hide':'Show'} details for ${configuredDeviceTitle(item)}`);disclosure.append(chevron);const orderControls=document.createElement('div');orderControls.className='device-order-controls';orderControls.append(up,down);actions.append(toggle,disclosure);summary.append(orderControls,main,actions);const body=document.createElement('div');body.className='unified-device-body';if(detectedItem)appendDetectedDeviceBody(body,detectedItem,lastDevicesDiagnostics||{});else{const empty=document.createElement('p');empty.className='muted';empty.textContent='No current detected-device details are available for this saved switch. Run Discovery to refresh its hardware information.';body.append(empty)}body.id=`configured-device-details-${position}`;body.hidden=!expanded;disclosure.setAttribute('aria-controls',body.id);const setExpanded=open=>{entry.dataset.expanded=String(open);body.hidden=!open;disclosure.setAttribute('aria-expanded',String(open));disclosure.setAttribute('aria-label',`${open?'Hide':'Show'} details for ${configuredDeviceTitle(item)}`);if(open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)};disclosure.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();setExpanded(entry.dataset.expanded!=='true')});entry.append(summary,body);root.append(entry)}for(const [index,item] of detected.entries()){if(used.has(index))continue;const key=`detected|${detectedDeviceKey(item)}`;const entry=document.createElement('details');entry.className='device-card unified-device-details';entry.dataset.deviceKey=key;entry.open=expandedUnifiedDevices.has(key);entry.addEventListener('toggle',()=>{if(entry.open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)});const summary=document.createElement('summary');const main=document.createElement('div');main.className='unified-device-main';const title=document.createElement('strong');title.textContent=item.name||item.model||'Detected device';const line=document.createElement('div');line.className='muted';line.textContent=`${item.model||'Unknown model'} · ${statusLabel(item.registry_status||'detected')} · ${item.rj45_interfaces||0} RJ45 + ${item.uplink_interfaces||0} uplinks`;main.append(title,line);const side=document.createElement('div');side.className='unified-device-actions';const source=document.createElement('span');source.className='device-source-chip';source.textContent=item.data_source||'SNMP';const chevron=document.createElement('span');chevron.className='unified-device-chevron';chevron.setAttribute('aria-hidden','true');chevron.textContent='▸';side.append(source,chevron);summary.append(main,side);const body=document.createElement('div');body.className='unified-device-body';appendDetectedDeviceBody(body,item,lastDevicesDiagnostics||{});entry.append(summary,body);root.append(entry)}if(!devices.length&&!detected.length)root.innerHTML='<p class="muted">No saved or detected switches are available yet. Add a switch in Discovery Settings or run Discovery.</p>';syncConfiguredDeviceToggleAvailability()}
+function renderUnifiedDevices(){
+  const root=$('configuredDevices');if(!root)return;
+  for(const entry of root.querySelectorAll('[data-device-key]')){
+    const key=entry.dataset.deviceKey||'';if(!key)continue;
+    const open=entry.tagName==='DETAILS'?entry.open:entry.dataset.expanded==='true';
+    if(open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key);
+  }
+  root.innerHTML='';
+  const config=lastConfiguredDevices||{},devices=config.devices||[],detected=lastDevicesDiagnostics?.devices||[],used=new Set(),writable=!!config.writable;
+  for(const [position,item] of devices.entries()){
+    const enabled=item.enabled!=='disabled',found=detectedForConfigured(item,detected,used),detectedItem=found?.item||null;
+    if(found)used.add(found.index);
+    const key=`saved|${item.switch_name}`,expanded=expandedUnifiedDevices.has(key);
+    const entry=document.createElement('div');
+    entry.className=`device-card unified-device-details configured-device${enabled?'':' disabled'}`;
+    entry.dataset.deviceKey=key;entry.dataset.expanded=String(expanded);
+
+    const summary=document.createElement('div');summary.className='unified-device-summary';summary.tabIndex=0;summary.setAttribute('aria-expanded',String(expanded));
+    const main=document.createElement('div');main.className='unified-device-main';
+    const title=document.createElement('strong');title.textContent=configuredDeviceTitle(item);
+    const line=document.createElement('div');line.className='muted';
+    const bits=[item.switch_name,item.sensor_prefix,item.switch_model&&item.switch_model!=='auto'?item.switch_model:'Auto-detect'].filter(Boolean);
+    line.textContent=bits.join(' · ');
+    const management=document.createElement('div');management.className='muted configured-management';
+    const configured=item.configured_management_target||'Not configured';
+    const effective=item.effective_management_target||(item.effective_management_status==='invalid_saved_row'?'Unavailable — saved row needs review':'Not configured');
+    management.textContent=`Configured management IP/host: ${configured} · Effective management IP/host: ${effective}`;
+    main.append(title,line,management);
+    if(detectedItem){
+      const detection=document.createElement('div');detection.className='muted detected-device-generated';
+      detection.textContent=`Detected: ${detectedItem.model||'Unknown model'} · ${statusLabel(detectedItem.registry_status||'detected')} · ${detectedItem.rj45_interfaces||0} RJ45 + ${detectedItem.uplink_interfaces||0} uplinks`;
+      main.append(detection);
+    }else{
+      const detection=document.createElement('div');detection.className='muted detected-device-generated';
+      detection.textContent='Detected hardware details: not available yet';main.append(detection);
+    }
+
+    const actions=document.createElement('div');actions.className='unified-device-actions';
+    if(detectedItem){const source=document.createElement('span');source.className='device-source-chip';source.textContent=detectedItem.data_source||'SNMP';actions.append(source)}
+    const up=document.createElement('button');up.type='button';up.className='device-order-button';up.textContent='↑';up.dataset.writable=String(writable);up.dataset.boundary=String(position===0);up.setAttribute('aria-label',`Move up ${configuredDeviceTitle(item)}`);
+    up.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(position>0)moveConfiguredDevice(item,devices[position-1],'up',up)});
+    const down=document.createElement('button');down.type='button';down.className='device-order-button';down.textContent='↓';down.dataset.writable=String(writable);down.dataset.boundary=String(position===devices.length-1);down.setAttribute('aria-label',`Move down ${configuredDeviceTitle(item)}`);
+    down.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(position<devices.length-1)moveConfiguredDevice(item,devices[position+1],'down',down)});
+    const toggle=document.createElement('button');toggle.type='button';toggle.className=`device-state-toggle ${enabled?'enabled':'disabled'}`;toggle.dataset.writable=String(writable);toggle.setAttribute('role','switch');toggle.setAttribute('aria-checked',String(enabled));toggle.setAttribute('aria-label',`${enabled?'Disable':'Enable'} ${configuredDeviceTitle(item)}`);
+    const track=document.createElement('span');track.className='toggle-track';track.setAttribute('aria-hidden','true');const knob=document.createElement('span');knob.className='toggle-knob';track.appendChild(knob);const label=document.createElement('span');label.textContent=enabled?'Enabled':'Disabled';toggle.append(track,label);
+    toggle.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();setConfiguredDeviceState(item,enabled?'disabled':'enabled',toggle)});
+    const chevron=document.createElement('span');chevron.className='unified-device-chevron';chevron.setAttribute('aria-hidden','true');chevron.textContent='▸';
+    const orderControls=document.createElement('div');orderControls.className='device-order-controls';orderControls.append(up,down);
+    actions.append(toggle,chevron);summary.append(orderControls,main,actions);
+
+    const body=document.createElement('div');body.className='unified-device-body';body.id=`configured-device-details-${position}`;body.hidden=!expanded;
+    if(detectedItem)appendDetectedDeviceBody(body,detectedItem,lastDevicesDiagnostics||{});else{const empty=document.createElement('p');empty.className='muted';empty.textContent='No current detected-device details are available for this saved switch. Run Discovery to refresh its hardware information.';body.append(empty)}
+    summary.setAttribute('aria-controls',body.id);
+    const setExpanded=open=>{entry.dataset.expanded=String(open);body.hidden=!open;summary.setAttribute('aria-expanded',String(open));if(open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)};
+    summary.addEventListener('click',()=>setExpanded(entry.dataset.expanded!=='true'));
+    summary.addEventListener('keydown',event=>{if(event.target===summary&&(event.key==='Enter'||event.key===' ')){event.preventDefault();setExpanded(entry.dataset.expanded!=='true')}});
+    entry.append(summary,body);root.append(entry);
+  }
+  for(const [index,item] of detected.entries()){
+    if(used.has(index))continue;
+    const key=`detected|${detectedDeviceKey(item)}`;
+    const entry=document.createElement('details');entry.className='device-card unified-device-details';entry.dataset.deviceKey=key;entry.open=expandedUnifiedDevices.has(key);
+    entry.addEventListener('toggle',()=>{if(entry.open)expandedUnifiedDevices.add(key);else expandedUnifiedDevices.delete(key)});
+    const summary=document.createElement('summary');
+    const main=document.createElement('div');main.className='unified-device-main';
+    const title=document.createElement('strong');title.textContent=item.name||item.model||'Detected device';
+    const line=document.createElement('div');line.className='muted';line.textContent=`${item.model||'Unknown model'} · ${statusLabel(item.registry_status||'detected')} · ${item.rj45_interfaces||0} RJ45 + ${item.uplink_interfaces||0} uplinks`;main.append(title,line);
+    const side=document.createElement('div');side.className='unified-device-actions';const source=document.createElement('span');source.className='device-source-chip';source.textContent=item.data_source||'SNMP';const chevron=document.createElement('span');chevron.className='unified-device-chevron';chevron.setAttribute('aria-hidden','true');chevron.textContent='▸';side.append(source,chevron);summary.append(main,side);
+    const body=document.createElement('div');body.className='unified-device-body';appendDetectedDeviceBody(body,item,lastDevicesDiagnostics||{});entry.append(summary,body);root.append(entry);
+  }
+  if(!devices.length&&!detected.length)root.innerHTML='<p class="muted">No saved or detected switches are available yet. Add a switch in Discovery Settings or run Discovery.</p>';
+  syncConfiguredDeviceToggleAvailability();
+}
 function renderConfiguredDevices(d){lastConfiguredDevices=d;renderUnifiedDevices();const status=$('configuredDevicesStatus');if(!d?.switch_list_enabled&&(d?.devices||[]).length)status.textContent='The saved switch list is globally disabled in Discovery Settings.';else if(!d?.writable)status.textContent='Read-only fallback: Home Assistant app configuration is unavailable. Use Discovery Settings to change device state.';else status.textContent=`${d?.count||0} saved device(s). Device order is persistent and is reused by Discovery and YAML/Card regeneration.`}
-async function moveConfiguredDevice(item,destination,direction,button){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device order.';return}button.disabled=true;const title=configuredDeviceTitle(item);$('configuredDevicesStatus').textContent=`Moving ${title} ${direction}…`;try{const r=await fetch(endpoint('api/configured-devices/order'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:item.index,switch_name:item.switch_name,destination_index:destination.index,destination_switch_name:destination.switch_name})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device order');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent='Saved persistent device order. Discovery and YAML/Card regeneration will use this order.'}catch(e){$('configuredDevicesStatus').textContent=`Could not change device order: ${e.message||e}`;await refreshConfiguredDevices(false)}finally{syncConfiguredDeviceToggleAvailability()}}
+async function moveConfiguredDevice(item,destination,direction,button){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device order.';return}button.disabled=true;const title=configuredDeviceTitle(item);$('configuredDevicesStatus').textContent=`Moving ${title} ${direction}…`;try{const r=await fetch(endpoint('api/configured-devices/order'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({switch_name:item.switch_name,destination_switch_name:destination.switch_name})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device order');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent='Saved persistent device order. Discovery and YAML/Card regeneration will use this order.'}catch(e){const failure=`Could not change device order: ${e.message||e}`;await refreshConfiguredDevices(false);$('configuredDevicesStatus').textContent=failure}finally{syncConfiguredDeviceToggleAvailability()}}
 async function refreshConfiguredDevices(showStatus=false){if(showStatus)$('configuredDevicesStatus').textContent='Refreshing saved devices…';try{const r=await fetch(endpoint('api/configured-devices'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load saved devices');renderConfiguredDevices(d)}catch(e){$('configuredDevicesStatus').textContent=`Could not load saved devices: ${e.message||e}`}}
 async function setConfiguredDeviceState(item,nextState,button){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device state.';return}button.disabled=true;const title=configuredDeviceTitle(item);$('configuredDevicesStatus').textContent=`Saving ${title} as ${nextState}…`;try{const r=await fetch(endpoint('api/configured-devices/state'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:item.index,switch_name:item.switch_name,enabled:nextState})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device state');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent=`${title} is now ${nextState}. Regenerate Dashboard Card YAML to apply this saved state immediately; no Discovery run is required.`}catch(e){$('configuredDevicesStatus').textContent=`Could not change ${title}: ${e.message||e}`;await refreshConfiguredDevices(false)}finally{syncConfiguredDeviceToggleAvailability()}}
 function renderDevices(d){lastDevicesDiagnostics=d;renderDeviceDiagnosticsSummary(d);renderUnifiedDevices()}

@@ -1,3 +1,10 @@
+## 2.4.23 — Consistent Devices row interaction
+
+- Make saved SNMP device rows expand and collapse from the whole row, matching detected/UniFi device interaction while keeping reorder and enable/disable controls independent.
+- Tighten Devices row spacing so the device list uses a denser, more consistent visual rhythm without changing the rest of the Hub density settings.
+- Harden persistent switch reordering by resolving saved switch identities from the latest authoritative Supervisor options instead of trusting stale browser indexes, and keep reorder failures visible after refresh.
+- Extend permanent Devices/order regressions for whole-row interaction, control isolation, stale-index tolerance, and persistent ordering.
+
 ## 2.4.22 — Restore 2.4.20 Hub/UI behavior
 
 - Restore the Discovery/Hub interface and presentation behavior from 2.4.20, superseding the 2.4.21 Hub UI/UX refinement.

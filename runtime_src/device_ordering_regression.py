@@ -56,9 +56,10 @@ try:
     assert [item["switch_name"] for item in before["devices"]] == ["SW-A", "SW-B", "SW-C"], before
 
     moved = web._move_configured_device(Path("/unused/options.json"), {
-        "index": 3,
+        # Deliberately stale indexes prove stable names are authoritative.
+        "index": 0,
         "switch_name": "SW-C",
-        "destination_index": 2,
+        "destination_index": 1,
         "destination_switch_name": "SW-B",
     })
     assert [item["switch_name"] for item in moved["devices"]] == ["SW-A", "SW-C", "SW-B"], moved
@@ -134,10 +135,16 @@ assert "summary.append(orderControls,main,actions)" in source
 render_start = source.index("function renderUnifiedDevices(){")
 detected_start = source.index("for(const [index,item] of detected.entries())", render_start)
 saved_block = source[render_start:detected_start]
-assert "document.createElement('summary')" not in saved_block
-assert "document.createElement('details')" not in saved_block
+assert "const entry=document.createElement('div')" in saved_block
 assert "const summary=document.createElement('div');summary.className='unified-device-summary'" in saved_block
-assert "actions.append(toggle,disclosure)" in saved_block
+assert "summary.addEventListener('click'" in saved_block
+assert "summary.addEventListener('keydown'" in saved_block
+assert "event.target===summary" in saved_block
+assert "actions.append(toggle,chevron)" in saved_block
+assert saved_block.count("event.preventDefault();event.stopPropagation()") >= 3
+assert "destination_index" not in saved_block
+assert "const failure=`Could not change device order:" in source
+assert "await refreshConfiguredDevices(false);$('configuredDevicesStatus').textContent=failure" in source
 
 job = Path(web.__file__).with_name("discovery_job.sh").read_text(encoding="utf-8")
 walk_fn = job.split("multi_switch_walk_rows() {", 1)[1].split("\n}\n", 1)[0]
