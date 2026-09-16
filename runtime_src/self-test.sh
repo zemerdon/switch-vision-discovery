@@ -1985,8 +1985,8 @@ grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.27"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.27"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.28"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.28"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -3662,6 +3662,15 @@ assert unexpected_actions == []
 events = []
 web._snmp2mqtt_runtime_info = lambda: dict(base_runtime)
 web.generated_yaml_generation_id = lambda _path: "123e4567-e89b-12d3-a456-426614174000"
+retry_checks = []
+def delayed_exact_load(base_topic, generation_id):
+    retry_checks.append((base_topic, generation_id))
+    return len(retry_checks) >= 3
+web.verify_generated_yaml_loaded = delayed_exact_load
+retry_lines = []
+assert web._verify_snmp2mqtt_generated_config_loaded(retry_lines, base_runtime) is True
+assert len(retry_checks) == 3
+assert "after 3 checks" in retry_lines[-1]
 web.verify_generated_yaml_loaded = lambda base_topic, generation_id: (
     base_topic == "snmp2mqtt"
     and generation_id == "123e4567-e89b-12d3-a456-426614174000"

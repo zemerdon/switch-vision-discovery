@@ -1,3 +1,9 @@
+## 2.4.28 — Reliable SNMP2MQTT re-enable verification
+
+- Retry exact generated-configuration load verification for a small bounded window after SNMP2MQTT start/restart, avoiding a false handoff warning when Supervisor reports the app running before the retained MQTT runtime marker is published.
+- Preserve the exact generation-ID proof requirement: a handoff still warns/fails closed if the marker never appears within the bounded window.
+- Add regression coverage proving delayed marker publication succeeds only after the expected retry and that permanent absence still warns.
+
 ## 2.4.27 — Reversible live dashboard projection
 
 - Keep a private full-card Native dashboard source in app-owned `/data` and project the visible dashboard from it, so disabling a device hides its card without destroying the exact card needed for re-enable.

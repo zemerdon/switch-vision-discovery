@@ -4058,16 +4058,27 @@ def _verify_snmp2mqtt_generated_config_loaded(
     if not generation_id:
         lines.append("SNMP2MQTT exact-load verification unavailable: generated YAML has no generation ID.")
         return False
-    try:
-        verified = verify_generated_yaml_loaded(base_topic, generation_id)
-    except Exception as exc:
-        lines.append(f"SNMP2MQTT exact-load verification unavailable: {type(exc).__name__}.")
-        return False
-    if verified:
-        lines.append("SNMP2MQTT exact generated configuration load verified.")
-    else:
-        lines.append("SNMP2MQTT exact generated configuration load was not verified.")
-    return verified
+    # The HA app can reach Supervisor's running state before its retained
+    # runtime config marker is visible on MQTT. Give that asynchronous
+    # publication a small bounded window instead of recording a false handoff
+    # warning immediately after a clean start/restart.
+    attempts = 6
+    for attempt in range(attempts):
+        try:
+            verified = verify_generated_yaml_loaded(base_topic, generation_id)
+        except Exception as exc:
+            lines.append(f"SNMP2MQTT exact-load verification unavailable: {type(exc).__name__}.")
+            return False
+        if verified:
+            lines.append(
+                "SNMP2MQTT exact generated configuration load verified"
+                + (f" after {attempt + 1} checks." if attempt else ".")
+            )
+            return True
+        if attempt + 1 < attempts:
+            time.sleep(1.0)
+    lines.append("SNMP2MQTT exact generated configuration load was not verified after the bounded retry window.")
+    return False
 
 
 def _ensure_snmp2mqtt_running(
