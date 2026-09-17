@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import json
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 import dashboard_device_order
@@ -293,10 +295,15 @@ for literal in (
     "device-state-toggle",
     "device-order-button",
     "_start_device_state_application",
+    "_device_state_application_worker",
+    "_device_configuration_update",
+    "polling_refresh_coalesced",
     "apply_device_state",
     "dashboard_refresh_started",
     "_apply_saved_device_order_to_dashboard",
     "polling_refresh_started",
+    "deviceControlsBlocked",
+    "lastDiscoveryState?.mode!=='apply_device_state'",
 ):
     assert literal in source, literal
 
@@ -314,10 +321,85 @@ assert "_apply_saved_device_order_to_dashboard()" in state_handler
 assert "_start_dashboard_card_regeneration" not in state_handler
 assert "_start_device_state_application()" in state_handler
 assert "_start_device_state_application(self.app.discovery_script)" not in state_handler
+assert 'with _device_configuration_update("Device configuration update"):' in state_handler
 
 order_handler = source.split('if path == "/api/configured-devices/order":', 1)[1].split('if path == "/api/configuration/import":', 1)[0]
 assert "_apply_saved_device_order_to_dashboard()" in order_handler
 assert "_start_dashboard_card_regeneration" not in order_handler
+assert 'with _device_configuration_update("Device order update"):' in order_handler
+
+# Device mutations remain available while the background SNMP state reconciler
+# owns the long-running operation, but remain blocked by a real Discovery run.
+with web._OPERATION_LOCK:
+    web._OPERATION_ACTIVE["name"] = "Device state application"
+    web._OPERATION_ACTIVE["started_at"] = "test"
+with web._device_configuration_update("Device configuration update"):
+    pass
+with web._OPERATION_LOCK:
+    web._OPERATION_ACTIVE["name"] = "Discovery"
+    web._OPERATION_ACTIVE["started_at"] = "test"
+try:
+    with web._device_configuration_update("Device configuration update"):
+        raise AssertionError("Discovery must block device mutation")
+except web.OperationConflict:
+    pass
+finally:
+    with web._OPERATION_LOCK:
+        web._OPERATION_ACTIVE["name"] = None
+        web._OPERATION_ACTIVE["started_at"] = None
+
+# Changes made during an in-flight state pass are coalesced into one latest-state
+# rerun rather than rejected or run concurrently. The real worker's per-pass
+# _run_discovery releases the operation; the fake mirrors that lifecycle.
+original_run = web._run_discovery
+original_projection = web._apply_saved_device_order_to_dashboard
+original_debounce = web._DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS
+original_retry = web._DEVICE_STATE_RECONCILE_RETRY_SECONDS
+started = threading.Event()
+release_first = threading.Event()
+passes: list[str] = []
+projections: list[int] = []
+try:
+    web._DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS = 0.01
+    web._DEVICE_STATE_RECONCILE_RETRY_SECONDS = 0.005
+    web._DEVICE_STATE_RECONCILE_REQUESTED = 0
+    web._DEVICE_STATE_RECONCILE_RUNNING = False
+    web._release_operation("Device state application")
+
+    def fake_run(_script: Path, mode: str = "discovery") -> None:
+        passes.append(mode)
+        if len(passes) == 1:
+            started.set()
+            assert release_first.wait(2.0), "timed out waiting to queue a second state change"
+        web._release_operation("Device state application")
+
+    def fake_projection() -> dict[str, bool]:
+        projections.append(len(passes))
+        return {"updated": True}
+
+    web._run_discovery = fake_run
+    web._apply_saved_device_order_to_dashboard = fake_projection
+    first = web._start_device_state_application(Path("/tmp/fake-discovery-job.sh"))
+    assert first["started"] is True and first["coalesced"] is False, first
+    assert started.wait(2.0), "first coalesced state pass did not start"
+    second = web._start_device_state_application(Path("/tmp/fake-discovery-job.sh"))
+    assert second["started"] is False and second["coalesced"] is True, second
+    assert second["generation"] == first["generation"] + 1, (first, second)
+    release_first.set()
+    deadline = time.monotonic() + 3.0
+    while web._DEVICE_STATE_RECONCILE_RUNNING and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert web._DEVICE_STATE_RECONCILE_RUNNING is False, "state reconciler did not quiesce"
+    assert passes == ["apply_device_state", "apply_device_state"], passes
+    assert len(projections) == 2, projections
+finally:
+    release_first.set()
+    web._run_discovery = original_run
+    web._apply_saved_device_order_to_dashboard = original_projection
+    web._DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS = original_debounce
+    web._DEVICE_STATE_RECONCILE_RETRY_SECONDS = original_retry
+    web._release_operation("Device state application")
+    web._DEVICE_STATE_RECONCILE_RUNNING = False
 
 job = Path(web.__file__).with_name("discovery_job.sh").read_text(encoding="utf-8")
 assert "dashboard_device_order.py" in job

@@ -1,3 +1,10 @@
+## 2.4.29 — Responsive/coalesced device state changes
+
+- Keep Devices enable/disable and reorder controls usable while the slower SNMP polling reconciliation runs in the background.
+- Serialize short device mutations safely and coalesce rapid SNMP state changes into latest-state reconciliation passes instead of rejecting or stacking conflicting operations.
+- Re-project the Native dashboard from current saved state after each polling pass so stale in-flight work cannot leave a stale visible card.
+- Label background state application separately from a full Discovery run and keep full Discovery/regeneration operations as the blocking boundary.
+
 ## 2.4.28 — Reliable SNMP2MQTT re-enable verification
 
 - Retry exact generated-configuration load verification for a small bounded window after SNMP2MQTT start/restart, avoiding a false handoff warning when Supervisor reports the app running before the retained MQTT runtime marker is published.

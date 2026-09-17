@@ -772,9 +772,15 @@ _DISCOVERY_STATE_LOCK = threading.Lock()
 _OPTIONS_UPDATE_LOCK = threading.Lock()
 _DISCOVERY_PROCESS_LOCK = threading.Lock()
 _OPERATION_LOCK = threading.Lock()
+_DEVICE_MUTATION_LOCK = threading.Lock()
+_DEVICE_STATE_RECONCILE_LOCK = threading.Lock()
 _OPERATION_ACTIVE: dict[str, Any] = {"name": None, "started_at": None}
 _DISCOVERY_PROCESS: subprocess.Popen[str] | None = None
 _DISCOVERY_STOP_REQUESTED = threading.Event()
+_DEVICE_STATE_RECONCILE_REQUESTED = 0
+_DEVICE_STATE_RECONCILE_RUNNING = False
+_DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS = 0.35
+_DEVICE_STATE_RECONCILE_RETRY_SECONDS = 0.20
 
 _DISCOVERY_STATE: dict[str, Any] = {
     "running": False,
@@ -823,6 +829,34 @@ def _exclusive_operation(name: str):
         yield
     finally:
         _release_operation(name)
+
+
+@contextmanager
+def _device_configuration_update(name: str):
+    """Serialize short device mutations while a background state apply runs.
+
+    Full Discovery/regeneration operations still block device mutation. A device
+    state application is different: it consumes a snapshot of saved state, so
+    later device mutations are safe as long as they are serialized and a fresh
+    reconciliation pass is queued afterward.
+    """
+    short_claimed = False
+    with _DEVICE_MUTATION_LOCK:
+        with _OPERATION_LOCK:
+            active = _OPERATION_ACTIVE.get("name")
+            if active and active != "Device state application":
+                raise OperationConflict(
+                    f"{active} is already running. Wait for it to finish before starting {name}."
+                )
+            if not active:
+                _OPERATION_ACTIVE["name"] = name
+                _OPERATION_ACTIVE["started_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                short_claimed = True
+        try:
+            yield
+        finally:
+            if short_claimed:
+                _release_operation(name)
 
 
 def _safe_bool(value: Any, default: bool) -> bool:
@@ -1455,44 +1489,88 @@ def _start_dashboard_card_regeneration(discovery_script: Path = DEFAULT_DISCOVER
     return {"started": True, "mode": "regenerate_card"}
 
 
-def _start_device_state_application(discovery_script: Path = DEFAULT_DISCOVERY_SCRIPT) -> dict[str, Any]:
-    """Apply saved SNMP state to polling and dashboard outputs without new walks."""
+def _device_state_application_worker(discovery_script: Path) -> None:
+    """Converge SNMP polling to the newest saved state, coalescing rapid changes."""
+    global _DEVICE_STATE_RECONCILE_RUNNING
     operation_name = "Device state application"
-    _claim_operation(operation_name)
-    _DISCOVERY_STOP_REQUESTED.clear()
-    _set_discovery_state(
-        running=True,
-        started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        finished_at=None,
-        success=None,
-        message="Applying device state",
-        log_tail=[],
-        stage="Applying device state",
-        switch="",
-        target="",
-        command="",
-        activity="Updating SNMP polling and dashboard from saved state",
-        phase="preparing",
-        mode="apply_device_state",
-        snmp2mqtt={
-            "status": "Waiting",
-            "action": "none",
-            "slug": None,
-            "state": None,
-            "message": "Waiting for saved device state to be applied",
-        },
-    )
-    thread = threading.Thread(
-        target=_run_discovery,
-        args=(discovery_script, "apply_device_state"),
-        daemon=True,
-    )
+    quiesced = False
     try:
-        thread.start()
-    except Exception:
-        _release_operation(operation_name)
-        raise
-    return {"started": True, "mode": "apply_device_state"}
+        while True:
+            # A short debounce collapses a burst of UI changes into one expensive
+            # stored-state regeneration. Changes made during a running pass bump
+            # the generation and automatically trigger one more latest-state pass.
+            time.sleep(_DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS)
+            with _DEVICE_STATE_RECONCILE_LOCK:
+                target_generation = _DEVICE_STATE_RECONCILE_REQUESTED
+
+            while True:
+                try:
+                    _claim_operation(operation_name)
+                    break
+                except OperationConflict:
+                    time.sleep(_DEVICE_STATE_RECONCILE_RETRY_SECONDS)
+
+            _DISCOVERY_STOP_REQUESTED.clear()
+            _run_discovery(discovery_script, "apply_device_state")
+
+            # A pass may have rendered an older SNMP snapshot while newer UI
+            # changes were being saved. Re-project the dashboard from the current
+            # authoritative state immediately before deciding whether another pass
+            # is required, so stale work cannot leave a stale visible card.
+            try:
+                _apply_saved_device_order_to_dashboard()
+            except (OSError, RuntimeError, ValueError):
+                pass
+
+            with _DEVICE_STATE_RECONCILE_LOCK:
+                if _DEVICE_STATE_RECONCILE_REQUESTED == target_generation:
+                    # Publish quiescence atomically with the generation check. A
+                    # new request after this point starts a new worker; this worker
+                    # must not clear that newer worker's running flag or operation.
+                    _DEVICE_STATE_RECONCILE_RUNNING = False
+                    quiesced = True
+                    return
+    finally:
+        if not quiesced:
+            # Unexpected worker failure: no replacement worker can have started
+            # while our running flag is still true, so cleanup is safe here.
+            _release_operation(operation_name)
+            with _DEVICE_STATE_RECONCILE_LOCK:
+                _DEVICE_STATE_RECONCILE_RUNNING = False
+
+
+def _start_device_state_application(discovery_script: Path = DEFAULT_DISCOVERY_SCRIPT) -> dict[str, Any]:
+    """Queue/coalesce saved SNMP state application without blocking device controls."""
+    global _DEVICE_STATE_RECONCILE_REQUESTED, _DEVICE_STATE_RECONCILE_RUNNING
+    with _DEVICE_STATE_RECONCILE_LOCK:
+        _DEVICE_STATE_RECONCILE_REQUESTED += 1
+        generation = _DEVICE_STATE_RECONCILE_REQUESTED
+        if _DEVICE_STATE_RECONCILE_RUNNING:
+            return {
+                "started": False,
+                "queued": True,
+                "coalesced": True,
+                "generation": generation,
+                "mode": "apply_device_state",
+            }
+        _DEVICE_STATE_RECONCILE_RUNNING = True
+        thread = threading.Thread(
+            target=_device_state_application_worker,
+            args=(discovery_script,),
+            daemon=True,
+        )
+        try:
+            thread.start()
+        except Exception:
+            _DEVICE_STATE_RECONCILE_RUNNING = False
+            raise
+    return {
+        "started": True,
+        "queued": True,
+        "coalesced": False,
+        "generation": generation,
+        "mode": "apply_device_state",
+    }
 
 
 def _read_supervisor_token() -> str:
@@ -5593,7 +5671,8 @@ function normalizedDeviceIdentity(value){return String(value||'').trim().toLower
 function detectedDeviceKey(item){return [item?.data_source||'SNMP',item?.name||'',item?.model||'Unknown model'].join('|')}
 function detectedForConfigured(item,detected,used){const identities=[item.switch_name,item.sensor_prefix,item.display_name].map(normalizedDeviceIdentity).filter(Boolean);let matches=detected.map((candidate,index)=>({candidate,index})).filter(({candidate,index})=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&[candidate?.source_switch_name,candidate?.name].map(normalizedDeviceIdentity).some(value=>value&&identities.includes(value)));if(matches.length===1)return {item:matches[0].candidate,index:matches[0].index};const targets=[item.configured_management_target,item.effective_management_target,item.switch_host].map(value=>String(value||'').trim().toLowerCase()).filter(Boolean);matches=detected.map((candidate,index)=>({candidate,index})).filter(({candidate,index})=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&targets.includes(String(candidate?.management_target||'').trim().toLowerCase()));if(matches.length===1)return {item:matches[0].candidate,index:matches[0].index};const configuredModel=String(item.switch_model||'').trim();if(configuredModel&&configuredModel!=='auto'){matches=detected.map((candidate,index)=>({candidate,index})).filter(({candidate,index})=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&String(candidate?.model||'').trim()===configuredModel);if(matches.length===1)return {item:matches[0].candidate,index:matches[0].index}}return null}
 function appendDetectedDeviceBody(body,item,d){const normalized={model:item.model,vendor_name:item.name,family:item.family,registry_status:item.registry_status,registry_match:item.registry_match,registry_last_validated_version:item.last_validated_version,physical_count:item.physical_interfaces,rj45_count:item.rj45_interfaces,registry_validation:item.validation};body.appendChild(deviceCard(normalized));const extra=document.createElement('div');extra.className='muted detected-device-extra';extra.textContent=`Source: ${item.data_source||'SNMP'} · ${item.data_source==='UniFi API'?`Firmware: ${item.firmware||'Unknown'}`:`SNMP walk: ${item.walk_found?'Available':'Unavailable'}`} · Uplinks detected: ${item.uplink_interfaces||0} · Mapping profile: ${item.mapping_profile||'Not assigned'} · Calibration profile: ${item.calibration_profile||'Not assigned'}`;body.appendChild(extra)}
-function syncConfiguredDeviceToggleAvailability(){const running=!!lastDiscoveryState?.running;document.querySelectorAll('.device-state-toggle').forEach(btn=>{const writable=btn.dataset.writable==='true';btn.disabled=running||!writable;btn.title=running?'Stop Discovery before changing device state.':(writable?'Toggle whether this device is actively polled and shown on the Switch Vision dashboard.':'This device cannot be changed from the current Hub state.')});document.querySelectorAll('.device-order-button').forEach(btn=>{const writable=btn.dataset.writable==='true';const boundary=btn.dataset.boundary==='true';btn.disabled=running||!writable||boundary;btn.title=running?'Stop Discovery before changing device order.':(!writable?'This device cannot be reordered from the current Hub state.':(boundary?'Already at this end of the device order.':'Move this device in the persistent dashboard order.'))})}
+function deviceControlsBlocked(){return !!lastDiscoveryState?.running&&lastDiscoveryState?.mode!=='apply_device_state'}
+function syncConfiguredDeviceToggleAvailability(){const blocked=deviceControlsBlocked();document.querySelectorAll('.device-state-toggle').forEach(btn=>{const writable=btn.dataset.writable==='true';btn.disabled=blocked||!writable;btn.title=blocked?'Wait for the current Discovery operation before changing device state.':(writable?'Toggle whether this device is actively polled and shown on the Switch Vision dashboard.':'This device cannot be changed from the current Hub state.')});document.querySelectorAll('.device-order-button').forEach(btn=>{const writable=btn.dataset.writable==='true';const boundary=btn.dataset.boundary==='true';btn.disabled=blocked||!writable||boundary;btn.title=blocked?'Wait for the current Discovery operation before changing device order.':(!writable?'This device cannot be reordered from the current Hub state.':(boundary?'Already at this end of the device order.':'Move this device in the persistent dashboard order.'))})}
 function unifiedDeviceTitle(row){if(row.configured)return configuredDeviceTitle(row.configured);const item=row.detected||{};return item.name||item.model||'Detected device'}
 function buildUnifiedDeviceRows(){const config=lastConfiguredDevices||{},saved=config.devices||[],detected=lastDevicesDiagnostics?.devices||[],used=new Set(),rows=[];for(const item of saved){const found=detectedForConfigured(item,detected,used),detectedItem=found?.item||null;if(found)used.add(found.index);rows.push({key:item.device_key||`snmp:${item.switch_name}`,source:'SNMP',configured:item,detected:detectedItem,enabled:item.enabled!=='disabled',writable:!!config.writable,controllable:true})}for(const [index,item] of detected.entries()){if(used.has(index))continue;if(item?.data_source==='UniFi API'&&item?.unifi_device_id){const key=`unifi:${item.unifi_device_id}`;rows.push({key,source:'UniFi API',configured:null,detected:item,enabled:(config.device_states||{})[key]!=='disabled',writable:!!config.device_control_writable,controllable:true});continue}rows.push({key:`detected|${detectedDeviceKey(item)}`,source:item?.data_source||'SNMP',configured:null,detected:item,enabled:true,writable:false,controllable:false})}const rank=new Map((config.device_order||[]).map((key,index)=>[key,index]));rows.sort((a,b)=>{const ar=rank.has(a.key)?rank.get(a.key):Number.MAX_SAFE_INTEGER,br=rank.has(b.key)?rank.get(b.key):Number.MAX_SAFE_INTEGER;if(ar!==br)return ar-br;return 0});return rows}
 function renderUnifiedDevices(){
@@ -5617,9 +5696,9 @@ function renderUnifiedDevices(){
   if(!rows.length)root.innerHTML='<p class="muted">No saved or detected switches are available yet. Add a switch in Discovery Settings or run Discovery.</p>';syncConfiguredDeviceToggleAvailability()
 }
 function renderConfiguredDevices(d){lastConfiguredDevices=d;renderUnifiedDevices();const status=$('configuredDevicesStatus');if(!d?.switch_list_enabled&&(d?.devices||[]).length)status.textContent='The saved SNMP switch list is globally disabled in Discovery Settings.';else status.textContent='Device order, enabled state, polling state, and Native dashboard card order are linked.'}
-async function moveConfiguredDevice(row,destination,direction,button){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device order.';return}button.disabled=true;const title=unifiedDeviceTitle(row);$('configuredDevicesStatus').textContent=`Moving ${title} ${direction}…`;try{const r=await fetch(endpoint('api/configured-devices/order'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_key:row.key,destination_device_key:destination.key})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device order');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent='Saved device order. Native dashboard order updated.'}catch(e){const failure=`Could not change device order: ${e.message||e}`;await refreshConfiguredDevices(false);$('configuredDevicesStatus').textContent=failure}finally{syncConfiguredDeviceToggleAvailability()}}
+async function moveConfiguredDevice(row,destination,direction,button){if(deviceControlsBlocked()){$('configuredDevicesStatus').textContent='Wait for the current Discovery operation before changing device order.';return}button.disabled=true;const title=unifiedDeviceTitle(row);$('configuredDevicesStatus').textContent=`Moving ${title} ${direction}…`;try{const r=await fetch(endpoint('api/configured-devices/order'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_key:row.key,destination_device_key:destination.key})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device order');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent='Saved device order. Native dashboard order updated.'}catch(e){const failure=`Could not change device order: ${e.message||e}`;await refreshConfiguredDevices(false);$('configuredDevicesStatus').textContent=failure}finally{syncConfiguredDeviceToggleAvailability()}}
 async function refreshConfiguredDevices(showStatus=false){if(showStatus)$('configuredDevicesStatus').textContent='Refreshing saved devices…';try{const r=await fetch(endpoint('api/configured-devices'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load saved devices');renderConfiguredDevices(d)}catch(e){$('configuredDevicesStatus').textContent=`Could not load saved devices: ${e.message||e}`}}
-async function setConfiguredDeviceState(row,nextState,button){if(lastDiscoveryState?.running){$('configuredDevicesStatus').textContent='Stop Discovery before changing device state.';return}button.disabled=true;const title=unifiedDeviceTitle(row);$('configuredDevicesStatus').textContent=`Saving ${title} as ${nextState}…`;try{const r=await fetch(endpoint('api/configured-devices/state'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_key:row.key,enabled:nextState})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device state');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent=`${title} is now ${nextState}. Polling and Native dashboard state are being applied automatically.`}catch(e){const failure=`Could not change ${title}: ${e.message||e}`;await refreshConfiguredDevices(false);$('configuredDevicesStatus').textContent=failure}finally{syncConfiguredDeviceToggleAvailability()}}
+async function setConfiguredDeviceState(row,nextState,button){if(deviceControlsBlocked()){$('configuredDevicesStatus').textContent='Wait for the current Discovery operation before changing device state.';return}button.disabled=true;const title=unifiedDeviceTitle(row);$('configuredDevicesStatus').textContent=`Saving ${title} as ${nextState}…`;try{const r=await fetch(endpoint('api/configured-devices/state'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_key:row.key,enabled:nextState})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device state');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent=`${title} is now ${nextState}. Background polling sync is queued; you can keep changing devices.`}catch(e){const failure=`Could not change ${title}: ${e.message||e}`;await refreshConfiguredDevices(false);$('configuredDevicesStatus').textContent=failure}finally{syncConfiguredDeviceToggleAvailability()}}
 function renderDevices(d){lastDevicesDiagnostics=d;renderDeviceDiagnosticsSummary(d);renderUnifiedDevices()}
 async function fetchDiagnosticsData(){const r=await fetch(endpoint('api/diagnostics'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Diagnostics request failed');return d}
 async function refreshDevicesData(showStatus=true){if(showStatus)$('devicesActionStatus').textContent='Refreshing devices…';try{const d=await fetchDiagnosticsData();window.latestDiagnostics=d;renderDevices(d);$('downloadDiagnosticsButton').href=endpoint('download/diagnostics.txt');if(showStatus)$('devicesActionStatus').textContent=`Updated ${d.generated_at||''}`}catch(e){if(showStatus)$('devicesActionStatus').textContent=`Could not load devices: ${e}`}}
@@ -5681,8 +5760,8 @@ let debugVisible=false;
 function elapsedText(started,finished=null){if(!started)return '00:00';const start=Date.parse(started);const end=finished?Date.parse(finished):Date.now();if(!Number.isFinite(start)||!Number.isFinite(end))return '00:00';const total=Math.max(0,Math.floor((end-start)/1000));const h=Math.floor(total/3600);const m=Math.floor((total%3600)/60);const s=total%60;return h?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
 function updateElapsedClock(){const state=lastDiscoveryState||{};if(!$('liveElapsed'))return;$('liveElapsed').textContent=state.running?elapsedText(state.started_at):((state.started_at&&state.finished_at)?elapsedText(state.started_at,state.finished_at):'00:00')}
 function startElapsedTicker(){if(elapsedTicker)return;elapsedTicker=setInterval(()=>{if(!document.hidden&&lastDiscoveryState?.running)updateElapsedClock()},250)}
-function showDiscovery(d){const state=d||{};lastDiscoveryState=state;const running=!!state.running;const regenYaml=state.mode==='regenerate_yaml';const regenCard=state.mode==='regenerate_card';const regen=regenYaml||regenCard;const phase=state.phase||(running?'running':(state.success===true?'complete':(state.success===false?'failed':'idle')));const preparing=running&&phase==='preparing';const stopping=running&&phase==='stopping';const active=running&&!preparing&&!stopping;const btn=$('runDiscoveryButton');const regenBtn=$('regenerateYamlButton');const cardBtn=$('regenerateCardYamlButton');const stopBtn=$('stopDiscoveryButton');btn.disabled=running;regenBtn.disabled=running;cardBtn.disabled=running;btn.textContent=preparing&&!regen?'Preparing…':(stopping?'Stopping…':(active&&!regen?'Discovery Running…':'Run Discovery'));regenBtn.textContent=regenYaml&&preparing?'Preparing…':(regenYaml&&active?'Regenerating…':'Regenerate SNMP2MQTT YAML');cardBtn.textContent=regenCard&&preparing?'Preparing…':(regenCard&&active?'Regenerating…':'Regenerate Dashboard Card YAML');stopBtn.disabled=!running||stopping;stopBtn.textContent=stopping?'Stopping…':'Stop Discovery';const modeLabel=regenCard?'Dashboard Card YAML regeneration':(regenYaml?'SNMP2MQTT YAML regeneration':'Discovery');let label='Idle / Ready';if(preparing)label=`Preparing ${modeLabel}`;else if(stopping)label=`Stopping ${modeLabel}`;else if(active)label=regen?`${modeLabel} running`:'Discovery running';else if(phase==='stopped')label=`${modeLabel} stopped`;else if(state.success===true)label=`${modeLabel} complete`;else if(state.success===false)label=`${modeLabel} failed: ${state.message||'Unknown error'}`;$('discoveryStatus').textContent=label;$('homeStatus').textContent=preparing?'Preparing Discovery':(stopping?'Stopping Discovery':(active?'Discovery running':(phase==='stopped'?'Discovery stopped':(state.success===true?'Last discovery complete':(state.success===false?'Discovery needs attention':'Ready')))));$('homeStatusDot').className=`status-dot${running?' running':(state.success===false?' failed':'')}`;$('liveStage').textContent=preparing?`Preparing ${modeLabel}`:(state.stage||label);$('liveSwitch').textContent=preparing?'Waiting':(state.switch||(!running&&state.success===true?'All configured switches':'Not running'));$('liveTarget').textContent=preparing?'Waiting':(state.target||'Not running');$('liveActivity').textContent=preparing?(regenCard?'Loading saved Discovery state and stored walks':(regenYaml?'Loading saved Discovery data and SNMP walks':'Validating configured switches')):(state.activity||label);$('liveCommand').textContent=preparing?'Not started':(state.command||'No command running');$('liveRunStatus').textContent=preparing?'Preparing':(stopping?'Stopping':(active?'Running':(phase==='stopped'?'Stopped':(state.success===true?'Complete':(state.success===false?'Failed':'Idle / Ready')))));const snmp=state.snmp2mqtt||{};$('liveSnmp2mqtt').textContent=snmp.message||snmp.status||'Waiting for Discovery';updateElapsedClock();const lines=state.log_tail||[];if(!debugVisible)$('discoveryLog').textContent=lines.length?lines.join('\n'):'No debug details are available yet.';updateSteps(state);syncConfiguredDeviceToggleAvailability()}
-function discoveryHistoryModeLabel(mode){return mode==='regenerate_card'?'Dashboard Card YAML regeneration':(mode==='regenerate_yaml'?'SNMP2MQTT YAML regeneration':'Discovery')}
+function showDiscovery(d){const state=d||{};lastDiscoveryState=state;const running=!!state.running;const regenYaml=state.mode==='regenerate_yaml';const regenCard=state.mode==='regenerate_card';const applyDeviceState=state.mode==='apply_device_state';const regen=regenYaml||regenCard;const phase=state.phase||(running?'running':(state.success===true?'complete':(state.success===false?'failed':'idle')));const preparing=running&&phase==='preparing';const stopping=running&&phase==='stopping';const active=running&&!preparing&&!stopping;const btn=$('runDiscoveryButton');const regenBtn=$('regenerateYamlButton');const cardBtn=$('regenerateCardYamlButton');const stopBtn=$('stopDiscoveryButton');btn.disabled=running;regenBtn.disabled=running;cardBtn.disabled=running;btn.textContent=preparing&&!regen?'Preparing…':(stopping?'Stopping…':(active&&!regen?'Discovery Running…':'Run Discovery'));regenBtn.textContent=regenYaml&&preparing?'Preparing…':(regenYaml&&active?'Regenerating…':'Regenerate SNMP2MQTT YAML');cardBtn.textContent=regenCard&&preparing?'Preparing…':(regenCard&&active?'Regenerating…':'Regenerate Dashboard Card YAML');stopBtn.disabled=!running||stopping||applyDeviceState;stopBtn.textContent=applyDeviceState&&running?'Applying changes…':(stopping?'Stopping…':'Stop Discovery');const modeLabel=applyDeviceState?'Device state application':(regenCard?'Dashboard Card YAML regeneration':(regenYaml?'SNMP2MQTT YAML regeneration':'Discovery'));let label='Idle / Ready';if(preparing)label=`Preparing ${modeLabel}`;else if(stopping)label=`Stopping ${modeLabel}`;else if(active)label=applyDeviceState?'Applying device changes':(regen?`${modeLabel} running`:'Discovery running');else if(phase==='stopped')label=`${modeLabel} stopped`;else if(state.success===true)label=`${modeLabel} complete`;else if(state.success===false)label=`${modeLabel} failed: ${state.message||'Unknown error'}`;$('discoveryStatus').textContent=label;$('homeStatus').textContent=applyDeviceState&&running?'Applying device changes':(preparing?'Preparing Discovery':(stopping?'Stopping Discovery':(active?'Discovery running':(phase==='stopped'?'Discovery stopped':(state.success===true?'Last discovery complete':(state.success===false?'Discovery needs attention':'Ready'))))));$('homeStatusDot').className=`status-dot${running?' running':(state.success===false?' failed':'')}`;$('liveStage').textContent=preparing?`Preparing ${modeLabel}`:(state.stage||label);$('liveSwitch').textContent=preparing?'Waiting':(state.switch||(!running&&state.success===true?'All configured switches':'Not running'));$('liveTarget').textContent=preparing?'Waiting':(state.target||'Not running');$('liveActivity').textContent=preparing?(regenCard?'Loading saved Discovery state and stored walks':(regenYaml?'Loading saved Discovery data and SNMP walks':'Validating configured switches')):(state.activity||label);$('liveCommand').textContent=preparing?'Not started':(state.command||'No command running');$('liveRunStatus').textContent=preparing?'Preparing':(stopping?'Stopping':(active?'Running':(phase==='stopped'?'Stopped':(state.success===true?'Complete':(state.success===false?'Failed':'Idle / Ready')))));const snmp=state.snmp2mqtt||{};$('liveSnmp2mqtt').textContent=snmp.message||snmp.status||'Waiting for Discovery';updateElapsedClock();const lines=state.log_tail||[];if(!debugVisible)$('discoveryLog').textContent=lines.length?lines.join('\n'):'No debug details are available yet.';updateSteps(state);syncConfiguredDeviceToggleAvailability()}
+function discoveryHistoryModeLabel(mode){return mode==='apply_device_state'?'Device state application':(mode==='regenerate_card'?'Dashboard Card YAML regeneration':(mode==='regenerate_yaml'?'SNMP2MQTT YAML regeneration':'Discovery'))}
 function discoveryHistoryStatusLabel(status){return status==='complete'?'Complete':(status==='failed'?'Failed':(status==='stopped'?'Stopped':'Unknown'))}
 function discoveryHistoryDuration(seconds){const total=Number(seconds);if(!Number.isFinite(total)||total<0)return 'Unknown';const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=Math.floor(total%60);return h?`${h}h ${m}m ${s}s`:(m?`${m}m ${s}s`:`${s}s`)}
 function discoveryHistoryFriendlyTime(value){const raw=String(value||'').trim();if(!raw)return 'Unknown time';const normalized=/[+-]\d{4}$/.test(raw)?raw.replace(/([+-]\d{2})(\d{2})$/,'$1:$2'):raw;const date=new Date(normalized);if(Number.isNaN(date.getTime()))return raw;try{return new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'}).format(date)}catch(_error){return date.toLocaleString()}}
@@ -6227,34 +6306,37 @@ class SupportHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/configured-devices/state":
             try:
-                with _exclusive_operation("Device configuration update"):
+                with _device_configuration_update("Device configuration update"):
                     length = int(self.headers.get("Content-Length", "0"))
                     if length <= 0 or length > 8192:
                         raise ValueError("Invalid device state request size.")
                     data = json.loads(self.rfile.read(length).decode("utf-8"))
                     result = _set_configured_device_state(self.app.options_file, data)
-                key = str(data.get("device_key") or "") if isinstance(data, dict) else ""
-                try:
-                    dashboard = _apply_saved_device_order_to_dashboard()
-                    result["dashboard_refresh_started"] = bool(dashboard.get("updated"))
-                    result["dashboard_refresh_pending"] = not bool(dashboard.get("updated"))
-                    result["dashboard_projection"] = dashboard
-                except (OSError, RuntimeError, ValueError) as exc:
-                    result["dashboard_refresh_started"] = False
-                    result["dashboard_refresh_pending"] = True
-                    result["dashboard_refresh_warning"] = str(exc)[:240]
-                result["polling_refresh_started"] = False
-                if key.startswith("snmp:"):
+                    key = str(data.get("device_key") or "") if isinstance(data, dict) else ""
                     try:
-                        _start_device_state_application()
-                        result["polling_refresh_started"] = True
-                    except OperationConflict:
+                        dashboard = _apply_saved_device_order_to_dashboard()
+                        result["dashboard_refresh_started"] = bool(dashboard.get("updated"))
+                        result["dashboard_refresh_pending"] = not bool(dashboard.get("updated"))
+                        result["dashboard_projection"] = dashboard
+                    except (OSError, RuntimeError, ValueError) as exc:
+                        result["dashboard_refresh_started"] = False
+                        result["dashboard_refresh_pending"] = True
+                        result["dashboard_refresh_warning"] = str(exc)[:240]
+                    result["polling_refresh_started"] = False
+                    if key.startswith("snmp:"):
+                        queued = _start_device_state_application()
+                        result["polling_refresh_started"] = bool(queued.get("started"))
                         result["polling_refresh_pending"] = True
-                elif key.startswith("unifi:"):
-                    # UniFi2MQTT reads the shared control file on its normal poll loop;
-                    # no Discovery/card-regeneration operation is required here.
-                    result["polling_refresh_pending"] = True
-                self._json(result)
+                        result["polling_refresh_coalesced"] = bool(queued.get("coalesced"))
+                        result["polling_refresh_generation"] = queued.get("generation")
+                    elif key.startswith("unifi:"):
+                        # UniFi2MQTT reads the shared control file on its normal poll loop;
+                        # no Discovery/card-regeneration operation is required here.
+                        result["polling_refresh_pending"] = True
+                    # Keep response ordering aligned with the serialized mutation
+                    # order so concurrent UI clicks cannot render an older snapshot
+                    # after a newer one has already been returned.
+                    self._json(result)
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -6262,22 +6344,22 @@ class SupportHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/configured-devices/order":
             try:
-                with _exclusive_operation("Device order update"):
+                with _device_configuration_update("Device order update"):
                     length = int(self.headers.get("Content-Length", "0"))
                     if length <= 0 or length > 8192:
                         raise ValueError("Invalid device order request size.")
                     data = json.loads(self.rfile.read(length).decode("utf-8"))
                     result = _move_configured_device(self.app.options_file, data)
-                try:
-                    dashboard = _apply_saved_device_order_to_dashboard()
-                    result["dashboard_refresh_started"] = bool(dashboard.get("updated"))
-                    result["dashboard_refresh_pending"] = not bool(dashboard.get("updated"))
-                    result["dashboard_projection"] = dashboard
-                except (OSError, RuntimeError, ValueError) as exc:
-                    result["dashboard_refresh_started"] = False
-                    result["dashboard_refresh_pending"] = True
-                    result["dashboard_refresh_warning"] = str(exc)[:240]
-                self._json(result)
+                    try:
+                        dashboard = _apply_saved_device_order_to_dashboard()
+                        result["dashboard_refresh_started"] = bool(dashboard.get("updated"))
+                        result["dashboard_refresh_pending"] = not bool(dashboard.get("updated"))
+                        result["dashboard_projection"] = dashboard
+                    except (OSError, RuntimeError, ValueError) as exc:
+                        result["dashboard_refresh_started"] = False
+                        result["dashboard_refresh_pending"] = True
+                        result["dashboard_refresh_warning"] = str(exc)[:240]
+                    self._json(result)
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
