@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 
 import support_web as web
 
 
 def snapshot(options: dict) -> dict:
-    original = web._self_addon_options
-    web._self_addon_options = lambda: options
-    try:
-        return web._configured_devices_snapshot(Path("/definitely-not-used/options.json"))
-    finally:
-        web._self_addon_options = original
+    original_options = web._self_addon_options
+    original_control = web.DEFAULT_DEVICE_CONTROL
+    with tempfile.TemporaryDirectory(prefix="switch-vision-management-ip-") as tmp:
+        web._self_addon_options = lambda: options
+        web.DEFAULT_DEVICE_CONTROL = Path(tmp) / "device-control.json"
+        try:
+            return web._configured_devices_snapshot(Path("/definitely-not-used/options.json"))
+        finally:
+            web._self_addon_options = original_options
+            web.DEFAULT_DEVICE_CONTROL = original_control
 
 
 canonical_secret = "canonical-private-community"
