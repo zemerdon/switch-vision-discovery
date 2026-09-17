@@ -230,8 +230,8 @@ def _hub_motd_text() -> str:
     return value[:HUB_MOTD_MAX_CHARS]
 
 
-def _page_with_ui_preferences() -> str:
-    """Apply current UI preferences and inject the safe Hub MOTD text."""
+def _page_with_ui_preferences(version: str | None = None) -> str:
+    """Apply current UI preferences and inject bounded runtime metadata."""
     preferences = _discovery_ui_preferences()
     classes = " ".join(
         (
@@ -239,9 +239,18 @@ def _page_with_ui_preferences() -> str:
             f"width-{preferences['content_width']}",
         )
     )
+    document_version = str(
+        version
+        or os.environ.get("SWITCH_VISION_DISCOVERY_VERSION", "unknown")
+        or "unknown"
+    ).strip()
     page = _PAGE.replace(
         "<body><main>",
-        f'<body class="{classes}" style="--sv-font-body:{preferences["text_size"]}px"><main>',
+        (
+            f'<body class="{classes}" '
+            f'data-sv-discovery-version="{html.escape(document_version, quote=True)}" '
+            f'style="--sv-font-body:{preferences["text_size"]}px"><main>'
+        ),
         1,
     )
     return page.replace("__SV_HUB_MOTD__", html.escape(_hub_motd_text()), 1)
@@ -6225,7 +6234,7 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 </div>
 </main>
 <script>
-const $=id=>document.getElementById(id); let defaultsLoaded=false; let polling=null; let elapsedTicker=null; let refreshInFlight=false; let currentView='home'; let lastRunning=false; let lastDiscoveryState={}; let generatedCardYamlModified=null;
+const $=id=>document.getElementById(id); const HUB_DOCUMENT_VERSION=String(document.body.dataset.svDiscoveryVersion||'unknown').trim(); const HUB_VERSION_RELOAD_KEY='switch-vision-hub-runtime-version-reload-v1'; let defaultsLoaded=false; let polling=null; let elapsedTicker=null; let refreshInFlight=false; let currentView='home'; let lastRunning=false; let lastDiscoveryState={}; let generatedCardYamlModified=null;
 const THEME_STORAGE_KEY='switch-vision-management-theme-v1';const MANAGEMENT_THEMES=new Set(['switch-vision','cisco-classic','cisco-nexus','unifi']);
 const MOTD_VISIBILITY_STORAGE_KEY='switch-vision-hub-motd-visibility-v1';
 function applyManagementTheme(value,{persist=true}={}){const theme=MANAGEMENT_THEMES.has(value)?value:'switch-vision';document.documentElement.dataset.svTheme=theme;if($('themeSelect'))$('themeSelect').value=theme;if(persist){try{localStorage.setItem(THEME_STORAGE_KEY,theme)}catch(_e){}}}
@@ -6444,7 +6453,8 @@ async function resetSnmpDiscoveryData(){const btn=$('resetSnmpDiscoveryButton');
 
 async function importConfiguration(){const file=$('configurationFile').files[0];const status=$('configurationStatus');if(!file){status.textContent='Choose a configuration JSON file first.';return}if(file.size>128*1024*1024){status.textContent='Configuration backup is too large.';return}if(!confirm('Restore this Switch Vision configuration? Complete backups overwrite matching non-secret component settings and restore calibration profiles/assets. Saved credentials are never imported.'))return;const btn=$('importConfigurationButton');btn.disabled=true;status.textContent='Restoring Switch Vision configuration…';try{const text=await file.text();const data=JSON.parse(text);const r=await fetch(endpoint('api/configuration/import'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Import failed');if(d.format==='legacy-discovery'){status.textContent=`Imported legacy Discovery configuration with ${d.switch_count||0} configured switch(es).`;return}const requirements=Array.isArray(d.credential_requirements)?d.credential_requirements:[];const pending=(Number(d.pending_discovery_switches||0)+Number(d.pending_unifi_controllers||0));const warnings=Array.isArray(d.warnings)&&d.warnings.length?` Warnings: ${d.warnings.join(' | ')}`:'';status.textContent=`Complete restore finished: ${(d.restored_components||[]).join(', ')||'configuration'} · ${d.calibration_profile_count||0} calibration profile(s) · ${d.asset_count||0} custom asset(s). ${requirements.length} credential${requirements.length===1?'':'s'} require re-entry${pending?`; ${pending} device/controller row${pending===1?'':'s'} restored pending credentials`:''}.${warnings}`;appLinksCache=null}catch(e){status.textContent=`Could not import configuration: ${e.message||e}`}finally{btn.disabled=false}}
 function schedulePoll(running=lastRunning){if(polling){clearTimeout(polling);polling=null}if(document.hidden)return;polling=setTimeout(refresh,running?1000:5000)}
-async function refresh(){if(refreshInFlight)return;refreshInFlight=true;try{const r=await fetch(endpoint('api/status'),{cache:'no-store'});const d=await r.json();if(!window.SwitchVisionHubSettings?.hasUnsavedCore?.()){if(d.ui_preferences?.density)syncDensityUi(d.ui_preferences.density);if(d.ui_preferences?.content_width)syncContentWidthUi(d.ui_preferences.content_width)}setUnifiHomeCardVisibility(d.ui_preferences?.show_unifi_integration!==false);if(d.ui_preferences?.show_unifi_integration!==false)await refreshUnifiHomeCard();if(!defaultsLoaded)setForm(d.defaults);showDiscovery(d.discovery);renderDiscoveryHistory(d.discovery_history||{});if(debugVisible)await refreshCurrentDiscoveryDebug();const contributionRunning=!!d.job.running;const discoveryRunning=!!d.discovery?.running;lastRunning=contributionRunning||discoveryRunning;$('createButton').disabled=contributionRunning;if(contributionRunning&&currentView!=='discovery')setView('progress');$('progressMessage').textContent=d.job.message||'Working…';$('logTail').textContent=(d.job.log_tail||[]).join('\n');if(!contributionRunning&&d.job.success===false&&currentView==='progress'){$('progressMessage').textContent=`Failed: ${d.job.message}`}if(!contributionRunning){showLatest(d.latest);if(d.job.success===true&&d.latest&&currentView==='progress')setView('ready')}if(currentView==='devices')await refreshDevicesData(false);else if(currentView==='discovery')await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])}catch(e){if(currentView==='progress')$('progressMessage').textContent=`Could not contact Support My Switch: ${e}`;else $('homeStatus').textContent=`Connection problem: ${e}`}finally{refreshInFlight=false;schedulePoll(lastRunning)}}
+function syncHubRuntimeVersion(runtimeVersion){const running=String(runtimeVersion||'').trim(),loaded=HUB_DOCUMENT_VERSION;if(!running||!loaded||running==='unknown'||loaded==='unknown'||running===loaded){try{sessionStorage.removeItem(HUB_VERSION_RELOAD_KEY)}catch(_e){}return false}const token=`${loaded}->${running}`;let previous='';try{previous=sessionStorage.getItem(HUB_VERSION_RELOAD_KEY)||''}catch(_e){}if(previous===token)return false;try{sessionStorage.setItem(HUB_VERSION_RELOAD_KEY,token)}catch(_e){}window.location.reload();return true}
+async function refresh(){if(refreshInFlight)return;refreshInFlight=true;try{const r=await fetch(endpoint('api/status'),{cache:'no-store'});const d=await r.json();if(syncHubRuntimeVersion(d.version))return;if(!window.SwitchVisionHubSettings?.hasUnsavedCore?.()){if(d.ui_preferences?.density)syncDensityUi(d.ui_preferences.density);if(d.ui_preferences?.content_width)syncContentWidthUi(d.ui_preferences.content_width)}setUnifiHomeCardVisibility(d.ui_preferences?.show_unifi_integration!==false);if(d.ui_preferences?.show_unifi_integration!==false)await refreshUnifiHomeCard();if(!defaultsLoaded)setForm(d.defaults);showDiscovery(d.discovery);renderDiscoveryHistory(d.discovery_history||{});if(debugVisible)await refreshCurrentDiscoveryDebug();const contributionRunning=!!d.job.running;const discoveryRunning=!!d.discovery?.running;lastRunning=contributionRunning||discoveryRunning;$('createButton').disabled=contributionRunning;if(contributionRunning&&currentView!=='discovery')setView('progress');$('progressMessage').textContent=d.job.message||'Working…';$('logTail').textContent=(d.job.log_tail||[]).join('\n');if(!contributionRunning&&d.job.success===false&&currentView==='progress'){$('progressMessage').textContent=`Failed: ${d.job.message}`}if(!contributionRunning){showLatest(d.latest);if(d.job.success===true&&d.latest&&currentView==='progress')setView('ready')}if(currentView==='devices')await refreshDevicesData(false);else if(currentView==='discovery')await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])}catch(e){if(currentView==='progress')$('progressMessage').textContent=`Could not contact Support My Switch: ${e}`;else $('homeStatus').textContent=`Connection problem: ${e}`}finally{refreshInFlight=false;schedulePoll(lastRunning)}}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(polling){clearTimeout(polling);polling=null}}else{updateElapsedClock();refresh()}});window.addEventListener('focus',()=>{if(!document.hidden){updateElapsedClock();refresh()}});
 async function create(){const btn=$('createButton');btn.disabled=true;setView('progress');$('progressMessage').textContent='Starting…';try{const r=await fetch(endpoint('api/create'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start contribution');await refresh()}catch(e){$('progressMessage').textContent=`Could not start: ${e}`;btn.disabled=false}}
 const DISCOVERY_TOOLTIP_HELP={runDiscoveryButton:'Contact each enabled switch, collect current evidence, identify hardware, and regenerate Switch Vision outputs.',regenerateYamlButton:'Rebuild SNMP2MQTT YAML from saved Discovery evidence without running new SNMP walks.',regenerateCardYamlButton:'Rebuild dashboard-card YAML from saved Discovery evidence without running new SNMP walks.',previewGeneratedDashboardYamlButton:'Preview the dependency-free dashboard export that can be pasted into a new Home Assistant dashboard.',copyGeneratedDashboardYamlButton:'Copy a complete dependency-free dashboard for Home Assistant Raw configuration editor.',copyGeneratedCardsOnlyButton:"Copy only the generated card list for pasting beneath an existing view's cards: key.",downloadGeneratedDashboardYamlButton:'Download the complete dependency-free Home Assistant dashboard export.',stopDiscoveryButton:'Request a clean stop of the active Discovery or regeneration operation.',viewResultsButton:'Open the unified Devices list and current detected hardware details.',toggleDebugButton:'Show the complete credential-sanitized debug session for the current or most recent operation.',copyDebugButton:'Copy the complete current-session credential-sanitized debug output.',devicesRunDiscoveryButton:'Start a fresh Discovery run for the currently enabled saved switches.',resetDeviceOrderButton:'Restore the device list and Native dashboard to immutable first-added order.',devicesRegenerateCardYamlButton:'Regenerate the dashboard card from current saved device order/state.',copyDiagnosticsButton:'Copy the privacy-safe Switch Vision diagnostics report.',resetSnmpDiscoveryButton:'Retire known Switch Vision SNMP MQTT entities and clear saved SNMP Discovery state for a clean rebuild.',addUnifiControllerButton:'Add another Local or Remote UniFi controller/site to this UniFi2MQTT instance.',testUnifiLocalButton:'Test Local UniFi API reachability, authentication, site resolution, and adopted-device access without saving.',testUnifiRemoteButton:'Test Remote Site Manager reachability, authentication, host/site resolution, and adopted-device access without saving.',unifi_priority_transport:'The connection path tried first on every UniFi poll.',unifi_fallback_transport:'The alternate connection used only when the priority path is unavailable.',unifi_local_controller_url:'Local UniFi Network Integration API origin. Self-hosted controllers normally use HTTPS port 11443.',unifi_remote_host_id:'UniFi Site Manager console host selector; auto is recommended when unambiguous.'};
@@ -6571,7 +6581,7 @@ class SupportHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _html(self) -> None:
-        body = _page_with_ui_preferences().encode("utf-8")
+        body = _page_with_ui_preferences(self.app.version).encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -6654,6 +6664,7 @@ class SupportHandler(BaseHTTPRequestHandler):
             self._html()
         elif path == "/api/status":
             self._json({
+                "version": self.app.version,
                 "job": _state_snapshot(),
                 "latest": _latest_contribution(self.app.contributions_dir),
                 "defaults": _defaults(self.app.options_file),

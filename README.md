@@ -22,6 +22,10 @@ Repository URL:
 
 Switch Vision components are independently versioned. The main Switch Vision Core product source is maintained separately and is not published in this repository.
 
+## Hub updates
+
+Discovery v2.4.35 embeds the loaded Hub frontend version and compares it with the running app version through the existing status poll. If a Home Assistant ingress tab remains open across a Discovery app update, the Hub performs one guarded self-refresh when those versions differ so the current Devices layout and JavaScript replace the stale in-memory page. The guard prevents repeated reload loops, and normal polling frequency is unchanged.
+
 ## User-first Discovery behavior
 
 Switch Vision Discovery is deliberately **fail-soft for reachable hardware**. The goal is to give the user something useful and diagnosable whenever the switch answers, rather than turn an incomplete model mapping or optional telemetry gap into a failed Discovery run.

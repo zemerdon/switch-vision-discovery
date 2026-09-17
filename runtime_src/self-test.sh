@@ -1989,14 +1989,25 @@ grep -q "openResolvedApp('discovery')" "$BASE_DIR/support_web.py"
 ! grep -q 'Install/copy the bundled local app' "$BASE_DIR/support_web.py"
 grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
 
+# v2.4.35 stale-open Hub frontend/runtime version synchronization.
+grep -Fq 'data-sv-discovery-version=' "$BASE_DIR/support_web.py"
+grep -Fq 'HUB_DOCUMENT_VERSION' "$BASE_DIR/support_web.py"
+grep -Fq 'HUB_VERSION_RELOAD_KEY' "$BASE_DIR/support_web.py"
+grep -Fq 'function syncHubRuntimeVersion(runtimeVersion)' "$BASE_DIR/support_web.py"
+grep -Fq 'sessionStorage.setItem(HUB_VERSION_RELOAD_KEY,token)' "$BASE_DIR/support_web.py"
+grep -Fq 'window.location.reload();return true' "$BASE_DIR/support_web.py"
+grep -Fq 'if(syncHubRuntimeVersion(d.version))return' "$BASE_DIR/support_web.py"
+grep -Fq '"version": self.app.version' "$BASE_DIR/support_web.py"
+echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
+
 
 # Blank/default switch-row regression.
 # A fresh Home Assistant install contains one visual placeholder row, but that
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.34"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.34"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.35"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.35"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"

@@ -1,3 +1,10 @@
+## 2.4.35 — Keep an open Hub synchronized after app updates
+
+- Embed the loaded Hub document version and expose the running Discovery app version through the existing status poll so frontend/runtime identity can be compared without adding another polling request.
+- When an already-open Home Assistant ingress Hub survives an app update and its frontend version no longer matches the restarted backend, reload the Hub once so the current Devices layout and JavaScript are loaded.
+- Guard the reload with session state so a proxy/browser anomaly cannot create an infinite refresh loop.
+- Keep the Devices row/card layout, saved device state, polling behavior, and public/Local runtime package identical.
+
 ## 2.4.34 — Aligned Hub toggles and UniFi presentation control
 
 - Standardize generated Hub checkbox rows so the checkbox, setting label and slab information icon share one clean baseline everywhere the shared toggle helper is used.

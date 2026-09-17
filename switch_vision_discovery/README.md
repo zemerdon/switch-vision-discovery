@@ -107,7 +107,7 @@ For the Experimental Zyxel `XS1930-10` profile, model-aware 8-RJ45 + 2-SFP front
 
 ## Port activity
 
-Discovery supplies the generated switch/card data; Activity LED behaviour itself is rendered by Switch Vision Core. Core v2.2.0 uses utilisation relative to negotiated link speed with configurable sensitivity, thresholds, blink periods, hold time, and hysteresis.
+Discovery supplies the generated switch/card data; Activity LED behaviour itself is rendered by Switch Vision Core. Core v2.7.13 keeps utilisation-relative Slow / Medium / Fast classification, sensitivity presets, custom thresholds, hold time, and hysteresis, while rendering active ports with natural irregular flicker. The existing Slow / Medium / Fast period values are preserved as average flicker-cadence controls rather than exact repeating blink periods.
 
 ## Configuration export and import
 
