@@ -5,6 +5,12 @@ set -eu
 # the exact missing contract instead of failing silently under set -e.
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export SV_CURRENT_DISCOVERY_DEBUG_PATH="${SV_CURRENT_DISCOVERY_DEBUG_PATH:-/tmp/switch-vision-current-discovery-debug.log}"
+export SV_DEVICE_CONTROL_PATH="${SV_DEVICE_CONTROL_PATH:-/tmp/switch-vision-self-test-device-control-$$.json}"
+rm -f "$SV_DEVICE_CONTROL_PATH"
+sv_self_test_cleanup() {
+    rm -f "$SV_DEVICE_CONTROL_PATH"
+}
+trap 'sv_self_test_cleanup' EXIT HUP INT TERM
 SV_COPY_DEBUG_TEST_DIR="$BASE_DIR"
 python3 "$BASE_DIR/dashboard_card_regeneration_regression.py"
 python3 "$BASE_DIR/discovery_history_regression.py"
@@ -106,7 +112,7 @@ echo 'Switch Vision Discovery v2.3.21 Credits home-navigation order: PASS'
 # contribution values are embedded in this regression.
 HP_TEST_WALK=$(mktemp)
 HP_TEST_CAP=$(mktemp)
-trap 'rm -f "$HP_TEST_WALK" "$HP_TEST_CAP"' EXIT HUP INT TERM
+trap 'rm -f "$HP_TEST_WALK" "$HP_TEST_CAP"; sv_self_test_cleanup' EXIT HUP INT TERM
 {
   echo '.1.3.6.1.2.1.1.1.0 = STRING: HP J8693A Switch 3500yl-48G'
   i=1
@@ -1110,7 +1116,7 @@ RUNTIME_REGISTRY="$RUNTIME_DATA_DIR/devices/supported_devices.json"
 cv_vendor_database_self_test
 
 tmp_dir=$(mktemp -d)
-trap 'rm -rf "$tmp_dir"' EXIT
+trap 'rm -rf "$tmp_dir"; sv_self_test_cleanup' EXIT
 walk="$tmp_dir/test-walk.txt"
 cat > "$walk" <<'WALK'
 .1.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, C3650 Software"
