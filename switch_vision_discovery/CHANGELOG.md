@@ -1,3 +1,10 @@
+## 2.4.32 — Helpful Hub tooltips
+
+- Replace label-only Hub hover text with authored contextual help that explains what each setting changes, including useful directionality such as what higher/lower Activity LED values do.
+- Cover the generated Core, Discovery and SNMP2MQTT settings surfaces with the existing accessible `?` help popovers while also exposing the same useful explanation on control hover.
+- Remove the generic fallback that copied `aria-label`, visible field labels or button text into browser tooltips when no real help existed. Obvious controls may have no tooltip rather than a useless duplicate label.
+- Add a permanent regression requiring authored help for the Hub settings surface and rejecting help text that simply repeats its visible label.
+
 ## 2.4.31 — Backup asset efficiency and single-source device ordering
 
 - Require Core backup API v2 and export only Core-identified custom logos/faceplates; stock Switch Vision visuals are recreated by the installed Core release instead of being copied one-by-one into every complete backup.
