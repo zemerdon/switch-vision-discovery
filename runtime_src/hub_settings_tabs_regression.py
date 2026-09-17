@@ -20,6 +20,19 @@ for marker in (
 ):
     assert marker in SOURCE, marker
 
+# Dashboard presentation lives inside the Native dashboard header section as a
+# balanced 2x2 responsive layout instead of a separate settings card.
+for marker in (
+    "presentationGroup.className='hub-header-group hub-header-presentation'",
+    "presentationGroup.innerHTML='<h4>Dashboard presentation</h4>'",
+    "headerLayout.append(displayGroup,shortcutGroup,presentationGroup,box)",
+    ".hub-header-layout{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(420px,1.2fr)",
+    ".hub-header-presentation .hub-toggle-grid{grid-template-columns:1fr}",
+    ".hub-header-presentation-width{grid-template-columns:1fr!important",
+):
+    assert marker in SOURCE, marker
+assert "const dash=sec('Dashboard presentation'" not in SOURCE
+
 # The old accordion contract must be gone; tabs are the sole top-level settings navigation.
 for old in (
     '<details id="hubComponent-core"',

@@ -543,33 +543,10 @@
     $("svProfileManagerDeleteAllUnused")
       .addEventListener(
         "click",
-        () => {
+        async () => {
           managerState.activeIndex = null;
-
-          // Do not clear/re-render first: the base Clear Selection action
-          // rebuilds the profile list, which can race the manager grouping and
-          // leave this handler with no inactive rows to select. Select the
-          // currently rendered eligible inactive rows in place, then delegate
-          // the actual protected deletion/confirmation to the base manager.
-          const inputs = [
-            ...document.querySelectorAll(
-              ".sv-profile-section-unused [data-profile-select]:not(:disabled)"
-            ),
-          ];
-
-          for (const input of inputs) {
-            if (!input.checked) {
-              input.checked = true;
-              input.dispatchEvent(
-                new Event("change", { bubbles: true })
-              );
-            }
-          }
-
-          const hidden = $("svProfilesDeleteSelected");
-          if (inputs.length && hidden && !hidden.disabled) {
-            hidden.click();
-          }
+          await window.SwitchVisionCalibrationProfiles
+            ?.deleteAllInactive?.();
           scheduleEnhance();
         }
       );

@@ -18,6 +18,7 @@ Repository URL:
 - Architectures: amd64, aarch64
 - Container image: `ghcr.io/zemerdon/switch-vision-discovery`
 - Current Switch Vision Core compatibility floor: v2.3.10+ for the Calibration Profile management/storage API used by Discovery
+- Complete configuration backup/restore of custom logo/faceplate assets requires Switch Vision Core v2.7.11+
 
 Switch Vision components are independently versioned. The main Switch Vision Core product source is maintained separately and is not published in this repository.
 

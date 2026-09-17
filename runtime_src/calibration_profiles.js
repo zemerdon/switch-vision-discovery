@@ -477,6 +477,11 @@
         (item) => item.active === true
       ).length;
 
+    const inactiveCount =
+      items.filter(
+        (item) => item.active !== true
+      ).length;
+
     const staleCount =
       items.filter(
         (item) => item.stale === true
@@ -491,6 +496,7 @@
     const summaryParts = [
       `${items.length} saved`,
       `${activeCount} active`,
+      `${inactiveCount} inactive`,
     ];
 
     if (staleCount) {
@@ -983,6 +989,33 @@
       state.loading = false;
       await load(true);
     }
+  }
+
+  async function deleteAllInactive() {
+    if (state.loading) return;
+
+    state.selected = new Set(
+      state.items
+        .filter(
+          (item) =>
+            item.active !== true &&
+            item.scope !== "factory"
+        )
+        .map(
+          (item) =>
+            String(item.profile || "").trim()
+        )
+        .filter(Boolean)
+    );
+
+    render();
+
+    if (!state.selected.size) {
+      message("No inactive calibration profiles are available to delete.");
+      return;
+    }
+
+    await deleteSelected();
   }
 
   async function deleteSelected() {
@@ -1487,5 +1520,6 @@
 
   window.SwitchVisionCalibrationProfiles = {
     load,
+    deleteAllInactive,
   };
 })();

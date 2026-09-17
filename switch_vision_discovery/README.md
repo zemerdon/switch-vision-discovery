@@ -8,6 +8,7 @@ The authoritative app version is defined in `config.yaml`. Switch Vision compone
 
 - Home Assistant OS or Supervised with `/share` access
 - Switch Vision Core v2.3.10 or later for the Calibration Profile management/storage API used by current Discovery releases
+- Switch Vision Core v2.7.11 or later for complete configuration backup/restore of custom Switch Vision logo and faceplate assets
 - SNMP v2c read-only access to each SNMP-managed target
 - UDP/161 reachability from Home Assistant to each SNMP-managed target
 - Separate Switch Vision SNMP2MQTT app when live SNMP entities are required

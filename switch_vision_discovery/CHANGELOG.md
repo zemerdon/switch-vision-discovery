@@ -1,3 +1,12 @@
+## 2.4.30 — Whole-stack backup and Hub state refinements
+
+- Replace the Discovery-only export with a versioned complete Switch Vision backup containing non-secret Core, Discovery, SNMP2MQTT, UniFi2MQTT and Installer settings, device state/order, immutable first-added ordering metadata, Calibration profiles, and custom Switch Vision logo/faceplate assets.
+- Exclude SNMP communities, MQTT passwords, UniFi API keys, tokens/passwords and the private Support My Switch contributor value. Restore recreates secret-dependent switch/controller structure as pending rows so only the missing credentials need to be entered. Older Discovery-only JSON imports remain supported.
+- Require the coordinated Core backup-asset capability and verify custom asset size/base64/SHA-256 before restore side effects, preventing a complete backup from silently degrading against an older Core.
+- Persist backend-only immutable first-added timestamps for SNMP and UniFi devices; manual reorder never changes them, and **Reset Order** restores oldest-first added order while immediately re-projecting the Native dashboard. Existing installs seed the first-added baseline deterministically from their current saved device order.
+- Move **Dashboard presentation** into the **Native dashboard header** settings section and rebalance the controls into a responsive four-panel layout.
+- Fix **Delete All Inactive** by delegating to the Calibration Profile manager's stateful bulk-delete path instead of racing grouped DOM selection, and add the inactive count to the toolbar summary.
+
 ## 2.4.29 — Responsive/coalesced device state changes
 
 - Keep Devices enable/disable and reorder controls usable while the slower SNMP polling reconciliation runs in the background.

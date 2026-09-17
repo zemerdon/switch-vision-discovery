@@ -7,6 +7,8 @@ support_my_switch.sh backend. It never sends email or stores mail credentials.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import copy
 from contextlib import contextmanager
 import html
@@ -88,6 +90,11 @@ DEFAULT_UNIFI_DIAGNOSTICS = Path("/share/switch_vision/unifi/diagnostics.json")
 DEFAULT_DEVICE_CONTROL = Path(
     os.environ.get("SV_DEVICE_CONTROL_PATH", str(DEFAULT_SHARE_DIR / "device-control.json"))
 )
+DEFAULT_CONFIGURATION_RESTORE_PENDING = DEFAULT_SHARE_DIR / "configuration-restore-pending.json"
+COMPLETE_BACKUP_FORMAT = "switch-vision-complete-backup-v1"
+COMPLETE_BACKUP_SCHEMA_VERSION = 1
+MAX_COMPLETE_BACKUP_BYTES = 128 * 1024 * 1024
+MAX_COMPLETE_BACKUP_ASSET_BYTES = 16 * 1024 * 1024
 DEFAULT_DISCOVERY_LOG = DEFAULT_SHARE_DIR / "discovery-web.log"
 _current_debug_override = os.environ.get("SV_CURRENT_DISCOVERY_DEBUG_PATH", "").strip()
 if _current_debug_override:
@@ -755,6 +762,8 @@ def _import_discovery_options(imported: dict[str, Any]) -> None:
                 raise RuntimeError(
                     f"Home Assistant did not confirm imported Discovery option '{key}'."
                 )
+        if "switches" in imported:
+            _reconcile_device_added_at(confirmed)
         enforce_retention(confirmed)
 
 
@@ -1968,6 +1977,16 @@ def _current_unified_device_keys(options: dict[str, Any]) -> list[str]:
     return keys
 
 
+def _reconcile_device_added_at(options: dict[str, Any]) -> dict[str, Any]:
+    """Persist immutable first-added timestamps for every currently known device."""
+    current_keys = _current_unified_device_keys(options)
+    control = device_control_state.load(DEFAULT_DEVICE_CONTROL)
+    control, changed = device_control_state.reconcile_added_at(control, current_keys)
+    if changed:
+        control = device_control_state.save(control, DEFAULT_DEVICE_CONTROL)
+    return control
+
+
 def _configured_devices_snapshot(options_file: Path) -> dict[str, Any]:
     """Return browser-safe persistent switch inventory plus unified device control."""
     writable = True
@@ -2035,8 +2054,8 @@ def _configured_devices_snapshot(options_file: Path) -> dict[str, Any]:
             "switch_model": str(raw.get("switch_model") or "auto").strip()[:120] or "auto",
             "enabled": state,
         })
-    control = device_control_state.load(DEFAULT_DEVICE_CONTROL)
     current_keys = _current_unified_device_keys(options)
+    control = _reconcile_device_added_at(options)
     return {
         "devices": devices,
         "count": len(devices),
@@ -2204,6 +2223,61 @@ def _move_configured_device(options_file: Path, request_data: Any) -> dict[str, 
     return _configured_devices_snapshot(options_file)
 
 
+def _reset_configured_device_order(options_file: Path) -> dict[str, Any]:
+    """Restore mixed SNMP/UniFi display order to immutable first-added order."""
+    with _OPTIONS_UPDATE_LOCK:
+        options = _self_addon_options()
+        current_keys = _current_unified_device_keys(options)
+        control = device_control_state.load(DEFAULT_DEVICE_CONTROL)
+        updated_control = device_control_state.reset_order(control, current_keys)
+        reset_keys = list(updated_control.get("order") or [])
+
+        rows = options.get("switches")
+        if not isinstance(rows, list):
+            rows = []
+        by_name = {
+            str(row.get("switch_name") or "").strip(): row
+            for row in rows
+            if isinstance(row, dict) and str(row.get("switch_name") or "").strip()
+        }
+        snmp_names = [key.split(":", 1)[1] for key in reset_keys if key.startswith("snmp:")]
+        snmp_name_set = set(snmp_names)
+        updated_rows = [by_name[name] for name in snmp_names if name in by_name]
+        updated_rows.extend(
+            row for row in rows
+            if not isinstance(row, dict)
+            or not str(row.get("switch_name") or "").strip()
+            or str(row.get("switch_name") or "").strip() not in snmp_name_set
+        )
+        if updated_rows != rows:
+            updated_options = dict(options)
+            updated_options["switches"] = updated_rows
+            _validate_inventory_identities(updated_options)
+            create_pre_mutation_backup(options, reason="device_order_reset")
+            _supervisor_json(
+                "/addons/self/options",
+                method="POST",
+                timeout=12.0,
+                payload={"options": updated_options},
+            )
+            confirmed = _self_addon_options()
+            confirmed_rows = confirmed.get("switches")
+            confirmed_names = [
+                str(item.get("switch_name") or "").strip()
+                for item in confirmed_rows if isinstance(item, dict)
+            ] if isinstance(confirmed_rows, list) else []
+            expected_names = [
+                str(item.get("switch_name") or "").strip()
+                for item in updated_rows if isinstance(item, dict)
+            ]
+            if confirmed_names != expected_names:
+                raise RuntimeError("Home Assistant did not confirm the reset device order.")
+
+        device_control_state.save(updated_control, DEFAULT_DEVICE_CONTROL)
+
+    return _configured_devices_snapshot(options_file)
+
+
 def _ensure_full_dashboard_source() -> tuple[Path | None, bool]:
     """Ensure a non-destructive full-card source exists for dashboard projection."""
     if DEFAULT_GENERATED_CARD_FULL.is_file():
@@ -2270,7 +2344,7 @@ def _home_assistant_service(domain: str, service: str, payload: dict[str, Any]) 
         raise RuntimeError(f"Home Assistant API request failed: {exc}") from exc
 
 
-def _home_assistant_ws(command: dict[str, Any]) -> Any:
+def _home_assistant_ws(command: dict[str, Any], *, max_size: int = 4 * 1024 * 1024) -> Any:
     """Call a Switch Vision WebSocket command through Supervisor."""
     command_type = str(
         command.get("type") or ""
@@ -2295,7 +2369,7 @@ def _home_assistant_ws(command: dict[str, Any]) -> Any:
             "ws://supervisor/core/websocket",
             open_timeout=12,
             close_timeout=5,
-            max_size=4 * 1024 * 1024,
+            max_size=max_size,
         ) as connection:
 
             required = json.loads(
@@ -2711,6 +2785,31 @@ def _discovery_settings_status() -> dict[str, Any]:
         row["snmp_community"] = ""
         row["original_switch_name"] = original_name
         safe_switches.append(row)
+    pending_switches = _load_configuration_restore_pending().get("discovery_switches", [])
+    if pending_switches:
+        current_names = {
+            str(row.get("switch_name") or "").strip()
+            for row in safe_switches
+            if isinstance(row, dict) and str(row.get("switch_name") or "").strip()
+        }
+        if not current_names:
+            # Replace the blank Home Assistant placeholder with the backed-up
+            # rows so a fresh install only needs its communities entered.
+            safe_switches = []
+        for raw in pending_switches:
+            if not isinstance(raw, dict):
+                continue
+            name = str(raw.get("switch_name") or "").strip()
+            if name and name in current_names:
+                continue
+            row = dict(raw)
+            row["snmp_community"] = ""
+            row["snmp_community_configured"] = False
+            row["original_switch_name"] = name
+            row["restore_pending"] = True
+            safe_switches.append(row)
+            if name:
+                current_names.add(name)
     settings["switches"] = safe_switches
     stack = settings.get("stack_member_prefixes")
     settings["stack_member_prefixes"] = [dict(item) for item in stack if isinstance(item, dict)] if isinstance(stack, list) else []
@@ -2797,6 +2896,7 @@ def _save_discovery_settings(data: Any) -> dict[str, Any]:
                     raise ValueError(f"Switch entry {index} must be an object.")
                 row = dict(raw)
                 row.pop("snmp_community_configured", None)
+                row.pop("restore_pending", None)
                 original_name = str(row.pop("original_switch_name", "") or "").strip()
                 community = row.get("snmp_community", "")
                 if not isinstance(community, str):
@@ -2827,7 +2927,11 @@ def _save_discovery_settings(data: Any) -> dict[str, Any]:
             confirmed = _self_addon_options()
             if confirmed != updated:
                 raise RuntimeError("Home Assistant did not confirm the complete Discovery settings update.")
+            if "switches" in requested:
+                _reconcile_device_added_at(confirmed)
             enforce_retention(confirmed)
+    if "switches" in requested:
+        _clear_configuration_restore_pending("discovery_switches")
     result = _discovery_settings_status()
     result.update({"saved": True, "changed": changed})
     return result
@@ -3428,6 +3532,21 @@ def _unifi2mqtt_settings_status() -> dict[str, Any]:
         if key not in UNIFI2MQTT_SECRET_FIELDS and key != "controllers"
     }
     safe_controllers = _unifi_controller_browser_rows(options)
+    pending_controllers = _load_configuration_restore_pending().get("unifi_controllers", [])
+    if pending_controllers:
+        known_ids = {str(row.get("id") or "").strip() for row in safe_controllers}
+        for raw in pending_controllers:
+            if not isinstance(raw, dict):
+                continue
+            controller_id = str(raw.get("id") or "").strip()
+            if controller_id and controller_id in known_ids:
+                continue
+            row = dict(raw)
+            row["api_key_configured"] = False
+            row["restore_pending"] = True
+            safe_controllers.append(row)
+            if controller_id:
+                known_ids.add(controller_id)
     safe_options["controllers"] = safe_controllers
 
     legacy_transport = str(options.get("transport") or "local").strip().lower()
@@ -3939,11 +4058,549 @@ def _save_unifi2mqtt_settings(data: Any) -> dict[str, Any]:
             timeout=30.0,
         )
         started = True
+    _clear_configuration_restore_pending("unifi_controllers")
     result = _unifi2mqtt_settings_status()
     result["saved"] = True
     result["restarted"] = restarted
     result["started"] = started
     return result
+
+
+
+_INSTALLER_BACKUP_OPTION_KEYS = {
+    "release_api_url",
+    "allow_custom_release_source",
+    "release_asset_pattern",
+    "preserve_custom_assets",
+    "create_backup",
+    "allow_prerelease",
+    "backup_retention",
+}
+
+
+def _load_configuration_restore_pending() -> dict[str, Any]:
+    payload = _read_json(DEFAULT_CONFIGURATION_RESTORE_PENDING)
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        return {"schema_version": 1, "discovery_switches": [], "unifi_controllers": []}
+    switches = payload.get("discovery_switches")
+    controllers = payload.get("unifi_controllers")
+    return {
+        "schema_version": 1,
+        "discovery_switches": [dict(row) for row in switches if isinstance(row, dict)] if isinstance(switches, list) else [],
+        "unifi_controllers": [dict(row) for row in controllers if isinstance(row, dict)] if isinstance(controllers, list) else [],
+    }
+
+
+def _save_configuration_restore_pending(payload: dict[str, Any]) -> None:
+    normalized = {
+        "schema_version": 1,
+        "discovery_switches": [dict(row) for row in payload.get("discovery_switches", []) if isinstance(row, dict)],
+        "unifi_controllers": [dict(row) for row in payload.get("unifi_controllers", []) if isinstance(row, dict)],
+    }
+    if not normalized["discovery_switches"] and not normalized["unifi_controllers"]:
+        try:
+            DEFAULT_CONFIGURATION_RESTORE_PENDING.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return
+    DEFAULT_CONFIGURATION_RESTORE_PENDING.parent.mkdir(parents=True, exist_ok=True)
+    temporary = DEFAULT_CONFIGURATION_RESTORE_PENDING.with_name(
+        f".{DEFAULT_CONFIGURATION_RESTORE_PENDING.name}.{os.getpid()}.tmp"
+    )
+    try:
+        temporary.write_text(json.dumps(normalized, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, DEFAULT_CONFIGURATION_RESTORE_PENDING)
+        os.chmod(DEFAULT_CONFIGURATION_RESTORE_PENDING, 0o644)
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _clear_configuration_restore_pending(section: str) -> None:
+    pending = _load_configuration_restore_pending()
+    if section == "discovery_switches":
+        pending["discovery_switches"] = []
+    elif section == "unifi_controllers":
+        pending["unifi_controllers"] = []
+    else:
+        raise ValueError("Unknown pending restore section.")
+    _save_configuration_restore_pending(pending)
+
+
+def _installer_settings_status() -> dict[str, Any]:
+    links = _installed_switch_vision_app_links()
+    item = links.get("installer") if isinstance(links, dict) else None
+    if not isinstance(item, dict) or not item.get("found") or not item.get("slug"):
+        return {"installed": False, "settings": None}
+    slug = str(item["slug"])
+    payload = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
+    info = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    options = info.get("options") if isinstance(info, dict) else None
+    if not isinstance(options, dict):
+        raise RuntimeError("Home Assistant did not expose Switch Vision Installer options.")
+    return {
+        "installed": True,
+        "slug": slug,
+        "state": str(info.get("state") or "unknown") if isinstance(info, dict) else "unknown",
+        "settings": {key: copy.deepcopy(options[key]) for key in _INSTALLER_BACKUP_OPTION_KEYS if key in options},
+    }
+
+
+def _save_installer_settings(settings: Any) -> dict[str, Any]:
+    if not isinstance(settings, dict):
+        raise ValueError("Installer backup settings must contain an object.")
+    unknown = sorted(set(settings) - _INSTALLER_BACKUP_OPTION_KEYS)
+    if unknown:
+        raise ValueError(f"Unsupported Installer backup setting: {unknown[0]}")
+    status = _installer_settings_status()
+    if not status.get("installed") or not status.get("slug"):
+        raise RuntimeError("Switch Vision Installer is not installed.")
+    slug = str(status["slug"])
+    info_payload = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
+    info = info_payload.get("data") if isinstance(info_payload.get("data"), dict) else info_payload
+    current = dict(info.get("options") or {}) if isinstance(info, dict) and isinstance(info.get("options"), dict) else {}
+    updated = dict(current)
+    for key, value in settings.items():
+        if key in {"allow_custom_release_source", "preserve_custom_assets", "create_backup", "allow_prerelease"}:
+            if type(value) is not bool:
+                raise ValueError(f"Installer setting {key} must be true or false.")
+            updated[key] = value
+        elif key == "backup_retention":
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 10:
+                raise ValueError("Installer backup_retention must be between 1 and 10.")
+            updated[key] = value
+        elif key == "release_api_url":
+            text = _plain_text(value, key, max_length=2048, allow_empty=False).strip()
+            if not text.startswith(("https://", "http://")):
+                raise ValueError("Installer release_api_url must be an HTTP or HTTPS URL.")
+            updated[key] = text
+        elif key == "release_asset_pattern":
+            updated[key] = _plain_text(value, key, max_length=256, allow_empty=False).strip()
+    if updated != current:
+        _supervisor_json(
+            f"/addons/{quote(slug, safe='')}/options",
+            method="POST",
+            timeout=20.0,
+            payload={"options": updated},
+        )
+    return _installer_settings_status()
+
+
+def _core_calibration_backup() -> dict[str, Any]:
+    listing = _home_assistant_ws({"type": "switch_vision/list_calibrations"})
+    if not isinstance(listing, dict):
+        raise RuntimeError("Switch Vision Core did not return calibration metadata.")
+    items = listing.get("items")
+    if not isinstance(items, list):
+        raise RuntimeError("Switch Vision Core calibration metadata is invalid.")
+    profiles: list[dict[str, Any]] = []
+    active_profiles: dict[str, str] = {}
+    for item in items:
+        if not isinstance(item, dict) or str(item.get("scope") or "") == "factory":
+            continue
+        profile = _calibration_profile_name(item.get("profile"))
+        detail = _home_assistant_ws(
+            {"type": "switch_vision/get_calibration", "profile": profile, "exact": True}
+        )
+        if not isinstance(detail, dict) or detail.get("exists") is not True or not isinstance(detail.get("calibration"), dict):
+            raise RuntimeError(f"Switch Vision Core could not export calibration profile {profile!r}.")
+        calibration = copy.deepcopy(detail["calibration"])
+        encoded = json.dumps(calibration, ensure_ascii=False).encode("utf-8")
+        if len(encoded) > 2 * 1024 * 1024:
+            raise RuntimeError(f"Calibration profile {profile!r} exceeds the backup size limit.")
+        profiles.append({"profile": profile, "calibration": calibration})
+        base = str(item.get("base_profile") or "").strip()
+        if item.get("active") is True and base and base != profile:
+            active_profiles[base] = profile
+    return {"profiles": profiles, "active_profiles": active_profiles}
+
+
+def _core_asset_backup() -> list[dict[str, Any]]:
+    listing = _home_assistant_ws({"type": "switch_vision/list_assets"})
+    if not isinstance(listing, dict):
+        raise RuntimeError("Switch Vision Core did not return asset metadata.")
+    if listing.get("backup_api") != 1:
+        raise RuntimeError("Switch Vision Core is too old for complete configuration backup. Update Core before exporting.")
+    result: list[dict[str, Any]] = []
+    for kind in ("logos", "faceplates"):
+        names = listing.get(kind)
+        if not isinstance(names, list):
+            raise RuntimeError(f"Switch Vision Core asset list for {kind} is invalid.")
+        for raw_name in names:
+            name = str(raw_name or "").strip()
+            if not name:
+                continue
+            asset = _home_assistant_ws(
+                {"type": "switch_vision/get_backup_asset", "kind": kind, "filename": name},
+                max_size=32 * 1024 * 1024,
+            )
+            if not isinstance(asset, dict):
+                raise RuntimeError(f"Switch Vision Core could not export asset {kind}/{name}.")
+            result.append({
+                "kind": kind,
+                "filename": name,
+                "size": int(asset.get("size") or 0),
+                "sha256": str(asset.get("sha256") or ""),
+                "content_base64": str(asset.get("content_base64") or ""),
+            })
+    return result
+
+
+def _backup_credential_requirements(
+    discovery: dict[str, Any], snmp2mqtt: dict[str, Any], unifi2mqtt: dict[str, Any]
+) -> list[dict[str, str]]:
+    requirements: list[dict[str, str]] = []
+    settings = discovery.get("settings") if isinstance(discovery, dict) else None
+    switches = settings.get("switches") if isinstance(settings, dict) else None
+    if isinstance(switches, list):
+        for row in switches:
+            if not isinstance(row, dict) or not row.get("snmp_community_configured"):
+                continue
+            identifier = str(row.get("switch_name") or row.get("display_name") or "switch").strip()
+            requirements.append({"component": "discovery", "kind": "snmp_community", "identifier": identifier})
+    if isinstance(settings, dict) and settings.get("support_contributor_value_configured"):
+        requirements.append({"component": "discovery", "kind": "private_contributor_value", "identifier": "Support My Switch recognition"})
+    if isinstance(snmp2mqtt, dict) and snmp2mqtt.get("password_configured"):
+        requirements.append({"component": "snmp2mqtt", "kind": "mqtt_password", "identifier": "MQTT"})
+    if isinstance(unifi2mqtt, dict):
+        for key, kind, label in (
+            ("local_api_key_configured", "api_key", "Local controller"),
+            ("remote_api_key_configured", "api_key", "Remote / Site Manager"),
+            ("mqtt_password_configured", "mqtt_password", "MQTT"),
+        ):
+            if unifi2mqtt.get(key):
+                requirements.append({"component": "unifi2mqtt", "kind": kind, "identifier": label})
+        options = unifi2mqtt.get("options")
+        controllers = options.get("controllers") if isinstance(options, dict) else None
+        if isinstance(controllers, list):
+            for row in controllers:
+                if isinstance(row, dict) and row.get("api_key_configured"):
+                    requirements.append({
+                        "component": "unifi2mqtt",
+                        "kind": "controller_api_key",
+                        "identifier": str(row.get("id") or "controller"),
+                    })
+    return requirements
+
+
+def _switch_vision_backup_export(version: str) -> dict[str, Any]:
+    core = _core_settings_status()
+    discovery = _discovery_settings_status()
+    snmp2mqtt = _snmp2mqtt_settings_status()
+    unifi2mqtt = _unifi2mqtt_settings_status()
+    installer = _installer_settings_status()
+    # Snapshotting configured devices establishes any missing immutable added_at
+    # migration metadata before the control state is captured.
+    _configured_devices_snapshot(DEFAULT_OPTIONS_FILE)
+    control = device_control_state.load(DEFAULT_DEVICE_CONTROL)
+    payload = {
+        "format": COMPLETE_BACKUP_FORMAT,
+        "schema_version": COMPLETE_BACKUP_SCHEMA_VERSION,
+        "switch_vision_discovery_version": version,
+        "exported_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "secrets_included": False,
+        "secret_policy": {
+            "snmp_communities": "excluded",
+            "mqtt_passwords": "excluded",
+            "unifi_api_keys": "excluded",
+            "tokens_and_passwords": "excluded",
+            "support_contributor_value": "excluded_private_value",
+        },
+        "components": {
+            "core": {"settings": copy.deepcopy(core.get("settings"))},
+            "discovery": {"settings": copy.deepcopy(discovery.get("settings"))},
+            "snmp2mqtt": {
+                "installed": bool(snmp2mqtt.get("installed")),
+                "settings": copy.deepcopy(snmp2mqtt.get("settings")),
+            },
+            "unifi2mqtt": {
+                "installed": bool(unifi2mqtt.get("installed")),
+                "options": copy.deepcopy(unifi2mqtt.get("options")),
+            },
+            "installer": {
+                "installed": bool(installer.get("installed")),
+                "settings": copy.deepcopy(installer.get("settings")),
+            },
+        },
+        "device_control": copy.deepcopy(control),
+        "calibrations": _core_calibration_backup(),
+        "assets": _core_asset_backup(),
+        "credential_requirements": _backup_credential_requirements(discovery, snmp2mqtt, unifi2mqtt),
+    }
+    _validate_complete_backup(payload)
+    return payload
+
+
+def _validate_complete_backup(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict) or data.get("format") != COMPLETE_BACKUP_FORMAT:
+        raise ValueError("This is not a supported complete Switch Vision backup.")
+    if data.get("schema_version") != COMPLETE_BACKUP_SCHEMA_VERSION:
+        raise ValueError("Unsupported complete Switch Vision backup schema version.")
+    if data.get("secrets_included") is not False:
+        raise ValueError("Complete Switch Vision backups must not contain secrets.")
+    components = data.get("components")
+    if not isinstance(components, dict):
+        raise ValueError("Complete backup components are missing.")
+    for required in ("core", "discovery", "snmp2mqtt", "unifi2mqtt", "installer"):
+        if not isinstance(components.get(required), dict):
+            raise ValueError(f"Complete backup component {required!r} is missing.")
+
+    discovery_settings = components["discovery"].get("settings")
+    if not isinstance(discovery_settings, dict):
+        raise ValueError("Complete backup Discovery settings are invalid.")
+    if str(discovery_settings.get("support_contributor_value") or ""):
+        raise ValueError("Complete backup contains a private Support My Switch value.")
+    switches = discovery_settings.get("switches")
+    if not isinstance(switches, list) or len(switches) > 256:
+        raise ValueError("Complete backup Discovery switch list is invalid.")
+    for row in switches:
+        if not isinstance(row, dict) or str(row.get("snmp_community") or ""):
+            raise ValueError("Complete backup must not contain SNMP community strings.")
+
+    snmp_settings = components["snmp2mqtt"].get("settings")
+    if snmp_settings is not None:
+        if not isinstance(snmp_settings, dict):
+            raise ValueError("Complete backup SNMP2MQTT settings are invalid.")
+        mqtt = snmp_settings.get("mqtt")
+        if isinstance(mqtt, dict) and str(mqtt.get("password") or ""):
+            raise ValueError("Complete backup must not contain MQTT passwords.")
+
+    unifi_options = components["unifi2mqtt"].get("options")
+    if unifi_options is not None:
+        if not isinstance(unifi_options, dict):
+            raise ValueError("Complete backup UniFi2MQTT options are invalid.")
+        for key in UNIFI2MQTT_SECRET_FIELDS:
+            if str(unifi_options.get(key) or ""):
+                raise ValueError("Complete backup must not contain UniFi/MQTT secrets.")
+        controllers = unifi_options.get("controllers")
+        if controllers is not None:
+            if not isinstance(controllers, list) or len(controllers) > 32:
+                raise ValueError("Complete backup UniFi controller list is invalid.")
+            for row in controllers:
+                if not isinstance(row, dict) or str(row.get("api_key") or ""):
+                    raise ValueError("Complete backup must not contain controller API keys.")
+
+    calibrations = data.get("calibrations")
+    if not isinstance(calibrations, dict):
+        raise ValueError("Complete backup calibration data is invalid.")
+    profiles = calibrations.get("profiles")
+    if not isinstance(profiles, list) or len(profiles) > 2048:
+        raise ValueError("Complete backup calibration profile list is invalid.")
+    for row in profiles:
+        if not isinstance(row, dict) or not isinstance(row.get("calibration"), dict):
+            raise ValueError("Complete backup contains an invalid calibration profile.")
+        _calibration_profile_name(row.get("profile"))
+        if len(json.dumps(row["calibration"], ensure_ascii=False).encode("utf-8")) > 2 * 1024 * 1024:
+            raise ValueError("Complete backup contains an oversized calibration profile.")
+    active_profiles = calibrations.get("active_profiles")
+    if not isinstance(active_profiles, dict):
+        raise ValueError("Complete backup active calibration map is invalid.")
+
+    assets = data.get("assets")
+    if not isinstance(assets, list) or len(assets) > 2048:
+        raise ValueError("Complete backup asset list is invalid.")
+    for asset in assets:
+        if not isinstance(asset, dict):
+            raise ValueError("Complete backup contains an invalid asset.")
+        if str(asset.get("kind") or "") not in {"logos", "faceplates"}:
+            raise ValueError("Complete backup contains an unsupported asset kind.")
+        name = str(asset.get("filename") or "")
+        if not name or name != Path(name).name or name.startswith("."):
+            raise ValueError("Complete backup contains an invalid asset filename.")
+        digest = str(asset.get("sha256") or "")
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError("Complete backup contains an invalid asset digest.")
+        content = asset.get("content_base64")
+        if not isinstance(content, str) or len(content) > 24 * 1024 * 1024:
+            raise ValueError("Complete backup contains an invalid or oversized asset payload.")
+        try:
+            raw_asset = base64.b64decode(content.encode("ascii"), validate=True)
+        except (UnicodeEncodeError, binascii.Error, ValueError) as exc:
+            raise ValueError("Complete backup contains invalid base64 asset content.") from exc
+        if len(raw_asset) > MAX_COMPLETE_BACKUP_ASSET_BYTES:
+            raise ValueError("Complete backup contains an asset above the 16 MiB restore limit.")
+        if int(asset.get("size") or -1) != len(raw_asset):
+            raise ValueError("Complete backup asset size does not match its manifest.")
+        if hashlib.sha256(raw_asset).hexdigest() != digest:
+            raise ValueError("Complete backup asset SHA-256 does not match its content.")
+
+    control = data.get("device_control")
+    if not isinstance(control, dict):
+        raise ValueError("Complete backup device-control state is invalid.")
+    device_control_state.load_from_object(control)
+    return copy.deepcopy(data)
+
+
+def _restore_core_calibrations(calibrations: dict[str, Any]) -> int:
+    profiles = calibrations.get("profiles") if isinstance(calibrations, dict) else None
+    if not isinstance(profiles, list):
+        raise ValueError("Calibration restore payload is invalid.")
+    by_name: dict[str, dict[str, Any]] = {}
+    restored = 0
+    for row in profiles:
+        profile = _calibration_profile_name(row.get("profile"))
+        calibration = row.get("calibration")
+        if not isinstance(calibration, dict):
+            raise ValueError(f"Calibration profile {profile!r} is invalid.")
+        by_name[profile] = copy.deepcopy(calibration)
+        _home_assistant_service(
+            "switch_vision",
+            "save_calibration",
+            {"profile": profile, "calibration": calibration, "mirror_to_base": False},
+        )
+        restored += 1
+    active = calibrations.get("active_profiles")
+    if isinstance(active, dict):
+        for base, profile_value in active.items():
+            base_name = _calibration_profile_name(base)
+            profile = _calibration_profile_name(profile_value)
+            calibration = by_name.get(profile)
+            if calibration is None:
+                raise ValueError(f"Active calibration {profile!r} is missing from the backup.")
+            if not profile.startswith(f"{base_name}__faceplate__"):
+                raise ValueError("Active calibration map does not match its base profile.")
+            _home_assistant_service(
+                "switch_vision",
+                "save_calibration",
+                {"profile": profile, "calibration": calibration, "mirror_to_base": True},
+            )
+    return restored
+
+
+def _restore_core_assets(assets: list[dict[str, Any]]) -> int:
+    restored = 0
+    for asset in assets:
+        result = _home_assistant_ws(
+            {
+                "type": "switch_vision/put_backup_asset",
+                "kind": asset["kind"],
+                "filename": asset["filename"],
+                "sha256": asset["sha256"],
+                "content_base64": asset["content_base64"],
+            },
+            max_size=32 * 1024 * 1024,
+        )
+        if not isinstance(result, dict) or str(result.get("sha256") or "") != asset["sha256"]:
+            raise RuntimeError(f"Switch Vision Core did not confirm restored asset {asset['filename']!r}.")
+        restored += 1
+    return restored
+
+
+def _restore_unifi2mqtt_nonsecret(options: dict[str, Any]) -> None:
+    status = _unifi2mqtt_settings_status()
+    if not status.get("installed") or not status.get("slug"):
+        raise RuntimeError("Switch Vision UniFi2MQTT is not installed.")
+    slug = str(status["slug"])
+    info_payload = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
+    info = info_payload.get("data") if isinstance(info_payload.get("data"), dict) else info_payload
+    stored = info.get("options") if isinstance(info, dict) else None
+    if not isinstance(stored, dict):
+        raise RuntimeError("Home Assistant did not expose current UniFi2MQTT options.")
+    safe = {key: copy.deepcopy(value) for key, value in options.items() if key not in UNIFI2MQTT_SECRET_FIELDS and key != "controllers"}
+    updated = _validate_unifi2mqtt_options(safe, dict(stored))
+    if updated != stored:
+        _supervisor_json(
+            f"/addons/{quote(slug, safe='')}/options",
+            method="POST",
+            timeout=20.0,
+            payload={"options": updated},
+        )
+
+
+def _restore_complete_backup(data: Any) -> dict[str, Any]:
+    backup = _validate_complete_backup(data)
+    # Preflight the coordinated Core contract before changing any component.
+    core_assets = _home_assistant_ws({"type": "switch_vision/list_assets"})
+    if not isinstance(core_assets, dict) or core_assets.get("backup_api") != 1:
+        raise RuntimeError("Switch Vision Core is too old for complete configuration restore. Update Core before importing.")
+    components = backup["components"]
+    restored_components: list[str] = []
+    warnings: list[str] = []
+
+    core_settings = components["core"].get("settings")
+    if isinstance(core_settings, dict):
+        _save_core_settings({"settings": core_settings})
+        restored_components.append("core")
+    asset_count = _restore_core_assets(backup["assets"])
+    profile_count = _restore_core_calibrations(backup["calibrations"])
+
+    installer_settings = components["installer"].get("settings")
+    if components["installer"].get("installed") and isinstance(installer_settings, dict):
+        try:
+            _save_installer_settings(installer_settings)
+            restored_components.append("installer")
+        except RuntimeError as exc:
+            warnings.append(str(exc))
+
+    snmp_settings = components["snmp2mqtt"].get("settings")
+    if components["snmp2mqtt"].get("installed") and isinstance(snmp_settings, dict):
+        try:
+            safe_snmp = copy.deepcopy(snmp_settings)
+            if isinstance(safe_snmp.get("mqtt"), dict):
+                safe_snmp["mqtt"]["password"] = ""
+            safe_snmp["clear_password"] = False
+            _save_snmp2mqtt_settings({"settings": safe_snmp})
+            restored_components.append("snmp2mqtt")
+        except RuntimeError as exc:
+            warnings.append(str(exc))
+
+    pending = _load_configuration_restore_pending()
+    unifi_options = components["unifi2mqtt"].get("options")
+    if components["unifi2mqtt"].get("installed") and isinstance(unifi_options, dict):
+        controllers = unifi_options.get("controllers")
+        pending["unifi_controllers"] = [
+            {key: copy.deepcopy(value) for key, value in row.items() if key not in {"api_key", "api_key_configured"}}
+            | {"api_key_configured": False, "restore_pending": True}
+            for row in controllers if isinstance(row, dict)
+        ] if isinstance(controllers, list) else []
+        try:
+            _restore_unifi2mqtt_nonsecret(unifi_options)
+            restored_components.append("unifi2mqtt")
+        except RuntimeError as exc:
+            warnings.append(str(exc))
+
+    discovery_settings = copy.deepcopy(components["discovery"].get("settings"))
+    if not isinstance(discovery_settings, dict):
+        raise ValueError("Complete backup Discovery settings are invalid.")
+    switches = discovery_settings.pop("switches", [])
+    discovery_settings.pop("support_contributor_value_configured", None)
+    contributor_was_configured = bool(
+        components["discovery"].get("settings", {}).get("support_contributor_value_configured")
+    )
+    discovery_settings["support_contributor_value"] = ""
+    if contributor_was_configured and str(discovery_settings.get("support_contributor_type") or "anonymous") != "anonymous":
+        # Existing write-only privacy policy does not permit a backup to recreate
+        # this private value. Preserve current live recognition until re-entered.
+        discovery_settings.pop("support_contributor_type", None)
+        discovery_settings.pop("support_contributor_value", None)
+    _save_discovery_settings({"settings": discovery_settings})
+    restored_components.append("discovery")
+    pending["discovery_switches"] = [
+        {key: copy.deepcopy(value) for key, value in row.items() if key not in {"snmp_community", "snmp_community_configured", "original_switch_name"}}
+        | {"snmp_community": "", "snmp_community_configured": False, "restore_pending": True}
+        for row in switches
+        if isinstance(row, dict) and (str(row.get("switch_name") or "").strip() or str(row.get("switch_host") or "").strip())
+    ]
+    _save_configuration_restore_pending(pending)
+
+    control = device_control_state.load_from_object(backup["device_control"])
+    device_control_state.save(control, DEFAULT_DEVICE_CONTROL)
+
+    return {
+        "imported": True,
+        "format": COMPLETE_BACKUP_FORMAT,
+        "restored_components": restored_components,
+        "asset_count": asset_count,
+        "calibration_profile_count": profile_count,
+        "credential_requirements": copy.deepcopy(backup.get("credential_requirements") or []),
+        "pending_discovery_switches": len(pending["discovery_switches"]),
+        "pending_unifi_controllers": len(pending["unifi_controllers"]),
+        "warnings": warnings,
+        "restart_required": False,
+    }
 
 
 def _install_unifi2mqtt() -> dict[str, Any]:
@@ -5416,12 +6073,12 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 
 <section id="configurationCard" class="card hidden">
 <h2>Import / Export Configuration</h2>
-<p>Export your configured switches and Discovery settings before moving to a fresh Home Assistant installation.</p>
-<div class="warning"><b>Keep the export private.</b> It can contain switch IP addresses and SNMP community strings.</div>
-<div class="actions"><a id="exportConfigurationButton" class="button primary" href="#">Export Configuration</a></div>
+<p>Create one complete, portable Switch Vision backup for a fresh installation. It includes non-secret configuration from every Switch Vision component, device state/order and immutable added-time metadata, calibration profiles, and custom Switch Vision visual assets.</p>
+<div class="warning"><b>Credentials are deliberately excluded.</b> SNMP communities, MQTT passwords, UniFi API keys, tokens and other passwords are never written to this file. The backup can still contain network addresses, device names, calibration data and custom images, so keep it private.</div>
+<div class="actions"><a id="exportConfigurationButton" class="button primary" href="#">Export Complete Backup</a></div>
 <hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
 <h3>Import Configuration</h3>
-<p>Select a Switch Vision Discovery configuration export. Import replaces the Discovery-related settings while preserving Support My Switch privacy preferences.</p>
+<p>Select a complete Switch Vision backup or an older Discovery-only configuration export. Complete restore reapplies all available non-secret component settings and restores calibration/assets. Devices/controllers whose credentials were excluded return as pending rows so only the missing credential needs to be entered.</p>
 <label class="field"><span><b>Configuration file</b></span><input id="configurationFile" type="file" accept="application/json,.json"></label>
 <div class="actions"><button id="importConfigurationButton" type="button">Import Configuration</button></div>
 <p id="configurationStatus" class="muted">No configuration imported.</p>
@@ -5524,7 +6181,7 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 <div id="devicesDiagnosticsMessages"></div>
 <div id="configuredDevices"></div>
 <p id="configuredDevicesStatus" class="muted configured-device-status"></p>
-<div class="actions"><button class="primary" id="refreshDevicesButton" type="button">Refresh Devices</button><button id="devicesRegenerateCardYamlButton" type="button">Regenerate Dashboard Card YAML</button><button id="copyDiagnosticsButton" type="button">Copy Diagnostics</button><a id="downloadDiagnosticsButton" class="button" href="#">Download Diagnostics Report</a><button id="devicesRunDiscoveryButton" type="button">Run Discovery</button></div>
+<div class="actions"><button class="primary" id="refreshDevicesButton" type="button">Refresh Devices</button><button id="resetDeviceOrderButton" type="button">Reset Order</button><button id="devicesRegenerateCardYamlButton" type="button">Regenerate Dashboard Card YAML</button><button id="copyDiagnosticsButton" type="button">Copy Diagnostics</button><a id="downloadDiagnosticsButton" class="button" href="#">Download Diagnostics Report</a><button id="devicesRunDiscoveryButton" type="button">Run Discovery</button></div>
 <p id="devicesActionStatus" class="muted"></p>
 </section>
 
@@ -5628,7 +6285,7 @@ function startCreditsAnimation(){
   }
   creditsAnimationFrame=requestAnimationFrame(frame);
 }
-const HUB_SHARED_PAGE_ACTIONS={discovery:{label:'Run Discovery',target:'runDiscoveryButton',status:'discoveryStatus'},devices:{label:'Refresh Devices',target:'refreshDevicesButton',status:'configuredDevicesStatus'},support:{label:'Create Contribution',target:'createButton'},configuration:{label:'Export Configuration',target:'exportConfigurationButton',status:'configurationStatus'},maintenance:{label:'Scan MQTT Entities',target:'scanMqttEntitiesButton',status:'mqttRepairStatus'},profiles:{label:'Refresh Profiles',target:'svProfilesRefresh',status:'svProfilesMessage'},unifi2mqtt:{label:'Save UniFi2MQTT Settings',target:'saveUnifi2mqttButton',status:'unifiSettingsStatus'}};let hubSharedStatusObserver=null;function syncSharedHubStatus(){const cfg=HUB_SHARED_PAGE_ACTIONS[currentView],out=$('hubSharedStatus');if(!out||!cfg)return;const src=cfg.status?$(cfg.status):null;out.textContent=src?.textContent?.trim()||'Ready'}function updateSharedHubActions(view=currentView){const bar=$('hubSharedActions'),primary=$('hubSharedPrimary');if(!bar||!primary)return;hubSharedStatusObserver?.disconnect();hubSharedStatusObserver=null;const cfg=HUB_SHARED_PAGE_ACTIONS[view];bar.classList.toggle('hidden',!cfg);if(!cfg)return;primary.textContent=cfg.label;primary.dataset.target=cfg.target;const src=cfg.status?$(cfg.status):null;if(src){hubSharedStatusObserver=new MutationObserver(syncSharedHubStatus);hubSharedStatusObserver.observe(src,{childList:true,subtree:true,characterData:true})}syncSharedHubStatus()}function runSharedHubPrimary(){const id=$('hubSharedPrimary')?.dataset.target;if(!id)return;const target=$(id);if(!target||target.disabled)return;target.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}))}function reloadSharedHubView(){if(currentView==='discovery'){refresh();Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()]);return}if(currentView==='devices'){loadDevices();return}if(currentView==='support'){refresh();return}if(currentView==='configuration'){$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json');$('configurationStatus').textContent='Configuration view refreshed.';return}if(currentView==='maintenance'){window.SwitchVisionMaintenance?.loadInstallerBackups?.();window.SwitchVisionMaintenance?.scan?.();return}if(currentView==='profiles'){window.SwitchVisionCalibrationProfiles?.load?.(true);return}if(currentView==='unifi2mqtt'){loadUnifi2mqttSettings();return}}function setView(view){currentView=view;const isHome=view==='home';$('backButton').textContent=isHome?'← Back to Home Assistant':'← Back';const titles={home:['Switch Vision Hub',''],discovery:['Discovery','Run a guided discovery job and review its progress.'],devices:['Devices','Latest detected hardware and generated configuration status.'],support:['Support My Switch','Prepare a privacy-processed contribution bundle. Nothing is sent automatically.'],configuration:['Import / Export Configuration','Export or import the saved Discovery switch list and Discovery settings.'],maintenance:['Maintenance','Repair and reset Switch Vision-managed runtime state safely.'],credits:['Credits','Acknowledging the contributors who help make Switch Vision possible.'],profiles:['Calibration Profiles','Manage saved faceplate calibration profiles.'],settings:['Switch Vision Hub Settings','Configure how Switch Vision Hub appears and behaves.'],unifi2mqtt:['UniFi2MQTT Settings','Configure the UniFi controller API and MQTT support path.'],progress:['Support My Switch','Preparing your contribution bundle.'],ready:['Support My Switch','Your contribution bundle is ready to review.']};const title=titles[view]||titles.home;$('pageHeading').textContent=title[0];$('pageLead').textContent=title[1];$('pageLead').classList.toggle('hidden',!title[1]);$('homeCard').classList.toggle('hidden',view!=='home');$('discoveryCard').classList.toggle('hidden',view!=='discovery');$('devicesCard').classList.toggle('hidden',view!=='devices');$('createCard').classList.toggle('hidden',view!=='support');$('importantCard').classList.toggle('hidden',view!=='support');$('configurationCard').classList.toggle('hidden',view!=='configuration');$('maintenanceCard').classList.toggle('hidden',view!=='maintenance');$('creditsCard').classList.toggle('hidden',view!=='credits');$('calibrationProfilesCard').classList.toggle('hidden',view!=='profiles');$('settingsCard').classList.toggle('hidden',view!=='settings');$('unifi2mqttCard').classList.toggle('hidden',view!=='unifi2mqtt');$('progressCard').classList.toggle('hidden',view!=='progress');$('readyCard').classList.toggle('hidden',view!=='ready');updateSharedHubActions(view);window.scrollTo({top:0,behavior:'smooth'})}
+const HUB_SHARED_PAGE_ACTIONS={discovery:{label:'Run Discovery',target:'runDiscoveryButton',status:'discoveryStatus'},devices:{label:'Refresh Devices',target:'refreshDevicesButton',status:'configuredDevicesStatus'},support:{label:'Create Contribution',target:'createButton'},configuration:{label:'Export Configuration',target:'exportConfigurationButton',status:'configurationStatus'},maintenance:{label:'Scan MQTT Entities',target:'scanMqttEntitiesButton',status:'mqttRepairStatus'},profiles:{label:'Refresh Profiles',target:'svProfilesRefresh',status:'svProfilesMessage'},unifi2mqtt:{label:'Save UniFi2MQTT Settings',target:'saveUnifi2mqttButton',status:'unifiSettingsStatus'}};let hubSharedStatusObserver=null;function syncSharedHubStatus(){const cfg=HUB_SHARED_PAGE_ACTIONS[currentView],out=$('hubSharedStatus');if(!out||!cfg)return;const src=cfg.status?$(cfg.status):null;out.textContent=src?.textContent?.trim()||'Ready'}function updateSharedHubActions(view=currentView){const bar=$('hubSharedActions'),primary=$('hubSharedPrimary');if(!bar||!primary)return;hubSharedStatusObserver?.disconnect();hubSharedStatusObserver=null;const cfg=HUB_SHARED_PAGE_ACTIONS[view];bar.classList.toggle('hidden',!cfg);if(!cfg)return;primary.textContent=cfg.label;primary.dataset.target=cfg.target;const src=cfg.status?$(cfg.status):null;if(src){hubSharedStatusObserver=new MutationObserver(syncSharedHubStatus);hubSharedStatusObserver.observe(src,{childList:true,subtree:true,characterData:true})}syncSharedHubStatus()}function runSharedHubPrimary(){const id=$('hubSharedPrimary')?.dataset.target;if(!id)return;const target=$(id);if(!target||target.disabled)return;target.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}))}function reloadSharedHubView(){if(currentView==='discovery'){refresh();Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()]);return}if(currentView==='devices'){loadDevices();return}if(currentView==='support'){refresh();return}if(currentView==='configuration'){$('exportConfigurationButton').href=endpoint('download/switch-vision-backup.json');$('configurationStatus').textContent='Configuration view refreshed.';return}if(currentView==='maintenance'){window.SwitchVisionMaintenance?.loadInstallerBackups?.();window.SwitchVisionMaintenance?.scan?.();return}if(currentView==='profiles'){window.SwitchVisionCalibrationProfiles?.load?.(true);return}if(currentView==='unifi2mqtt'){loadUnifi2mqttSettings();return}}function setView(view){currentView=view;const isHome=view==='home';$('backButton').textContent=isHome?'← Back to Home Assistant':'← Back';const titles={home:['Switch Vision Hub',''],discovery:['Discovery','Run a guided discovery job and review its progress.'],devices:['Devices','Latest detected hardware and generated configuration status.'],support:['Support My Switch','Prepare a privacy-processed contribution bundle. Nothing is sent automatically.'],configuration:['Import / Export Configuration','Back up or restore the complete non-secret Switch Vision configuration across all components.'],maintenance:['Maintenance','Repair and reset Switch Vision-managed runtime state safely.'],credits:['Credits','Acknowledging the contributors who help make Switch Vision possible.'],profiles:['Calibration Profiles','Manage saved faceplate calibration profiles.'],settings:['Switch Vision Hub Settings','Configure how Switch Vision Hub appears and behaves.'],unifi2mqtt:['UniFi2MQTT Settings','Configure the UniFi controller API and MQTT support path.'],progress:['Support My Switch','Preparing your contribution bundle.'],ready:['Support My Switch','Your contribution bundle is ready to review.']};const title=titles[view]||titles.home;$('pageHeading').textContent=title[0];$('pageLead').textContent=title[1];$('pageLead').classList.toggle('hidden',!title[1]);$('homeCard').classList.toggle('hidden',view!=='home');$('discoveryCard').classList.toggle('hidden',view!=='discovery');$('devicesCard').classList.toggle('hidden',view!=='devices');$('createCard').classList.toggle('hidden',view!=='support');$('importantCard').classList.toggle('hidden',view!=='support');$('configurationCard').classList.toggle('hidden',view!=='configuration');$('maintenanceCard').classList.toggle('hidden',view!=='maintenance');$('creditsCard').classList.toggle('hidden',view!=='credits');$('calibrationProfilesCard').classList.toggle('hidden',view!=='profiles');$('settingsCard').classList.toggle('hidden',view!=='settings');$('unifi2mqttCard').classList.toggle('hidden',view!=='unifi2mqtt');$('progressCard').classList.toggle('hidden',view!=='progress');$('readyCard').classList.toggle('hidden',view!=='ready');updateSharedHubActions(view);window.scrollTo({top:0,behavior:'smooth'})}
 function goBack(){if(!$('homeCard').classList.contains('hidden')){try{if(history.length>1){history.back();return}}catch(_e){}try{window.top.location.href='/';return}catch(_e){}location.href='/';return}setView('home')}
 function openHomeAssistantPath(path){try{window.top.location.href=path;return}catch(_e){}window.location.href=path}
 let appLinksCache=null;
@@ -5672,7 +6329,7 @@ function detectedDeviceKey(item){return [item?.data_source||'SNMP',item?.name||'
 function detectedForConfigured(item,detected,used){const identities=[item.switch_name,item.sensor_prefix,item.display_name].map(normalizedDeviceIdentity).filter(Boolean);let matches=detected.map((candidate,index)=>({candidate,index})).filter(({candidate,index})=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&[candidate?.source_switch_name,candidate?.name].map(normalizedDeviceIdentity).some(value=>value&&identities.includes(value)));if(matches.length===1)return {item:matches[0].candidate,index:matches[0].index};const targets=[item.configured_management_target,item.effective_management_target,item.switch_host].map(value=>String(value||'').trim().toLowerCase()).filter(Boolean);matches=detected.map((candidate,index)=>({candidate,index})).filter(({candidate,index})=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&targets.includes(String(candidate?.management_target||'').trim().toLowerCase()));if(matches.length===1)return {item:matches[0].candidate,index:matches[0].index};const configuredModel=String(item.switch_model||'').trim();if(configuredModel&&configuredModel!=='auto'){matches=detected.map((candidate,index)=>({candidate,index})).filter(({candidate,index})=>!used.has(index)&&candidate?.data_source!=='UniFi API'&&String(candidate?.model||'').trim()===configuredModel);if(matches.length===1)return {item:matches[0].candidate,index:matches[0].index}}return null}
 function appendDetectedDeviceBody(body,item,d){const normalized={model:item.model,vendor_name:item.name,family:item.family,registry_status:item.registry_status,registry_match:item.registry_match,registry_last_validated_version:item.last_validated_version,physical_count:item.physical_interfaces,rj45_count:item.rj45_interfaces,registry_validation:item.validation};body.appendChild(deviceCard(normalized));const extra=document.createElement('div');extra.className='muted detected-device-extra';extra.textContent=`Source: ${item.data_source||'SNMP'} · ${item.data_source==='UniFi API'?`Firmware: ${item.firmware||'Unknown'}`:`SNMP walk: ${item.walk_found?'Available':'Unavailable'}`} · Uplinks detected: ${item.uplink_interfaces||0} · Mapping profile: ${item.mapping_profile||'Not assigned'} · Calibration profile: ${item.calibration_profile||'Not assigned'}`;body.appendChild(extra)}
 function deviceControlsBlocked(){return !!lastDiscoveryState?.running&&lastDiscoveryState?.mode!=='apply_device_state'}
-function syncConfiguredDeviceToggleAvailability(){const blocked=deviceControlsBlocked();document.querySelectorAll('.device-state-toggle').forEach(btn=>{const writable=btn.dataset.writable==='true';btn.disabled=blocked||!writable;btn.title=blocked?'Wait for the current Discovery operation before changing device state.':(writable?'Toggle whether this device is actively polled and shown on the Switch Vision dashboard.':'This device cannot be changed from the current Hub state.')});document.querySelectorAll('.device-order-button').forEach(btn=>{const writable=btn.dataset.writable==='true';const boundary=btn.dataset.boundary==='true';btn.disabled=blocked||!writable||boundary;btn.title=blocked?'Wait for the current Discovery operation before changing device order.':(!writable?'This device cannot be reordered from the current Hub state.':(boundary?'Already at this end of the device order.':'Move this device in the persistent dashboard order.'))})}
+function syncConfiguredDeviceToggleAvailability(){const blocked=deviceControlsBlocked();document.querySelectorAll('.device-state-toggle').forEach(btn=>{const writable=btn.dataset.writable==='true';btn.disabled=blocked||!writable;btn.title=blocked?'Wait for the current Discovery operation before changing device state.':(writable?'Toggle whether this device is actively polled and shown on the Switch Vision dashboard.':'This device cannot be changed from the current Hub state.')});document.querySelectorAll('.device-order-button').forEach(btn=>{const writable=btn.dataset.writable==='true';const boundary=btn.dataset.boundary==='true';btn.disabled=blocked||!writable||boundary;btn.title=blocked?'Wait for the current Discovery operation before changing device order.':(!writable?'This device cannot be reordered from the current Hub state.':(boundary?'Already at this end of the device order.':'Move this device in the persistent dashboard order.'))});const reset=$('resetDeviceOrderButton');if(reset){const writable=!!lastConfiguredDevices?.device_control_writable;reset.disabled=blocked||!writable;reset.title=blocked?'Wait for the current Discovery operation before resetting device order.':'Restore devices to their immutable first-added order.'}}
 function unifiedDeviceTitle(row){if(row.configured)return configuredDeviceTitle(row.configured);const item=row.detected||{};return item.name||item.model||'Detected device'}
 function buildUnifiedDeviceRows(){const config=lastConfiguredDevices||{},saved=config.devices||[],detected=lastDevicesDiagnostics?.devices||[],used=new Set(),rows=[];for(const item of saved){const found=detectedForConfigured(item,detected,used),detectedItem=found?.item||null;if(found)used.add(found.index);rows.push({key:item.device_key||`snmp:${item.switch_name}`,source:'SNMP',configured:item,detected:detectedItem,enabled:item.enabled!=='disabled',writable:!!config.writable,controllable:true})}for(const [index,item] of detected.entries()){if(used.has(index))continue;if(item?.data_source==='UniFi API'&&item?.unifi_device_id){const key=`unifi:${item.unifi_device_id}`;rows.push({key,source:'UniFi API',configured:null,detected:item,enabled:(config.device_states||{})[key]!=='disabled',writable:!!config.device_control_writable,controllable:true});continue}rows.push({key:`detected|${detectedDeviceKey(item)}`,source:item?.data_source||'SNMP',configured:null,detected:item,enabled:true,writable:false,controllable:false})}const rank=new Map((config.device_order||[]).map((key,index)=>[key,index]));rows.sort((a,b)=>{const ar=rank.has(a.key)?rank.get(a.key):Number.MAX_SAFE_INTEGER,br=rank.has(b.key)?rank.get(b.key):Number.MAX_SAFE_INTEGER;if(ar!==br)return ar-br;return 0});return rows}
 function renderUnifiedDevices(){
@@ -5697,6 +6354,7 @@ function renderUnifiedDevices(){
 }
 function renderConfiguredDevices(d){lastConfiguredDevices=d;renderUnifiedDevices();const status=$('configuredDevicesStatus');if(!d?.switch_list_enabled&&(d?.devices||[]).length)status.textContent='The saved SNMP switch list is globally disabled in Discovery Settings.';else status.textContent='Device order, enabled state, polling state, and Native dashboard card order are linked.'}
 async function moveConfiguredDevice(row,destination,direction,button){if(deviceControlsBlocked()){$('configuredDevicesStatus').textContent='Wait for the current Discovery operation before changing device order.';return}button.disabled=true;const title=unifiedDeviceTitle(row);$('configuredDevicesStatus').textContent=`Moving ${title} ${direction}…`;try{const r=await fetch(endpoint('api/configured-devices/order'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_key:row.key,destination_device_key:destination.key})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device order');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent='Saved device order. Native dashboard order updated.'}catch(e){const failure=`Could not change device order: ${e.message||e}`;await refreshConfiguredDevices(false);$('configuredDevicesStatus').textContent=failure}finally{syncConfiguredDeviceToggleAvailability()}}
+async function resetConfiguredDeviceOrder(){if(deviceControlsBlocked()){$('configuredDevicesStatus').textContent='Wait for the current Discovery operation before resetting device order.';return}if(!confirm('Reset device order to the original first-added order?'))return;const btn=$('resetDeviceOrderButton');btn.disabled=true;$('configuredDevicesStatus').textContent='Restoring original first-added device order…';try{const r=await fetch(endpoint('api/configured-devices/reset-order'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not reset device order');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent='Device order restored to original first-added order. Native dashboard order updated.'}catch(e){const failure=`Could not reset device order: ${e.message||e}`;await refreshConfiguredDevices(false);$('configuredDevicesStatus').textContent=failure}finally{syncConfiguredDeviceToggleAvailability()}}
 async function refreshConfiguredDevices(showStatus=false){if(showStatus)$('configuredDevicesStatus').textContent='Refreshing saved devices…';try{const r=await fetch(endpoint('api/configured-devices'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load saved devices');renderConfiguredDevices(d)}catch(e){$('configuredDevicesStatus').textContent=`Could not load saved devices: ${e.message||e}`}}
 async function setConfiguredDeviceState(row,nextState,button){if(deviceControlsBlocked()){$('configuredDevicesStatus').textContent='Wait for the current Discovery operation before changing device state.';return}button.disabled=true;const title=unifiedDeviceTitle(row);$('configuredDevicesStatus').textContent=`Saving ${title} as ${nextState}…`;try{const r=await fetch(endpoint('api/configured-devices/state'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_key:row.key,enabled:nextState})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save device state');renderConfiguredDevices(d);$('configuredDevicesStatus').textContent=`${title} is now ${nextState}. Background polling sync is queued; you can keep changing devices.`}catch(e){const failure=`Could not change ${title}: ${e.message||e}`;await refreshConfiguredDevices(false);$('configuredDevicesStatus').textContent=failure}finally{syncConfiguredDeviceToggleAvailability()}}
 function renderDevices(d){lastDevicesDiagnostics=d;renderDeviceDiagnosticsSummary(d);renderUnifiedDevices()}
@@ -5784,19 +6442,19 @@ async function runDiscovery(){const btn=$('runDiscoveryButton');btn.disabled=tru
 async function stopDiscovery(){const btn=$('stopDiscoveryButton');btn.disabled=true;$('discoveryStatus').textContent='Stopping Discovery';try{const r=await fetch(endpoint('api/discovery/stop'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not stop Discovery');await refresh()}catch(e){$('discoveryStatus').textContent=`Could not stop Discovery: ${e}`;btn.disabled=false}}
 async function resetSnmpDiscoveryData(){const btn=$('resetSnmpDiscoveryButton');const status=$('resetSnmpDiscoveryStatus');if(lastDiscoveryState?.running){status.textContent='Stop Discovery before resetting SNMP data.';return}if(!confirm('Reset SNMP Discovery data? This stops Switch Vision SNMP2MQTT, removes identifiable retained SNMP2MQTT Home Assistant discovery entities, deletes saved SNMP walk/capability/generated SNMP data, and clears the generated card for a clean rebuild. UniFi data and settings are preserved.'))return;btn.disabled=true;status.textContent='Resetting SNMP Discovery data…';try{const r=await fetch(endpoint('api/discovery/reset-snmp'),{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'SNMP reset failed');const warning=(d.warnings||[]).length?` Warnings: ${(d.warnings||[]).join(' | ')}`:'';status.textContent=`SNMP reset complete. MQTT entities retired: ${d.mqtt_topics_cleared||0}/${d.mqtt_topics_found||0}. Saved walk entries removed: ${d.walk_entries_removed||0}. Capability entries removed: ${d.capability_entries_removed||0}.${warning} Run Discovery to rebuild from the currently enabled sources.`;await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus(),refreshDevicesData(false)])}catch(e){status.textContent=`Could not reset SNMP Discovery data: ${e.message||e}`}finally{btn.disabled=false}}
 
-async function importConfiguration(){const file=$('configurationFile').files[0];const status=$('configurationStatus');if(!file){status.textContent='Choose a configuration JSON file first.';return}if(file.size>1024*1024){status.textContent='Configuration file is too large.';return}if(!confirm('Import this Discovery configuration? The current switch list and Discovery settings will be replaced.'))return;const btn=$('importConfigurationButton');btn.disabled=true;status.textContent='Importing configuration…';try{const text=await file.text();const data=JSON.parse(text);const r=await fetch(endpoint('api/configuration/import'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Import failed');status.textContent=`Imported ${d.switch_count||0} configured switch(es). The saved Supervisor configuration is active for the next Discovery run.`}catch(e){status.textContent=`Could not import configuration: ${e.message||e}`}finally{btn.disabled=false}}
+async function importConfiguration(){const file=$('configurationFile').files[0];const status=$('configurationStatus');if(!file){status.textContent='Choose a configuration JSON file first.';return}if(file.size>128*1024*1024){status.textContent='Configuration backup is too large.';return}if(!confirm('Restore this Switch Vision configuration? Complete backups overwrite matching non-secret component settings and restore calibration profiles/assets. Saved credentials are never imported.'))return;const btn=$('importConfigurationButton');btn.disabled=true;status.textContent='Restoring Switch Vision configuration…';try{const text=await file.text();const data=JSON.parse(text);const r=await fetch(endpoint('api/configuration/import'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Import failed');if(d.format==='legacy-discovery'){status.textContent=`Imported legacy Discovery configuration with ${d.switch_count||0} configured switch(es).`;return}const requirements=Array.isArray(d.credential_requirements)?d.credential_requirements:[];const pending=(Number(d.pending_discovery_switches||0)+Number(d.pending_unifi_controllers||0));const warnings=Array.isArray(d.warnings)&&d.warnings.length?` Warnings: ${d.warnings.join(' | ')}`:'';status.textContent=`Complete restore finished: ${(d.restored_components||[]).join(', ')||'configuration'} · ${d.calibration_profile_count||0} calibration profile(s) · ${d.asset_count||0} custom asset(s). ${requirements.length} credential${requirements.length===1?'':'s'} require re-entry${pending?`; ${pending} device/controller row${pending===1?'':'s'} restored pending credentials`:''}.${warnings}`;appLinksCache=null}catch(e){status.textContent=`Could not import configuration: ${e.message||e}`}finally{btn.disabled=false}}
 function schedulePoll(running=lastRunning){if(polling){clearTimeout(polling);polling=null}if(document.hidden)return;polling=setTimeout(refresh,running?1000:5000)}
 async function refresh(){if(refreshInFlight)return;refreshInFlight=true;try{const r=await fetch(endpoint('api/status'),{cache:'no-store'});const d=await r.json();if(!window.SwitchVisionHubSettings?.hasUnsavedCore?.()){if(d.ui_preferences?.density)syncDensityUi(d.ui_preferences.density);if(d.ui_preferences?.content_width)syncContentWidthUi(d.ui_preferences.content_width)}setUnifiHomeCardVisibility(d.ui_preferences?.show_unifi_integration!==false);if(d.ui_preferences?.show_unifi_integration!==false)await refreshUnifiHomeCard();if(!defaultsLoaded)setForm(d.defaults);showDiscovery(d.discovery);renderDiscoveryHistory(d.discovery_history||{});if(debugVisible)await refreshCurrentDiscoveryDebug();const contributionRunning=!!d.job.running;const discoveryRunning=!!d.discovery?.running;lastRunning=contributionRunning||discoveryRunning;$('createButton').disabled=contributionRunning;if(contributionRunning&&currentView!=='discovery')setView('progress');$('progressMessage').textContent=d.job.message||'Working…';$('logTail').textContent=(d.job.log_tail||[]).join('\n');if(!contributionRunning&&d.job.success===false&&currentView==='progress'){$('progressMessage').textContent=`Failed: ${d.job.message}`}if(!contributionRunning){showLatest(d.latest);if(d.job.success===true&&d.latest&&currentView==='progress')setView('ready')}if(currentView==='devices')await refreshDevicesData(false);else if(currentView==='discovery')await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])}catch(e){if(currentView==='progress')$('progressMessage').textContent=`Could not contact Support My Switch: ${e}`;else $('homeStatus').textContent=`Connection problem: ${e}`}finally{refreshInFlight=false;schedulePoll(lastRunning)}}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(polling){clearTimeout(polling);polling=null}}else{updateElapsedClock();refresh()}});window.addEventListener('focus',()=>{if(!document.hidden){updateElapsedClock();refresh()}});
 async function create(){const btn=$('createButton');btn.disabled=true;setView('progress');$('progressMessage').textContent='Starting…';try{const r=await fetch(endpoint('api/create'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start contribution');await refresh()}catch(e){$('progressMessage').textContent=`Could not start: ${e}`;btn.disabled=false}}
-const DISCOVERY_TOOLTIP_HELP={runDiscoveryButton:'Contact each enabled switch, collect current evidence, identify hardware, and regenerate Switch Vision outputs.',regenerateYamlButton:'Rebuild SNMP2MQTT YAML from saved Discovery evidence without running new SNMP walks.',regenerateCardYamlButton:'Rebuild dashboard-card YAML from saved Discovery evidence without running new SNMP walks.',previewGeneratedDashboardYamlButton:'Preview the dependency-free dashboard export that can be pasted into a new Home Assistant dashboard.',copyGeneratedDashboardYamlButton:'Copy a complete dependency-free dashboard for Home Assistant Raw configuration editor.',copyGeneratedCardsOnlyButton:"Copy only the generated card list for pasting beneath an existing view's cards: key.",downloadGeneratedDashboardYamlButton:'Download the complete dependency-free Home Assistant dashboard export.',stopDiscoveryButton:'Request a clean stop of the active Discovery or regeneration operation.',viewResultsButton:'Open the unified Devices list and current detected hardware details.',toggleDebugButton:'Show the complete credential-sanitized debug session for the current or most recent operation.',copyDebugButton:'Copy the complete current-session credential-sanitized debug output.',devicesRunDiscoveryButton:'Start a fresh Discovery run for the currently enabled saved switches.',devicesRegenerateCardYamlButton:'Regenerate the dashboard card from current saved device order/state.',copyDiagnosticsButton:'Copy the privacy-safe Switch Vision diagnostics report.',resetSnmpDiscoveryButton:'Retire known Switch Vision SNMP MQTT entities and clear saved SNMP Discovery state for a clean rebuild.',addUnifiControllerButton:'Add another Local or Remote UniFi controller/site to this UniFi2MQTT instance.',testUnifiLocalButton:'Test Local UniFi API reachability, authentication, site resolution, and adopted-device access without saving.',testUnifiRemoteButton:'Test Remote Site Manager reachability, authentication, host/site resolution, and adopted-device access without saving.',unifi_priority_transport:'The connection path tried first on every UniFi poll.',unifi_fallback_transport:'The alternate connection used only when the priority path is unavailable.',unifi_local_controller_url:'Local UniFi Network Integration API origin. Self-hosted controllers normally use HTTPS port 11443.',unifi_remote_host_id:'UniFi Site Manager console host selector; auto is recommended when unambiguous.'};
+const DISCOVERY_TOOLTIP_HELP={runDiscoveryButton:'Contact each enabled switch, collect current evidence, identify hardware, and regenerate Switch Vision outputs.',regenerateYamlButton:'Rebuild SNMP2MQTT YAML from saved Discovery evidence without running new SNMP walks.',regenerateCardYamlButton:'Rebuild dashboard-card YAML from saved Discovery evidence without running new SNMP walks.',previewGeneratedDashboardYamlButton:'Preview the dependency-free dashboard export that can be pasted into a new Home Assistant dashboard.',copyGeneratedDashboardYamlButton:'Copy a complete dependency-free dashboard for Home Assistant Raw configuration editor.',copyGeneratedCardsOnlyButton:"Copy only the generated card list for pasting beneath an existing view's cards: key.",downloadGeneratedDashboardYamlButton:'Download the complete dependency-free Home Assistant dashboard export.',stopDiscoveryButton:'Request a clean stop of the active Discovery or regeneration operation.',viewResultsButton:'Open the unified Devices list and current detected hardware details.',toggleDebugButton:'Show the complete credential-sanitized debug session for the current or most recent operation.',copyDebugButton:'Copy the complete current-session credential-sanitized debug output.',devicesRunDiscoveryButton:'Start a fresh Discovery run for the currently enabled saved switches.',resetDeviceOrderButton:'Restore the device list and Native dashboard to immutable first-added order.',devicesRegenerateCardYamlButton:'Regenerate the dashboard card from current saved device order/state.',copyDiagnosticsButton:'Copy the privacy-safe Switch Vision diagnostics report.',resetSnmpDiscoveryButton:'Retire known Switch Vision SNMP MQTT entities and clear saved SNMP Discovery state for a clean rebuild.',addUnifiControllerButton:'Add another Local or Remote UniFi controller/site to this UniFi2MQTT instance.',testUnifiLocalButton:'Test Local UniFi API reachability, authentication, site resolution, and adopted-device access without saving.',testUnifiRemoteButton:'Test Remote Site Manager reachability, authentication, host/site resolution, and adopted-device access without saving.',unifi_priority_transport:'The connection path tried first on every UniFi poll.',unifi_fallback_transport:'The alternate connection used only when the priority path is unavailable.',unifi_local_controller_url:'Local UniFi Network Integration API origin. Self-hosted controllers normally use HTTPS port 11443.',unifi_remote_host_id:'UniFi Site Manager console host selector; auto is recommended when unambiguous.'};
 function installDiscoveryTooltips(root=document){const selector='button,input,select,a.button,summary';for(const el of root.querySelectorAll?root.querySelectorAll(selector):[]){if(el.title)continue;let help=DISCOVERY_TOOLTIP_HELP[el.id]||el.getAttribute('aria-label')||'';const label=el.closest?.('label');if(!help&&label){const small=label.querySelector('small');if(small)help=small.textContent.trim();if(!help){const span=label.querySelector(':scope > span');if(span)help=span.textContent.trim()}}if(!help&&(el.tagName==='BUTTON'||el.tagName==='SUMMARY'||el.matches('a.button')))help=el.textContent.trim();if(help)el.title=help}}
 const discoveryTooltipObserver=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===Node.ELEMENT_NODE){if(node.matches?.('button,input,select,a.button,summary'))installDiscoveryTooltips(node.parentElement||document);else installDiscoveryTooltips(node)}});discoveryTooltipObserver.observe(document.body,{childList:true,subtree:true});installDiscoveryTooltips(document);
-$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();$('hubMotdToggle').addEventListener('click',toggleHubMotdVisibility);initHubMotdVisibility();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openCalibrationProfilesButton').addEventListener('click',()=>{setView('profiles');window.SwitchVisionCalibrationProfiles?.load()});$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedDashboardYamlButton').addEventListener('click',previewGeneratedDashboardYaml);$('copyGeneratedDashboardYamlButton').addEventListener('click',copyGeneratedDashboardYaml);$('copyGeneratedCardsOnlyButton').addEventListener('click',copyGeneratedCardsOnly);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('devicesRegenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYamlFromDevices);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/discovery-configuration.json')});$('openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()});$('openIntegrationSettingsButton').addEventListener('click',()=>window.SwitchVisionHubSettings?.open('core'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('testUnifiLocalButton').addEventListener('click',()=>testUnifiConnection('local'));$('testUnifiRemoteButton').addEventListener('click',()=>testUnifiConnection('remote'));$('clearUnifiConnectionTestDebugButton').addEventListener('click',clearUnifiConnectionTestDebug);$('addUnifiControllerButton').addEventListener('click',addUnifiController);$('unifi_priority_transport').addEventListener('change',syncUnifiFallbackOptions);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('hubSharedPrimary').addEventListener('click',runSharedHubPrimary);$('hubSharedReload').addEventListener('click',reloadSharedHubView);$('hubSharedBack').addEventListener('click',goBack);installStaticSecretControls();setView('home');startElapsedTicker();refresh();
+$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();$('hubMotdToggle').addEventListener('click',toggleHubMotdVisibility);initHubMotdVisibility();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openCalibrationProfilesButton').addEventListener('click',()=>{setView('profiles');window.SwitchVisionCalibrationProfiles?.load()});$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('previewGeneratedDashboardYamlButton').addEventListener('click',previewGeneratedDashboardYaml);$('copyGeneratedDashboardYamlButton').addEventListener('click',copyGeneratedDashboardYaml);$('copyGeneratedCardsOnlyButton').addEventListener('click',copyGeneratedCardsOnly);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('resetDeviceOrderButton').addEventListener('click',resetConfiguredDeviceOrder);$('devicesRegenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYamlFromDevices);$('openConfigurationButton').addEventListener('click',()=>{setView('configuration');$('exportConfigurationButton').href=endpoint('download/switch-vision-backup.json')});$('openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()});$('openIntegrationSettingsButton').addEventListener('click',()=>window.SwitchVisionHubSettings?.open('core'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('testUnifiLocalButton').addEventListener('click',()=>testUnifiConnection('local'));$('testUnifiRemoteButton').addEventListener('click',()=>testUnifiConnection('remote'));$('clearUnifiConnectionTestDebugButton').addEventListener('click',clearUnifiConnectionTestDebug);$('addUnifiControllerButton').addEventListener('click',addUnifiController);$('unifi_priority_transport').addEventListener('change',syncUnifiFallbackOptions);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('hubSharedPrimary').addEventListener('click',runSharedHubPrimary);$('hubSharedReload').addEventListener('click',reloadSharedHubView);$('hubSharedBack').addEventListener('click',goBack);installStaticSecretControls();setView('home');startElapsedTicker();refresh();
 </script>
 <script src="credits_v25.js"></script>
 <script>
-(()=>{'use strict';const q=id=>document.getElementById(id),clone=v=>JSON.parse(JSON.stringify(v)),dirty=new Set(),state={core:null,snmp2mqtt:null,discovery:null,models:[],order:[],activeTab:'core'},expandedDiscoverySwitches=new Set();let discoverySwitchExpansionInitialized=false;const L={show_all_switch_vision_sidebar_items:'Show all Switch Vision sidebar items',show_panel_in_sidebar:'Show native Switch Vision in sidebar',show_lovelace_dashboard_in_sidebar:'Show Switch Vision dashboard in sidebar',show_hub_in_sidebar:'Show Switch Vision Hub in sidebar',show_installer_in_sidebar:'Show Switch Vision Installer in sidebar',show_dashboard_header:'Show dashboard header',native_header_show_summary:'Show summary',native_header_show_refresh:'Show refresh',native_header_show_version:'Show version',native_header_shortcut_switch_vision_settings:'Switch Vision Settings shortcut',native_header_shortcut_hub:'Hub shortcut',native_header_shortcut_maintenance:'Maintenance shortcut',native_header_shortcut_discovery_settings:'Discovery Settings shortcut',native_header_shortcut_installer:'Installer shortcut',native_header_shortcut_installer_settings:'Installer Settings shortcut',native_header_shortcut_snmp2mqtt_settings:'SNMP2MQTT Settings shortcut',native_header_shortcut_unifi2mqtt_settings:'UniFi2MQTT Settings shortcut',show_calibration_buttons:'Show calibration buttons on cards',show_card_headers:'Show card headers'};const OL={hub:'Hub',maintenance:'Maintenance',switch_vision_settings:'Switch Vision Settings',discovery_settings:'Discovery Settings',installer:'Installer',installer_settings:'Installer Settings',snmp2mqtt_settings:'SNMP2MQTT Settings',unifi2mqtt_settings:'UniFi2MQTT Settings'};function status(t,c=''){const n=q('hubSettingsStatus');if(n){n.className=`muted hub-settings-status ${c}`.trim();n.textContent=t}}function selectTab(which='core',focus=false){const ids=['core','discovery','snmp2mqtt'];const selected=ids.includes(which)?which:'core';state.activeTab=selected;for(const id of ids){const active=id===selected,pane=q(`hubComponent-${id}`),tab=q(`hubTab-${id}`);if(pane)pane.hidden=!active;if(tab){tab.classList.toggle('is-active',active);tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1}}if(focus)q(`hubTab-${selected}`)?.focus()}function tabKeydown(e){const ids=['core','discovery','snmp2mqtt'],current=state.activeTab,i=Math.max(0,ids.indexOf(current));let next=null;if(e.key==='ArrowRight')next=ids[(i+1)%ids.length];else if(e.key==='ArrowLeft')next=ids[(i-1+ids.length)%ids.length];else if(e.key==='Home')next=ids[0];else if(e.key==='End')next=ids[ids.length-1];if(next){e.preventDefault();selectTab(next,true)}}function mark(o){dirty.add(o);q('hubSettingsSave').disabled=false;status('Unsaved changes')}function clear(o){dirty.delete(o);q('hubSettingsSave').disabled=!dirty.size}async function req(p,o={}){const r=await fetch(endpoint(p),{cache:'no-store',...o});let d={};try{d=await r.json()}catch(_e){}if(!r.ok)throw new Error(d.error||`Request failed (${r.status})`);return d}function sec(t,p=''){const x=document.createElement('section');x.className='hub-settings-section';x.innerHTML=`<h3>${t}</h3>${p?`<p class="muted">${p}</p>`:''}`;return x}function hubHelp(t){const w=document.createElement('span');w.className='hub-help';const b=document.createElement('button');b.type='button';b.className='hub-help-button';b.textContent='?';b.setAttribute('aria-label','Help: '+t);b.setAttribute('aria-expanded','false');const p=document.createElement('span');p.className='hub-help-popover';p.setAttribute('role','tooltip');p.textContent=t;p.hidden=true;let pinned=false;const show=()=>{p.hidden=false;b.setAttribute('aria-expanded','true')},hide=()=>{if(!pinned){p.hidden=true;b.setAttribute('aria-expanded','false')}};b.onmouseenter=show;b.onmouseleave=hide;b.onfocus=show;b.onblur=hide;b.onclick=e=>{e.preventDefault();pinned=!pinned;pinned?show():hide()};b.onkeydown=e=>{if(e.key==='Escape'){pinned=false;p.hidden=true;b.setAttribute('aria-expanded','false')}};w.append(b,p);return w}function attachActionHelp(id,t){const e=q(id);if(e&&!e.nextElementSibling?.classList?.contains('hub-help'))e.after(hubHelp(t))}function fld(t,c,h=''){const x=document.createElement('label');x.className='field hub-setting-field';const s=document.createElement('span');s.className='hub-field-label';s.textContent=t;if(h)s.append(hubHelp(h));const target=c.matches?.('input,select,textarea')?c:c.querySelector?.('input,select,textarea');if(target)target.setAttribute('aria-label',t);x.append(s,c);return x}function tog(t,v,fn,dis=false,h=''){const x=document.createElement('label');x.className='option hub-setting-toggle';const i=document.createElement('input');i.type='checkbox';i.checked=!!v;i.disabled=dis;i.onchange=()=>fn(i.checked);i.setAttribute('aria-label',t);const s=document.createElement('span');s.className='hub-option-label hub-toggle-label';s.textContent=t;if(h)s.append(hubHelp(h));x.append(i,s);return x}function sel(v,opts,fn){const s=document.createElement('select');for(const [a,b] of opts){const o=document.createElement('option');o.value=a;o.textContent=b;o.selected=String(v)===String(a);s.append(o)}s.onchange=()=>fn(s.value);return s}function inp(v,type,fn,a={}){const i=document.createElement('input');i.type=type;i.value=v??'';for(const[k,x]of Object.entries(a))if(x!==undefined&&x!==null)i.setAttribute(k,String(x));i.oninput=()=>fn(i.value);return i}function secretInp(v,fn,refProvider,configured,a={}){const i=inp(v,'password',fn,a);return secretControl(i,refProvider,configured)}function fontChoices(){return Array.from({length:11},(_,i)=>{const px=i+10;return[String(px),`${px} px`]})}const UI_DENSITY_SCALE=[['spacious','Spacious'],['comfortable','Comfortable'],['compact','Compact'],['dense','Dense'],['ultra_dense','Ultra Dense']];const UI_WIDTH_SCALE=[['standard','Standard'],['standard_plus','Standard+'],['wide','Wide'],['wide_plus','Wide+'],['extra_wide','Extra Wide'],['extra_wide_plus','Extra Wide+'],['ultra_wide','Ultra Wide'],['ultra_wide_plus','Ultra Wide+'],['max_wide','Max Wide'],['full','Full']];function scaleIndex(value,scale){const i=scale.findIndex(([v])=>v===String(value));return i>=0?i:0}function rangeScale(value,scale,leftLabel,rightLabel,onChange){const wrap=document.createElement('div');wrap.className='hub-range-control';const ends=document.createElement('div');ends.className='hub-range-ends';const left=document.createElement('span'),right=document.createElement('span');left.textContent=leftLabel;right.textContent=rightLabel;ends.append(left,right);const input=document.createElement('input');input.type='range';input.min='1';input.max=String(scale.length);input.step='1';input.value=String(scaleIndex(value,scale)+1);const ticks=document.createElement('div');ticks.className='hub-range-ticks';scale.forEach(([,label],i)=>{const tick=document.createElement('span');tick.textContent=String(i+1);tick.title=label;ticks.append(tick)});const out=document.createElement('output');const update=emit=>{const i=Math.max(0,Math.min(scale.length-1,Number(input.value)-1));const [mapped,label]=scale[i];out.textContent=`${i+1} / ${scale.length} · ${label}`;if(emit)onChange(mapped,label,i+1)};input.addEventListener('input',()=>update(true));update(false);wrap.append(ends,input,ticks,out);return wrap}function applyDiscoveryAppearancePreview(density,width){syncDensityUi(density);syncContentWidthUi(width)}function installerAppearancePreview(){const p=document.createElement('div');p.className='installer-appearance-preview';p.innerHTML='<div class="installer-preview-frame"><div class="installer-preview-head"><span></span><span class="installer-preview-label"></span></div><div class="installer-preview-grid"><i></i><i></i><i></i></div><div class="installer-preview-card"></div></div>';return p}function applyInstallerAppearancePreview(root,density,width){if(!root)return;const di=Math.max(0,scaleIndex(density,UI_DENSITY_SCALE)),wi=Math.max(0,scaleIndex(width,UI_WIDTH_SCALE));root.style.setProperty('--preview-width',`${64+wi*4}%`);root.style.setProperty('--preview-gap',`${14-di*2}px`);root.style.setProperty('--preview-pad',`${16-di*2}px`);const label=root.querySelector('.installer-preview-label');if(label)label.textContent=`${UI_DENSITY_SCALE[di][1]} · ${UI_WIDTH_SCALE[wi][1]}`}function renderCore(){const r=q('hubCoreSettings');r.innerHTML='';if(!state.core?.settings){r.textContent='Core settings are unavailable.';return}const s=state.core.settings,side=sec('Sidebar & navigation'),sideTog=document.createElement('div');sideTog.className='hub-toggle-grid';for(const[k,v]of Object.entries(s.sidebar||{}))sideTog.append(tog(L[k]||k,v,x=>{s.sidebar[k]=x;mark('core')}));side.append(sideTog);r.append(side);const h=sec('Native dashboard header','Choose what appears in the Native Switch Vision header. Shortcut order affects enabled shortcuts only.'),displayGroup=document.createElement('div'),shortcutGroup=document.createElement('div');displayGroup.className='hub-header-group';shortcutGroup.className='hub-header-group hub-header-shortcuts';displayGroup.innerHTML='<h4>Header display</h4>';shortcutGroup.innerHTML='<h4>Enabled shortcuts</h4>';const displayKeys=['show_dashboard_header','native_header_show_refresh','native_header_show_summary','native_header_show_version'];for(const k of displayKeys){if(Object.prototype.hasOwnProperty.call(s.native_header||{},k))displayGroup.append(tog(L[k]||k,s.native_header[k],x=>{s.native_header[k]=x;mark('core')}))}for(const[k,v]of Object.entries(s.native_header||{})){if(k.startsWith('native_header_shortcut_')&&k!=='native_header_shortcut_order')shortcutGroup.append(tog(L[k]||k,v,x=>{s.native_header[k]=x;mark('core');renderCore()}))}const box=document.createElement('div');box.className='hub-order-list hub-header-group';box.innerHTML='<h4>Shortcut order</h4><p class="muted hub-order-help">Only enabled shortcuts are shown in the Native dashboard header.</p>';state.order=[...(s.native_header.native_header_shortcut_order||[])];const draw=()=>{box.querySelectorAll('.hub-order-row').forEach(n=>n.remove());state.order.forEach((id,n)=>{const row=document.createElement('div');row.className='hub-order-row';const enabledKey=`native_header_shortcut_${id}`,enabled=s.native_header?.[enabledKey]!==false;row.classList.toggle('is-disabled',!enabled);const nm=document.createElement('span');nm.textContent=OL[id]||id;nm.title=enabled?'Enabled shortcut':'Shortcut is disabled';const u=document.createElement('button'),d=document.createElement('button');u.type=d.type='button';u.textContent='↑';d.textContent='↓';u.disabled=n===0;d.disabled=n===state.order.length-1;u.setAttribute('aria-label',`Move ${OL[id]||id} up`);d.setAttribute('aria-label',`Move ${OL[id]||id} down`);u.onclick=()=>{[state.order[n-1],state.order[n]]=[state.order[n],state.order[n-1]];s.native_header.native_header_shortcut_order=[...state.order];mark('core');draw()};d.onclick=()=>{[state.order[n+1],state.order[n]]=[state.order[n],state.order[n+1]];s.native_header.native_header_shortcut_order=[...state.order];mark('core');draw()};row.append(nm,u,d);box.append(row)})};draw();const headerLayout=document.createElement('div');headerLayout.className='hub-header-layout';headerLayout.append(displayGroup,shortcutGroup,box);h.append(headerLayout);r.append(h);const dash=sec('Dashboard presentation','Control card headers, Calibration controls, and the maximum rendered faceplate width.'),dashTog=document.createElement('div');dashTog.className='hub-toggle-grid';for(const[k,v]of Object.entries(s.dashboard||{})){if(k==='faceplate_width_mode'||k==='faceplate_custom_width')continue;dashTog.append(tog(L[k]||k,v,x=>{s.dashboard[k]=x;mark('core')}))}dash.append(dashTog);const widthGrid=document.createElement('div');widthGrid.className='grid';const widthMode=sel(s.dashboard.faceplate_width_mode||'auto',[['auto','Auto'],['800','800 px'],['1024','1024 px'],['custom','Custom']],x=>{s.dashboard.faceplate_width_mode=x;mark('core');renderCore()});widthGrid.append(fld('Faceplate width',widthMode,'Sets the maximum rendered faceplate/card width. Height and calibrated geometry scale proportionally.'));if((s.dashboard.faceplate_width_mode||'auto')==='custom')widthGrid.append(fld('Custom faceplate width (px)',inp(s.dashboard.faceplate_custom_width||800,'number',x=>{s.dashboard.faceplate_custom_width=Number(x);mark('core')},{min:320,max:4096,step:1}),'Custom width is remembered when you switch back to a preset.'));dash.append(widthGrid);r.append(dash);const a=sec('Activity LEDs'),g=document.createElement('div');g.className='grid hub-grid-dense';g.append(fld('Sensitivity preset',sel(s.activity_leds.activity_led_sensitivity_preset,[['low','Low'],['normal','Normal'],['high','High'],['custom','Custom']],x=>{s.activity_leds.activity_led_sensitivity_preset=x;mark('core')})));for(const[k,t,min,max,step]of [['activity_slow_max_utilization_pct','Slow activity maximum (%)',.001,100,.001],['activity_medium_max_utilization_pct','Medium activity maximum (%)',.001,100,.001],['activity_slow_period_ms','Slow blink period (ms)',120,2000,1],['activity_medium_period_ms','Medium blink period (ms)',120,2000,1],['activity_fast_period_ms','Fast blink period (ms)',120,2000,1],['activity_hold_seconds','Activity hold (seconds)',1,120,.1],['activity_hysteresis_pct','Hysteresis (%)',0,50,.1]])g.append(fld(t,inp(s.activity_leds[k],'number',x=>{s.activity_leds[k]=Number(x);mark('core')},{min,max,step})));a.append(g);r.append(a);const ap=document.createElement('div');ap.className='hub-settings-columns';for(const[grp,title]of[['discovery','Discovery appearance'],['installer','Installer appearance']]){const b=sec(title),v=s[grp],densityKey=`${grp}_ui_density`,widthKey=`${grp}_content_width`;let preview=null;const live=()=>{if(grp==='discovery')applyDiscoveryAppearancePreview(v[densityKey],v[widthKey]);else applyInstallerAppearancePreview(preview,v[densityKey],v[widthKey])};b.append(fld('UI density',rangeScale(v[densityKey],UI_DENSITY_SCALE,'Spacious','Ultra Dense',x=>{v[densityKey]=x;mark('core');live()}),'Live preview. Left is more spacious; right fits more information onscreen.'),fld('Text size',sel(v[`${grp}_text_size`],fontChoices(),x=>{v[`${grp}_text_size`]=Number(x);mark('core')})),fld('Content width',rangeScale(v[widthKey],UI_WIDTH_SCALE,'Narrower','Wider',x=>{v[widthKey]=x;mark('core');live()}),'Live preview. Left is narrower; right is wider.'));if(grp==='installer'){preview=installerAppearancePreview();b.append(preview);applyInstallerAppearancePreview(preview,v[densityKey],v[widthKey])}if(grp==='discovery')b.append(tog('Show UniFi integration',v.show_unifi_integration,x=>{v.show_unifi_integration=x;mark('core')}));ap.append(b)}r.append(ap)}function renderSnmp(){const r=q('hubSnmpSettings');r.innerHTML='';const d=state.snmp2mqtt;if(!d?.installed){r.innerHTML='<div class="warning">Switch Vision SNMP2MQTT is not installed.</div>';return}const s=d.settings,m=sec('MQTT connection'),g=document.createElement('div');g.className='grid';g.append(fld('MQTT host',inp(s.mqtt.host,'text',x=>{s.mqtt.host=x;mark('snmp2mqtt')})),fld('MQTT port',inp(s.mqtt.port,'number',x=>{s.mqtt.port=Number(x);mark('snmp2mqtt')},{min:1,max:65535,step:1})),fld('MQTT username',inp(s.mqtt.username,'text',x=>{s.mqtt.username=x;mark('snmp2mqtt')})),fld('MQTT password',secretInp('',x=>{s.mqtt.password=x;mark('snmp2mqtt')},()=>({scope:'snmp2mqtt',kind:'mqtt_password'}),!!d.password_configured,{autocomplete:'new-password',placeholder:d.password_configured?'Saved — use eye to reveal':'Not configured'}),'Saved passwords stay redacted in normal settings responses. Use the eye to reveal this one on demand; blank preserves it.'));m.append(g,tog('Clear saved MQTT password',false,x=>{s.clear_password=x;mark('snmp2mqtt')},false,'Only enable this if the broker no longer requires the saved password.'));r.append(m);const p=sec('Target configuration'),pg=document.createElement('div');pg.className='grid';for(const[k,t]of[['targets_path','Targets path'],['switch_vision_generated_yaml_path','Generated YAML path'],['imported_targets_path','Imported targets path']])pg.append(fld(t,inp(s[k],'text',x=>{s[k]=x;mark('snmp2mqtt')})));p.append(pg,tog('Use Switch Vision generated YAML',s.use_switch_vision_generated_yaml,x=>{s.use_switch_vision_generated_yaml=x;mark('snmp2mqtt')}),tog('Back up existing config before import',s.backup_existing_config,x=>{s.backup_existing_config=x;mark('snmp2mqtt')}));r.append(p);const ha=sec('Home Assistant discovery');ha.append(tog('MQTT Discovery enabled',true,()=>{},true,'Required by Switch Vision and enforced by SNMP2MQTT.'),fld('Discovery prefix',inp('homeassistant','text',()=>{},{readonly:'readonly'}),'Required value: homeassistant.'));r.append(ha)}function bsel(v,fn){return sel(v===true||String(v).toLowerCase()==='true'?'true':'false',[['true','Enabled'],['false','Disabled']],fn)}function renderDiscovery(){const r=q('hubDiscoverySettings');r.innerHTML='';if(!state.discovery?.settings){r.textContent='Discovery settings are unavailable.';return}const s=state.discovery.settings,w=sec('Discovery workflow'),wg=document.createElement('div');wg.className='grid hub-discovery-workflow-grid';for(const[k,t]of[['run_snmp_walks','Run SNMP walks'],['enable_switch_list','Use saved switch list'],['parse_all_walks','Parse all stored walks'],['generate_snmp2mqtt','Generate SNMP2MQTT YAML'],['clean_output_before_walk','Clean generated output before walk'],['generate_support_my_switch_bundle','Create Support My Switch bundle after Discovery']])wg.append(fld(t,bsel(s[k],x=>{s[k]=x;mark('discovery')})));w.append(wg);r.append(w);const sw=sec('Switches','SNMP communities are masked by default. Use the eye to reveal a saved community; blank preserves it. Use the arrows to reorder switches; Save commits that order.');const switches=s.switches||[];if(!discoverySwitchExpansionInitialized){if(switches.length){expandedDiscoverySwitches.add(String(switches[0].original_switch_name||switches[0].switch_name||'index:0'))}discoverySwitchExpansionInitialized=true}switches.forEach((row,n)=>{const key=String(row.original_switch_name||row.switch_name||`index:${n}`);const c=document.createElement('div');c.className='device-card hub-setting-row hub-switch-setting-row';const hd=document.createElement('div');hd.className='hub-switch-setting-summary';const order=document.createElement('span');order.className='hub-switch-setting-order';const up=document.createElement('button'),down=document.createElement('button');up.type=down.type='button';up.textContent='↑';down.textContent='↓';up.disabled=n===0;down.disabled=n===switches.length-1;up.setAttribute('aria-label',`Move up ${row.display_name||row.switch_name||`Switch ${n+1}`}`);down.setAttribute('aria-label',`Move down ${row.display_name||row.switch_name||`Switch ${n+1}`}`);const move=delta=>{const target=n+delta;if(target<0||target>=switches.length)return;[switches[n],switches[target]]=[switches[target],switches[n]];mark('discovery');renderDiscovery()};up.addEventListener('click',()=>move(-1));down.addEventListener('click',()=>move(1));order.append(up,down);const toggle=document.createElement('button');toggle.type='button';toggle.className='hub-switch-setting-toggle';toggle.setAttribute('aria-expanded',String(expandedDiscoverySwitches.has(key)));const label=document.createElement('span');label.className='hub-switch-setting-label';const name=document.createElement('strong');name.textContent=`Switch ${n+1}`;const meta=document.createElement('span');meta.className='muted hub-switch-setting-meta';meta.textContent=[row.display_name||row.switch_name||'Unnamed switch',row.switch_model&&row.switch_model!=='auto'?row.switch_model:'Auto-detect',row.switch_host||'No host'].join(' · ');label.append(name,meta);const chevron=document.createElement('span');chevron.className='hub-switch-setting-chevron';chevron.textContent='▸';chevron.setAttribute('aria-hidden','true');toggle.append(label,chevron);const rm=document.createElement('button');rm.type='button';rm.className='danger';rm.textContent='Remove';rm.onclick=()=>{expandedDiscoverySwitches.delete(key);switches.splice(n,1);mark('discovery');renderDiscovery()};hd.append(order,toggle,rm);c.append(hd);const g=document.createElement('div');g.className='grid hub-switch-setting-body';g.hidden=!expandedDiscoverySwitches.has(key);toggle.addEventListener('click',()=>{const open=g.hidden;if(open)expandedDiscoverySwitches.add(key);else expandedDiscoverySwitches.delete(key);g.hidden=!open;toggle.setAttribute('aria-expanded',String(open));c.classList.toggle('is-open',open)});c.classList.toggle('is-open',!g.hidden);const f=(t,k,type='text',hint='')=>{if(type==='password')return fld(t,secretInp(row[k]??'',x=>{row[k]=x;mark('discovery')},()=>({scope:'discovery',kind:'snmp_community',identifier:row.original_switch_name||row.switch_name}),!!row.snmp_community_configured,{autocomplete:'new-password',placeholder:row.snmp_community_configured?'Saved — use eye to reveal':'Required for new switch'}),hint);return fld(t,inp(row[k]??'',type,x=>{row[k]=x;mark('discovery')}),hint)};g.append(f('Switch Name (Used internally only)','switch_name'),f('Display name','display_name'),f('Switch host','switch_host'),f('Sensor prefix','sensor_prefix'),f('SNMP community','snmp_community','password','Saved communities stay redacted in normal settings responses; use the eye to reveal this one on demand.'),fld('State',sel(row.enabled||'enabled',[['enabled','Enabled'],['disabled','Disabled']],x=>{row.enabled=x;mark('discovery')})),fld('Walk mode',sel(row.walk_mode||'targeted',[['targeted','Targeted'],['full','Full']],x=>{row.walk_mode=x;mark('discovery')})),fld('Switch model',sel(row.switch_model||'auto',[['auto','Auto'],...state.models.filter(m=>m!=='auto').map(m=>[m,m])],x=>{row.switch_model=x;mark('discovery')})),f('Card header title','card_header_title'));c.append(g);sw.append(c)});const add=document.createElement('button');add.type='button';add.textContent='Add switch';add.onclick=()=>{const row={switch_name:'',display_name:'',switch_host:'',sensor_prefix:'',snmp_community:'',snmp_community_configured:false,original_switch_name:'',enabled:'enabled',walk_mode:'targeted',switch_model:'auto',card_header_title:''};s.switches.push(row);expandedDiscoverySwitches.add(`index:${s.switches.length-1}`);mark('discovery');renderDiscovery()};sw.append(add);r.append(sw);const st=sec('Stack member display mapping');(s.stack_member_prefixes||[]).forEach((row,n)=>{const c=document.createElement('div');c.className='device-card hub-setting-row';const hd=document.createElement('div');hd.className='device-head';hd.innerHTML=`<strong>Stack member ${n+1}</strong>`;const rm=document.createElement('button');rm.type='button';rm.className='danger';rm.textContent='Remove';rm.onclick=()=>{s.stack_member_prefixes.splice(n,1);mark('discovery');renderDiscovery()};hd.append(rm);c.append(hd);const g=document.createElement('div');g.className='grid';for(const[k,t]of[['switch_name','Switch name'],['member','Member number'],['display_name','Display name'],['sensor_prefix','Sensor prefix'],['card_header_title','Card header title']])g.append(fld(t,inp(row[k]??'','text',x=>{row[k]=x;mark('discovery')})));c.append(g);st.append(c)});const as=document.createElement('button');as.type='button';as.textContent='Add stack member';as.onclick=()=>{s.stack_member_prefixes.push({switch_name:'',member:'1',display_name:'',sensor_prefix:'',card_header_title:''});mark('discovery');renderDiscovery()};st.append(as);r.append(st);const p=sec('Paths & SNMP timing'),pg=document.createElement('div');pg.className='grid';for(const[k,t]of[['input_path','Input walk path'],['snmpwalks_dir','SNMP walks directory'],['report_path','Discovery report path'],['targets_csv','Targets CSV path'],['last_run_summary_path','Last-run summary path'],['generated_yaml_path','Generated SNMP2MQTT path'],['generated_card_path','Generated dashboard path'],['snmp_log_path','SNMP log path']])pg.append(fld(t,inp(s[k]??'','text',x=>{s[k]=x;mark('discovery')})));for(const[k,t,min,max]of[['snmp_timeout','SNMP timeout',1,30],['snmp_retries','SNMP retries',0,10],['minimum_valid_walk_lines','Minimum valid walk lines',1,1000000]])pg.append(fld(t,inp(s[k]??'','number',x=>{s[k]=String(x);mark('discovery')},{min,max,step:1})));p.append(pg);r.append(p);const bk=sec('Discovery configuration backups'),bg=document.createElement('div');bg.className='grid';bg.append(fld('Automatic retention',bsel(s.backup_retention_enabled,x=>{s.backup_retention_enabled=x;mark('discovery')})),fld('Retained backups',inp(s.backup_retention_count,'number',x=>{s.backup_retention_count=Number(x);mark('discovery')},{min:1,max:10,step:1})));bk.append(bg);r.append(bk);const sp=sec('Support My Switch privacy & recognition'),sg=document.createElement('div');sg.className='grid';for(const[k,t]of[['support_mask_management_ips','Mask management IPs'],['support_mask_mac_addresses','Mask MAC addresses'],['support_mask_hostnames','Mask hostnames'],['support_mask_vlan_names','Mask VLAN names'],['support_mask_interface_descriptions','Mask interface descriptions']])sg.append(fld(t,bsel(s[k],x=>{s[k]=x;mark('discovery')})));sg.append(fld('Contributor recognition',sel(s.support_contributor_type||'anonymous',[['anonymous','Anonymous'],['first_name','First name'],['full_name','Full name'],['github','GitHub'],['forum','Forum']],x=>{s.support_contributor_type=x;mark('discovery')})),fld('Contributor value',inp('','text',x=>{s.support_contributor_value=x;mark('discovery')},{maxlength:120,placeholder:s.support_contributor_value_configured?'Saved — leave blank to keep':'Optional recognition'}),'Private and write-only in the Hub; nothing is published automatically.'));sp.append(sg);r.append(sp)}function cleanDiscovery(){const s=clone(state.discovery.settings);delete s.support_contributor_value_configured;s.switches=(s.switches||[]).map(row=>{const x={...row};delete x.snmp_community_configured;return x});return s}async function load(){status('Loading settings…');const a=await Promise.allSettled([req('api/settings/core'),req('api/settings/snmp2mqtt'),req('api/settings/discovery')]);state.core=a[0].status==='fulfilled'?clone(a[0].value):null;state.snmp2mqtt=a[1].status==='fulfilled'?clone(a[1].value):{installed:false};if(a[2].status==='fulfilled'){state.discovery=clone(a[2].value);state.models=[...(a[2].value.models||[])]}else state.discovery=null;renderCore();renderSnmp();renderDiscovery();if(state.core?.settings?.discovery)applyDiscoveryAppearancePreview(state.core.settings.discovery.discovery_ui_density,state.core.settings.discovery.discovery_content_width);dirty.clear();q('hubSettingsSave').disabled=true;const e=a.filter(x=>x.status==='rejected').map(x=>x.reason?.message||String(x.reason));status(e.length?`Loaded with ${e.length} unavailable section(s): ${e.join(' · ')}`:'All settings loaded from their authoritative components.',e.length?'failure':'success')}async function save(){if(!dirty.size)return;const b=q('hubSettingsSave'),done=[];b.disabled=true;try{for(const o of ['core','snmp2mqtt','discovery']){if(!dirty.has(o))continue;status(`Saving ${o==='core'?'Core':o==='snmp2mqtt'?'SNMP2MQTT':'Discovery'}…`);const body=o==='core'?{settings:state.core.settings}:o==='snmp2mqtt'?{settings:state.snmp2mqtt.settings}:{settings:cleanDiscovery()};const d=await req(`api/settings/${o}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(o==='core')state.core=clone(d);else if(o==='snmp2mqtt')state.snmp2mqtt=clone(d);else{state.discovery=clone(d);state.models=[...(d.models||state.models)]}done.push(o);clear(o)}renderCore();renderSnmp();renderDiscovery();status('Saved successfully.','success')}catch(e){status(`${done.length?`Saved ${done.join(', ')}. `:''}Save stopped: ${e.message||e}`,'failure');b.disabled=!dirty.size}}async function resetCore(){if(!confirm('Reset all Switch Vision Core settings to their factory defaults? SNMP2MQTT and Discovery settings are not changed.'))return;try{status('Resetting Core settings…');state.core=clone(await req('api/settings/core',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_to_defaults:true})}));clear('core');renderCore();status('Core settings reset to defaults.','success')}catch(e){status(`Core reset failed: ${e.message||e}`,'failure')}}function styles(){if(q('hubSettingsStyles'))return;const s=document.createElement('style');s.id='hubSettingsStyles';s.textContent='.hub-settings-page,.hub-profiles-page{margin:0;padding:0}.hub-settings-section{border:1px solid var(--line-soft);border-radius:10px;padding:12px;margin:10px 0;background:var(--surface-inset);box-shadow:inset 0 1px 0 var(--heading-soft)}.hub-settings-section:first-child{margin-top:0}.hub-settings-section h3{margin:.1rem 0 .3rem;padding-left:11px;position:relative;color:var(--heading)}.hub-settings-section h3::before{content:"";position:absolute;left:0;top:.12em;width:3px;height:1.05em;border-radius:999px;background:var(--heading-line);box-shadow:0 0 12px var(--heading-glow)}.hub-settings-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.hub-range-control{display:grid;gap:4px;width:100%}.hub-range-control input[type=range]{width:100%;margin:0;accent-color:var(--accent)}.hub-range-ends,.hub-range-ticks{display:flex;justify-content:space-between;gap:4px;color:var(--muted);font-size:var(--sv-font-small)}.hub-range-ticks span{min-width:1.2em;text-align:center}.hub-range-control output{font-weight:700;color:var(--heading);font-size:var(--sv-font-small)}.installer-appearance-preview{border:1px solid var(--line-soft);border-radius:9px;padding:10px;margin-top:8px;background:var(--surface-inset);overflow:hidden}.installer-preview-frame{width:var(--preview-width,70%);max-width:100%;margin:auto;border:1px solid var(--line);border-radius:8px;padding:var(--preview-pad,12px);display:grid;gap:var(--preview-gap,8px);background:var(--surface)}.installer-preview-head{display:flex;justify-content:space-between;gap:8px}.installer-preview-head>span:first-child{width:38%;height:8px;border-radius:99px;background:var(--accent-soft)}.installer-preview-label{font-size:var(--sv-font-small);color:var(--muted)}.installer-preview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--preview-gap,8px)}.installer-preview-grid i,.installer-preview-card{display:block;height:26px;border:1px solid var(--line-soft);border-radius:6px;background:var(--surface-button)}.installer-preview-card{height:42px}.hub-setting-toggle span{display:block}.hub-setting-field{margin:6px 0;gap:4px;align-self:start;align-content:start}.hub-setting-field>span{font-weight:600;line-height:1.2}.hub-setting-field>input,.hub-setting-field>select{width:100%;height:38px;min-height:38px;padding:6px 10px}.hub-setting-field>small{line-height:1.25;margin-top:1px}.hub-settings-section .grid{align-items:start;gap:8px 14px}.hub-discovery-workflow-grid .hub-field-label{min-height:2.4em;align-items:flex-start}.hub-discovery-workflow-grid .hub-setting-field>select{align-self:start}.hub-order-list{border:1px solid var(--line-soft);border-radius:9px;padding:10px;margin-top:12px}.hub-order-row{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center;padding:5px 0}.hub-order-row button{padding:5px 9px}.hub-settings-actions{position:sticky;bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface-inset);border:1px solid var(--line-soft);padding:8px 10px;margin:10px 0 0;z-index:3;box-shadow:0 8px 22px -18px var(--heading-glow);border-radius:10px}.hub-settings-status{margin:0 0 0 auto;line-height:1.2}.hub-settings-status.success{color:var(--ok)}.hub-settings-status.failure{color:var(--bad)}.hub-settings-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto;padding:2px 2px 8px;margin:0 0 10px;border-bottom:1px solid var(--line-soft)}.hub-settings-tab{flex:0 0 auto;font-weight:750;color:var(--muted);background:var(--surface-button)!important;border-color:var(--line-soft)!important}.hub-settings-tab.is-active{color:var(--heading-strong)!important;border-color:var(--accent-strong)!important;background:var(--accent-soft)!important;box-shadow:inset 0 -2px 0 var(--accent)}.hub-settings-tab:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-soft),inset 0 -2px 0 var(--accent)}.hub-component{border:1px solid var(--line-soft);border-radius:12px;padding:10px;margin:10px 0;background:linear-gradient(180deg,var(--heading-soft),var(--surface-inset) 64px);box-shadow:inset 0 1px 0 var(--heading-soft)}.hub-settings-pane[hidden]{display:none!important}.hub-switch-setting-body[hidden]{display:none!important}.hub-setting-row{margin:12px 0}.hub-field-label,.hub-toggle-label{display:inline-flex;align-items:center;gap:6px}.hub-help{position:relative;display:inline-flex;align-items:center}.hub-help-button{width:22px!important;height:22px!important;min-height:22px!important;padding:0!important;border-radius:50%!important}.hub-help-popover{position:absolute;z-index:20;left:26px;top:50%;transform:translateY(-50%);width:max-content;max-width:min(320px,72vw);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card-strong);color:var(--text);box-shadow:0 8px 24px var(--shadow);white-space:normal}.hub-help-popover[hidden]{display:none}@media(max-width:700px){.hub-settings-status{width:100%;margin:0}.hub-settings-actions{padding-bottom:4px}}#settingsCard{--hub-control-height:var(--control-height);--hub-control-radius:var(--control-radius);--hub-field-gap:4px;--hub-grid-row-gap:6px;--hub-grid-column-gap:12px;--hub-toggle-min-height:24px;--hub-sub-radius:10px}#settingsCard .grid,.hub-control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--hub-grid-row-gap) var(--hub-grid-column-gap);align-items:start}.hub-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(240px,300px));column-gap:10px;justify-content:start;align-items:start}.hub-setting-toggle{min-height:var(--hub-toggle-min-height);padding:2px 0;gap:7px;align-items:center;font-weight:400;line-height:1.2}.hub-setting-toggle input{margin:0;flex:0 0 auto}.hub-setting-toggle .hub-option-label{font-weight:400;display:block}.hub-setting-field{display:grid;margin:4px 0;gap:var(--hub-field-gap);align-self:start;align-content:start}.hub-setting-field>span{font-weight:600;line-height:1.2}.hub-setting-field>input,.hub-setting-field>select{width:100%;height:var(--hub-control-height);min-height:var(--hub-control-height);padding:var(--control-pad-y) var(--control-pad-x);border-radius:var(--hub-control-radius)}.hub-setting-field>small{line-height:1.25;margin-top:1px}.hub-header-layout{display:grid;grid-template-columns:minmax(210px,.7fr) minmax(400px,1.35fr) minmax(300px,.9fr);gap:12px;align-items:start}.hub-header-group{border:1px solid var(--line-soft);border-radius:9px;padding:9px 10px;background:var(--surface);min-width:0}.hub-header-group h4{margin:0 0 7px;color:var(--heading);font-size:var(--sv-font-body)}.hub-header-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));column-gap:10px;align-content:start}.hub-header-shortcuts h4{grid-column:1/-1}.hub-order-list{width:100%;max-width:none;align-self:start;margin-top:0;padding:9px 10px}.hub-order-help{margin:0 0 5px;line-height:1.25}.hub-order-row{min-height:30px;padding:1px 0;gap:5px}.hub-order-row.is-disabled>span{opacity:.55}.hub-order-row button{width:32px;height:30px;min-height:30px;padding:0;border-radius:7px}.hub-grid-dense{grid-template-columns:repeat(4,minmax(0,1fr))!important}.hub-setting-row{border-radius:var(--hub-sub-radius);padding:12px;margin:10px 0}.hub-setting-row .grid{margin-top:8px}.hub-switch-setting-row{padding:0;overflow:hidden}.hub-switch-setting-summary{display:flex;align-items:center;gap:10px;padding:10px 12px}.hub-switch-setting-order{display:flex;gap:5px;flex:0 0 auto}.hub-switch-setting-order button{width:32px!important;height:30px!important;min-height:30px!important;padding:0!important}.hub-switch-setting-toggle{display:flex!important;align-items:center!important;gap:10px!important;min-width:0!important;flex:1!important;justify-content:space-between!important;text-align:left!important;background:transparent!important;border:0!important;box-shadow:none!important;padding:2px 4px!important}.hub-switch-setting-toggle:hover{background:var(--heading-soft)!important}.hub-switch-setting-label{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.hub-switch-setting-chevron{flex:0 0 auto;color:var(--muted);transition:transform .12s ease}.hub-switch-setting-row.is-open .hub-switch-setting-chevron{transform:rotate(90deg)}.hub-switch-setting-label>strong{color:var(--accent-strong);text-shadow:0 0 10px var(--heading-glow);letter-spacing:.01em}.hub-switch-setting-meta{font-size:var(--sv-font-small)}.hub-switch-setting-body{padding:10px 12px 12px;border-top:1px solid var(--line-soft);margin-top:0!important}#settingsCard button{min-height:var(--hub-control-height);border-radius:var(--hub-control-radius);padding:6px 11px}#settingsCard .hub-order-row button{min-height:30px;padding:0}.hub-component .actions{gap:6px;margin-top:7px}@media(max-width:1250px){.hub-header-layout{grid-template-columns:minmax(220px,.75fr) minmax(400px,1.25fr)}.hub-order-list{grid-column:1/-1}.hub-grid-dense{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:800px){#settingsCard .grid,.hub-control-grid,.hub-toggle-grid,.hub-grid-dense{grid-template-columns:1fr!important}.hub-header-layout{grid-template-columns:1fr}.hub-header-shortcuts{grid-template-columns:1fr}.hub-order-list{grid-column:auto}}body.density-spacious #settingsCard{--hub-control-height:42px;--hub-grid-row-gap:12px}body.density-spacious .hub-settings-section{padding:16px}body.density-spacious .hub-component{padding:14px}body.density-spacious .hub-switch-setting-summary{gap:12px;padding:14px 16px}body.density-spacious .hub-switch-setting-body{padding:14px 16px 16px}body.density-spacious .hub-setting-row{margin:12px 0}body.density-comfortable #settingsCard{--hub-control-height:38px;--hub-grid-row-gap:10px}body.density-comfortable .hub-settings-section{padding:12px}body.density-comfortable .hub-component{padding:10px}body.density-comfortable .hub-switch-setting-summary{gap:10px;padding:10px 12px}body.density-comfortable .hub-switch-setting-body{padding:10px 12px 12px}body.density-comfortable .hub-setting-row{margin:10px 0}body.density-compact #settingsCard{--hub-control-height:36px;--hub-grid-row-gap:8px}body.density-compact .hub-settings-section{padding:10px}body.density-compact .hub-component{padding:8px}body.density-compact .hub-switch-setting-summary{gap:8px;padding:8px 10px}body.density-compact .hub-switch-setting-body{padding:8px 10px 10px}body.density-compact .hub-setting-row{margin:8px 0}body.density-dense #settingsCard{--hub-control-height:34px;--hub-grid-row-gap:7px}body.density-dense .hub-settings-section{padding:8px}body.density-dense .hub-component{padding:7px}body.density-dense .hub-switch-setting-summary{gap:7px;padding:6px 8px}body.density-dense .hub-switch-setting-body{padding:6px 8px 8px}body.density-dense .hub-setting-row{margin:6px 0}body.density-ultra_dense #settingsCard{--hub-control-height:32px;--hub-grid-row-gap:5px}body.density-ultra_dense .hub-settings-section{padding:6px}body.density-ultra_dense .hub-component{padding:6px}body.density-ultra_dense .hub-switch-setting-summary{gap:5px;padding:4px 6px}body.density-ultra_dense .hub-switch-setting-body{padding:4px 6px 6px}body.density-ultra_dense .hub-setting-row{margin:4px 0}';document.head.append(s)}async function open(which='core'){styles();setView('settings');await load();selectTab(which)}function init(){styles();document.querySelectorAll('[data-hub-settings-tab]').forEach(tab=>{tab.addEventListener('click',()=>selectTab(tab.dataset.hubSettingsTab));tab.addEventListener('keydown',tabKeydown)});selectTab(state.activeTab);attachActionHelp('hubSettingsSave','Save all changed Switch Vision Hub settings to their authoritative components.');attachActionHelp('hubSettingsReload','Reload authoritative component settings and discard unsaved Hub values.');attachActionHelp('hubCoreReset','Reset Switch Vision Core settings to factory defaults.');attachActionHelp('hubCoreFallback','Open native Home Assistant Switch Vision integration settings.');attachActionHelp('hubSnmpFallback','Open native SNMP2MQTT app configuration.');attachActionHelp('hubDiscoveryFallback','Open native Discovery app configuration.');q('hubSettingsSave')?.addEventListener('click',save);q('hubSettingsReload')?.addEventListener('click',load);q('hubSettingsBack')?.addEventListener('click',goBack);q('hubCoreReset')?.addEventListener('click',resetCore);q('hubCoreFallback')?.addEventListener('click',()=>openHomeAssistantPath('/config/integrations/integration/switch_vision'));q('hubSnmpFallback')?.addEventListener('click',()=>openResolvedApp('snmp2mqtt'));q('hubDiscoveryFallback')?.addEventListener('click',()=>openResolvedApp('discovery'))}window.SwitchVisionHubSettings={open,load,save,hasUnsavedCore:()=>dirty.has('core')};document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init,{once:true}):init()})();
+(()=>{'use strict';const q=id=>document.getElementById(id),clone=v=>JSON.parse(JSON.stringify(v)),dirty=new Set(),state={core:null,snmp2mqtt:null,discovery:null,models:[],order:[],activeTab:'core'},expandedDiscoverySwitches=new Set();let discoverySwitchExpansionInitialized=false;const L={show_all_switch_vision_sidebar_items:'Show all Switch Vision sidebar items',show_panel_in_sidebar:'Show native Switch Vision in sidebar',show_lovelace_dashboard_in_sidebar:'Show Switch Vision dashboard in sidebar',show_hub_in_sidebar:'Show Switch Vision Hub in sidebar',show_installer_in_sidebar:'Show Switch Vision Installer in sidebar',show_dashboard_header:'Show dashboard header',native_header_show_summary:'Show summary',native_header_show_refresh:'Show refresh',native_header_show_version:'Show version',native_header_shortcut_switch_vision_settings:'Switch Vision Settings shortcut',native_header_shortcut_hub:'Hub shortcut',native_header_shortcut_maintenance:'Maintenance shortcut',native_header_shortcut_discovery_settings:'Discovery Settings shortcut',native_header_shortcut_installer:'Installer shortcut',native_header_shortcut_installer_settings:'Installer Settings shortcut',native_header_shortcut_snmp2mqtt_settings:'SNMP2MQTT Settings shortcut',native_header_shortcut_unifi2mqtt_settings:'UniFi2MQTT Settings shortcut',show_calibration_buttons:'Show calibration buttons on cards',show_card_headers:'Show card headers'};const OL={hub:'Hub',maintenance:'Maintenance',switch_vision_settings:'Switch Vision Settings',discovery_settings:'Discovery Settings',installer:'Installer',installer_settings:'Installer Settings',snmp2mqtt_settings:'SNMP2MQTT Settings',unifi2mqtt_settings:'UniFi2MQTT Settings'};function status(t,c=''){const n=q('hubSettingsStatus');if(n){n.className=`muted hub-settings-status ${c}`.trim();n.textContent=t}}function selectTab(which='core',focus=false){const ids=['core','discovery','snmp2mqtt'];const selected=ids.includes(which)?which:'core';state.activeTab=selected;for(const id of ids){const active=id===selected,pane=q(`hubComponent-${id}`),tab=q(`hubTab-${id}`);if(pane)pane.hidden=!active;if(tab){tab.classList.toggle('is-active',active);tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1}}if(focus)q(`hubTab-${selected}`)?.focus()}function tabKeydown(e){const ids=['core','discovery','snmp2mqtt'],current=state.activeTab,i=Math.max(0,ids.indexOf(current));let next=null;if(e.key==='ArrowRight')next=ids[(i+1)%ids.length];else if(e.key==='ArrowLeft')next=ids[(i-1+ids.length)%ids.length];else if(e.key==='Home')next=ids[0];else if(e.key==='End')next=ids[ids.length-1];if(next){e.preventDefault();selectTab(next,true)}}function mark(o){dirty.add(o);q('hubSettingsSave').disabled=false;status('Unsaved changes')}function clear(o){dirty.delete(o);q('hubSettingsSave').disabled=!dirty.size}async function req(p,o={}){const r=await fetch(endpoint(p),{cache:'no-store',...o});let d={};try{d=await r.json()}catch(_e){}if(!r.ok)throw new Error(d.error||`Request failed (${r.status})`);return d}function sec(t,p=''){const x=document.createElement('section');x.className='hub-settings-section';x.innerHTML=`<h3>${t}</h3>${p?`<p class="muted">${p}</p>`:''}`;return x}function hubHelp(t){const w=document.createElement('span');w.className='hub-help';const b=document.createElement('button');b.type='button';b.className='hub-help-button';b.textContent='?';b.setAttribute('aria-label','Help: '+t);b.setAttribute('aria-expanded','false');const p=document.createElement('span');p.className='hub-help-popover';p.setAttribute('role','tooltip');p.textContent=t;p.hidden=true;let pinned=false;const show=()=>{p.hidden=false;b.setAttribute('aria-expanded','true')},hide=()=>{if(!pinned){p.hidden=true;b.setAttribute('aria-expanded','false')}};b.onmouseenter=show;b.onmouseleave=hide;b.onfocus=show;b.onblur=hide;b.onclick=e=>{e.preventDefault();pinned=!pinned;pinned?show():hide()};b.onkeydown=e=>{if(e.key==='Escape'){pinned=false;p.hidden=true;b.setAttribute('aria-expanded','false')}};w.append(b,p);return w}function attachActionHelp(id,t){const e=q(id);if(e&&!e.nextElementSibling?.classList?.contains('hub-help'))e.after(hubHelp(t))}function fld(t,c,h=''){const x=document.createElement('label');x.className='field hub-setting-field';const s=document.createElement('span');s.className='hub-field-label';s.textContent=t;if(h)s.append(hubHelp(h));const target=c.matches?.('input,select,textarea')?c:c.querySelector?.('input,select,textarea');if(target)target.setAttribute('aria-label',t);x.append(s,c);return x}function tog(t,v,fn,dis=false,h=''){const x=document.createElement('label');x.className='option hub-setting-toggle';const i=document.createElement('input');i.type='checkbox';i.checked=!!v;i.disabled=dis;i.onchange=()=>fn(i.checked);i.setAttribute('aria-label',t);const s=document.createElement('span');s.className='hub-option-label hub-toggle-label';s.textContent=t;if(h)s.append(hubHelp(h));x.append(i,s);return x}function sel(v,opts,fn){const s=document.createElement('select');for(const [a,b] of opts){const o=document.createElement('option');o.value=a;o.textContent=b;o.selected=String(v)===String(a);s.append(o)}s.onchange=()=>fn(s.value);return s}function inp(v,type,fn,a={}){const i=document.createElement('input');i.type=type;i.value=v??'';for(const[k,x]of Object.entries(a))if(x!==undefined&&x!==null)i.setAttribute(k,String(x));i.oninput=()=>fn(i.value);return i}function secretInp(v,fn,refProvider,configured,a={}){const i=inp(v,'password',fn,a);return secretControl(i,refProvider,configured)}function fontChoices(){return Array.from({length:11},(_,i)=>{const px=i+10;return[String(px),`${px} px`]})}const UI_DENSITY_SCALE=[['spacious','Spacious'],['comfortable','Comfortable'],['compact','Compact'],['dense','Dense'],['ultra_dense','Ultra Dense']];const UI_WIDTH_SCALE=[['standard','Standard'],['standard_plus','Standard+'],['wide','Wide'],['wide_plus','Wide+'],['extra_wide','Extra Wide'],['extra_wide_plus','Extra Wide+'],['ultra_wide','Ultra Wide'],['ultra_wide_plus','Ultra Wide+'],['max_wide','Max Wide'],['full','Full']];function scaleIndex(value,scale){const i=scale.findIndex(([v])=>v===String(value));return i>=0?i:0}function rangeScale(value,scale,leftLabel,rightLabel,onChange){const wrap=document.createElement('div');wrap.className='hub-range-control';const ends=document.createElement('div');ends.className='hub-range-ends';const left=document.createElement('span'),right=document.createElement('span');left.textContent=leftLabel;right.textContent=rightLabel;ends.append(left,right);const input=document.createElement('input');input.type='range';input.min='1';input.max=String(scale.length);input.step='1';input.value=String(scaleIndex(value,scale)+1);const ticks=document.createElement('div');ticks.className='hub-range-ticks';scale.forEach(([,label],i)=>{const tick=document.createElement('span');tick.textContent=String(i+1);tick.title=label;ticks.append(tick)});const out=document.createElement('output');const update=emit=>{const i=Math.max(0,Math.min(scale.length-1,Number(input.value)-1));const [mapped,label]=scale[i];out.textContent=`${i+1} / ${scale.length} · ${label}`;if(emit)onChange(mapped,label,i+1)};input.addEventListener('input',()=>update(true));update(false);wrap.append(ends,input,ticks,out);return wrap}function applyDiscoveryAppearancePreview(density,width){syncDensityUi(density);syncContentWidthUi(width)}function installerAppearancePreview(){const p=document.createElement('div');p.className='installer-appearance-preview';p.innerHTML='<div class="installer-preview-frame"><div class="installer-preview-head"><span></span><span class="installer-preview-label"></span></div><div class="installer-preview-grid"><i></i><i></i><i></i></div><div class="installer-preview-card"></div></div>';return p}function applyInstallerAppearancePreview(root,density,width){if(!root)return;const di=Math.max(0,scaleIndex(density,UI_DENSITY_SCALE)),wi=Math.max(0,scaleIndex(width,UI_WIDTH_SCALE));root.style.setProperty('--preview-width',`${64+wi*4}%`);root.style.setProperty('--preview-gap',`${14-di*2}px`);root.style.setProperty('--preview-pad',`${16-di*2}px`);const label=root.querySelector('.installer-preview-label');if(label)label.textContent=`${UI_DENSITY_SCALE[di][1]} · ${UI_WIDTH_SCALE[wi][1]}`}function renderCore(){const r=q('hubCoreSettings');r.innerHTML='';if(!state.core?.settings){r.textContent='Core settings are unavailable.';return}const s=state.core.settings,side=sec('Sidebar & navigation'),sideTog=document.createElement('div');sideTog.className='hub-toggle-grid';for(const[k,v]of Object.entries(s.sidebar||{}))sideTog.append(tog(L[k]||k,v,x=>{s.sidebar[k]=x;mark('core')}));side.append(sideTog);r.append(side);const h=sec('Native dashboard header','Choose what appears in the Native Switch Vision header and how dashboard cards are presented. Shortcut order affects enabled shortcuts only.'),displayGroup=document.createElement('div'),shortcutGroup=document.createElement('div'),presentationGroup=document.createElement('div');displayGroup.className='hub-header-group';shortcutGroup.className='hub-header-group hub-header-shortcuts';presentationGroup.className='hub-header-group hub-header-presentation';displayGroup.innerHTML='<h4>Header display</h4>';shortcutGroup.innerHTML='<h4>Enabled shortcuts</h4>';presentationGroup.innerHTML='<h4>Dashboard presentation</h4>';const displayKeys=['show_dashboard_header','native_header_show_refresh','native_header_show_summary','native_header_show_version'];for(const k of displayKeys){if(Object.prototype.hasOwnProperty.call(s.native_header||{},k))displayGroup.append(tog(L[k]||k,s.native_header[k],x=>{s.native_header[k]=x;mark('core')}))}for(const[k,v]of Object.entries(s.native_header||{})){if(k.startsWith('native_header_shortcut_')&&k!=='native_header_shortcut_order')shortcutGroup.append(tog(L[k]||k,v,x=>{s.native_header[k]=x;mark('core');renderCore()}))}const presentationTog=document.createElement('div');presentationTog.className='hub-toggle-grid';for(const[k,v]of Object.entries(s.dashboard||{})){if(k==='faceplate_width_mode'||k==='faceplate_custom_width')continue;presentationTog.append(tog(L[k]||k,v,x=>{s.dashboard[k]=x;mark('core')}))}presentationGroup.append(presentationTog);const widthGrid=document.createElement('div');widthGrid.className='grid hub-header-presentation-width';const widthMode=sel(s.dashboard.faceplate_width_mode||'auto',[['auto','Auto'],['800','800 px'],['1024','1024 px'],['custom','Custom']],x=>{s.dashboard.faceplate_width_mode=x;mark('core');renderCore()});widthGrid.append(fld('Faceplate width',widthMode,'Sets the maximum rendered faceplate/card width. Height and calibrated geometry scale proportionally.'));if((s.dashboard.faceplate_width_mode||'auto')==='custom')widthGrid.append(fld('Custom faceplate width (px)',inp(s.dashboard.faceplate_custom_width||800,'number',x=>{s.dashboard.faceplate_custom_width=Number(x);mark('core')},{min:320,max:4096,step:1}),'Custom width is remembered when you switch back to a preset.'));presentationGroup.append(widthGrid);const box=document.createElement('div');box.className='hub-order-list hub-header-group';box.innerHTML='<h4>Shortcut order</h4><p class="muted hub-order-help">Only enabled shortcuts are shown in the Native dashboard header.</p>';state.order=[...(s.native_header.native_header_shortcut_order||[])];const draw=()=>{box.querySelectorAll('.hub-order-row').forEach(n=>n.remove());state.order.forEach((id,n)=>{const row=document.createElement('div');row.className='hub-order-row';const enabledKey=`native_header_shortcut_${id}`,enabled=s.native_header?.[enabledKey]!==false;row.classList.toggle('is-disabled',!enabled);const nm=document.createElement('span');nm.textContent=OL[id]||id;nm.title=enabled?'Enabled shortcut':'Shortcut is disabled';const u=document.createElement('button'),d=document.createElement('button');u.type=d.type='button';u.textContent='↑';d.textContent='↓';u.disabled=n===0;d.disabled=n===state.order.length-1;u.setAttribute('aria-label',`Move ${OL[id]||id} up`);d.setAttribute('aria-label',`Move ${OL[id]||id} down`);u.onclick=()=>{[state.order[n-1],state.order[n]]=[state.order[n],state.order[n-1]];s.native_header.native_header_shortcut_order=[...state.order];mark('core');draw()};d.onclick=()=>{[state.order[n+1],state.order[n]]=[state.order[n],state.order[n+1]];s.native_header.native_header_shortcut_order=[...state.order];mark('core');draw()};row.append(nm,u,d);box.append(row)})};draw();const headerLayout=document.createElement('div');headerLayout.className='hub-header-layout';headerLayout.append(displayGroup,shortcutGroup,presentationGroup,box);h.append(headerLayout);r.append(h);const a=sec('Activity LEDs'),g=document.createElement('div');g.className='grid hub-grid-dense';g.append(fld('Sensitivity preset',sel(s.activity_leds.activity_led_sensitivity_preset,[['low','Low'],['normal','Normal'],['high','High'],['custom','Custom']],x=>{s.activity_leds.activity_led_sensitivity_preset=x;mark('core')})));for(const[k,t,min,max,step]of [['activity_slow_max_utilization_pct','Slow activity maximum (%)',.001,100,.001],['activity_medium_max_utilization_pct','Medium activity maximum (%)',.001,100,.001],['activity_slow_period_ms','Slow blink period (ms)',120,2000,1],['activity_medium_period_ms','Medium blink period (ms)',120,2000,1],['activity_fast_period_ms','Fast blink period (ms)',120,2000,1],['activity_hold_seconds','Activity hold (seconds)',1,120,.1],['activity_hysteresis_pct','Hysteresis (%)',0,50,.1]])g.append(fld(t,inp(s.activity_leds[k],'number',x=>{s.activity_leds[k]=Number(x);mark('core')},{min,max,step})));a.append(g);r.append(a);const ap=document.createElement('div');ap.className='hub-settings-columns';for(const[grp,title]of[['discovery','Discovery appearance'],['installer','Installer appearance']]){const b=sec(title),v=s[grp],densityKey=`${grp}_ui_density`,widthKey=`${grp}_content_width`;let preview=null;const live=()=>{if(grp==='discovery')applyDiscoveryAppearancePreview(v[densityKey],v[widthKey]);else applyInstallerAppearancePreview(preview,v[densityKey],v[widthKey])};b.append(fld('UI density',rangeScale(v[densityKey],UI_DENSITY_SCALE,'Spacious','Ultra Dense',x=>{v[densityKey]=x;mark('core');live()}),'Live preview. Left is more spacious; right fits more information onscreen.'),fld('Text size',sel(v[`${grp}_text_size`],fontChoices(),x=>{v[`${grp}_text_size`]=Number(x);mark('core')})),fld('Content width',rangeScale(v[widthKey],UI_WIDTH_SCALE,'Narrower','Wider',x=>{v[widthKey]=x;mark('core');live()}),'Live preview. Left is narrower; right is wider.'));if(grp==='installer'){preview=installerAppearancePreview();b.append(preview);applyInstallerAppearancePreview(preview,v[densityKey],v[widthKey])}if(grp==='discovery')b.append(tog('Show UniFi integration',v.show_unifi_integration,x=>{v.show_unifi_integration=x;mark('core')}));ap.append(b)}r.append(ap)}function renderSnmp(){const r=q('hubSnmpSettings');r.innerHTML='';const d=state.snmp2mqtt;if(!d?.installed){r.innerHTML='<div class="warning">Switch Vision SNMP2MQTT is not installed.</div>';return}const s=d.settings,m=sec('MQTT connection'),g=document.createElement('div');g.className='grid';g.append(fld('MQTT host',inp(s.mqtt.host,'text',x=>{s.mqtt.host=x;mark('snmp2mqtt')})),fld('MQTT port',inp(s.mqtt.port,'number',x=>{s.mqtt.port=Number(x);mark('snmp2mqtt')},{min:1,max:65535,step:1})),fld('MQTT username',inp(s.mqtt.username,'text',x=>{s.mqtt.username=x;mark('snmp2mqtt')})),fld('MQTT password',secretInp('',x=>{s.mqtt.password=x;mark('snmp2mqtt')},()=>({scope:'snmp2mqtt',kind:'mqtt_password'}),!!d.password_configured,{autocomplete:'new-password',placeholder:d.password_configured?'Saved — use eye to reveal':'Not configured'}),'Saved passwords stay redacted in normal settings responses. Use the eye to reveal this one on demand; blank preserves it.'));m.append(g,tog('Clear saved MQTT password',false,x=>{s.clear_password=x;mark('snmp2mqtt')},false,'Only enable this if the broker no longer requires the saved password.'));r.append(m);const p=sec('Target configuration'),pg=document.createElement('div');pg.className='grid';for(const[k,t]of[['targets_path','Targets path'],['switch_vision_generated_yaml_path','Generated YAML path'],['imported_targets_path','Imported targets path']])pg.append(fld(t,inp(s[k],'text',x=>{s[k]=x;mark('snmp2mqtt')})));p.append(pg,tog('Use Switch Vision generated YAML',s.use_switch_vision_generated_yaml,x=>{s.use_switch_vision_generated_yaml=x;mark('snmp2mqtt')}),tog('Back up existing config before import',s.backup_existing_config,x=>{s.backup_existing_config=x;mark('snmp2mqtt')}));r.append(p);const ha=sec('Home Assistant discovery');ha.append(tog('MQTT Discovery enabled',true,()=>{},true,'Required by Switch Vision and enforced by SNMP2MQTT.'),fld('Discovery prefix',inp('homeassistant','text',()=>{},{readonly:'readonly'}),'Required value: homeassistant.'));r.append(ha)}function bsel(v,fn){return sel(v===true||String(v).toLowerCase()==='true'?'true':'false',[['true','Enabled'],['false','Disabled']],fn)}function renderDiscovery(){const r=q('hubDiscoverySettings');r.innerHTML='';if(!state.discovery?.settings){r.textContent='Discovery settings are unavailable.';return}const s=state.discovery.settings,w=sec('Discovery workflow'),wg=document.createElement('div');wg.className='grid hub-discovery-workflow-grid';for(const[k,t]of[['run_snmp_walks','Run SNMP walks'],['enable_switch_list','Use saved switch list'],['parse_all_walks','Parse all stored walks'],['generate_snmp2mqtt','Generate SNMP2MQTT YAML'],['clean_output_before_walk','Clean generated output before walk'],['generate_support_my_switch_bundle','Create Support My Switch bundle after Discovery']])wg.append(fld(t,bsel(s[k],x=>{s[k]=x;mark('discovery')})));w.append(wg);r.append(w);const sw=sec('Switches','SNMP communities are masked by default. Use the eye to reveal a saved community; blank preserves it. Use the arrows to reorder switches; Save commits that order.');const switches=s.switches||[];if(!discoverySwitchExpansionInitialized){if(switches.length){expandedDiscoverySwitches.add(String(switches[0].original_switch_name||switches[0].switch_name||'index:0'))}discoverySwitchExpansionInitialized=true}switches.forEach((row,n)=>{const key=String(row.original_switch_name||row.switch_name||`index:${n}`);const c=document.createElement('div');c.className='device-card hub-setting-row hub-switch-setting-row';const hd=document.createElement('div');hd.className='hub-switch-setting-summary';const order=document.createElement('span');order.className='hub-switch-setting-order';const up=document.createElement('button'),down=document.createElement('button');up.type=down.type='button';up.textContent='↑';down.textContent='↓';up.disabled=n===0;down.disabled=n===switches.length-1;up.setAttribute('aria-label',`Move up ${row.display_name||row.switch_name||`Switch ${n+1}`}`);down.setAttribute('aria-label',`Move down ${row.display_name||row.switch_name||`Switch ${n+1}`}`);const move=delta=>{const target=n+delta;if(target<0||target>=switches.length)return;[switches[n],switches[target]]=[switches[target],switches[n]];mark('discovery');renderDiscovery()};up.addEventListener('click',()=>move(-1));down.addEventListener('click',()=>move(1));order.append(up,down);const toggle=document.createElement('button');toggle.type='button';toggle.className='hub-switch-setting-toggle';toggle.setAttribute('aria-expanded',String(expandedDiscoverySwitches.has(key)));const label=document.createElement('span');label.className='hub-switch-setting-label';const name=document.createElement('strong');name.textContent=`Switch ${n+1}`;const meta=document.createElement('span');meta.className='muted hub-switch-setting-meta';meta.textContent=[row.display_name||row.switch_name||'Unnamed switch',row.switch_model&&row.switch_model!=='auto'?row.switch_model:'Auto-detect',row.switch_host||'No host',row.restore_pending?'Credential required':''].filter(Boolean).join(' · ');label.append(name,meta);const chevron=document.createElement('span');chevron.className='hub-switch-setting-chevron';chevron.textContent='▸';chevron.setAttribute('aria-hidden','true');toggle.append(label,chevron);const rm=document.createElement('button');rm.type='button';rm.className='danger';rm.textContent='Remove';rm.onclick=()=>{expandedDiscoverySwitches.delete(key);switches.splice(n,1);mark('discovery');renderDiscovery()};hd.append(order,toggle,rm);c.append(hd);const g=document.createElement('div');g.className='grid hub-switch-setting-body';g.hidden=!expandedDiscoverySwitches.has(key);toggle.addEventListener('click',()=>{const open=g.hidden;if(open)expandedDiscoverySwitches.add(key);else expandedDiscoverySwitches.delete(key);g.hidden=!open;toggle.setAttribute('aria-expanded',String(open));c.classList.toggle('is-open',open)});c.classList.toggle('is-open',!g.hidden);const f=(t,k,type='text',hint='')=>{if(type==='password')return fld(t,secretInp(row[k]??'',x=>{row[k]=x;mark('discovery')},()=>({scope:'discovery',kind:'snmp_community',identifier:row.original_switch_name||row.switch_name}),!!row.snmp_community_configured,{autocomplete:'new-password',placeholder:row.snmp_community_configured?'Saved — use eye to reveal':(row.restore_pending?'Credential required after restore':'Required for new switch')}),hint);return fld(t,inp(row[k]??'',type,x=>{row[k]=x;mark('discovery')}),hint)};g.append(f('Switch Name (Used internally only)','switch_name'),f('Display name','display_name'),f('Switch host','switch_host'),f('Sensor prefix','sensor_prefix'),f('SNMP community','snmp_community','password','Saved communities stay redacted in normal settings responses; use the eye to reveal this one on demand.'),fld('State',sel(row.enabled||'enabled',[['enabled','Enabled'],['disabled','Disabled']],x=>{row.enabled=x;mark('discovery')})),fld('Walk mode',sel(row.walk_mode||'targeted',[['targeted','Targeted'],['full','Full']],x=>{row.walk_mode=x;mark('discovery')})),fld('Switch model',sel(row.switch_model||'auto',[['auto','Auto'],...state.models.filter(m=>m!=='auto').map(m=>[m,m])],x=>{row.switch_model=x;mark('discovery')})),f('Card header title','card_header_title'));c.append(g);sw.append(c)});const add=document.createElement('button');add.type='button';add.textContent='Add switch';add.onclick=()=>{const row={switch_name:'',display_name:'',switch_host:'',sensor_prefix:'',snmp_community:'',snmp_community_configured:false,original_switch_name:'',enabled:'enabled',walk_mode:'targeted',switch_model:'auto',card_header_title:''};s.switches.push(row);expandedDiscoverySwitches.add(`index:${s.switches.length-1}`);mark('discovery');renderDiscovery()};sw.append(add);r.append(sw);const st=sec('Stack member display mapping');(s.stack_member_prefixes||[]).forEach((row,n)=>{const c=document.createElement('div');c.className='device-card hub-setting-row';const hd=document.createElement('div');hd.className='device-head';hd.innerHTML=`<strong>Stack member ${n+1}</strong>`;const rm=document.createElement('button');rm.type='button';rm.className='danger';rm.textContent='Remove';rm.onclick=()=>{s.stack_member_prefixes.splice(n,1);mark('discovery');renderDiscovery()};hd.append(rm);c.append(hd);const g=document.createElement('div');g.className='grid';for(const[k,t]of[['switch_name','Switch name'],['member','Member number'],['display_name','Display name'],['sensor_prefix','Sensor prefix'],['card_header_title','Card header title']])g.append(fld(t,inp(row[k]??'','text',x=>{row[k]=x;mark('discovery')})));c.append(g);st.append(c)});const as=document.createElement('button');as.type='button';as.textContent='Add stack member';as.onclick=()=>{s.stack_member_prefixes.push({switch_name:'',member:'1',display_name:'',sensor_prefix:'',card_header_title:''});mark('discovery');renderDiscovery()};st.append(as);r.append(st);const p=sec('Paths & SNMP timing'),pg=document.createElement('div');pg.className='grid';for(const[k,t]of[['input_path','Input walk path'],['snmpwalks_dir','SNMP walks directory'],['report_path','Discovery report path'],['targets_csv','Targets CSV path'],['last_run_summary_path','Last-run summary path'],['generated_yaml_path','Generated SNMP2MQTT path'],['generated_card_path','Generated dashboard path'],['snmp_log_path','SNMP log path']])pg.append(fld(t,inp(s[k]??'','text',x=>{s[k]=x;mark('discovery')})));for(const[k,t,min,max]of[['snmp_timeout','SNMP timeout',1,30],['snmp_retries','SNMP retries',0,10],['minimum_valid_walk_lines','Minimum valid walk lines',1,1000000]])pg.append(fld(t,inp(s[k]??'','number',x=>{s[k]=String(x);mark('discovery')},{min,max,step:1})));p.append(pg);r.append(p);const bk=sec('Discovery configuration backups'),bg=document.createElement('div');bg.className='grid';bg.append(fld('Automatic retention',bsel(s.backup_retention_enabled,x=>{s.backup_retention_enabled=x;mark('discovery')})),fld('Retained backups',inp(s.backup_retention_count,'number',x=>{s.backup_retention_count=Number(x);mark('discovery')},{min:1,max:10,step:1})));bk.append(bg);r.append(bk);const sp=sec('Support My Switch privacy & recognition'),sg=document.createElement('div');sg.className='grid';for(const[k,t]of[['support_mask_management_ips','Mask management IPs'],['support_mask_mac_addresses','Mask MAC addresses'],['support_mask_hostnames','Mask hostnames'],['support_mask_vlan_names','Mask VLAN names'],['support_mask_interface_descriptions','Mask interface descriptions']])sg.append(fld(t,bsel(s[k],x=>{s[k]=x;mark('discovery')})));sg.append(fld('Contributor recognition',sel(s.support_contributor_type||'anonymous',[['anonymous','Anonymous'],['first_name','First name'],['full_name','Full name'],['github','GitHub'],['forum','Forum']],x=>{s.support_contributor_type=x;mark('discovery')})),fld('Contributor value',inp('','text',x=>{s.support_contributor_value=x;mark('discovery')},{maxlength:120,placeholder:s.support_contributor_value_configured?'Saved — leave blank to keep':'Optional recognition'}),'Private and write-only in the Hub; nothing is published automatically.'));sp.append(sg);r.append(sp)}function cleanDiscovery(){const s=clone(state.discovery.settings);delete s.support_contributor_value_configured;s.switches=(s.switches||[]).map(row=>{const x={...row};delete x.snmp_community_configured;delete x.restore_pending;return x});return s}async function load(){status('Loading settings…');const a=await Promise.allSettled([req('api/settings/core'),req('api/settings/snmp2mqtt'),req('api/settings/discovery')]);state.core=a[0].status==='fulfilled'?clone(a[0].value):null;state.snmp2mqtt=a[1].status==='fulfilled'?clone(a[1].value):{installed:false};if(a[2].status==='fulfilled'){state.discovery=clone(a[2].value);state.models=[...(a[2].value.models||[])]}else state.discovery=null;renderCore();renderSnmp();renderDiscovery();if(state.core?.settings?.discovery)applyDiscoveryAppearancePreview(state.core.settings.discovery.discovery_ui_density,state.core.settings.discovery.discovery_content_width);dirty.clear();q('hubSettingsSave').disabled=true;const e=a.filter(x=>x.status==='rejected').map(x=>x.reason?.message||String(x.reason));status(e.length?`Loaded with ${e.length} unavailable section(s): ${e.join(' · ')}`:'All settings loaded from their authoritative components.',e.length?'failure':'success')}async function save(){if(!dirty.size)return;const b=q('hubSettingsSave'),done=[];b.disabled=true;try{for(const o of ['core','snmp2mqtt','discovery']){if(!dirty.has(o))continue;status(`Saving ${o==='core'?'Core':o==='snmp2mqtt'?'SNMP2MQTT':'Discovery'}…`);const body=o==='core'?{settings:state.core.settings}:o==='snmp2mqtt'?{settings:state.snmp2mqtt.settings}:{settings:cleanDiscovery()};const d=await req(`api/settings/${o}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(o==='core')state.core=clone(d);else if(o==='snmp2mqtt')state.snmp2mqtt=clone(d);else{state.discovery=clone(d);state.models=[...(d.models||state.models)]}done.push(o);clear(o)}renderCore();renderSnmp();renderDiscovery();status('Saved successfully.','success')}catch(e){status(`${done.length?`Saved ${done.join(', ')}. `:''}Save stopped: ${e.message||e}`,'failure');b.disabled=!dirty.size}}async function resetCore(){if(!confirm('Reset all Switch Vision Core settings to their factory defaults? SNMP2MQTT and Discovery settings are not changed.'))return;try{status('Resetting Core settings…');state.core=clone(await req('api/settings/core',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_to_defaults:true})}));clear('core');renderCore();status('Core settings reset to defaults.','success')}catch(e){status(`Core reset failed: ${e.message||e}`,'failure')}}function styles(){if(q('hubSettingsStyles'))return;const s=document.createElement('style');s.id='hubSettingsStyles';s.textContent='.hub-settings-page,.hub-profiles-page{margin:0;padding:0}.hub-settings-section{border:1px solid var(--line-soft);border-radius:10px;padding:12px;margin:10px 0;background:var(--surface-inset);box-shadow:inset 0 1px 0 var(--heading-soft)}.hub-settings-section:first-child{margin-top:0}.hub-settings-section h3{margin:.1rem 0 .3rem;padding-left:11px;position:relative;color:var(--heading)}.hub-settings-section h3::before{content:"";position:absolute;left:0;top:.12em;width:3px;height:1.05em;border-radius:999px;background:var(--heading-line);box-shadow:0 0 12px var(--heading-glow)}.hub-settings-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.hub-range-control{display:grid;gap:4px;width:100%}.hub-range-control input[type=range]{width:100%;margin:0;accent-color:var(--accent)}.hub-range-ends,.hub-range-ticks{display:flex;justify-content:space-between;gap:4px;color:var(--muted);font-size:var(--sv-font-small)}.hub-range-ticks span{min-width:1.2em;text-align:center}.hub-range-control output{font-weight:700;color:var(--heading);font-size:var(--sv-font-small)}.installer-appearance-preview{border:1px solid var(--line-soft);border-radius:9px;padding:10px;margin-top:8px;background:var(--surface-inset);overflow:hidden}.installer-preview-frame{width:var(--preview-width,70%);max-width:100%;margin:auto;border:1px solid var(--line);border-radius:8px;padding:var(--preview-pad,12px);display:grid;gap:var(--preview-gap,8px);background:var(--surface)}.installer-preview-head{display:flex;justify-content:space-between;gap:8px}.installer-preview-head>span:first-child{width:38%;height:8px;border-radius:99px;background:var(--accent-soft)}.installer-preview-label{font-size:var(--sv-font-small);color:var(--muted)}.installer-preview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--preview-gap,8px)}.installer-preview-grid i,.installer-preview-card{display:block;height:26px;border:1px solid var(--line-soft);border-radius:6px;background:var(--surface-button)}.installer-preview-card{height:42px}.hub-setting-toggle span{display:block}.hub-setting-field{margin:6px 0;gap:4px;align-self:start;align-content:start}.hub-setting-field>span{font-weight:600;line-height:1.2}.hub-setting-field>input,.hub-setting-field>select{width:100%;height:38px;min-height:38px;padding:6px 10px}.hub-setting-field>small{line-height:1.25;margin-top:1px}.hub-settings-section .grid{align-items:start;gap:8px 14px}.hub-discovery-workflow-grid .hub-field-label{min-height:2.4em;align-items:flex-start}.hub-discovery-workflow-grid .hub-setting-field>select{align-self:start}.hub-order-list{border:1px solid var(--line-soft);border-radius:9px;padding:10px;margin-top:12px}.hub-order-row{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center;padding:5px 0}.hub-order-row button{padding:5px 9px}.hub-settings-actions{position:sticky;bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface-inset);border:1px solid var(--line-soft);padding:8px 10px;margin:10px 0 0;z-index:3;box-shadow:0 8px 22px -18px var(--heading-glow);border-radius:10px}.hub-settings-status{margin:0 0 0 auto;line-height:1.2}.hub-settings-status.success{color:var(--ok)}.hub-settings-status.failure{color:var(--bad)}.hub-settings-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto;padding:2px 2px 8px;margin:0 0 10px;border-bottom:1px solid var(--line-soft)}.hub-settings-tab{flex:0 0 auto;font-weight:750;color:var(--muted);background:var(--surface-button)!important;border-color:var(--line-soft)!important}.hub-settings-tab.is-active{color:var(--heading-strong)!important;border-color:var(--accent-strong)!important;background:var(--accent-soft)!important;box-shadow:inset 0 -2px 0 var(--accent)}.hub-settings-tab:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-soft),inset 0 -2px 0 var(--accent)}.hub-component{border:1px solid var(--line-soft);border-radius:12px;padding:10px;margin:10px 0;background:linear-gradient(180deg,var(--heading-soft),var(--surface-inset) 64px);box-shadow:inset 0 1px 0 var(--heading-soft)}.hub-settings-pane[hidden]{display:none!important}.hub-switch-setting-body[hidden]{display:none!important}.hub-setting-row{margin:12px 0}.hub-field-label,.hub-toggle-label{display:inline-flex;align-items:center;gap:6px}.hub-help{position:relative;display:inline-flex;align-items:center}.hub-help-button{width:22px!important;height:22px!important;min-height:22px!important;padding:0!important;border-radius:50%!important}.hub-help-popover{position:absolute;z-index:20;left:26px;top:50%;transform:translateY(-50%);width:max-content;max-width:min(320px,72vw);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card-strong);color:var(--text);box-shadow:0 8px 24px var(--shadow);white-space:normal}.hub-help-popover[hidden]{display:none}@media(max-width:700px){.hub-settings-status{width:100%;margin:0}.hub-settings-actions{padding-bottom:4px}}#settingsCard{--hub-control-height:var(--control-height);--hub-control-radius:var(--control-radius);--hub-field-gap:4px;--hub-grid-row-gap:6px;--hub-grid-column-gap:12px;--hub-toggle-min-height:24px;--hub-sub-radius:10px}#settingsCard .grid,.hub-control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--hub-grid-row-gap) var(--hub-grid-column-gap);align-items:start}.hub-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(240px,300px));column-gap:10px;justify-content:start;align-items:start}.hub-setting-toggle{min-height:var(--hub-toggle-min-height);padding:2px 0;gap:7px;align-items:center;font-weight:400;line-height:1.2}.hub-setting-toggle input{margin:0;flex:0 0 auto}.hub-setting-toggle .hub-option-label{font-weight:400;display:block}.hub-setting-field{display:grid;margin:4px 0;gap:var(--hub-field-gap);align-self:start;align-content:start}.hub-setting-field>span{font-weight:600;line-height:1.2}.hub-setting-field>input,.hub-setting-field>select{width:100%;height:var(--hub-control-height);min-height:var(--hub-control-height);padding:var(--control-pad-y) var(--control-pad-x);border-radius:var(--hub-control-radius)}.hub-setting-field>small{line-height:1.25;margin-top:1px}.hub-header-layout{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(420px,1.2fr);gap:12px;align-items:start}.hub-header-group{border:1px solid var(--line-soft);border-radius:9px;padding:9px 10px;background:var(--surface);min-width:0}.hub-header-group h4{margin:0 0 7px;color:var(--heading);font-size:var(--sv-font-body)}.hub-header-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));column-gap:10px;align-content:start}.hub-header-shortcuts h4{grid-column:1/-1}.hub-header-presentation .hub-toggle-grid{grid-template-columns:1fr}.hub-header-presentation-width{grid-template-columns:1fr!important;margin-top:6px}.hub-order-list{width:100%;max-width:none;align-self:start;margin-top:0;padding:9px 10px}.hub-order-help{margin:0 0 5px;line-height:1.25}.hub-order-row{min-height:30px;padding:1px 0;gap:5px}.hub-order-row.is-disabled>span{opacity:.55}.hub-order-row button{width:32px;height:30px;min-height:30px;padding:0;border-radius:7px}.hub-grid-dense{grid-template-columns:repeat(4,minmax(0,1fr))!important}.hub-setting-row{border-radius:var(--hub-sub-radius);padding:12px;margin:10px 0}.hub-setting-row .grid{margin-top:8px}.hub-switch-setting-row{padding:0;overflow:hidden}.hub-switch-setting-summary{display:flex;align-items:center;gap:10px;padding:10px 12px}.hub-switch-setting-order{display:flex;gap:5px;flex:0 0 auto}.hub-switch-setting-order button{width:32px!important;height:30px!important;min-height:30px!important;padding:0!important}.hub-switch-setting-toggle{display:flex!important;align-items:center!important;gap:10px!important;min-width:0!important;flex:1!important;justify-content:space-between!important;text-align:left!important;background:transparent!important;border:0!important;box-shadow:none!important;padding:2px 4px!important}.hub-switch-setting-toggle:hover{background:var(--heading-soft)!important}.hub-switch-setting-label{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.hub-switch-setting-chevron{flex:0 0 auto;color:var(--muted);transition:transform .12s ease}.hub-switch-setting-row.is-open .hub-switch-setting-chevron{transform:rotate(90deg)}.hub-switch-setting-label>strong{color:var(--accent-strong);text-shadow:0 0 10px var(--heading-glow);letter-spacing:.01em}.hub-switch-setting-meta{font-size:var(--sv-font-small)}.hub-switch-setting-body{padding:10px 12px 12px;border-top:1px solid var(--line-soft);margin-top:0!important}#settingsCard button{min-height:var(--hub-control-height);border-radius:var(--hub-control-radius);padding:6px 11px}#settingsCard .hub-order-row button{min-height:30px;padding:0}.hub-component .actions{gap:6px;margin-top:7px}@media(max-width:1150px){.hub-header-layout{grid-template-columns:1fr}.hub-header-shortcuts{grid-template-columns:repeat(2,minmax(180px,1fr))}.hub-order-list{grid-column:auto}.hub-grid-dense{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:800px){#settingsCard .grid,.hub-control-grid,.hub-toggle-grid,.hub-grid-dense{grid-template-columns:1fr!important}.hub-header-layout{grid-template-columns:1fr}.hub-header-shortcuts{grid-template-columns:1fr}.hub-order-list{grid-column:auto}}body.density-spacious #settingsCard{--hub-control-height:42px;--hub-grid-row-gap:12px}body.density-spacious .hub-settings-section{padding:16px}body.density-spacious .hub-component{padding:14px}body.density-spacious .hub-switch-setting-summary{gap:12px;padding:14px 16px}body.density-spacious .hub-switch-setting-body{padding:14px 16px 16px}body.density-spacious .hub-setting-row{margin:12px 0}body.density-comfortable #settingsCard{--hub-control-height:38px;--hub-grid-row-gap:10px}body.density-comfortable .hub-settings-section{padding:12px}body.density-comfortable .hub-component{padding:10px}body.density-comfortable .hub-switch-setting-summary{gap:10px;padding:10px 12px}body.density-comfortable .hub-switch-setting-body{padding:10px 12px 12px}body.density-comfortable .hub-setting-row{margin:10px 0}body.density-compact #settingsCard{--hub-control-height:36px;--hub-grid-row-gap:8px}body.density-compact .hub-settings-section{padding:10px}body.density-compact .hub-component{padding:8px}body.density-compact .hub-switch-setting-summary{gap:8px;padding:8px 10px}body.density-compact .hub-switch-setting-body{padding:8px 10px 10px}body.density-compact .hub-setting-row{margin:8px 0}body.density-dense #settingsCard{--hub-control-height:34px;--hub-grid-row-gap:7px}body.density-dense .hub-settings-section{padding:8px}body.density-dense .hub-component{padding:7px}body.density-dense .hub-switch-setting-summary{gap:7px;padding:6px 8px}body.density-dense .hub-switch-setting-body{padding:6px 8px 8px}body.density-dense .hub-setting-row{margin:6px 0}body.density-ultra_dense #settingsCard{--hub-control-height:32px;--hub-grid-row-gap:5px}body.density-ultra_dense .hub-settings-section{padding:6px}body.density-ultra_dense .hub-component{padding:6px}body.density-ultra_dense .hub-switch-setting-summary{gap:5px;padding:4px 6px}body.density-ultra_dense .hub-switch-setting-body{padding:4px 6px 6px}body.density-ultra_dense .hub-setting-row{margin:4px 0}';document.head.append(s)}async function open(which='core'){styles();setView('settings');await load();selectTab(which)}function init(){styles();document.querySelectorAll('[data-hub-settings-tab]').forEach(tab=>{tab.addEventListener('click',()=>selectTab(tab.dataset.hubSettingsTab));tab.addEventListener('keydown',tabKeydown)});selectTab(state.activeTab);attachActionHelp('hubSettingsSave','Save all changed Switch Vision Hub settings to their authoritative components.');attachActionHelp('hubSettingsReload','Reload authoritative component settings and discard unsaved Hub values.');attachActionHelp('hubCoreReset','Reset Switch Vision Core settings to factory defaults.');attachActionHelp('hubCoreFallback','Open native Home Assistant Switch Vision integration settings.');attachActionHelp('hubSnmpFallback','Open native SNMP2MQTT app configuration.');attachActionHelp('hubDiscoveryFallback','Open native Discovery app configuration.');q('hubSettingsSave')?.addEventListener('click',save);q('hubSettingsReload')?.addEventListener('click',load);q('hubSettingsBack')?.addEventListener('click',goBack);q('hubCoreReset')?.addEventListener('click',resetCore);q('hubCoreFallback')?.addEventListener('click',()=>openHomeAssistantPath('/config/integrations/integration/switch_vision'));q('hubSnmpFallback')?.addEventListener('click',()=>openResolvedApp('snmp2mqtt'));q('hubDiscoveryFallback')?.addEventListener('click',()=>openResolvedApp('discovery'))}window.SwitchVisionHubSettings={open,load,save,hasUnsavedCore:()=>dirty.has('core')};document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init,{once:true}):init()})();
 </script>
 <script src="maintenance.js"></script>
 <script src="calibration_profiles.js"></script>
@@ -5869,6 +6527,27 @@ class SupportHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Content-Disposition", 'attachment; filename="switch-vision-discovery-configuration.json"')
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _complete_configuration_download(self) -> None:
+        try:
+            payload = _switch_vision_backup_export(self.app.version)
+        except (ValueError, RuntimeError, OSError) as exc:
+            self._json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
+        body = (json.dumps(payload, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+        if len(body) > MAX_COMPLETE_BACKUP_BYTES:
+            self._json(
+                {"error": "Complete Switch Vision backup exceeds the 128 MiB safety limit."},
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+            )
+            return
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Disposition", 'attachment; filename="switch-vision-complete-backup.json"')
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
@@ -6068,6 +6747,8 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(body)
+        elif path == "/download/switch-vision-backup.json":
+            self._complete_configuration_download()
         elif path == "/download/discovery-configuration.json":
             self._configuration_download()
         elif path == "/download/diagnostics.txt":
@@ -6365,23 +7046,46 @@ class SupportHandler(BaseHTTPRequestHandler):
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
+        if path == "/api/configured-devices/reset-order":
+            try:
+                with _device_configuration_update("Device order reset"):
+                    result = _reset_configured_device_order(self.app.options_file)
+                    try:
+                        dashboard = _apply_saved_device_order_to_dashboard()
+                        result["dashboard_refresh_started"] = bool(dashboard.get("updated"))
+                        result["dashboard_refresh_pending"] = not bool(dashboard.get("updated"))
+                        result["dashboard_projection"] = dashboard
+                    except (OSError, RuntimeError, ValueError) as exc:
+                        result["dashboard_refresh_started"] = False
+                        result["dashboard_refresh_pending"] = True
+                        result["dashboard_refresh_warning"] = str(exc)[:240]
+                    self._json(result)
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, OSError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
         if path == "/api/configuration/import":
             try:
                 with _exclusive_operation("Configuration import"):
                     length = int(self.headers.get("Content-Length", "0"))
-                    if length <= 0 or length > 1024 * 1024:
-                        raise ValueError("Invalid configuration file size.")
+                    if length <= 0 or length > MAX_COMPLETE_BACKUP_BYTES:
+                        raise ValueError("Invalid configuration backup size.")
                     data = json.loads(self.rfile.read(length).decode("utf-8"))
-                    imported = _validate_discovery_import(data)
-                    _import_discovery_options(imported)
-                    self._json({
-                        "imported": True,
-                        "switch_count": _configured_switch_count(imported.get("switches")),
-                        "restart_required": False,
-                    })
+                    if isinstance(data, dict) and data.get("format") == COMPLETE_BACKUP_FORMAT:
+                        self._json(_restore_complete_backup(data))
+                    else:
+                        imported = _validate_discovery_import(data)
+                        _import_discovery_options(imported)
+                        self._json({
+                            "imported": True,
+                            "format": "legacy-discovery",
+                            "switch_count": _configured_switch_count(imported.get("switches")),
+                            "restart_required": False,
+                        })
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            except (ValueError, RuntimeError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if path == "/api/maintenance/installer-backups":

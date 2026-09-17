@@ -102,13 +102,15 @@ toggle_source = SOURCE[toggle_start:toggle_end]
 assert "hub-option-label" in toggle_source
 assert "createElement('b')" not in toggle_source
 
-# Native-header settings use a compact three-part desktop layout: display toggles,
-# enabled shortcuts, and persistent shortcut order. It collapses responsively.
+# Native-header settings use a balanced four-part desktop layout: display toggles,
+# enabled shortcuts, dashboard presentation, and persistent shortcut order.
+# It collapses responsively without putting Dashboard presentation in a second card.
 assert "headerLayout.className='hub-header-layout'" in SOURCE
-assert "headerLayout.append(displayGroup,shortcutGroup,box)" in SOURCE
-assert "grid-template-columns:minmax(210px,.7fr) minmax(400px,1.35fr) minmax(300px,.9fr)" in SOURCE
+assert "headerLayout.append(displayGroup,shortcutGroup,presentationGroup,box)" in SOURCE
+assert "grid-template-columns:minmax(260px,.8fr) minmax(420px,1.2fr)" in SOURCE
 assert ".hub-header-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr))" in SOURCE
-assert "@media(max-width:1250px){.hub-header-layout" in SOURCE
+assert ".hub-header-presentation .hub-toggle-grid{grid-template-columns:1fr}" in SOURCE
+assert "@media(max-width:1150px){.hub-header-layout" in SOURCE
 assert "@media(max-width:800px)" in SOURCE
 assert "border:1px solid var(--line-soft);border-radius:10px;padding:12px;margin:10px 0;background:var(--surface-inset)" in SOURCE
 
@@ -203,16 +205,18 @@ assert ".sv-profile-section-unused .sv-profile-select{" in PROFILE_MANAGER
 assert "Delete All Inactive" in PROFILE_MANAGER
 assert "Select inactive calibration profile" in PROFILE_MANAGER
 
-# v2.4.18: inactive profile multi-selection is checkbox-owned. Row clicks must
-# not clear/re-render a user's existing selection, and Delete All Inactive must
-# select the current inactive rows in place rather than racing Clear Selection.
+# Inactive profile multi-selection remains checkbox-owned. Delete All Inactive
+# delegates to the base profile manager's stateful operation instead of trying
+# to synthesize checkbox DOM changes after the grouped manager has rerendered.
 delete_all_block = PROFILE_MANAGER.split(
     '$("svProfileManagerDeleteAllUnused")', 1
 )[1].split("function selectCard", 1)[0]
 assert '$("svProfilesClearSelection")' not in delete_all_block
 assert "window.setTimeout" not in delete_all_block
-assert "if (!input.checked)" in delete_all_block
-assert 'hidden.click();' in delete_all_block
+assert "querySelectorAll" not in delete_all_block
+assert "dispatchEvent" not in delete_all_block
+assert "SwitchVisionCalibrationProfiles" in delete_all_block
+assert "?.deleteAllInactive?.();" in delete_all_block
 
 select_card_block = PROFILE_MANAGER.split("function selectCard", 1)[1].split(
     "function wireCard", 1
