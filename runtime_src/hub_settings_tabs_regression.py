@@ -33,6 +33,12 @@ for marker in (
     assert marker in SOURCE, marker
 assert "const dash=sec('Dashboard presentation'" not in SOURCE
 
+# Show UniFi integration belongs to Native dashboard header -> Dashboard
+# presentation. The saved Core discovery preference is reused in-place; it must
+# not be rendered in the Discovery appearance card again.
+assert "if(s.discovery&&Object.prototype.hasOwnProperty.call(s.discovery,'show_unifi_integration'))presentationTog.append(tog('Show UniFi integration',s.discovery.show_unifi_integration" in SOURCE
+assert "if(grp==='discovery')b.append(tog('Show UniFi integration'" not in SOURCE
+
 # The old accordion contract must be gone; tabs are the sole top-level settings navigation.
 for old in (
     '<details id="hubComponent-core"',

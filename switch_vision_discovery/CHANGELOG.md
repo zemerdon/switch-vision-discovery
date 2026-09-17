@@ -1,3 +1,10 @@
+## 2.4.34 — Aligned Hub toggles and UniFi presentation control
+
+- Standardize generated Hub checkbox rows so the checkbox, setting label and slab information icon share one clean baseline everywhere the shared toggle helper is used.
+- Remove the conflicting block-level toggle-label rule that allowed help icons to drop beneath their labels at dense settings layouts.
+- Move **Show UniFi integration** out of **Discovery appearance** and into **Native dashboard header → Dashboard presentation** while preserving the existing Core setting key, saved value and behavior.
+- Keep field labels, Activity LED controls, appearance sliders and all authored help content unchanged.
+
 ## 2.4.33 — Slab-style Hub information icons
 
 - Replace the circular `?` help triggers across the Hub with a compact slab-style information icon while preserving the same authored contextual help.

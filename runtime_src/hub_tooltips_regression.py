@@ -41,6 +41,7 @@ assert "const help=h||H[t]||''" in SOURCE
 assert "if(help)target.title=help" in SOURCE
 assert "if(help)i.title=help" in SOURCE
 assert "s.append(hubHelp(help))" in SOURCE
+assert "x.append(i,s);if(help)x.append(hubHelp(help));return x" in SOURCE
 assert "b.innerHTML='<svg class=\"hub-help-icon\"" in SOURCE
 assert 'hub-help-icon rect,.hub-help-icon path' in SOURCE
 assert 'border-radius:5px!important' in SOURCE

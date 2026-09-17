@@ -77,11 +77,13 @@ for marker in (
     ".hub-toggle-grid{display:grid",
     "--hub-toggle-min-height:24px",
     "repeat(2,minmax(240px,300px));column-gap:10px",
-    "padding:2px 0;gap:7px;align-items:center",
     ".hub-control-grid",
     ".hub-header-layout{display:grid",
     ".hub-grid-dense",
-    ".hub-setting-toggle .hub-option-label{font-weight:400",
+    ".hub-setting-toggle{min-height:var(--hub-toggle-min-height);padding:2px 0;display:grid;grid-template-columns:18px minmax(0,auto) 20px",
+    ".hub-setting-toggle input{margin:0;width:16px;height:16px;align-self:center",
+    ".hub-setting-toggle .hub-option-label{font-weight:400;display:block;min-width:0;line-height:1.2",
+    ".hub-setting-toggle>.hub-help{align-self:center;justify-self:start",
     ".hub-setting-field>input,.hub-setting-field>select{width:100%;height:var(--hub-control-height)",
     "#settingsCard button{min-height:var(--hub-control-height)",
     ".hub-order-list{width:100%;max-width:none",
@@ -101,6 +103,8 @@ toggle_end = SOURCE.index("function sel(", toggle_start)
 toggle_source = SOURCE[toggle_start:toggle_end]
 assert "hub-option-label" in toggle_source
 assert "createElement('b')" not in toggle_source
+assert "x.append(i,s);if(help)x.append(hubHelp(help));return x" in toggle_source
+assert "s.append(hubHelp(help))" not in toggle_source
 
 # Native-header settings use a balanced four-part desktop layout: display toggles,
 # enabled shortcuts, dashboard presentation, and persistent shortcut order.
