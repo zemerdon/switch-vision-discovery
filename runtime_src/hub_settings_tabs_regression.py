@@ -43,31 +43,40 @@ for old in (
     assert old not in SOURCE, old
 
 
-# Discovery Settings switch rows are compact custom disclosures. The first saved
-# switch is expanded by default, later rows start collapsed, and arrow buttons
-# are siblings of (not children of) the disclosure toggle so HA/Chrome cannot
-# swallow reorder clicks through <summary> interactive-content behavior.
+# Discovery Settings switch rows are compact custom disclosures. Device ordering
+# is owned exclusively by the Devices view, so Settings must not render or mutate
+# switch order. The first saved switch remains expanded by default and later rows
+# start collapsed.
 for marker in (
     "expandedDiscoverySwitches=new Set();let discoverySwitchExpansionInitialized=false",
     "if(!discoverySwitchExpansionInitialized){if(switches.length){expandedDiscoverySwitches.add",
+    "const sw=sec('Switches','SNMP communities are masked by default. Use the eye to reveal a saved community; blank preserves it. Device ordering is managed from Devices.');",
     "const c=document.createElement('div');c.className='device-card hub-setting-row hub-switch-setting-row'",
     "const hd=document.createElement('div');hd.className='hub-switch-setting-summary'",
     "const toggle=document.createElement('button');toggle.type='button';toggle.className='hub-switch-setting-toggle'",
     "toggle.setAttribute('aria-expanded',String(expandedDiscoverySwitches.has(key)))",
-    "up.textContent='↑';down.textContent='↓'",
-    "const move=delta=>{const target=n+delta;if(target<0||target>=switches.length)return;[switches[n],switches[target]]=[switches[target],switches[n]];mark('discovery');renderDiscovery()}",
-    "up.addEventListener('click',()=>move(-1));down.addEventListener('click',()=>move(1))",
-    "hd.append(order,toggle,rm)",
+    "hd.append(toggle,rm)",
     "g.hidden=!expandedDiscoverySwitches.has(key)",
     "toggle.addEventListener('click',()=>{const open=g.hidden;",
     ".hub-switch-setting-summary{display:flex",
-    ".hub-switch-setting-order{display:flex",
     ".hub-switch-setting-toggle{display:flex!important",
     ".hub-switch-setting-label>strong{color:var(--accent-strong)",
     "hub-discovery-workflow-grid",
     ".hub-discovery-workflow-grid .hub-field-label{min-height:2.4em",
 ):
     assert marker in SOURCE, marker
+
+settings_start = SOURCE.index("function renderDiscovery(){")
+settings_end = SOURCE.index("function cleanDiscovery(){", settings_start)
+settings_block = SOURCE[settings_start:settings_end]
+for obsolete in (
+    "hub-switch-setting-order",
+    "const move=delta=>",
+    "up.addEventListener('click',()=>move(-1))",
+    "down.addEventListener('click',()=>move(1))",
+    "Use the arrows to reorder switches",
+):
+    assert obsolete not in settings_block, obsolete
 
 # Do not reintroduce real buttons inside <summary>; that was unreliable under
 # Home Assistant ingress and caused the Settings reorder arrows to no-op.

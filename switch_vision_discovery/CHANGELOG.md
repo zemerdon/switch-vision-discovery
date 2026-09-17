@@ -1,3 +1,10 @@
+## 2.4.31 — Backup asset efficiency and single-source device ordering
+
+- Require Core backup API v2 and export only Core-identified custom logos/faceplates; stock Switch Vision visuals are recreated by the installed Core release instead of being copied one-by-one into every complete backup.
+- Preserve user-modified stock-named assets because Core classifies stock ownership by filename plus SHA-256, not filename alone.
+- Remove duplicate switch reorder arrows and reorder mutation logic from Discovery Settings. **Devices** is now the single UI for manual ordering and **Reset Order**; Discovery Settings remains for switch configuration only.
+- Keep complete backups non-secret and preserve the existing whole-stack component settings, Calibration profiles, device state/order and backend-only first-added reset metadata.
+
 ## 2.4.30 — Whole-stack backup and Hub state refinements
 
 - Replace the Discovery-only export with a versioned complete Switch Vision backup containing non-secret Core, Discovery, SNMP2MQTT, UniFi2MQTT and Installer settings, device state/order, immutable first-added ordering metadata, Calibration profiles, and custom Switch Vision logo/faceplate assets.

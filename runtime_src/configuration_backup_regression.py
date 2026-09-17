@@ -92,10 +92,36 @@ try:
         web._installer_settings_status = lambda: {"installed": True, "settings": {"preserve_custom_assets": True, "backup_retention": 5}}
         web._configured_devices_snapshot = lambda _path: {"ok": True}
         web._core_calibration_backup = lambda: {"profiles": [{"profile": "custom_lab", "calibration": {"model": "fixture"}}], "active_profiles": {}}
+
+        # Core owns the stock/custom distinction. Discovery must fetch only files
+        # Core marks custom; stock release assets are recreated by Core install.
+        asset_calls = []
+        def asset_ws(command, **_kwargs):
+            asset_calls.append(copy.deepcopy(command))
+            if command["type"] == "switch_vision/list_assets":
+                return {
+                    "backup_api": 2,
+                    "logos": ["sv-logo.png", "logo.png"],
+                    "faceplates": ["24rj45-4sfp.png", "custom-faceplate.png"],
+                    "custom_logos": ["logo.png"],
+                    "custom_faceplates": ["custom-faceplate.png"],
+                }
+            name = command["filename"]
+            raw = b"abc" if name == "logo.png" else b"xyz"
+            import base64, hashlib
+            return {"size": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "content_base64": base64.b64encode(raw).decode("ascii")}
+        web._home_assistant_ws = asset_ws
+        custom_assets = web._core_asset_backup()
+        assert [row["filename"] for row in custom_assets] == ["logo.png", "custom-faceplate.png"], custom_assets
+        requested_assets = [row["filename"] for row in asset_calls if row.get("type") == "switch_vision/get_backup_asset"]
+        assert requested_assets == ["logo.png", "custom-faceplate.png"], requested_assets
+        assert "sv-logo.png" not in requested_assets
+        assert "24rj45-4sfp.png" not in requested_assets
+
         web._core_asset_backup = lambda: [{"kind": "logos", "filename": "logo.png", "size": 3,
                                             "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "content_base64": "YWJj"}]
 
-        backup = web._switch_vision_backup_export("2.4.30")
+        backup = web._switch_vision_backup_export("2.4.31")
         encoded = json.dumps(backup, sort_keys=True)
         assert backup["format"] == web.COMPLETE_BACKUP_FORMAT
         assert backup["secrets_included"] is False
@@ -146,7 +172,7 @@ try:
         calls: list[tuple[str, object]] = []
         web._home_assistant_ws = lambda command, **_kwargs: (
             calls.append(("core-preflight", copy.deepcopy(command)))
-            or {"backup_api": 1}
+            or {"backup_api": 2}
         )
         web._save_core_settings = lambda payload: calls.append(("core", copy.deepcopy(payload))) or {}
         web._restore_core_assets = lambda assets: calls.append(("assets", copy.deepcopy(assets))) or len(assets)
@@ -201,6 +227,8 @@ for marker in (
     'pending_unifi_controllers',
     'switch_vision/get_backup_asset',
     'switch_vision/put_backup_asset',
+    'listing.get(f"custom_{kind}")',
+    'int(listing.get("backup_api") or 0) < 2',
 ):
     assert marker in source, marker
 
