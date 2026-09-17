@@ -41,6 +41,10 @@ assert "const help=h||H[t]||''" in SOURCE
 assert "if(help)target.title=help" in SOURCE
 assert "if(help)i.title=help" in SOURCE
 assert "s.append(hubHelp(help))" in SOURCE
+assert "b.innerHTML='<svg class=\"hub-help-icon\"" in SOURCE
+assert 'hub-help-icon rect,.hub-help-icon path' in SOURCE
+assert 'border-radius:5px!important' in SOURCE
+assert "b.textContent='?'" not in SOURCE
 
 start = SOURCE.index('function installDiscoveryTooltips(root=document)')
 end = SOURCE.index('const discoveryTooltipObserver=', start)

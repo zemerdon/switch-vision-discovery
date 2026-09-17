@@ -1,3 +1,10 @@
+## 2.4.33 — Slab-style Hub information icons
+
+- Replace the circular `?` help triggers across the Hub with a compact slab-style information icon while preserving the same authored contextual help.
+- Render the help glyph as an inline SVG so it remains crisp across browser zoom and display scaling without depending on a UI font or external icon library.
+- Use a subtle muted default state with accent hover/focus feedback, keeping keyboard, pointer, touch, Escape-to-close and pinned-popover behavior unchanged.
+- Keep all 2.4.32 tooltip-quality guarantees: no label-only fallback help and no loss of authored explanations.
+
 ## 2.4.32 — Helpful Hub tooltips
 
 - Replace label-only Hub hover text with authored contextual help that explains what each setting changes, including useful directionality such as what higher/lower Activity LED values do.
