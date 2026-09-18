@@ -100,6 +100,7 @@ for marker in (
     '/download/switch-vision-dashboard.yaml',
     '/download/switch-vision-custom-dashboard.yaml',
     'generatedDashboardExportMode()',
+    'syncGeneratedDashboardExportMode(true)',
     "fetchGeneratedDashboardExport('cards')",
 ):
     assert marker in source, marker
