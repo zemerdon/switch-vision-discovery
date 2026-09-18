@@ -10,17 +10,24 @@ for marker in (
     "const inactiveCount =",
     "`${inactiveCount} inactive`",
     "async function deleteAllUnused()",
-    "item.active !== true",
-    'item.scope !== "factory"',
+    "function deletionProtected(item)",
+    "item.deletion_protected === true",
+    'protectionReason === "active_base"',
+    "!deletionProtected(item)",
     "await deleteSelected();",
     "deleteSelected,",
     "deleteAllUnused,",
 ):
     assert marker in profiles, marker
 assert "SwitchVisionCalibrationProfiles" in manager
+assert 'badgeText.includes("BASE IN USE")' in manager
+assert '"BASE PROFILES IN USE"' in manager
+assert "protectedBase.length" in manager
 assert "?.deleteAllUnused?.();" in manager
 assert "?.deleteSelected?.();" in manager
 assert "switch_vision/delete_calibration" in web
+assert "def _calibration_profile_management_view(" in web
+assert 'item["deletion_protection_reason"] = reason' in web
 delete_route = web.split('"/api/calibration-profiles/delete"', 1)[1].split("return", 1)[0]
 assert "_home_assistant_ws(" in delete_route
 assert "_home_assistant_service(" not in delete_route

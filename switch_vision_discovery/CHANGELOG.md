@@ -1,3 +1,10 @@
+## 2.4.39 — Protect active calibration bases during cleanup
+
+- Fix **Delete Selected** and **Delete All Unused** when an active custom faceplate points at a saved base calibration. Core protects both the active faceplate profile and its base anchor; the Hub now derives that same protection state before offering deletion.
+- Mark protected base anchors as **BASE IN USE**, disable their selection/deletion controls, and exclude them from stale/unused bulk cleanup while leaving genuinely unused faceplate profiles deletable.
+- Add a regression for the exact live failure observed on HAOS where the Hub classified an active base anchor as unused and Core correctly rejected deletion with `invalid_profile`.
+- Make **Devices → Configure Devices** the first and default Devices tab, with **Device Overview** second, so saved-device configuration opens directly from the Devices card.
+
 ## 2.4.38 — Maintenance consolidation and portable device restore
 
 - Fix complete configuration restore on fresh installs with switch stacks by deferring stack-member rows together with their parent switch rows until SNMP communities are re-entered; validate parent/member relationships before any restore side effect.

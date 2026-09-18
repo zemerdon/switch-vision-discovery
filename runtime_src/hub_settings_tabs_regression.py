@@ -67,11 +67,13 @@ for marker in (
     ".hub-switch-setting-summary{display:flex",
     ".hub-switch-setting-toggle{display:flex!important",
     ".hub-switch-setting-label>strong{color:var(--accent-strong)",
-    'id="devicesTab-overview"',
-    'id="devicesTab-configure"',
+    'id="devicesTab-configure" class="hub-settings-tab is-active"',
     'data-devices-tab="configure">Configure Devices</button>',
+    'id="devicesTab-overview" class="hub-settings-tab"',
     'id="hubDeviceConfiguration"',
-    "function selectDevicesTab(which='overview',focus=false)",
+    "function selectDevicesTab(which='configure',focus=false)",
+    "const ids=['configure','overview']",
+    "selectDevicesTab('configure')",
 ):
     assert marker in SOURCE, marker
 
@@ -181,5 +183,10 @@ for marker in (
 assert '<b>Calibration Profiles</b>' not in SOURCE
 assert '<b>Import / Export Configuration</b>' not in SOURCE
 assert '<span>Add / Remove Switches</span>' not in SOURCE
+
+# Configure Devices is the first/default Devices surface.
+assert SOURCE.index('id="devicesTab-configure"') < SOURCE.index('id="devicesTab-overview"')
+assert SOURCE.index('id="devicesPanel-configure"') < SOURCE.index('id="devicesPanel-overview"')
+assert "window.SwitchVisionHubSettings?.selectDevicesTab?.('configure')" in SOURCE
 
 print("Switch Vision Settings top tabs regression: PASS")

@@ -61,6 +61,16 @@
     return data;
   }
 
+  function deletionProtected(item) {
+    return Boolean(
+      item && (
+        item.deletion_protected === true ||
+        item.active === true ||
+        item.scope === "factory"
+      )
+    );
+  }
+
   function message(text = "", error = false) {
     const target = $("svProfilesMessage");
     if (!target) return;
@@ -353,8 +363,7 @@
             .filter(
               (item) =>
                 item.stale === true &&
-                item.active !== true &&
-                item.scope !== "factory"
+                !deletionProtected(item)
             )
             .map(
               (item) =>
@@ -375,8 +384,7 @@
             .filter(
               (item) =>
                 item.stale === true &&
-                item.active !== true &&
-                item.scope !== "factory"
+                !deletionProtected(item)
             )
             .map(
               (item) =>
@@ -440,8 +448,7 @@
       items
         .filter(
           (item) =>
-            item.active !== true &&
-            item.scope !== "factory"
+            !deletionProtected(item)
         )
         .map(
           (item) =>
@@ -538,8 +545,12 @@
           );
 
         const protectedProfile =
-          item.active === true ||
-          scope === "factory";
+          deletionProtected(item);
+
+        const protectionReason =
+          String(
+            item.deletion_protection_reason || ""
+          );
 
         const badges = [];
 
@@ -552,7 +563,9 @@
         badges.push(
           item.active === true
             ? `<span class="sv-profile-badge active">ACTIVE</span>`
-            : `<span class="sv-profile-badge">UNUSED</span>`
+            : protectionReason === "active_base"
+              ? `<span class="sv-profile-badge warning">BASE IN USE</span>`
+              : `<span class="sv-profile-badge">UNUSED</span>`
         );
 
         if (item.stale === true) {
@@ -606,7 +619,9 @@
                   ? "Factory profile protected"
                   : item.active === true
                     ? "Active profile protected"
-                    : "Select profile"
+                    : protectionReason === "active_base"
+                      ? "Base profile in use"
+                      : "Select profile"
               }
             </label>
 
@@ -699,8 +714,7 @@
             if (
               !Number.isInteger(index) ||
               !item ||
-              item.active === true ||
-              item.scope === "factory"
+              deletionProtected(item)
             ) {
               checkbox.checked = false;
               return;
@@ -933,14 +947,18 @@
 
     if (!item || state.loading) return;
 
-    if (
-      item.active === true ||
-      item.scope === "factory"
-    ) {
+    if (deletionProtected(item)) {
+      const reason =
+        String(
+          item.deletion_protection_reason || ""
+        );
+
       message(
         item.scope === "factory"
           ? "Factory profiles are protected from deletion."
-          : "Active profiles are protected from deletion.",
+          : reason === "active_base"
+            ? "Base profiles in use by an active calibration are protected from deletion."
+            : "Active profiles are protected from deletion.",
         true
       );
 
@@ -998,8 +1016,7 @@
       state.items
         .filter(
           (item) =>
-            item.active !== true &&
-            item.scope !== "factory"
+            !deletionProtected(item)
         )
         .map(
           (item) =>
@@ -1041,13 +1058,11 @@
 
     if (
       selectedItems.some(
-        (item) =>
-          item.active === true ||
-          item.scope === "factory"
+        (item) => deletionProtected(item)
       )
     ) {
       message(
-        "Bulk deletion stopped: an active or factory profile was selected.",
+        "Bulk deletion stopped: a protected active, base-in-use, or factory profile was selected.",
         true
       );
 

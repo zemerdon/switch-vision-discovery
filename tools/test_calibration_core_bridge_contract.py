@@ -111,6 +111,51 @@ def test_successful_calibration_list_round_trip() -> None:
     }
 
 
+def test_management_view_protects_active_base_and_target() -> None:
+    raw = {
+        "active_profiles": {
+            "native_SW1": "native_SW1__faceplate__selected",
+        },
+        "items": [
+            {
+                "profile": "native_SW1",
+                "scope": "native",
+                "active": False,
+            },
+            {
+                "profile": "native_SW1__faceplate__selected",
+                "scope": "native",
+                "active": True,
+            },
+            {
+                "profile": "native_SW1__faceplate__unused",
+                "scope": "native",
+                "active": False,
+            },
+            {
+                "profile": "factory_demo",
+                "scope": "factory",
+                "active": False,
+            },
+        ],
+    }
+
+    view = hub._calibration_profile_management_view(raw)
+    by_profile = {item["profile"]: item for item in view["items"]}
+
+    assert by_profile["native_SW1"]["deletion_protected"] is True
+    assert by_profile["native_SW1"]["deletion_protection_reason"] == "active_base"
+    assert by_profile["native_SW1__faceplate__selected"]["deletion_protected"] is True
+    assert by_profile["native_SW1__faceplate__selected"]["deletion_protection_reason"] == "active"
+    assert by_profile["native_SW1__faceplate__unused"]["deletion_protected"] is False
+    assert by_profile["native_SW1__faceplate__unused"]["deletion_protection_reason"] == ""
+    assert by_profile["factory_demo"]["deletion_protected"] is True
+    assert by_profile["factory_demo"]["deletion_protection_reason"] == "factory"
+
+    # Management annotation is derived state and must not mutate Core's payload.
+    assert "deletion_protected" not in raw["items"][0]
+
+
 def test_missing_token_is_classified() -> None:
     with patched(_read_supervisor_token=lambda: ""):
         exc = expect_bridge_error(
@@ -408,6 +453,8 @@ def test_support_privacy_processing_preserves_bridge_diagnostic_contract() -> No
 def main() -> int:
     test_successful_calibration_list_round_trip()
     print("PASS: Calibration/Core WebSocket success round trip")
+    test_management_view_protects_active_base_and_target()
+    print("PASS: Calibration management protects active bases and targets")
     test_missing_token_is_classified()
     print("PASS: Missing Supervisor token is classified")
     test_auth_rejection_is_classified()

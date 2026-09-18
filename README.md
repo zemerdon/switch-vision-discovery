@@ -24,7 +24,7 @@ Switch Vision components are independently versioned. The main Switch Vision Cor
 
 ## Hub updates
 
-Discovery v2.4.38 fixes complete-configuration restore on fresh installs with switch stacks by deferring stack-member rows together with their secret-dependent parent switch rows until SNMP communities are re-entered. It adds a secret-free **Switches Only** transfer, moves saved switch/stack editing to **Devices → Configure Devices**, and consolidates backups, SNMP maintenance, complete/switch configuration transfer, Calibration Profiles, and reset actions into a tabbed **Maintenance** surface. Calibration bulk deletion now uses Core's authenticated deletion bridge, and fresh Local UniFi controller profiles default certificate verification off while Remote Site Manager and MQTT verification remain protected. The v2.4.37 Pro Max visual contract and CI isolation remain unchanged.
+Discovery v2.4.39 fixes Calibration Profile cleanup when an active custom faceplate keeps its base calibration protected in Core. The Hub now marks that base anchor **BASE IN USE**, excludes it from **Delete Selected**/**Delete All Unused**, and still deletes genuinely unused profiles. **Devices → Configure Devices** is also now the first/default Devices tab, with **Device Overview** second. The v2.4.38 fresh-stack restore, **Switches Only** transfer, Devices configuration move, Maintenance consolidation, authenticated calibration deletion bridge, and Local UniFi TLS default remain unchanged.
 
 The v2.4.35 stale-open Hub protection remains in place: the loaded frontend version is compared with the running app version through the existing status poll, with one guarded self-refresh after an update when they differ.
 

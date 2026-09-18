@@ -767,6 +767,7 @@
     const active = [];
     const activeCustom = [];
     const activeNative = [];
+    const protectedBase = [];
     const unused = [];
 
     for (const card of bareCards) {
@@ -811,6 +812,8 @@
           "active"
         ) ||
         badgeText.includes("ACTIVE");
+      const isProtectedBase =
+        badgeText.includes("BASE IN USE");
 
       if (isActive) {
         active.push(card);
@@ -822,6 +825,8 @@
         } else {
           activeNative.push(card);
         }
+      } else if (isProtectedBase) {
+        protectedBase.push(card);
       } else {
         const input = card.querySelector("[data-profile-select]");
         const name = String(
@@ -876,6 +881,23 @@
       activeSection.appendChild(empty);
     }
 
+    const protectedBaseSection =
+      document.createElement("section");
+    protectedBaseSection.className =
+      "sv-profile-section";
+    protectedBaseSection.appendChild(
+      sectionHeading(
+        "BASE PROFILES IN USE",
+        protectedBase.length
+      )
+    );
+
+    if (protectedBase.length) {
+      protectedBaseSection.appendChild(
+        listFor(protectedBase)
+      );
+    }
+
     const unusedSection =
       document.createElement("section");
     unusedSection.className =
@@ -903,6 +925,9 @@
 
     root.replaceChildren(
       activeSection,
+      ...(protectedBase.length
+        ? [protectedBaseSection]
+        : []),
       unusedSection
     );
   }
