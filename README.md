@@ -24,7 +24,7 @@ Switch Vision components are independently versioned. The main Switch Vision Cor
 
 ## Hub updates
 
-Discovery v2.4.39 fixes Calibration Profile cleanup when an active custom faceplate keeps its base calibration protected in Core. The Hub now marks that base anchor **BASE IN USE**, excludes it from **Delete Selected**/**Delete All Unused**, and still deletes genuinely unused profiles. **Devices → Configure Devices** is also now the first/default Devices tab, with **Device Overview** second. The v2.4.38 fresh-stack restore, **Switches Only** transfer, Devices configuration move, Maintenance consolidation, authenticated calibration deletion bridge, and Local UniFi TLS default remain unchanged.
+Discovery v2.4.40 adds a new-dashboard YAML format selector in Hub → Discovery. **Custom dashboard** is the default and preserves the generated `custom:vertical-layout` wrapper plus `layout:` settings for a manually created Home Assistant dashboard using Layout Card; **Standard dashboard** keeps the existing dependency-free export. Preview, Copy, and Download all follow the selected format, while **Copy Cards Only** remains unchanged for existing dashboards. The v2.4.39 Calibration **BASE IN USE** protection and Configure Devices default tab remain unchanged.
 
 The v2.4.35 stale-open Hub protection remains in place: the loaded frontend version is compared with the running app version through the existing status poll, with one guarded self-refresh after an update when they differ.
 

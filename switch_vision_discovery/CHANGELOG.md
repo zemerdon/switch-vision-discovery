@@ -1,3 +1,10 @@
+## 2.4.40 — Custom dashboard YAML export
+
+- Add a **New dashboard format** selector to Hub → Discovery → Generated Dashboard YAML. **Custom dashboard** is the default and preserves the generated `custom:vertical-layout` wrapper plus `layout:` metadata for a new Home Assistant dashboard using Layout Card; **Standard dashboard** keeps the existing dependency-free export.
+- Make **Preview Dashboard YAML**, **Copy Dashboard YAML**, and **Download Dashboard YAML** all follow the selected dashboard format while leaving **Copy Cards Only** unchanged for existing dashboards.
+- Keep the Native generated dashboard source read-only and validate both export paths from the same source; unknown custom view dependencies remain blocked instead of being copied blindly.
+- Add permanent regression coverage for both full-dashboard formats, the custom-layout metadata, selector/default, API routes, download routes, and unchanged cards-only behavior.
+
 ## 2.4.39 — Protect active calibration bases during cleanup
 
 - Fix **Delete Selected** and **Delete All Unused** when an active custom faceplate points at a saved base calibration. Core protects both the active faceplate profile and its base anchor; the Hub now derives that same protection state before offering deletion.

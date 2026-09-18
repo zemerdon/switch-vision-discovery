@@ -46,6 +46,19 @@ with tempfile.TemporaryDirectory() as tmpdir:
     assert [card["type"] for card in view["cards"]] == ["markdown", "custom:switch-vision-3650"]
     assert view["cards"][1]["selected_switch"] == "sw1"
 
+    custom = web._generated_dashboard_export(path, custom_dashboard=True)
+    assert custom["valid"] is True, custom
+    assert custom["mode"] == "custom-dashboard"
+    assert "custom:vertical-layout" in custom["text"]
+    assert "Layout Card is required" in custom["text"]
+    custom_doc = yaml.safe_load(custom["text"])
+    custom_view = custom_doc["views"][0]
+    assert custom_view["type"] == "custom:vertical-layout"
+    assert custom_view["layout"] == {"width": 800, "max_cols": 1}
+    assert custom_view["title"] == "Switch Vision"
+    assert custom_view["path"] == "switch-vision"
+    assert [card["type"] for card in custom_view["cards"]] == ["markdown", "custom:switch-vision-3650"]
+
     cards = web._generated_dashboard_export(path, cards_only=True)
     assert cards["valid"] is True, cards
     assert cards["mode"] == "cards"
@@ -63,6 +76,9 @@ with tempfile.TemporaryDirectory() as tmpdir:
     blocked = web._generated_dashboard_export(path)
     assert blocked["valid"] is False
     assert "unknown custom view dependency" in blocked["error"]
+    blocked_custom = web._generated_dashboard_export(path, custom_dashboard=True)
+    assert blocked_custom["valid"] is False
+    assert "unknown custom view dependency" in blocked_custom["error"]
 
     two_views = SAMPLE + "\n  - title: Second\n    cards:\n      - type: markdown\n        content: second\n"
     path.write_text(two_views, encoding="utf-8")
@@ -72,14 +88,18 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
 source = Path(web.__file__).read_text(encoding="utf-8")
 for marker in (
+    'id="generatedDashboardExportMode"',
+    'value="custom-dashboard" selected',
     'id="previewGeneratedDashboardYamlButton"',
     'id="copyGeneratedDashboardYamlButton"',
     'id="copyGeneratedCardsOnlyButton"',
     'id="downloadGeneratedDashboardYamlButton"',
     '/api/generated-card-yaml/dashboard-export',
+    '/api/generated-card-yaml/custom-dashboard-export',
     '/api/generated-card-yaml/cards-export',
     '/download/switch-vision-dashboard.yaml',
-    "fetchGeneratedDashboardExport('dashboard')",
+    '/download/switch-vision-custom-dashboard.yaml',
+    'generatedDashboardExportMode()',
     "fetchGeneratedDashboardExport('cards')",
 ):
     assert marker in source, marker
