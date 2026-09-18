@@ -2563,8 +2563,8 @@
       },
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-pro-max-24-api",
-      "calibration_profile": "unifi_24_rj45_2sfp_inline",
-      "default_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
+      "calibration_profile": "unifi_24p_rj45_2sfp",
+      "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
       "contributions": [
         {
           "id": "community-validation-1",
@@ -2617,9 +2617,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
+        "recommended_faceplate": "faceplates/unifi-24p-rj45-2sfp.png",
         "optional_faceplates": [],
-        "calibration_profile": "unifi_24_rj45_2sfp_inline",
+        "calibration_profile": "unifi_24p_rj45_2sfp",
         "canvas": {
           "width": 2048,
           "height": 448

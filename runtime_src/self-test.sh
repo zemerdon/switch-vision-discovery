@@ -2007,8 +2007,8 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.36"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.36"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.37"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.37"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -3557,8 +3557,8 @@ for model, (rj45, uplinks, poe, dashboard, profile) in expected.items():
     assert profiles[profile]["status"] == "experimental", model
 
 promax = models["USW Pro Max 24"]
-assert promax["calibration_profile"] == "unifi_24_rj45_2sfp_inline"
-assert promax["default_faceplate"] == "faceplates/unifi-24-rj45-2sfp-inline.png"
+assert promax["calibration_profile"] == "unifi_24p_rj45_2sfp"
+assert promax["default_faceplate"] == "faceplates/unifi-24p-rj45-2sfp.png"
 ucg = models["UCG Ultra"]
 assert ucg["calibration_profile"] == "default_unifi_5_rj45"
 assert ucg["default_faceplate"] == "faceplates/unifi-5rj45.png"

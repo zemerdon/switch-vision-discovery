@@ -564,22 +564,24 @@ def test_latest_contribution_exposes_evidence_metadata() -> None:
 
 
 def main() -> int:
-    test_discovery_save_and_write_only_secrets()
-    print("PASS: Discovery settings save, rename, manual-model and secret preservation contracts")
-    test_saved_row_effective_config_is_canonical_fresh_and_secret_safe()
-    print("PASS: Saved switch rows use fresh canonical effective config with secret-safe provenance")
-    test_manual_model_fallback_is_complete()
-    print("PASS: Degraded registry fallback accepts current manual model set")
-    test_core_reset_contract()
-    print("PASS: Core Reset button backend contract")
-    test_snmp2mqtt_save_password_preservation_and_restart()
-    print("PASS: SNMP2MQTT save preserves blank password and requests restart")
-    test_snmp_reset_boundary()
-    print("PASS: SNMP Discovery reset stop guard, cleanup and UniFi preservation boundary")
-    test_discovery_exit10_warning_and_handoff_contract()
-    print("PASS: Discovery exit 10 is warning-only, blocks SNMP2MQTT and preserves exit-0 handoff")
-    test_latest_contribution_exposes_evidence_metadata()
-    print("PASS: Support My Switch contribution status exposes structured evidence metadata")
+    with tempfile.TemporaryDirectory(prefix="sv-hub-save-reset-contracts-") as temp:
+        with patched(DEFAULT_DEVICE_CONTROL=Path(temp) / "device-control.json"):
+            test_discovery_save_and_write_only_secrets()
+            print("PASS: Discovery settings save, rename, manual-model and secret preservation contracts")
+            test_saved_row_effective_config_is_canonical_fresh_and_secret_safe()
+            print("PASS: Saved switch rows use fresh canonical effective config with secret-safe provenance")
+            test_manual_model_fallback_is_complete()
+            print("PASS: Degraded registry fallback accepts current manual model set")
+            test_core_reset_contract()
+            print("PASS: Core Reset button backend contract")
+            test_snmp2mqtt_save_password_preservation_and_restart()
+            print("PASS: SNMP2MQTT save preserves blank password and requests restart")
+            test_snmp_reset_boundary()
+            print("PASS: SNMP Discovery reset stop guard, cleanup and UniFi preservation boundary")
+            test_discovery_exit10_warning_and_handoff_contract()
+            print("PASS: Discovery exit 10 is warning-only, blocks SNMP2MQTT and preserves exit-0 handoff")
+            test_latest_contribution_exposes_evidence_metadata()
+            print("PASS: Support My Switch contribution status exposes structured evidence metadata")
     print("Switch Vision Hub executable save/reset contracts: PASS")
     return 0
 

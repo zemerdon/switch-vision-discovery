@@ -1,3 +1,9 @@
+## 2.4.37 — Restore Pro Max visual contract and CI isolation
+
+- Restore USW Pro Max 24 to the original shipped UniFi 24 RJ45 + 2 SFP faceplate and unifi_24p_rj45_2sfp calibration profile, matching Core 2.7.14 and the pre-2.6.25 owner-supplied visual contract.
+- Update permanent Discovery self-test expectations so the later inline reassignment cannot silently return.
+- Isolate the hosted Hub save/reset contract suite onto disposable device-control storage instead of the Home Assistant /share path, so CI exercises the backend contract without requiring HAOS filesystem state.
+
 ## 2.4.36 — Geometry recovery, safe reset, and device reconciliation
 
 - Add **Reset Everything** to Maintenance with exact typed confirmation. It resets mutable Switch Vision settings, generated runtime state, calibration profiles, and Switch Vision-owned retained MQTT state across installed components while preserving installed apps, recovery/configuration backups, Support My Switch archives, custom faceplates/logos, and protected originals.
