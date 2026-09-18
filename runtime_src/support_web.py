@@ -12,6 +12,7 @@ import binascii
 import copy
 from contextlib import contextmanager
 import html
+import ipaddress
 import json
 import mimetypes
 import os
@@ -52,6 +53,7 @@ from discovery_backups import (
     remove_discovery_backup,
 )
 from discovery_history import (
+    DEFAULT_HISTORY_PATH as DEFAULT_DISCOVERY_HISTORY,
     append_discovery_history,
     discovery_history_snapshot,
     sanitize_debug_text,
@@ -67,7 +69,8 @@ HUB_MOTD_DEFAULT = (
     "Thank you for your continued support. Please use Support My Switch and submit your "
     "contribution package to switch-vision@zemerdon.com. Even if nothing is wrong, a "
     "contribution package validates correctness. Also feel free to express any feedback, "
-    "ideas, or bugs."
+    "ideas, or bugs. If any faceplate geometry is not correct, can you please click Reset "
+    "Faceplate in the Calibration tool, and if that doesn't work, let me know please."
 )
 HUB_MOTD_MAX_CHARS = 500
 DEFAULT_CONTRIBUTIONS_DIR = Path("/share/switch_vision/contributions")
@@ -139,8 +142,8 @@ UNIFI2MQTT_DEFAULT_OPTIONS = {
     "remote_api_key": "",
     # Optional first-class multi-controller configuration.
     "controllers": [],
-    "poll_interval": "30",
-    "mqtt_host": "core-mosquitto",
+    "poll_interval": "10",
+    "mqtt_host": "",
     "mqtt_port": "1883",
     "mqtt_username": "",
     "mqtt_password": "",
@@ -156,6 +159,68 @@ UNIFI2MQTT_SECRET_FIELDS = {
     "remote_api_key",
     "mqtt_password",
 }
+
+DISCOVERY_RESET_OPTIONS = {
+    "input_path": "/share/switch_vision/snmpwalk.txt",
+    "snmpwalks_dir": "/share/switch_vision/snmpwalks",
+    "report_path": "/share/switch_vision/discovery-report.txt",
+    "run_snmp_walks": "true",
+    "enable_switch_list": "true",
+    "switches": [{
+        "switch_name": "",
+        "switch_host": "",
+        "sensor_prefix": "",
+        "snmp_community": "readonly",
+        "enabled": "enabled",
+        "walk_mode": "targeted",
+        "switch_model": "auto",
+        "card_header_title": "",
+    }],
+    "stack_member_prefixes": [],
+    "parse_all_walks": "false",
+    "generate_snmp2mqtt": "true",
+    "clean_output_before_walk": "false",
+    "targets_csv": "/share/switch_vision/discovery-targets.csv",
+    "last_run_summary_path": "/share/switch_vision/last-discovery-run.txt",
+    "generated_yaml_path": "/share/switch_vision/generated-snmp2mqtt.yaml",
+    "generated_card_path": "/share/switch_vision/generated-dashboard-card.yaml",
+    "snmp_timeout": "3",
+    "snmp_retries": "1",
+    "snmp_log_path": "/share/switch_vision/snmpwalk.log",
+    "minimum_valid_walk_lines": "100",
+    "backup_retention_enabled": "true",
+    "backup_retention_count": 5,
+    "generate_support_my_switch_bundle": "true",
+    "support_mask_management_ips": "true",
+    "support_mask_mac_addresses": "true",
+    "support_mask_hostnames": "true",
+    "support_mask_vlan_names": "true",
+    "support_mask_interface_descriptions": "true",
+    "support_contributor_type": "anonymous",
+    "support_contributor_value": "",
+}
+
+SNMP2MQTT_RESET_OPTIONS = {
+    "mqtt": {"host": "", "port": 1883, "username": "", "password": ""},
+    "targets_path": "/config/app_configs/switch_vision_snmp2mqtt/targets.yaml",
+    "use_switch_vision_generated_yaml": True,
+    "switch_vision_generated_yaml_path": "/share/switch_vision/generated-snmp2mqtt.yaml",
+    "imported_targets_path": "/config/app_configs/switch_vision_snmp2mqtt/imported/generated-snmp2mqtt.yaml",
+    "backup_existing_config": False,
+    "homeassistant": {"discovery": True, "prefix": "homeassistant"},
+}
+
+INSTALLER_RESET_SETTINGS = {
+    "release_api_url": "https://api.github.com/repos/zemerdon/switch-vision-releases/releases/latest",
+    "allow_custom_release_source": False,
+    "release_asset_pattern": "switch-vision-*.zip",
+    "preserve_custom_assets": True,
+    "create_backup": True,
+    "allow_prerelease": False,
+    "backup_retention": 5,
+}
+
+RESET_EVERYTHING_CONFIRMATION = "RESET EVERYTHING"
 
 UI_PREFERENCES_PATH = Path("/share/switch_vision/ui-preferences.json")
 UI_TEXT_SIZE_MIN_PX = 10
@@ -3232,6 +3297,210 @@ def _reset_snmp_discovery_data() -> dict[str, Any]:
     }
 
 
+def _unifi_mqtt_slug(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_") or "unifi_switch"
+
+
+def _unifi_retirement_topics_from_snapshot(
+    snapshot: Any,
+    options: dict[str, Any],
+) -> list[str]:
+    """Return only retained MQTT topics proven to belong to current UniFi snapshot rows."""
+    if not isinstance(snapshot, dict):
+        return []
+    devices = snapshot.get("devices")
+    if not isinstance(devices, list):
+        return []
+    topic_prefix = str(options.get("mqtt_topic_prefix") or "switch_vision/unifi").strip().strip("/")
+    discovery_prefix = str(options.get("mqtt_discovery_prefix") or "homeassistant").strip().strip("/")
+    if not topic_prefix or not discovery_prefix or any(mark in topic_prefix + discovery_prefix for mark in "+#"):
+        return []
+
+    topics: set[str] = {f"{topic_prefix}/status"}
+    for raw in devices:
+        if not isinstance(raw, dict):
+            continue
+        did = _unifi_mqtt_slug(raw.get("id") or raw.get("name"))
+        base = f"{topic_prefix}/{did}"
+        topics.add(f"{base}/available")
+
+        def sensor(key: str) -> None:
+            uid = f"switch_vision_unifi_{did}_{_unifi_mqtt_slug(key)}"
+            topics.add(f"{base}/{key}")
+            topics.add(f"{discovery_prefix}/sensor/{uid}/config")
+
+        def binary(key: str) -> None:
+            uid = f"switch_vision_unifi_{did}_{_unifi_mqtt_slug(key)}"
+            topics.add(f"{base}/{key}")
+            topics.add(f"{discovery_prefix}/binary_sensor/{uid}/config")
+
+        for key in ("model", "firmware"):
+            sensor(key)
+        binary("online")
+        for key in ("cpu", "memory", "uptime", "uplink_rx_rate", "uplink_tx_rate"):
+            sensor(key)
+
+        ports = raw.get("ports")
+        for port in ports if isinstance(ports, list) else []:
+            if not isinstance(port, dict) or port.get("idx") is None:
+                continue
+            try:
+                number = int(port["idx"])
+            except (TypeError, ValueError):
+                continue
+            prefix = f"port/{number}"
+            binary(f"{prefix}/status")
+            for key in ("speed", "max_speed", "connector"):
+                sensor(f"{prefix}/{key}")
+            binary(f"{prefix}/poe_enabled")
+            binary(f"{prefix}/poe_active")
+            sensor(f"{prefix}/poe_standard")
+            for key in ("traffic_available", "activity", "activity_at", "rx_bytes", "tx_bytes"):
+                topics.add(f"{base}/{prefix}/{key}")
+            activity_uid = f"switch_vision_unifi_{did}_{_unifi_mqtt_slug(prefix + '/activity')}"
+            topics.add(f"{discovery_prefix}/binary_sensor/{activity_uid}/config")
+    return sorted(topics)
+
+
+def _reset_everything() -> dict[str, Any]:
+    """Reset mutable Switch Vision configuration/runtime state, preserving user recovery/content."""
+    if _discovery_state_snapshot().get("running"):
+        raise RuntimeError("Stop Discovery before using Reset Everything.")
+
+    current_discovery = _self_addon_options()
+    create_pre_mutation_backup(current_discovery, reason="reset_everything")
+
+    unifi_status = _unifi2mqtt_settings_status()
+    unifi_snapshot = _read_json(DEFAULT_UNIFI_SNAPSHOT)
+    unifi_options = dict(UNIFI2MQTT_DEFAULT_OPTIONS)
+    unifi_slug = str(unifi_status.get("slug") or "").strip()
+    if unifi_status.get("installed") and unifi_slug:
+        try:
+            info = _supervisor_json(f"/addons/{quote(unifi_slug, safe='')}/info")
+            info_data = info.get("data") if isinstance(info.get("data"), dict) else info
+            stored = info_data.get("options") if isinstance(info_data, dict) else None
+            if isinstance(stored, dict):
+                unifi_options.update(stored)
+            if str(info_data.get("state") or "").lower() in {"started", "running"}:
+                _supervisor_json(
+                    f"/addons/{quote(unifi_slug, safe='')}/stop",
+                    method="POST",
+                    timeout=30.0,
+                )
+        except RuntimeError as exc:
+            raise RuntimeError(f"Could not stop UniFi2MQTT safely before reset: {exc}") from exc
+
+    snmp_result = _reset_snmp_discovery_data()
+
+    unifi_topics = _unifi_retirement_topics_from_snapshot(unifi_snapshot, unifi_options)
+    unifi_cleared = 0
+    unifi_warnings: list[str] = []
+    for topic in unifi_topics:
+        try:
+            _home_assistant_service(
+                "mqtt",
+                "publish",
+                {"topic": topic, "payload": "", "qos": 0, "retain": True},
+            )
+            unifi_cleared += 1
+        except RuntimeError as exc:
+            unifi_warnings.append(f"Could not clear {topic}: {exc}")
+            if len(unifi_warnings) >= 8:
+                break
+
+    _home_assistant_service(
+        "switch_vision",
+        "reset_calibrations",
+        {"scope": "all"},
+    )
+    _save_core_settings({"reset_to_defaults": True})
+
+    installer_reset = False
+    try:
+        installer = _installer_settings_status()
+        if installer.get("installed"):
+            _save_installer_settings(INSTALLER_RESET_SETTINGS)
+            installer_reset = True
+    except RuntimeError as exc:
+        raise RuntimeError(f"Could not reset Installer settings: {exc}") from exc
+
+    snmp_addon = _find_snmp2mqtt_addon()
+    snmp_settings_reset = False
+    if snmp_addon is not None:
+        snmp_slug = str(snmp_addon.get("slug") or "").strip()
+        if snmp_slug:
+            _supervisor_json(
+                f"/addons/{quote(snmp_slug, safe='')}/options",
+                method="POST",
+                timeout=20.0,
+                payload={"options": copy.deepcopy(SNMP2MQTT_RESET_OPTIONS)},
+            )
+            snmp_settings_reset = True
+
+    unifi_settings_reset = False
+    if unifi_status.get("installed") and unifi_slug:
+        _supervisor_json(
+            f"/addons/{quote(unifi_slug, safe='')}/options",
+            method="POST",
+            timeout=20.0,
+            payload={"options": copy.deepcopy(UNIFI2MQTT_DEFAULT_OPTIONS)},
+        )
+        unifi_settings_reset = True
+
+    _supervisor_json(
+        "/addons/self/options",
+        method="POST",
+        timeout=20.0,
+        payload={"options": copy.deepcopy(DISCOVERY_RESET_OPTIONS)},
+    )
+
+    removed_runtime: list[str] = []
+    for path in (
+        DEFAULT_UNIFI_SNAPSHOT,
+        DEFAULT_UNIFI_DIAGNOSTICS,
+        DEFAULT_DEVICE_CONTROL,
+        DEFAULT_CONFIGURATION_RESTORE_PENDING,
+        UI_PREFERENCES_PATH,
+        DEFAULT_DISCOVERY_HISTORY,
+        DEFAULT_INSTALLER_MAINTENANCE_RESPONSE,
+        DEFAULT_DISCOVERY_LOG,
+        DEFAULT_CURRENT_DISCOVERY_DEBUG,
+    ):
+        try:
+            if path.is_file() or path.is_symlink():
+                path.unlink(missing_ok=True)
+                removed_runtime.append(str(path))
+        except OSError as exc:
+            raise RuntimeError(f"Could not remove mutable Switch Vision runtime state {path}: {exc}") from exc
+
+    return {
+        "reset": True,
+        "core_settings_reset": True,
+        "core_calibrations_reset": True,
+        "discovery_settings_reset": True,
+        "snmp2mqtt_settings_reset": snmp_settings_reset,
+        "unifi2mqtt_settings_reset": unifi_settings_reset,
+        "installer_settings_reset": installer_reset,
+        "snmp": snmp_result,
+        "unifi_mqtt_topics_found": len(unifi_topics),
+        "unifi_mqtt_topics_cleared": unifi_cleared,
+        "warnings": list(snmp_result.get("warnings") or []) + unifi_warnings,
+        "removed_runtime": removed_runtime,
+        "preserved": [
+            "installed Switch Vision apps",
+            "Installer recovery backups",
+            "Discovery configuration backups",
+            "Support My Switch contribution archives",
+            "custom faceplate and logo files",
+            "protected contribution/source originals",
+        ],
+        "message": (
+            "Switch Vision mutable settings and runtime state were reset. "
+            "Installed apps, backup sets, contribution archives, and custom visual assets were preserved."
+        ),
+    }
+
+
 def _addon_payload_list(path: str) -> list[dict[str, Any]]:
     payload = _supervisor_json(path)
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
@@ -5423,6 +5692,51 @@ def _file_info(path: Path) -> dict[str, Any]:
     }
 
 
+def _normalized_device_mac(value: Any) -> str:
+    compact = re.sub(r"[^0-9a-f]", "", str(value or "").strip().casefold())
+    if len(compact) != 12 or not re.fullmatch(r"[0-9a-f]{12}", compact):
+        return ""
+    return ":".join(compact[index:index + 2] for index in range(0, 12, 2))
+
+
+def _normalized_device_ip(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        return ipaddress.ip_address(text).compressed
+    except ValueError:
+        return ""
+
+
+def _unique_detected_snmp_identity_match(
+    devices: list[dict[str, Any]], *, mac_address: Any = "", ip_address: Any = ""
+) -> tuple[dict[str, Any] | None, str]:
+    mac = _normalized_device_mac(mac_address)
+    if mac:
+        matches = [
+            item for item in devices
+            if item.get("data_source", "SNMP") != "UniFi API"
+            and _normalized_device_mac(item.get("_identity_mac")) == mac
+        ]
+        if len(matches) == 1:
+            return matches[0], "hardware_mac"
+        if len(matches) > 1:
+            return None, ""
+
+    ip = _normalized_device_ip(ip_address)
+    if ip:
+        matches = [
+            item for item in devices
+            if item.get("data_source", "SNMP") != "UniFi API"
+            and _normalized_device_ip(item.get("_identity_ip")) == ip
+        ]
+        if len(matches) == 1:
+            return matches[0], "management_ip"
+
+    return None, ""
+
+
 def _walk_management_target(path: Path) -> str:
     """Read the management target recorded in a Switch Vision walk header."""
     if not path.is_file():
@@ -5502,6 +5816,17 @@ def _diagnostics_snapshot(version: str) -> dict[str, Any]:
             "uplink_interfaces": len(uplinks),
             "walk_found": walk_found,
             "generated_at": data.get("generated_at"),
+            # Private server-side identity hints are removed before the
+            # diagnostics payload leaves the app. They exist only to collapse a
+            # proven SNMP + UniFi observation of the same physical chassis.
+            "_identity_mac": (
+                device.get("mac_address")
+                or device.get("base_mac")
+                or device.get("chassis_mac")
+                or device.get("mac")
+                or ""
+            ),
+            "_identity_ip": management_target,
         })
 
     # Merge normalized UniFi2MQTT devices into the same Devices/Diagnostics
@@ -5518,6 +5843,28 @@ def _diagnostics_snapshot(version: str) -> dict[str, Any]:
             physical = [p for p in ports if isinstance(p, dict)]
             rj45 = [p for p in physical if str(p.get("connector") or "").upper() == "RJ45"]
             uplinks = [p for p in physical if str(p.get("connector") or "").upper() in {"SFP", "SFPPLUS", "SFP+"}]
+            matched_snmp, match_basis = _unique_detected_snmp_identity_match(
+                devices,
+                mac_address=raw.get("mac_address"),
+                ip_address=raw.get("ip_address"),
+            )
+            if matched_snmp is not None:
+                # Keep the SNMP row as the stable configured/display identity
+                # and attach the independently proven UniFi source to it. Never
+                # merge by model/name alone: hardware MAC is authoritative and a
+                # unique management IP is the only fallback.
+                matched_snmp["unifi_device_id"] = str(raw.get("id") or "").strip()
+                matched_snmp["data_source"] = "SNMP + UniFi API"
+                matched_snmp["unifi_match_basis"] = match_basis
+                matched_snmp["online"] = str(raw.get("state") or "").upper() == "ONLINE"
+                matched_snmp["firmware"] = raw.get("firmware")
+                matched_snmp["api_capabilities"] = (
+                    raw.get("api_capabilities")
+                    if isinstance(raw.get("api_capabilities"), dict)
+                    else {}
+                )
+                continue
+
             devices.append({
                 "unifi_device_id": str(raw.get("id") or "").strip(),
                 "name": str(raw.get("name") or model),
@@ -5557,6 +5904,12 @@ def _diagnostics_snapshot(version: str) -> dict[str, Any]:
                 "UniFi2MQTT poll failed at "
                 f"{stage}: {error_type}."
             )
+
+    # Identity hints used for local reconciliation are never returned to the
+    # browser/diagnostics download.
+    for item in devices:
+        item.pop("_identity_mac", None)
+        item.pop("_identity_ip", None)
 
     registry_loaded = isinstance(registry_raw, (dict, list))
     if not registry_loaded:
@@ -6119,6 +6472,13 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 <div class="warning"><b>This is more destructive than Repair MQTT Entities.</b> Use Repair first for stale Home Assistant entities. Reset is for a deliberate clean SNMP rebuild.</div>
 <div class="actions"><button id="resetSnmpDiscoveryButton" class="danger" type="button">Reset SNMP Discovery Data</button></div>
 <p id="resetSnmpDiscoveryStatus" class="muted"></p>
+
+<hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
+<h3>Reset Everything</h3>
+<p>Return Switch Vision mutable settings, generated runtime state, calibration profiles, and Switch Vision-owned retained MQTT state to clean defaults across Core, Discovery, SNMP2MQTT, UniFi2MQTT, and Installer where installed.</p>
+<div class="warning"><b>Destructive Switch Vision reset:</b> installed apps remain installed, and recovery backups, Discovery configuration backups, Support My Switch contribution archives, custom faceplates/logos, and protected originals are preserved. SNMP2MQTT and UniFi2MQTT are left stopped so cleared state is not immediately republished. You must type <code>RESET EVERYTHING</code> exactly to continue.</div>
+<div class="actions"><button id="resetEverythingButton" class="danger" type="button">Reset Everything</button></div>
+<p id="resetEverythingStatus" class="muted"></p>
 </section>
 
 <section id="settingsCard" class="hidden hub-settings-page">
@@ -7218,6 +7578,25 @@ class SupportHandler(BaseHTTPRequestHandler):
                         raise ValueError("Invalid MQTT repair request size.")
                     data = json.loads(self.rfile.read(length).decode("utf-8"))
                     self._json(repair_mqtt_entities(data))
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/maintenance/reset-everything":
+            try:
+                with _exclusive_operation("Reset Everything"):
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 4096:
+                        raise ValueError("Invalid Reset Everything request size.")
+                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    if not isinstance(data, dict):
+                        raise ValueError("Reset Everything request must contain a JSON object.")
+                    if str(data.get("confirmation") or "") != RESET_EVERYTHING_CONFIRMATION:
+                        raise ValueError(
+                            f'Type "{RESET_EVERYTHING_CONFIRMATION}" exactly to confirm Reset Everything.'
+                        )
+                    self._json(_reset_everything())
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:

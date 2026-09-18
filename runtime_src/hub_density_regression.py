@@ -206,10 +206,11 @@ assert "data-profile-copy" not in PROFILES
 assert "Copy Profile" not in PROFILES
 assert "Copy to…" not in PROFILES
 assert ".sv-profile-section-unused .sv-profile-select{" in PROFILE_MANAGER
-assert "Delete All Inactive" in PROFILE_MANAGER
+assert "Delete All Unused" in PROFILE_MANAGER
+assert "Delete All Inactive" not in PROFILE_MANAGER
 assert "Select inactive calibration profile" in PROFILE_MANAGER
 
-# Inactive profile multi-selection remains checkbox-owned. Delete All Inactive
+# Unused profile multi-selection remains checkbox-owned. Delete All Unused
 # delegates to the base profile manager's stateful operation instead of trying
 # to synthesize checkbox DOM changes after the grouped manager has rerendered.
 delete_all_block = PROFILE_MANAGER.split(
@@ -220,7 +221,7 @@ assert "window.setTimeout" not in delete_all_block
 assert "querySelectorAll" not in delete_all_block
 assert "dispatchEvent" not in delete_all_block
 assert "SwitchVisionCalibrationProfiles" in delete_all_block
-assert "?.deleteAllInactive?.();" in delete_all_block
+assert "?.deleteAllUnused?.();" in delete_all_block
 
 select_card_block = PROFILE_MANAGER.split("function selectCard", 1)[1].split(
     "function wireCard", 1

@@ -991,7 +991,7 @@
     }
   }
 
-  async function deleteAllInactive() {
+  async function deleteAllUnused() {
     if (state.loading) return;
 
     state.selected = new Set(
@@ -1011,7 +1011,7 @@
     render();
 
     if (!state.selected.size) {
-      message("No inactive calibration profiles are available to delete.");
+      message("No unused calibration profiles are available to delete.");
       return;
     }
 
@@ -1520,6 +1520,6 @@
 
   window.SwitchVisionCalibrationProfiles = {
     load,
-    deleteAllInactive,
+    deleteAllUnused,
   };
 })();

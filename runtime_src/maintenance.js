@@ -469,6 +469,60 @@
     }
   }
 
+  async function resetEverything() {
+    const button = el("resetEverythingButton");
+    const status = el("resetEverythingStatus");
+    if (!button || !status) return;
+
+    const confirmation = window.prompt(
+      "Reset all mutable Switch Vision settings and generated runtime state?\n\n" +
+        "Installed apps, recovery/configuration backups, Support My Switch archives, " +
+        "custom faceplates/logos, and protected originals are preserved.\n\n" +
+        "Type RESET EVERYTHING exactly to continue."
+    );
+
+    if (confirmation === null) {
+      status.textContent = "Reset Everything cancelled.";
+      return;
+    }
+    if (confirmation !== "RESET EVERYTHING") {
+      status.textContent = 'Reset Everything was not run. Type "RESET EVERYTHING" exactly.';
+      return;
+    }
+
+    button.disabled = true;
+    status.textContent = "Resetting Switch Vision mutable state…";
+    try {
+      const response = await fetch(endpoint("api/maintenance/reset-everything"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Reset Everything failed");
+      }
+      const warnings =
+        Array.isArray(data.warnings) && data.warnings.length
+          ? " Warnings: " + data.warnings.join(" | ")
+          : "";
+      const preserved =
+        Array.isArray(data.preserved) && data.preserved.length
+          ? " Preserved: " + data.preserved.join(", ") + "."
+          : "";
+      status.textContent =
+        (data.message || "Switch Vision reset complete.") +
+        preserved + warnings;
+      lastPlan = null;
+      renderPlan(null);
+      await loadInstallerBackups({ quiet: true });
+    } catch (error) {
+      status.textContent = "Reset Everything failed: " + (error.message || error);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   const open = el("openMaintenanceButton");
   if (open) {
     open.addEventListener("click", () => {
@@ -485,6 +539,7 @@
   el("scanMqttEntitiesButton")?.addEventListener("click", scan);
   el("repairMqttEntitiesButton")?.addEventListener("click", repair);
   el("exportMqttResultsButton")?.addEventListener("click", exportResults);
+  el("resetEverythingButton")?.addEventListener("click", resetEverything);
 
   if (
     new URLSearchParams(window.location.search).get("view") === "maintenance"
@@ -501,5 +556,6 @@
     scan,
     repair,
     exportResults,
+    resetEverything,
   };
 })();

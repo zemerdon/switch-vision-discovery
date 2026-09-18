@@ -24,7 +24,9 @@ Switch Vision components are independently versioned. The main Switch Vision Cor
 
 ## Hub updates
 
-Discovery v2.4.35 embeds the loaded Hub frontend version and compares it with the running app version through the existing status poll. If a Home Assistant ingress tab remains open across a Discovery app update, the Hub performs one guarded self-refresh when those versions differ so the current Devices layout and JavaScript replace the stale in-memory page. The guard prevents repeated reload loops, and normal polling frequency is unchanged.
+Discovery v2.4.36 adds a guarded **Reset Everything** maintenance workflow, clearer Calibration Profile cleanup with **Delete Selected** and **Delete All Unused**, and conservative SNMP + UniFi device reconciliation that merges only proven identities. The Hub MOTD also asks users to try **Reset Faceplate** when geometry looks wrong and to report any remaining problem.
+
+The v2.4.35 stale-open Hub protection remains in place: the loaded frontend version is compared with the running app version through the existing status poll, with one guarded self-refresh after an update when they differ.
 
 ## User-first Discovery behavior
 

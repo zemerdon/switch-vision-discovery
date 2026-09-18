@@ -25,6 +25,8 @@ done
 
 rm -f switch_vision_discovery/runtime.tar.gz
 tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+  --exclude='__pycache__' --exclude='*/__pycache__' \
+  --exclude='*.pyc' --exclude='*.pyo' --exclude='.DS_Store' \
   -czf switch_vision_discovery/runtime.tar.gz -C runtime_src .
 
 echo "Materialized Switch Vision Discovery runtime v$VERSION"

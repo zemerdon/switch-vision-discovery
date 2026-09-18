@@ -1,3 +1,12 @@
+## 2.4.36 — Geometry recovery, safe reset, and device reconciliation
+
+- Add **Reset Everything** to Maintenance with exact typed confirmation. It resets mutable Switch Vision settings, generated runtime state, calibration profiles, and Switch Vision-owned retained MQTT state across installed components while preserving installed apps, recovery/configuration backups, Support My Switch archives, custom faceplates/logos, and protected originals.
+- Rename the calibration cleanup action to **Delete All Unused** and keep **Delete Selected** stable for one or many selected unused profiles; active and factory profiles remain protected.
+- Reconcile one physical chassis observed by both SNMP and UniFi into one Devices/Diagnostics row only when a normalized hardware MAC or a unique management IP proves the identity. Ambiguous identity remains separate.
+- Align Discovery's UniFi2MQTT reset defaults with the actual current UniFi2MQTT app schema.
+- Extend the default Hub Message of the Day to ask users with incorrect faceplate geometry to try **Reset Faceplate** in Calibration and report the problem if it remains.
+- Add permanent reset, MOTD, profile-management, and duplicate-device regression coverage.
+
 ## 2.4.35 — Keep an open Hub synchronized after app updates
 
 - Embed the loaded Hub document version and expose the running Discovery app version through the existing status poll so frontend/runtime identity can be compared without adding another polling request.

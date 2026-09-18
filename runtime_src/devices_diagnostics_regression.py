@@ -165,4 +165,60 @@ with tempfile.TemporaryDirectory(prefix="sv-device-diagnostics-") as tmp_name:
     assert "2960x-48p" in names, names
     assert "2960x-48-rj45" not in names, names
 
+    # One physical chassis observed by both SNMP and UniFi must be one Hub row.
+    # Hardware MAC is stronger than management address, so an internal UniFi IP
+    # can safely reconcile with an SNMP target reached through another address.
+    live_cap["device"]["mac_address"] = "02:11:22:33:44:55"
+    (caps / "2960x-48p-capabilities.json").write_text(json.dumps(live_cap), encoding="utf-8")
+    unifi_dir = share / "unifi"
+    unifi_dir.mkdir(parents=True)
+    (unifi_dir / "devices.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "devices": [
+                    {
+                        "id": "same-physical-switch",
+                        "name": "UniFi observation",
+                        "model": "USW Pro 24",
+                        "ip_address": "198.51.100.55",
+                        "mac_address": "02-11-22-33-44-55",
+                        "state": "ONLINE",
+                        "firmware": "test",
+                        "ports": [],
+                        "api_capabilities": {"port_detail": True},
+                    },
+                    {
+                        "id": "different-switch",
+                        "name": "Different switch",
+                        "model": "US 8 60W",
+                        "ip_address": "198.51.100.56",
+                        "mac_address": "02:aa:bb:cc:dd:ee",
+                        "state": "ONLINE",
+                        "ports": [],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    snapshot = web._diagnostics_snapshot("test")
+    rows = snapshot["devices"]
+    merged = [item for item in rows if item.get("unifi_device_id") == "same-physical-switch"]
+    assert len(merged) == 1, rows
+    assert merged[0]["name"] == "2960x-48p"
+    assert merged[0]["data_source"] == "SNMP + UniFi API"
+    assert merged[0]["unifi_match_basis"] == "hardware_mac"
+    assert "_identity_mac" not in merged[0] and "_identity_ip" not in merged[0]
+    assert len([item for item in rows if item.get("unifi_device_id") == "different-switch"]) == 1
+
+    # Ambiguous hardware identity must fail closed instead of collapsing rows.
+    duplicate_cap = dict(live_cap)
+    duplicate_cap["source_walk"] = str(current_walk)
+    (caps / "second-current-capabilities.json").write_text(json.dumps(duplicate_cap), encoding="utf-8")
+    snapshot = web._diagnostics_snapshot("test")
+    same_id_rows = [item for item in snapshot["devices"] if item.get("unifi_device_id") == "same-physical-switch"]
+    assert len(same_id_rows) == 1
+    assert same_id_rows[0]["data_source"] == "UniFi API"
+
 print("Discovery Devices inline diagnostics contract: PASS")

@@ -419,7 +419,7 @@
         class="danger sv-profile-manager-context"
         type="button"
         disabled
-      >Delete All Inactive</button>
+      >Delete All Unused</button>
     `;
 
     toolbar.appendChild(actions);
@@ -546,7 +546,7 @@
         async () => {
           managerState.activeIndex = null;
           await window.SwitchVisionCalibrationProfiles
-            ?.deleteAllInactive?.();
+            ?.deleteAllUnused?.();
           scheduleEnhance();
         }
       );
@@ -1015,10 +1015,7 @@
         !hiddenDelete ||
         hiddenDelete.disabled;
 
-      deleteButton.textContent =
-        selected.length === 1
-          ? "Delete Profile"
-          : "Delete Selected";
+      deleteButton.textContent = "Delete Selected";
     }
 
     if (deleteAllUnused) {
@@ -1027,8 +1024,8 @@
       ).length;
       deleteAllUnused.disabled = eligible === 0 || !hiddenDelete;
       deleteAllUnused.textContent = eligible
-        ? `Delete All Inactive (${eligible})`
-        : "Delete All Inactive";
+        ? `Delete All Unused (${eligible})`
+        : "Delete All Unused";
     }
 
     syncVisualSelection();

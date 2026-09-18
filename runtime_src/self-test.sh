@@ -193,7 +193,8 @@ grep -Fq 'svProfileManagerImport' "$BASE_DIR/calibration_profiles_manager.js"
 ! grep -Fq 'svProfileManagerCopyTarget' "$BASE_DIR/calibration_profiles_manager.js"
 grep -Fq 'svProfileManagerDelete' "$BASE_DIR/calibration_profiles_manager.js"
 grep -Fq 'svProfileManagerDeleteAllUnused' "$BASE_DIR/calibration_profiles_manager.js"
-grep -Fq 'Delete All Inactive' "$BASE_DIR/calibration_profiles_manager.js"
+grep -Fq 'Delete All Unused' "$BASE_DIR/calibration_profiles_manager.js"
+! grep -Fq 'Delete All Inactive' "$BASE_DIR/calibration_profiles_manager.js"
 grep -Fq '.sv-profile-section-unused .sv-profile-select{' "$BASE_DIR/calibration_profiles_manager.js"
 ! grep -Fq 'Copy Profile' "$BASE_DIR/calibration_profiles_manager.js"
 ! grep -Fq 'data-profile-copy' "$BASE_DIR/calibration_profiles.js"
@@ -2006,8 +2007,8 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.35"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.35"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.36"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.36"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"

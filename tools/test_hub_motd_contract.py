@@ -34,7 +34,8 @@ def test_motd_default_and_bounded_normalisation() -> None:
         "Thank you for your continued support. Please use Support My Switch and submit your "
         "contribution package to switch-vision@zemerdon.com. Even if nothing is wrong, a "
         "contribution package validates correctness. Also feel free to express any feedback, "
-        "ideas, or bugs."
+        "ideas, or bugs. If any faceplate geometry is not correct, can you please click Reset "
+        "Faceplate in the Calibration tool, and if that doesn't work, let me know please."
     )
     assert hub.HUB_MOTD_DEFAULT == expected_default
     with motd_env(None):

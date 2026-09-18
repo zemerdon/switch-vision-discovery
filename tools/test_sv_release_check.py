@@ -48,6 +48,9 @@ def main() -> int:
     assert "Path(sys.executable).resolve().parent" not in source
     assert "tracked_archive = archive_path.read_bytes()" in source
     assert "Discovery tracked runtime archive restore: PASS" in source
+    materializer = (ROOT / "tools" / "materialize_runtime.sh").read_text(encoding="utf-8")
+    for marker in ("--exclude='__pycache__'", "--exclude='*/__pycache__'", "--exclude='*.pyc'", "--exclude='*.pyo'"):
+        assert marker in materializer, marker
 
     pins = [
         line.strip()
