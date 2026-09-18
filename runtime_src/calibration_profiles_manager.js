@@ -527,16 +527,10 @@
     $("svProfileManagerDelete")
       .addEventListener(
         "click",
-        () => {
-          const hidden =
-            $("svProfilesDeleteSelected");
-
-          if (
-            hidden &&
-            !hidden.disabled
-          ) {
-            hidden.click();
-          }
+        async () => {
+          await window.SwitchVisionCalibrationProfiles
+            ?.deleteSelected?.();
+          scheduleEnhance();
         }
       );
 

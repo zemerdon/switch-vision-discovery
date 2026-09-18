@@ -2,8 +2,107 @@
   let lastPlan = null;
   let lastInstallerBackupStatus = null;
   let installerPollTimer = null;
+  let activeMaintenanceTab = "backups";
+  const loadedMaintenanceTabs = new Set();
 
   const el = (id) => document.getElementById(id);
+
+  function installMaintenanceStyles() {
+    if (el("switchVisionMaintenanceStyles")) return;
+    const style = document.createElement("style");
+    style.id = "switchVisionMaintenanceStyles";
+    style.textContent = `
+      .maintenance-tabs{
+        display:flex;
+        gap:8px;
+        align-items:center;
+        overflow-x:auto;
+        padding:2px 2px 8px;
+        margin:0 0 12px;
+        border-bottom:1px solid var(--line-soft)
+      }
+      .maintenance-tab{
+        flex:0 0 auto;
+        font-weight:750;
+        color:var(--muted);
+        background:var(--surface-button)!important;
+        border-color:var(--line-soft)!important
+      }
+      .maintenance-tab.is-active{
+        color:var(--heading-strong)!important;
+        border-color:var(--accent-strong)!important;
+        background:var(--accent-soft)!important;
+        box-shadow:inset 0 -2px 0 var(--accent)
+      }
+      .maintenance-tab:focus-visible{
+        outline:none;
+        box-shadow:0 0 0 3px var(--accent-soft),inset 0 -2px 0 var(--accent)
+      }
+      .maintenance-pane[hidden]{display:none!important}
+      .maintenance-pane{
+        min-width:0
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function setConfigurationExportLinks() {
+    const complete = el("exportConfigurationButton");
+    const switches = el("exportSwitchesButton");
+    if (complete) complete.href = endpoint("download/switch-vision-backup.json");
+    if (switches) switches.href = endpoint("download/switch-vision-switch-configuration.json");
+  }
+
+  function maintenanceTabKeydown(event) {
+    const ids = ["backups", "snmp", "configuration", "calibrations", "reset"];
+    const current = Math.max(0, ids.indexOf(activeMaintenanceTab));
+    let next = null;
+    if (event.key === "ArrowRight") next = ids[(current + 1) % ids.length];
+    else if (event.key === "ArrowLeft") next = ids[(current - 1 + ids.length) % ids.length];
+    else if (event.key === "Home") next = ids[0];
+    else if (event.key === "End") next = ids[ids.length - 1];
+    if (!next) return;
+    event.preventDefault();
+    selectMaintenanceTab(next, true);
+  }
+
+  function selectMaintenanceTab(which = "backups", focus = false) {
+    const ids = ["backups", "snmp", "configuration", "calibrations", "reset"];
+    const selected = ids.includes(which) ? which : "backups";
+    activeMaintenanceTab = selected;
+
+    for (const id of ids) {
+      const active = id === selected;
+      const tab = el(`maintenanceTabButton-${id}`);
+      const panel = el(`maintenancePanel-${id}`);
+      if (tab) {
+        tab.classList.toggle("is-active", active);
+        tab.setAttribute("aria-selected", String(active));
+        tab.tabIndex = active ? 0 : -1;
+      }
+      if (panel) panel.hidden = !active;
+    }
+
+    if (focus) el(`maintenanceTabButton-${selected}`)?.focus();
+
+    if (selected === "backups" && !loadedMaintenanceTabs.has("backups")) {
+      loadedMaintenanceTabs.add("backups");
+      loadInstallerBackups();
+      window.SwitchVisionHubSettings?.loadMaintenanceBackupSettings?.();
+    } else if (selected === "snmp" && !loadedMaintenanceTabs.has("snmp")) {
+      loadedMaintenanceTabs.add("snmp");
+      scan();
+    } else if (selected === "configuration") {
+      setConfigurationExportLinks();
+    } else if (selected === "calibrations") {
+      window.SwitchVisionCalibrationProfiles?.load?.();
+    }
+  }
+
+  function openMaintenance(which = "backups") {
+    setView("maintenance");
+    selectMaintenanceTab(which);
+  }
 
   function installerOperationMessage(operation) {
     if (!operation || typeof operation !== "object") return "";
@@ -516,6 +615,7 @@
       lastPlan = null;
       renderPlan(null);
       await loadInstallerBackups({ quiet: true });
+      await window.SwitchVisionHubSettings?.loadMaintenanceBackupSettings?.();
     } catch (error) {
       status.textContent = "Reset Everything failed: " + (error.message || error);
     } finally {
@@ -523,13 +623,18 @@
     }
   }
 
+  installMaintenanceStyles();
+
+  document.querySelectorAll("[data-maintenance-tab]").forEach((tab) => {
+    tab.addEventListener("click", () =>
+      selectMaintenanceTab(tab.dataset.maintenanceTab || "backups")
+    );
+    tab.addEventListener("keydown", maintenanceTabKeydown);
+  });
+
   const open = el("openMaintenanceButton");
   if (open) {
-    open.addEventListener("click", () => {
-      setView("maintenance");
-      loadInstallerBackups();
-      scan();
-    });
+    open.addEventListener("click", () => openMaintenance("backups"));
   }
   el("refreshInstallerBackupsButton")?.addEventListener("click", () => loadInstallerBackups());
   el("installerBackupAutomaticRetention")?.addEventListener("click", toggleInstallerBackupRetention);
@@ -541,15 +646,24 @@
   el("exportMqttResultsButton")?.addEventListener("click", exportResults);
   el("resetEverythingButton")?.addEventListener("click", resetEverything);
 
-  if (
-    new URLSearchParams(window.location.search).get("view") === "maintenance"
-  ) {
-    setView("maintenance");
-    loadInstallerBackups();
-    scan();
+  const query = new URLSearchParams(window.location.search);
+  const requestedView = query.get("view");
+  if (requestedView === "maintenance") {
+    openMaintenance(query.get("tab") || "backups");
+  } else if (requestedView === "configuration") {
+    openMaintenance("configuration");
+  } else if (requestedView === "profiles") {
+    openMaintenance("calibrations");
+    document.addEventListener(
+      "DOMContentLoaded",
+      () => window.SwitchVisionCalibrationProfiles?.load?.(),
+      { once: true }
+    );
   }
 
   window.SwitchVisionMaintenance = {
+    open: openMaintenance,
+    selectTab: selectMaintenanceTab,
     loadInstallerBackups,
     runInstallerBackupAction,
     toggleInstallerBackupRetention,

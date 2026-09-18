@@ -56,7 +56,10 @@ try:
                 "enabled": "enabled", "walk_mode": "targeted", "switch_model": "auto",
                 "original_switch_name": "SW1",
             }],
-            "stack_member_prefixes": [],
+            "stack_member_prefixes": [{
+                "switch_name": "SW1", "member": "1", "display_name": "Core member 1",
+                "sensor_prefix": "sw1", "card_header_title": "Core",
+            }],
             "support_contributor_type": "forum",
             "support_contributor_value": "",
             "support_contributor_value_configured": True,
@@ -189,6 +192,10 @@ try:
         assert pending["discovery_switches"][0]["switch_name"] == "SW1"
         assert pending["discovery_switches"][0]["snmp_community"] == ""
         assert pending["discovery_switches"][0]["restore_pending"] is True
+        assert len(pending["discovery_stack_member_prefixes"]) == 1, pending
+        assert pending["discovery_stack_member_prefixes"][0]["switch_name"] == "SW1"
+        assert pending["discovery_stack_member_prefixes"][0]["member"] == "1"
+        assert restored["pending_discovery_stack_members"] == 1
         assert len(pending["unifi_controllers"]) == 1, pending
         assert "api_key" not in pending["unifi_controllers"][0]
         assert pending["unifi_controllers"][0]["restore_pending"] is True
@@ -196,9 +203,31 @@ try:
         assert snmp_payload["settings"]["mqtt"]["password"] == ""
         discovery_payload = next(value for name, value in calls if name == "discovery")
         assert "switches" not in discovery_payload["settings"]
+        assert "stack_member_prefixes" not in discovery_payload["settings"]
         assert "support_contributor_value" not in discovery_payload["settings"]
         restored_control = device_control.load(web.DEFAULT_DEVICE_CONTROL)
         assert restored_control["added_at"] == backup["device_control"]["added_at"]
+
+        # Switches-only transfer is deliberately narrow and non-secret.
+        switch_export = web._switches_export("2.4.38")
+        assert switch_export["format"] == web.SWITCHES_EXPORT_FORMAT
+        assert switch_export["secrets_included"] is False
+        assert len(switch_export["switches"]) == 1
+        assert len(switch_export["stack_member_prefixes"]) == 1
+        assert switch_export["switches"][0]["switch_name"] == "SW1"
+        assert switch_export["stack_member_prefixes"][0]["switch_name"] == "SW1"
+        switch_encoded = json.dumps(switch_export, sort_keys=True)
+        assert "snmp_community" not in switch_encoded
+        assert "private-community" not in switch_encoded
+        assert "run_snmp_walks" not in switch_encoded
+        web.DEFAULT_CONFIGURATION_RESTORE_PENDING.unlink(missing_ok=True)
+        imported_switches = web._import_switches_only(switch_export)
+        assert imported_switches["switch_count"] == 1
+        assert imported_switches["stack_member_count"] == 1
+        pending = web._load_configuration_restore_pending()
+        assert pending["discovery_switches"][0]["restore_pending"] is True
+        assert pending["discovery_switches"][0]["snmp_community"] == ""
+        assert pending["discovery_stack_member_prefixes"][0]["member"] == "1"
 
         # An old Core aborts before any restore side effect.
         side_effects: list[str] = []
@@ -224,12 +253,27 @@ for marker in (
     'Export Complete Backup',
     'Credentials are deliberately excluded.',
     'pending_discovery_switches',
+    'pending_discovery_stack_members',
     'pending_unifi_controllers',
     'switch_vision/get_backup_asset',
     'switch_vision/put_backup_asset',
     'listing.get(f"custom_{kind}")',
     'int(listing.get("backup_api") or 0) < 2',
+    'SWITCHES_EXPORT_FORMAT = "switch-vision-switch-configuration-v1"',
+    '/download/switch-vision-switch-configuration.json',
+    '/api/switches/import',
+    'async function importSwitchesConfiguration()',
+    "$('importSwitchesButton').addEventListener('click',importSwitchesConfiguration)",
+    'data-maintenance-tab="configuration"',
+    'data-maintenance-tab="calibrations"',
+    'Configuration Import / Export',
+    'id="calibrationProfilesRoot"',
+    'id="hubDeviceConfiguration"',
+    'Add / Remove Devices',
 ):
     assert marker in source, marker
+
+assert 'id="openConfigurationButton"' not in source
+assert 'id="openCalibrationProfilesButton"' not in source
 
 print("Switch Vision complete non-secret configuration backup regression: PASS")

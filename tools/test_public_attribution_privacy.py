@@ -67,7 +67,10 @@ def check_public_credits() -> None:
     path = ROOT / "runtime_src/support_web.py"
     text = path.read_text(encoding="utf-8", errors="ignore")
     start = text.index('<section id="creditsCard"')
-    end = text.index('<section id="calibrationProfilesCard"', start)
+    next_section = re.search(r'\n<section id="', text[start + 1 :])
+    if next_section is None:
+        raise SystemExit("Public Credits section has no following top-level section")
+    end = start + 1 + next_section.start()
     block = text[start:end]
     names = re.findall(r'<span class="credit-name">([^<]+)</span>', block)
     expected_names = [name for name, _scope in PUBLIC_CREDITS] * 2

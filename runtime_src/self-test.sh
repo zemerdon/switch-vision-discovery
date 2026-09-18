@@ -373,7 +373,10 @@ PY_INGRESS_GATE
 # v2.2.0 Maintenance Hub MQTT ownership/reconciliation regression
 python3 -m py_compile "$BASE_DIR/discovery_backups.py" "$BASE_DIR/discovery_backups_regression.py" "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py" "$BASE_DIR/walk_correlation.py"
 grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
-grep -Fq '<span>Manage Backups</span>' "$BASE_DIR/support_web.py"
+grep -Fq '<span>Backups</span>' "$BASE_DIR/support_web.py"
+grep -Fq 'data-maintenance-tab="snmp">SNMP</button>' "$BASE_DIR/support_web.py"
+grep -Fq 'data-maintenance-tab="configuration">Configuration Import / Export</button>' "$BASE_DIR/support_web.py"
+grep -Fq 'data-maintenance-tab="calibrations">Calibration Profiles</button>' "$BASE_DIR/support_web.py"
 grep -Fq 'id="maintenanceCard"' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/scan' "$BASE_DIR/support_web.py"
 grep -Fq '/api/maintenance/mqtt/repair' "$BASE_DIR/support_web.py"
@@ -1083,16 +1086,19 @@ PY_MAU
 [ "$mau_live_oid_count" -eq 1 ]
 echo "Switch Vision Discovery v2.1.47 DOT3-MAU targeted-walk regression: PASS"
 
-# Calibration Profile Manager relocation checks
-grep -Fq 'id="openCalibrationProfilesButton"'     "$BASE_DIR/support_web.py"
+# Calibration Profile Manager relocation checks: the manager is embedded in
+# Maintenance -> Calibration Profiles and the old standalone navigation/card is gone.
+grep -Fq 'id="maintenancePanel-calibrations"' "$BASE_DIR/support_web.py"
+grep -Fq 'id="calibrationProfilesRoot"' "$BASE_DIR/support_web.py"
+! grep -Fq 'id="openCalibrationProfilesButton"' "$BASE_DIR/support_web.py"
+! grep -Fq 'id="calibrationProfilesCard"' "$BASE_DIR/support_web.py"
 
-grep -Fq 'id="calibrationProfilesCard"'     "$BASE_DIR/support_web.py"
+grep -Fq 'switch_vision/list_calibrations' "$BASE_DIR/support_web.py"
 
-grep -Fq 'switch_vision/list_calibrations'     "$BASE_DIR/support_web.py"
+grep -Fq 'switch_vision/get_calibration' "$BASE_DIR/support_web.py"
+grep -Fq 'switch_vision/delete_calibration' "$BASE_DIR/support_web.py"
 
-grep -Fq 'switch_vision/get_calibration'     "$BASE_DIR/support_web.py"
-
-grep -Fq 'SwitchVisionCalibrationProfiles'     "$BASE_DIR/calibration_profiles.js"
+grep -Fq 'SwitchVisionCalibrationProfiles' "$BASE_DIR/calibration_profiles.js"
 
 if [ -d "$BASE_DIR/mib_database" ]; then
   RUNTIME_DATA_DIR="$BASE_DIR"
@@ -2007,8 +2013,8 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.37"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.37"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.38"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.38"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"

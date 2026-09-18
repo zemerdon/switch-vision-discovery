@@ -1520,6 +1520,7 @@
 
   window.SwitchVisionCalibrationProfiles = {
     load,
+    deleteSelected,
     deleteAllUnused,
   };
 })();

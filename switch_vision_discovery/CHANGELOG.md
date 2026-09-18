@@ -1,3 +1,13 @@
+## 2.4.38 — Maintenance consolidation and portable device restore
+
+- Fix complete configuration restore on fresh installs with switch stacks by deferring stack-member rows together with their parent switch rows until SNMP communities are re-entered; validate parent/member relationships before any restore side effect.
+- Add a narrow **Switches Only** export/import format containing saved switch definitions and stack-member display mappings only. SNMP communities and unrelated Discovery/component settings are deliberately excluded.
+- Move switch and stack-member configuration out of **Switch Vision Settings → Discovery Settings** and into **Devices → Configure Devices**, while keeping Device Overview as the operational/status surface.
+- Consolidate **Import / Export Configuration** and **Calibration Profiles** into a tabbed **Maintenance** card alongside **Backups**, **SNMP**, and destructive **Reset** actions. Discovery backup-retention controls now live with the other backup controls.
+- Repair **Delete Selected** and **Delete All Unused** calibration-profile cleanup by calling the stateful profile manager directly and using Core's authenticated admin WebSocket deletion contract.
+- Default fresh Local UniFi TLS certificate verification to off while preserving explicit saved choices; Remote Site Manager stays verified HTTPS and MQTT certificate verification stays enabled by default.
+- Add permanent regressions for fresh stack restore, narrow switch transfer, Maintenance/Devices navigation, calibration deletion routing, and secret exclusion.
+
 ## 2.4.37 — Restore Pro Max visual contract and CI isolation
 
 - Restore USW Pro Max 24 to the original shipped UniFi 24 RJ45 + 2 SFP faceplate and unifi_24p_rj45_2sfp calibration profile, matching Core 2.7.14 and the pre-2.6.25 owner-supplied visual contract.

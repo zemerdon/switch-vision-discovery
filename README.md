@@ -24,7 +24,7 @@ Switch Vision components are independently versioned. The main Switch Vision Cor
 
 ## Hub updates
 
-Discovery v2.4.37 restores the USW Pro Max 24 to the standard shipped UniFi 24 RJ45 + 2 SFP faceplate/calibration contract used by Core 2.7.14, and keeps the hosted save/reset regression isolated from Home Assistant's /share filesystem. The v2.4.36 guarded **Reset Everything**, Calibration Profile cleanup, conservative SNMP + UniFi device reconciliation, and Reset Faceplate MOTD guidance remain unchanged.
+Discovery v2.4.38 fixes complete-configuration restore on fresh installs with switch stacks by deferring stack-member rows together with their secret-dependent parent switch rows until SNMP communities are re-entered. It adds a secret-free **Switches Only** transfer, moves saved switch/stack editing to **Devices → Configure Devices**, and consolidates backups, SNMP maintenance, complete/switch configuration transfer, Calibration Profiles, and reset actions into a tabbed **Maintenance** surface. Calibration bulk deletion now uses Core's authenticated deletion bridge, and fresh Local UniFi controller profiles default certificate verification off while Remote Site Manager and MQTT verification remain protected. The v2.4.37 Pro Max visual contract and CI isolation remain unchanged.
 
 The v2.4.35 stale-open Hub protection remains in place: the loaded frontend version is compared with the running app version through the existing status poll, with one guarded self-refresh after an update when they differ.
 

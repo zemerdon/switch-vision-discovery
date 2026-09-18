@@ -49,49 +49,88 @@ for old in (
     assert old not in SOURCE, old
 
 
-# Discovery Settings switch rows are compact custom disclosures. Device ordering
-# is owned exclusively by the Devices view, so Settings must not render or mutate
-# switch order. The first saved switch remains expanded by default and later rows
-# start collapsed.
+# Discovery Settings now owns Discovery workflow/path/privacy settings only.
+# Saved switch rows and stack-member display mapping live under Devices ->
+# Configure Devices. The first saved switch remains expanded by default there.
 for marker in (
+    "function renderDeviceConfiguration(){",
     "expandedDiscoverySwitches=new Set();let discoverySwitchExpansionInitialized=false",
-    "if(!discoverySwitchExpansionInitialized){if(switches.length){expandedDiscoverySwitches.add",
-    "const sw=sec('Switches','SNMP communities are masked by default. Use the eye to reveal a saved community; blank preserves it. Device ordering is managed from Devices.');",
+    "if(!discoverySwitchExpansionInitialized){if(switches.length)expandedDiscoverySwitches.add",
+    "sw=sec('Switches','SNMP communities are masked by default.",
+    "const st=sec('Stack member display mapping')",
     "const c=document.createElement('div');c.className='device-card hub-setting-row hub-switch-setting-row'",
     "const hd=document.createElement('div');hd.className='hub-switch-setting-summary'",
     "const toggle=document.createElement('button');toggle.type='button';toggle.className='hub-switch-setting-toggle'",
     "toggle.setAttribute('aria-expanded',String(expandedDiscoverySwitches.has(key)))",
-    "hd.append(toggle,rm)",
     "g.hidden=!expandedDiscoverySwitches.has(key)",
     "toggle.addEventListener('click',()=>{const open=g.hidden;",
     ".hub-switch-setting-summary{display:flex",
     ".hub-switch-setting-toggle{display:flex!important",
     ".hub-switch-setting-label>strong{color:var(--accent-strong)",
-    "hub-discovery-workflow-grid",
-    ".hub-discovery-workflow-grid .hub-field-label{min-height:2.4em",
+    'id="devicesTab-overview"',
+    'id="devicesTab-configure"',
+    'data-devices-tab="configure">Configure Devices</button>',
+    'id="hubDeviceConfiguration"',
+    "function selectDevicesTab(which='overview',focus=false)",
 ):
     assert marker in SOURCE, marker
 
 settings_start = SOURCE.index("function renderDiscovery(){")
-settings_end = SOURCE.index("function cleanDiscovery(){", settings_start)
+settings_end = SOURCE.index("function renderDeviceConfiguration(){", settings_start)
 settings_block = SOURCE[settings_start:settings_end]
+for moved in (
+    "const sw=sec('Switches'",
+    "const st=sec('Stack member display mapping')",
+    "SNMP community",
+    "Add switch",
+    "Add stack member",
+):
+    assert moved not in settings_block, moved
+
+device_start = SOURCE.index("function renderDeviceConfiguration(){")
+device_end = SOURCE.index("function renderDiscoveryBackupSettings(){", device_start)
+device_block = SOURCE[device_start:device_end]
 for obsolete in (
     "hub-switch-setting-order",
     "const move=delta=>",
     "up.addEventListener('click',()=>move(-1))",
     "down.addEventListener('click',()=>move(1))",
     "Use the arrows to reorder switches",
+    "document.createElement('summary')",
+    "document.createElement('details')",
 ):
-    assert obsolete not in settings_block, obsolete
+    assert obsolete not in device_block, obsolete
 
-# Do not reintroduce real buttons inside <summary>; that was unreliable under
-# Home Assistant ingress and caused the Settings reorder arrows to no-op.
-settings_start = SOURCE.index("function renderDiscovery(){")
-settings_end = SOURCE.index("function cleanDiscovery(){", settings_start)
-settings_block = SOURCE[settings_start:settings_end]
-assert "document.createElement('summary')" not in settings_block
-assert "document.createElement('details')" not in settings_block
-assert "c.open=true" not in SOURCE
+# Backup retention moved out of Discovery Settings and into Maintenance -> Backups.
+assert "const bk=sec('Discovery configuration backups')" not in settings_block
+for marker in (
+    'id="maintenanceDiscoveryBackupSettings"',
+    'id="maintenanceBackupSettingsSave"',
+    'id="maintenanceBackupSettingsReload"',
+    "function renderDiscoveryBackupSettings(){",
+):
+    assert marker in SOURCE, marker
+
+# Maintenance is the single home for backups, SNMP cleanup, configuration
+# transfer, calibration profiles, and destructive reset actions.
+for marker in (
+    'class="maintenance-tabs" role="tablist"',
+    'data-maintenance-tab="backups">Backups</button>',
+    'data-maintenance-tab="snmp">SNMP</button>',
+    'data-maintenance-tab="configuration">Configuration Import / Export</button>',
+    'data-maintenance-tab="calibrations">Calibration Profiles</button>',
+    'data-maintenance-tab="reset">Reset</button>',
+    'id="maintenancePanel-configuration"',
+    'id="maintenancePanel-calibrations"',
+    'id="calibrationProfilesRoot"',
+    'id="exportConfigurationButton"',
+    'id="exportSwitchesButton"',
+):
+    assert marker in SOURCE, marker
+assert 'id="configurationCard"' not in SOURCE
+assert 'id="calibrationProfilesCard"' not in SOURCE
+assert 'id="openConfigurationButton"' not in SOURCE
+assert 'id="openCalibrationProfilesButton"' not in SOURCE
 
 # Save/reload remains shared across all panes and dirty state is not cleared by tab changes.
 select_start = SOURCE.index("function selectTab(which='core',focus=false)")
@@ -100,8 +139,9 @@ select_block = SOURCE[select_start:select_end]
 assert 'dirty.clear()' not in select_block
 assert 'hubSettingsSave' in SOURCE and 'hubSettingsReload' in SOURCE
 
-# Shared sticky action bar is available on each working Hub view and delegates
-# to the page's existing real action rather than duplicating business logic.
+# Shared sticky action bar remains on direct working views. Maintenance owns
+# several different operations, so it deliberately has no single fake primary
+# action and the removed standalone Configuration/Profile views are absent.
 for marker in (
     'id="hubSharedActions" class="hub-settings-actions hub-shared-actions hidden"',
     'id="hubSharedPrimary" class="primary"',
@@ -110,9 +150,6 @@ for marker in (
     "const HUB_SHARED_PAGE_ACTIONS={discovery:{label:'Run Discovery'",
     "devices:{label:'Refresh Devices'",
     "support:{label:'Create Contribution'",
-    "configuration:{label:'Export Configuration'",
-    "maintenance:{label:'Scan MQTT Entities'",
-    "profiles:{label:'Refresh Profiles'",
     "unifi2mqtt:{label:'Save UniFi2MQTT Settings'",
     "function runSharedHubPrimary()",
     "function reloadSharedHubView()",
@@ -122,17 +159,27 @@ for marker in (
     "$('hubSharedBack').addEventListener('click',goBack)",
 ):
     assert marker in SOURCE, marker
+for removed_mapping in (
+    "configuration:{label:'Export Configuration'",
+    "maintenance:{label:'Scan MQTT Entities'",
+    "profiles:{label:'Refresh Profiles'",
+):
+    assert removed_mapping not in SOURCE, removed_mapping
 
-# Hub navigation bullets use consistent title-style capitalization for actions.
+# Hub navigation reflects the consolidated architecture.
 for marker in (
+    'Add / Remove Devices',
     'Show Detected Devices &amp; Status',
     'Reorder Switches',
-    'Manage Faceplate Calibrations',
-    'Import / Export Profiles',
-    'Manage Backups',
-    'Repair Stale MQTT Entities',
-    'Add / Remove Switches',
+    '<b>Maintenance</b>',
+    '<span>Backups</span>',
+    '<span>SNMP Maintenance</span>',
+    '<span>Configuration Import / Export</span>',
+    '<span>Calibration Profiles</span>',
 ):
     assert marker in SOURCE, marker
+assert '<b>Calibration Profiles</b>' not in SOURCE
+assert '<b>Import / Export Configuration</b>' not in SOURCE
+assert '<span>Add / Remove Switches</span>' not in SOURCE
 
 print("Switch Vision Settings top tabs regression: PASS")

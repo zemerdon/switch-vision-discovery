@@ -132,14 +132,16 @@ assert "$('openSnmp2mqttSettingsButton').addEventListener" not in SOURCE
 assert "g.className='grid hub-grid-dense'" in SOURCE
 assert "grid-template-columns:repeat(4,minmax(0,1fr))" in SOURCE
 
-# v2.3.16: keep the established Hub header/card framing while tightening the
-# profile rows, preserving hidden internal IDs, and keeping summaries single-line.
+# Keep the established Hub header/card framing while tightening the profile
+# rows. Calibration Profiles now lives under its own Maintenance tab rather
+# than a standalone home card.
 assert '<p id="pageLead" class="lead hidden"></p>' in SOURCE
 assert 'class="lead topbar-lead hidden"' not in SOURCE
 assert "settings:['Switch Vision Hub Settings','Configure how Switch Vision Hub appears and behaves.']" in SOURCE
-assert '<section id="calibrationProfilesCard" class="card hidden">' in SOURCE
-assert '<h2>Calibration Profiles</h2>' in SOURCE
-assert '<p class="lead">Manage saved Switch Vision faceplate calibration profiles.</p>' in SOURCE
+assert '<section id="maintenancePanel-calibrations" class="maintenance-pane"' in SOURCE
+assert '<h3>Calibration Profiles</h3>' in SOURCE
+assert 'Manage saved Switch Vision faceplate calibration profiles, transfer profile calibration data, and clean unused profiles.' in SOURCE
+assert '<section id="calibrationProfilesCard"' not in SOURCE
 assert '<h2>Switch Vision Settings</h2>' not in SOURCE
 assert ".hub-settings-actions{position:sticky;bottom:6px" in SOURCE
 assert ".hub-component{border:1px solid var(--line-soft);border-radius:12px;padding:10px;margin:10px 0" in SOURCE
@@ -243,7 +245,8 @@ assert ".sv-profile-section-unused .sv-profile-card{" in PROFILE_MANAGER
 assert "cursor:default" in PROFILE_MANAGER
 assert "root.style.setProperty('--preview-width',`${64+wi*4}%`)" in SOURCE
 assert "root.style.setProperty('--preview-width',`${55+wi*5}%`)" not in SOURCE
-assert '<span>Import / Export Profiles</span>' in SOURCE
+assert 'data-maintenance-tab="calibrations">Calibration Profiles</button>' in SOURCE
+assert '<span>Import / Export Profiles</span>' not in SOURCE
 assert '<span>Copy / Import / Export Profiles</span>' not in SOURCE
 assert 'subgroup(\n          "CUSTOM"' in PROFILE_MANAGER
 assert 'subgroup(\n          "NATIVE"' in PROFILE_MANAGER
@@ -273,19 +276,22 @@ for marker in (
 ):
     assert marker in SOURCE, marker
 
-# v2.3.10: Maintenance has one Installer recovery-backup manager only. The
-# retention control is a button, the configurable retained-limit field and
-# redundant Discovery backup UI are gone, and the visible count is rendered
-# directly from the same backups array as the rows.
+# Maintenance Backups keeps the Installer recovery-backup manager and now
+# colocates Discovery backup-retention settings without reintroducing a second
+# file-list manager. The Installer visible count is still rendered from the
+# same backups array as its rows.
 for removed in (
     'id="installerBackupRetentionCount"',
     'id="saveInstallerBackupPolicyButton"',
     'id="applyInstallerBackupRetentionButton"',
-    '<h3>Discovery Configuration Backups</h3>',
     'id="discoveryBackupSummary"',
     'id="refreshDiscoveryBackupsButton"',
 ):
     assert removed not in SOURCE, removed
+assert '<h3>Discovery Configuration Backups</h3>' in SOURCE
+assert 'id="maintenanceDiscoveryBackupSettings"' in SOURCE
+assert 'id="maintenanceBackupSettingsSave"' in SOURCE
+assert 'id="maintenanceBackupSettingsReload"' in SOURCE
 assert 'id="installerBackupAutomaticRetention" type="button" aria-pressed="false"' in SOURCE
 assert 'class="installer-backup-summary muted">0 retained backups<' in SOURCE
 assert ".installer-backup-row{display:grid;grid-template-columns:minmax(0,1fr) auto" in SOURCE
