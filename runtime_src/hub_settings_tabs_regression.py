@@ -51,11 +51,11 @@ for old in (
 
 # Discovery Settings now owns Discovery workflow/path/privacy settings only.
 # Saved switch rows and stack-member display mapping live under Devices ->
-# Configure Devices. The first saved switch remains expanded by default there.
+# Configure Devices. Existing saved switches all start collapsed; expansion is
+# user-driven for the current page session.
 for marker in (
     "function renderDeviceConfiguration(){",
-    "expandedDiscoverySwitches=new Set();let discoverySwitchExpansionInitialized=false",
-    "if(!discoverySwitchExpansionInitialized){if(switches.length)expandedDiscoverySwitches.add",
+    "expandedDiscoverySwitches=new Set();",
     "sw=sec('Switches','SNMP communities are masked by default.",
     "const st=sec('Stack member display mapping')",
     "const c=document.createElement('div');c.className='device-card hub-setting-row hub-switch-setting-row'",
@@ -92,6 +92,9 @@ for moved in (
 device_start = SOURCE.index("function renderDeviceConfiguration(){")
 device_end = SOURCE.index("function renderDiscoveryBackupSettings(){", device_start)
 device_block = SOURCE[device_start:device_end]
+assert "discoverySwitchExpansionInitialized" not in SOURCE
+assert "switches[0]" not in device_block
+assert "expandedDiscoverySwitches.add(`index:${s.switches.length-1}`)" in device_block
 for obsolete in (
     "hub-switch-setting-order",
     "const move=delta=>",
