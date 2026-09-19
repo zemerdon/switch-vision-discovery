@@ -1,3 +1,10 @@
+## 2.4.41 — Collapsed Configure Devices switch rows
+
+- Make all previously saved switch rows under **Devices → Configure Devices** start collapsed instead of automatically expanding Switch 1.
+- Preserve the existing per-page expand/collapse interaction after a user opens a row.
+- Keep a newly created switch expanded immediately after **Add switch** so its fields are ready for entry without an extra click.
+- Add permanent regression coverage that rejects any return of first-switch auto-expansion while retaining the new-switch convenience behavior.
+
 ## 2.4.40 — Custom dashboard YAML export
 
 - Add a **New dashboard format** selector to Hub → Discovery → Generated Dashboard YAML. **Custom dashboard** is the default and preserves the generated `custom:vertical-layout` wrapper plus `layout:` metadata for a new Home Assistant dashboard using Layout Card; **Standard dashboard** keeps the existing dependency-free export.

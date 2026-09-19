@@ -24,7 +24,9 @@ Switch Vision components are independently versioned. The main Switch Vision Cor
 
 ## Hub updates
 
-Discovery v2.4.40 adds a new-dashboard YAML format selector in Hub → Discovery. **Custom dashboard** is the default and preserves the generated `custom:vertical-layout` wrapper plus `layout:` settings for a manually created Home Assistant dashboard using Layout Card; **Standard dashboard** keeps the existing dependency-free export. Preview, Copy, and Download all follow the selected format, while **Copy Cards Only** remains unchanged for existing dashboards. The v2.4.39 Calibration **BASE IN USE** protection and Configure Devices default tab remain unchanged.
+Discovery v2.4.41 makes **Devices → Configure Devices** easier to scan by starting every previously saved switch row collapsed. A newly added switch still opens immediately so its fields are ready for entry without an extra click.
+
+Discovery v2.4.40 added the new-dashboard YAML format selector in Hub → Discovery. **Custom dashboard** remains the default and preserves the generated `custom:vertical-layout` wrapper plus `layout:` settings for a manually created Home Assistant dashboard using Layout Card; **Standard dashboard** keeps the dependency-free export. Preview, Copy, and Download follow the selected format, while **Copy Cards Only** remains unchanged for existing dashboards.
 
 The v2.4.35 stale-open Hub protection remains in place: the loaded frontend version is compared with the running app version through the existing status poll, with one guarded self-refresh after an update when they differ.
 
