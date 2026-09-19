@@ -2013,8 +2013,8 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.41"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.41"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.42"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.42"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -3055,6 +3055,16 @@ assert c2960x24ps["ports"]["gigabit_sfp"] == 4
 assert c2960x24ps["ports"]["ten_gigabit_sfp_plus"] == 0
 assert models["WS-C2960X-24TS-L"]["validation"]["uplinks"] == "pending"
 
+c2960xr = models["WS-C2960XR-48LPS-I"]
+assert c2960xr["status"] == "experimental"
+assert c2960xr["ports"]["rj45"] == 48
+assert c2960xr["ports"]["uplinks"] == 4
+assert c2960xr["ports"]["gigabit_sfp"] == 4
+assert c2960xr["ports"]["ten_gigabit_sfp_plus"] == 0
+assert c2960xr["mapping_profile"] == "cisco-2960xr-48lps-48p-4sfp"
+assert c2960xr["validation"]["uplinks"] == "contribution_confirmed_gi1_0_49_52_1g_sfp"
+assert profiles["cisco-2960xr-48lps-48p-4sfp"]["layout"]["sfp_1g_ports"] == 4
+
 p3560 = next(p for p in profiles.values() if "WS-C3560CG-8PC-S" in (p.get("model_patterns") or []))
 assert p3560["layout"]["rj45_ports"] == 8
 assert p3560["layout"]["sfp_1g_ports"] == 2
@@ -3396,7 +3406,7 @@ assert xg16["unifi_api_port_map"]["sfp"] == list(range(1, 13))
 assert xg16["unifi_api_port_map"]["rj45"] == [13, 14, 15, 16]
 
 agg = models["USW Pro Aggregation"]
-assert agg["status"] == "detected"
+assert agg["status"] == "experimental"
 assert agg["dashboard_support"] is True
 assert agg["ports"]["rj45"] == 0
 assert agg["ports"]["ten_gigabit_sfp_plus"] == 28
@@ -3413,10 +3423,26 @@ pxg = profiles["ubiquiti-us-xg-16-api"]
 assert pxg["interface_patterns"]["rj45"] == ["api-port-13", "api-port-14", "api-port-15", "api-port-16", "0/13", "0/14", "0/15", "0/16"]
 assert pxg["interface_patterns"]["sfp_10g"] == [f"api-port-{n}" for n in range(1, 13)] + [f"0/{n}" for n in range(1, 13)]
 pagg = profiles["ubiquiti-usw-pro-aggregation-api"]
+assert pagg["status"] == "experimental"
 assert pagg["layout"]["rj45_ports"] == 0
 assert pagg["layout"]["sfp_10g_ports"] == 28
 assert pagg["layout"]["sfp_25g_ports"] == 4
 assert pagg["interface_patterns"]["sfp_25g"] == [f"api-port-{n}" for n in range(29, 33)]
+
+fiber = models["UCG Fiber"]
+assert fiber["status"] == "experimental"
+assert fiber["dashboard_support"] is True
+assert fiber["ports"]["rj45"] == 5
+assert fiber["ports"]["uplinks"] == 2
+assert fiber["ports"]["poe"] is True
+assert fiber["unifi_api_port_map"] == {"rj45": [1, 2, 3, 4, 5], "sfp": [6, 7]}
+assert fiber["calibration_profile"] == "unifi_8_rj45_2sfp"
+assert fiber["default_faceplate"] == "faceplates/unifi-8-rj45-2sfp.png"
+pfiber = profiles["ubiquiti-ucg-fiber-api"]
+assert pfiber["status"] == "experimental"
+assert pfiber["layout"] == {"members": 1, "rj45_ports": 5, "sfp_1g_ports": 0, "sfp_10g_ports": 2}
+assert pfiber["interface_patterns"]["rj45"] == [f"api-port-{n}" for n in range(1, 6)]
+assert pfiber["interface_patterns"]["sfp_10g"] == ["api-port-6", "api-port-7"]
 print("Switch Vision Discovery community-validation UniFi contract regression: PASS")
 PYTEST_community_validation
 
@@ -3451,6 +3477,13 @@ snapshot = {
             "api_capabilities": {"port_detail": True, "per_port_traffic": False},
             "ports": ports([(n, "SFPPLUS") for n in range(1, 29)] + [(n, "SFP28") for n in range(29, 33)]),
         },
+        {
+            "id": "ucg-fiber-test",
+            "name": "UCG Fiber test",
+            "model": "UCG Fiber",
+            "api_capabilities": {"port_detail": True, "per_port_traffic": False},
+            "ports": ports([(n, "RJ45") for n in range(1, 6)] + [(6, "SFPPLUS"), (7, "SFPPLUS")]),
+        },
     ]
 }
 Path(sys.argv[1]).write_text(json.dumps(snapshot), encoding="utf-8")
@@ -3463,10 +3496,14 @@ grep -q 'switch_model: US 48' "$tmp_dir/community-validation-cards.yaml"
 grep -q 'unifi_sfp_port_offset: 48' "$tmp_dir/community-validation-cards.yaml"
 grep -q 'switch_model: US XG 16' "$tmp_dir/community-validation-cards.yaml"
 grep -q 'switch_model: USW Pro Aggregation' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'switch_model: UCG Fiber' "$tmp_dir/community-validation-cards.yaml"
 grep -q 'calibration_profile: unifi_4_rj45_12sfp' "$tmp_dir/community-validation-cards.yaml"
 grep -q 'calibration_profile: unifi_32sfp' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'calibration_profile: unifi_8_rj45_2sfp' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'port_count: 5' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'sfp_port_count: 2' "$tmp_dir/community-validation-cards.yaml"
 ! grep -q 'USW Pro Aggregation.*dashboard support is pending verified visuals' "$tmp_dir/community-validation-cards.yaml"
-grep -q 'UniFi cards emitted: 3; waiting for visuals/registry: 0' "$tmp_dir/community-validation-cards.yaml"
+grep -q 'UniFi cards emitted: 4; waiting for visuals/registry: 0' "$tmp_dir/community-validation-cards.yaml"
 echo "Switch Vision Discovery community-validation generated-card regression: PASS"
 # v2.1.36 UniFi-only SNMP2MQTT status regression.
 PYTHONPATH="$BASE_DIR" python3 - <<'PYTEST_V2136_UNIFI_ONLY'

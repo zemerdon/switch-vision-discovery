@@ -58,6 +58,14 @@ SUPPORT_CONTRACT_EXCEPTIONS: dict[str, dict[str, object]] = {
             "still marks that validation pending while topology/status/evidence remain aligned."
         ),
     },
+    "USW Pro Aggregation": {
+        "fields": ("status",),
+        "reason": (
+            "Discovery is the support-confidence authority and promotes this complete "
+            "32-port API/card contract to Experimental under the dashboard-first policy; "
+            "Core's derivative registry may lag this support-status-only change."
+        ),
+    },
 }
 
 FACEPLATE_CATALOG_SCHEMA = "switch-vision-faceplate-catalog-v1"

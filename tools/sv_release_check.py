@@ -33,6 +33,7 @@ PERMANENT_CHECKS = (
     "tools/test_us_xg16_acceptance.py",
     "tools/test_c3850_community_validation.py",
     "tools/test_visual_contract_policy.py",
+    "tools/test_dashboard_first_promotions.py",
     "tools/test_faceplate_catalog_contract.py",
     "tools/test_faceplate_matrix_2419.py",
     "tools/test_unifi_activity_refresh_contract.py",
@@ -54,6 +55,7 @@ PERMANENT_CHECKS = (
     "tools/test_registry_roundtrip.py",
 )
 SHELL_CHECKS = (
+    "tools/test_production_physical_contract.sh",
     "tools/test_contributor_interface_batch.sh",
     "tools/test_unifi_entrypoint_source_matrix.sh",
 )

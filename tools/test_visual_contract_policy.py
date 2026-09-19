@@ -64,6 +64,14 @@ expected_support_exceptions = {
             "still marks that validation pending while topology/status/evidence remain aligned."
         ),
     },
+    "USW Pro Aggregation": {
+        "fields": ("status",),
+        "reason": (
+            "Discovery is the support-confidence authority and promotes this complete "
+            "32-port API/card contract to Experimental under the dashboard-first policy; "
+            "Core's derivative registry may lag this support-status-only change."
+        ),
+    },
 }
 assert module.SUPPORT_CONTRACT_EXCEPTIONS == expected_support_exceptions, module.SUPPORT_CONTRACT_EXCEPTIONS
 assert set(module.SUPPORT_CONTRACT_EXCEPTIONS["WS-C2960X-24PS-L"]["fields"]) == {"validation"}

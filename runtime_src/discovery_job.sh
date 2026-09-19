@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.41"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.42"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -876,10 +876,11 @@ parser_report() {
     function is_2960(m) { return (is_2960x(m) || is_2960s(m)) }
     function c2960_rj45_limit(m) {
       if (m ~ /^WS-C2960X-24/ || m ~ /^WS-C2960S-24/) return 24
-      if (m ~ /^WS-C2960X-48/ || m ~ /^WS-C2960S-48/) return 48
+      if (m ~ /^WS-C2960XR-48/ || m ~ /^WS-C2960X-48/ || m ~ /^WS-C2960S-48/) return 48
       return 48
     }
     function c2960_profile(m) {
+      if (m ~ /^WS-C2960XR-48LPS-I$/) return "cisco-2960xr-48lps-48p-4sfp"
       if (m ~ /^WS-C2960X-24PS/) return "cisco-2960x-24ps-24p-4sfp"
       if (m ~ /^WS-C2960X-24TS/) return "cisco-2960x-24ts-24p-4sfp"
       if (m ~ /^WS-C2960X-48FPD/) return "cisco-2960x-48fpd-48p-2x10g"
@@ -892,6 +893,7 @@ parser_report() {
       return "cisco-2960x-auto"
     }
     function c2960_sfp_count(m) {
+      if (m ~ /^WS-C2960XR-48LPS-I$/) return 4
       if (m ~ /^WS-C2960X-24/ || m ~ /^WS-C2960S-24/) return 4
       if (m ~ /^WS-C2960X-48/ || m ~ /^WS-C2960S-48/) return 2
       return 0
@@ -997,7 +999,7 @@ parser_report() {
         match(line, /Version [0-9][^,]*/)
         ios = substr(line, RSTART + 8, RLENGTH - 8)
       }
-      if (match(line, /WS-C(3850|3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
+      if (match(line, /WS-C(3850|3650|3750X|3750|3560CG|2960XR|2960X|2960S)-[A-Z0-9-]+/)) {
         model_candidate = substr(line, RSTART, RLENGTH)
         if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.(2|7|13)\./ || line ~ /\.3\.6\.1\.4\.1\.9\.5\.1\./) {
           if (model_rank(model_candidate) > model_rank(local_model)) local_model = model_candidate
@@ -1006,10 +1008,10 @@ parser_report() {
         } else if (model_rank(model_candidate) > model_rank(candidate_model)) candidate_model = model_candidate
       }
       if (line ~ /\.3\.6\.1\.2\.1\.1\.1\.0 = /) sys_descr_present=1
-      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.2\.[0-9]+ = STRING:/ && val ~ /WS-C(3850|3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/) {
+      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.2\.[0-9]+ = STRING:/ && val ~ /WS-C(3850|3650|3750X|3750|3560CG|2960XR|2960X|2960S)-[A-Z0-9-]+/) {
         idx=oid_index(line); identity_model_descr_idx[idx]=1; identity_idx[idx]=1
       }
-      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.13\.[0-9]+ = STRING:/ && val ~ /WS-C(3850|3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/) {
+      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.13\.[0-9]+ = STRING:/ && val ~ /WS-C(3850|3650|3750X|3750|3560CG|2960XR|2960X|2960S)-[A-Z0-9-]+/) {
         idx=oid_index(line); identity_model_name_idx[idx]=1; identity_idx[idx]=1
       }
       if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.11\.[0-9]+ = STRING:/) {
@@ -2838,7 +2840,7 @@ write_generated_yaml_for_walk() {
     function is_2960(m) { return (is_2960x(m) || is_2960s(m)) }
     function c2960_rj45_limit(m) {
       if (m ~ /^WS-C2960X-24/ || m ~ /^WS-C2960S-24/) return 24
-      if (m ~ /^WS-C2960X-48/ || m ~ /^WS-C2960S-48/) return 48
+      if (m ~ /^WS-C2960XR-48/ || m ~ /^WS-C2960X-48/ || m ~ /^WS-C2960S-48/) return 48
       return 48
     }
     function physical_label(name, idx, key, parts, member, port, label) {
@@ -2944,12 +2946,12 @@ write_generated_yaml_for_walk() {
         # 24-port Catalyst 2960X models expose Gi1/0/25-28 as four physical
         # 1G SFP cages. Preserve the IOS source identity, but publish them in
         # the card/entity namespace as SFP 1G 1-4 to match the faceplate.
-        if (model ~ /^(WS-)?C2960X-24/) return label " SFP 1G " (port - c2960_rj45_limit(model))
+        if (model ~ /^(WS-)?C2960X-24/ || model ~ /^WS-C2960XR-48LPS-I$/) return label " SFP 1G " (port - c2960_rj45_limit(model))
         return label " Uplink " (port - c2960_rj45_limit(model))
       }
       if (is_2960(model) && (name ~ /^Te/ || name ~ /^TenGigabitEthernet/) && parts[2] == "0") return label " SFP 10G " port
       if ((name ~ /^Gi/ || name ~ /^GigabitEthernet/) && parts[2] == "0") return label " Port " port
-      if (model ~ /^(WS-)?C2960X-24/ && (name ~ /^Gi/ || name ~ /^GigabitEthernet/) && parts[2] == "1") return label " SFP 1G " port
+      if ((model ~ /^(WS-)?C2960X-24/ || model ~ /^WS-C2960XR-48LPS-I$/) && (name ~ /^Gi/ || name ~ /^GigabitEthernet/) && parts[2] == "1") return label " SFP 1G " port
       if ((name ~ /^Gi/ || name ~ /^GigabitEthernet/) && parts[2] == "1") return label " Uplink " port
       if ((name ~ /^Te/ || name ~ /^TenGigabitEthernet/) && parts[2] == "1") return label " SFP 10G " port
       return label " Interface " idx
@@ -3077,7 +3079,7 @@ write_generated_yaml_for_walk() {
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
       if (line ~ /WS-C3850-12XS/) c3850_model="WS-C3850-12XS"
       if (line ~ /WS-C3750-48P/) c3750_model="WS-C3750-48P"
-      if (match(line, /WS-C(3850|3650|3750X|3750|3560CG|2960X|2960S)-[A-Z0-9-]+/)) {
+      if (match(line, /WS-C(3850|3650|3750X|3750|3560CG|2960XR|2960X|2960S)-[A-Z0-9-]+/)) {
         model_candidate=substr(line, RSTART, RLENGTH)
         if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.(2|7|13)\./ || line ~ /\.3\.6\.1\.4\.1\.9\.5\.1\./) {
           if (model_rank(model_candidate) > model_rank(local_model)) local_model=model_candidate
@@ -4115,7 +4117,7 @@ write_generated_dashboard_card() {
         echo "        status_entity_suffix: _status"
         case "${effective_model:-${detected_model:-}}" in
           *J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
-          *S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
+          *S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
           *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
         esac
         emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"
@@ -4151,7 +4153,7 @@ write_generated_dashboard_card() {
       echo "        status_entity_suffix: _status"
       case "${exact_model:-}" in
         *J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
-        *S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
+        *S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
         *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
       esac
       emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"

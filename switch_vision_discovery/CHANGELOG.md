@@ -1,3 +1,10 @@
+## 2.4.42 — Dashboard-first model promotions
+
+- Promote the contribution-backed Cisco `WS-C2960XR-48LPS-I` directly to **Experimental** with its exact 48 RJ45 + 4×1G SFP contract, using reviewed Catalyst 2960/Cisco family telemetry only where the exact walk agrees and the existing stock 48+4 visual until dedicated artwork exists.
+- Add **Experimental UCG Fiber** support from its complete UniFi API contract: five RJ45 ports plus two 10G SFP+ cages, exact API port bindings, observed multigig capabilities and 802.3at PoE on port 4, with a safe existing UniFi 8+2 visual that does not create phantom ports.
+- Promote **USW Pro Aggregation** from Detected to **Experimental** because its complete 28×10G SFP+ + 4×25G SFP28 API mapping, dashboard support and shipped 32-position optical visual already establish a safe reproducible card contract.
+- Extend Cisco family/product recognition and generated-card bindings for the 2960XR four-SFP layout, and add permanent regressions that protect all three dashboard-first promotions.
+
 ## 2.4.41 — Collapsed Configure Devices switch rows
 
 - Make all previously saved switch rows under **Devices → Configure Devices** start collapsed instead of automatically expanding Switch 1.

@@ -159,7 +159,7 @@ done
 if grep -Eq 'name: C2960 (Uplink [1-4]|SFP 1G (25|26|27|28)|SFP 10G [1-4]) Status' "$c2960x24_yaml"; then
   note_failure "cisco-2960x-24ps: source interface numbering leaked into logical SFP faceplate namespace"
 fi
-grep -Fq '*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;' "$RUNTIME/discovery_job.sh" || note_failure "cisco-2960x-24: generated-card binding is not pinned to logical SFP 1G 1-4 entities"
+grep -Fq '*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;' "$RUNTIME/discovery_job.sh" || note_failure "cisco-2960x/xr: generated-card binding is not pinned to logical SFP 1G entities"
 
 # The non-PoE 24TS variant uses the same Gi1/0/25-28 -> logical SFP1-4
 # front-panel mapping and must remain covered by the same contract.
@@ -178,6 +178,24 @@ while [ "$i" -le 4 ]; do
 done
 if grep -Eq 'name: C2960TS (Uplink [1-4]|SFP 1G (25|26|27|28)|SFP 10G [1-4]) Status' "$c2960x24ts_yaml"; then
   note_failure "cisco-2960x-24ts: source interface numbering leaked into logical SFP faceplate namespace"
+fi
+
+# Dashboard-first 2960XR contribution: exact 48 copper + four 1G SFP ports.
+c2960xr="$TMP/cisco-2960xr-48lps.txt"
+make_walk "$c2960xr" 'Cisco IOS Software, C2960X Software (C2960X-UNIVERSALK9-M), Version 15.2(7)E14, WS-C2960XR-48LPS-I' '1.3.6.1.4.1.9.1.1208'
+printf '.1.3.6.1.2.1.47.1.1.1.1.13.1001 = STRING: "WS-C2960XR-48LPS-I"\n' >> "$c2960xr"
+idx=1
+i=1
+while [ "$i" -le 52 ]; do append_iface "$c2960xr" "$idx" "Gi1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+run_case cisco-2960xr "$c2960xr" C2960XR 'WS-C2960XR-48LPS-I' 52
+c2960xr_yaml="$TMP/cisco-2960xr/generated.yaml"
+i=1
+while [ "$i" -le 4 ]; do
+  grep -Fq "    name: C2960XR SFP 1G $i Status" "$c2960xr_yaml" || note_failure "cisco-2960xr: missing logical SFP 1G $i status entity"
+  i=$((i + 1))
+done
+if grep -Eq 'name: C2960XR (Uplink [1-4]|SFP 1G (49|50|51|52)|SFP 10G [1-4]) Status' "$c2960xr_yaml"; then
+  note_failure "cisco-2960xr: source numbering/type leaked into logical four-SFP faceplate namespace"
 fi
 
 # Bernard: 48 lowercase Gi access ports + two lowercase Te uplinks.

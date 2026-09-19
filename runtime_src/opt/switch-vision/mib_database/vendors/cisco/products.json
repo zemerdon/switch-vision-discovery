@@ -21,7 +21,8 @@
       "tested_models": [
         "WS-C2960X-48FPD-L",
         "WS-C2960X-24PS-L",
-        "WS-C2960X-24TS-L"
+        "WS-C2960X-24TS-L",
+        "WS-C2960XR-48LPS-I"
       ]
     },
     {

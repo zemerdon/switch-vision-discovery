@@ -201,6 +201,29 @@ profiles:
       - Gi{member}/0/{port}
       - GigabitEthernet{member}/0/{port}
       sfp_10g: []
+  cisco-2960xr-48lps-48p-4sfp:
+    status: experimental
+    vendor: Cisco
+    family: Catalyst 2960X
+    model_patterns:
+    - WS-C2960XR-48LPS-I
+    layout:
+      members: auto
+      rj45_ports: 48
+      sfp_1g_ports: 4
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_1g:
+      - Gi{member}/0/{port}
+      - GigabitEthernet{member}/0/{port}
+      sfp_10g: []
+    notes:
+    - Exact contribution confirms Gi{member}/0/1-48 as copper and Gi{member}/0/49-52 as four 1G SFP cages.
+    - Reuse compatible Catalyst 2960X/Cisco telemetry behavior only where the current exact capture agrees.
+    - Per-port PoE behavior and real multi-member stack operation remain pending; they do not block the proven dashboard contract.
   cisco-sg500x-24-24p-4x10g:
     status: community_validated
     vendor: Cisco
@@ -834,7 +857,7 @@ profiles:
     - Dashboard output remains disabled until verified 12-SFP+ + 4-RJ45 visual coordinates
       exist.
   ubiquiti-usw-pro-aggregation-api:
-    status: detected
+    status: experimental
     vendor: Ubiquiti
     family: UniFi Switch Pro Aggregation
     model_patterns:
@@ -884,8 +907,8 @@ profiles:
       - api-port-32
     notes:
     - Community hardware evidence confirms 28x 10G SFP+ plus 4x 25G SFP28 and no RJ45 ports.
-    - The sfp_25g fields preserve observed hardware truth for this detected-only profile;
-      dashboard output remains disabled until verified 32-port optical geometry exists.
+    - The sfp_25g fields preserve observed hardware truth for the exact 32-port optical contract.
+    - Experimental dashboard output uses the shipped unifi_32sfp visual; dedicated field alignment confirmation remains a later fidelity/Community Validated concern.
   ubiquiti-ucg-ultra-api:
     status: experimental
     vendor: Ubiquiti
@@ -908,6 +931,32 @@ profiles:
     - Four ports are 1G-capable and one is 2.5G-capable; WAN/LAN role remains controller-driven
       rather than position-derived.
     - Dedicated UCG Ultra dashboard artwork remains pending.
+  ubiquiti-ucg-fiber-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Cloud Gateway Fiber
+    model_patterns:
+    - UCG Fiber
+    layout:
+      members: 1
+      rj45_ports: 5
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - api-port-1
+      - api-port-2
+      - api-port-3
+      - api-port-4
+      - api-port-5
+      sfp_1g: []
+      sfp_10g:
+      - api-port-6
+      - api-port-7
+    notes:
+    - Real-hardware UniFi API evidence confirms five RJ45 positions plus two 10G SFP+ cages.
+    - Ports 1-4 are 2.5G-capable RJ45; port 4 exposes 802.3at PoE output capability; port 5 is 10G-capable RJ45.
+    - The same-manufacturer unifi_8_rj45_2sfp visual safely contains the proven 5+2 physical contract until dedicated UCG Fiber artwork exists.
   ubiquiti-us-16-poe-150w-api:
     status: experimental
     vendor: Ubiquiti
