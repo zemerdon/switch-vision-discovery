@@ -129,7 +129,7 @@ jobs:
           sh "$runtime_dir/self-test.sh"
       - name: Get app information
         id: info
-        uses: home-assistant/actions/helpers/info@a7c616ce81ccda50150bf1595786c71b1883fabb
+        uses: home-assistant/actions/helpers/info@58bff37c8947f690ace498be413a9b78d6f30f93
         with:
           path: ./switch_vision_discovery
       - name: Normalize app information
@@ -145,7 +145,7 @@ jobs:
           echo "url=${{ steps.info.outputs.url }}" >> "$GITHUB_OUTPUT"
       - name: Prepare build matrix
         id: matrix
-        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@7412f0023ea9b6e58e8bb5059f1660f51376f49a # 2026.09.0
         with:
           architectures: ${{ steps.info.outputs.architectures }}
           image-name: ${{ steps.normalize.outputs.image_name }}
@@ -171,7 +171,7 @@ jobs:
           set -euo pipefail
           sh tools/materialize_runtime.sh
       - name: Build image without publishing
-        uses: home-assistant/builder/actions/build-image@4de35182ce1e329181bffcbcc84d33db5e2c7e10 # 2026.06.0
+        uses: home-assistant/builder/actions/build-image@7412f0023ea9b6e58e8bb5059f1660f51376f49a # 2026.09.0
         with:
           arch: ${{ matrix.arch }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
