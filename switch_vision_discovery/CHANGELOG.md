@@ -1,3 +1,9 @@
+## 2.4.43 — Model-aware port roles
+
+- Propagate optional exact-model `port_roles` metadata into generated UniFi dashboard cards.
+- Carry the UDM Pro registry default that classifies physical RJ45 port 9 as WAN, allowing Core Calibration Auto / Model default to resolve the correct role.
+- Keep port-role metadata separate from generic UniFi uplink state so WAN is never inferred solely from position or uplink flags.
+- Add permanent UniFi physical-contract regression coverage for role propagation.
 ## 2.4.42 — Dashboard-first model promotions
 
 - Promote the contribution-backed Cisco `WS-C2960XR-48LPS-I` directly to **Experimental** with its exact 48 RJ45 + 4×1G SFP contract, using reviewed Catalyst 2960/Cisco family telemetry only where the exact walk agrees and the existing stock 48+4 visual until dedicated artwork exists.
