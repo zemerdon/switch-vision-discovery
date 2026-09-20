@@ -498,6 +498,20 @@ def main() -> int:
                 errors.append(
                     "N2128PX-ON: privacy-neutral public evidence note drift"
                 )
+            if core_notes != discovery_notes:
+                errors.append(
+                    "N2128PX-ON: exact registry notes drift between Core and Discovery"
+                )
+            dell_notes = "\n".join(str(note) for note in discovery_notes).casefold()
+            for stale in (
+                "generic 48 rj45 + 4 sfp",
+                "exact dell faceplate pending",
+                "final dell faceplate calibration",
+            ):
+                if stale in dell_notes:
+                    errors.append(
+                        f"N2128PX-ON: stale Dell visual-state wording remains: {stale}"
+                    )
 
         changed_visuals = [
             field

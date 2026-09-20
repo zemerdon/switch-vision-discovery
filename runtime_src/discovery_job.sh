@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.45"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.46"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1716,7 +1716,7 @@ parser_report() {
       print "- SFP/uplink mapping: " sfp_note(profile_status, model)
       if (model ~ /^S5720-12TP-LI-AC$/ || model ~ /^S5735-L8P4X-A1$/) print "- Faceplate: generic 48 RJ45 + 4 SFP fallback visual"
       else if (model == "XS1930-10") print "- Faceplate: compact 8 RJ45 + 2 SFP temporary fallback visual"
-      else if (model == "N2128PX-ON") print "- Faceplate: generic 48 RJ45 + 4 SFP fallback visual; exact Dell faceplate pending"
+      else if (model == "N2128PX-ON") print "- Faceplate: dedicated Dell 28 RJ45 + 2 SFP+ visual; current-build alignment confirmed"
       else if (model == "CRS328-24P-4S+") print "- Faceplate: neutral 24 RJ45 + 4 SFP temporary fallback visual; exact MikroTik alignment pending"
       else print "- Faceplate: registry-selected visual"
       print ""
