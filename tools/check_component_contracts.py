@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import re
 import subprocess
 import sys
@@ -29,10 +30,6 @@ DEFAULT_SNMP_ADDON_CONFIG_URL = (
 # Shared exact-model visual defaults are a hard Core/Discovery contract.
 # Any intentional divergence must be listed here with a non-empty reason.
 VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {
-    "US 16 PoE 150W": (
-        "Discovery owns the approved stock 24+2 visual fallback; the shared "
-        "physical 16 RJ45 + 2 SFP topology remains identical to Core."
-    ),
     "USW Flex Mini": (
         "Discovery now selects Core's already-shipped unifi-5rj45.png / "
         "default_unifi_5_rj45 presentation for the exact five-RJ45 topology; "
@@ -128,6 +125,27 @@ def load_pinned_faceplate_catalog():
     pin = parse_faceplate_pin(json.loads(CORE_FACEPLATE_PIN_PATH.read_text(encoding="utf-8")))
     url = f"https://raw.githubusercontent.com/{pin['repository']}/{pin['commit_sha']}/{pin['path']}"
     return parse_faceplate_catalog(json.loads(fetch_text(url)))
+
+def resolve_core_source_root(value: str | None) -> Path | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    root = Path(raw).expanduser().resolve()
+    required = (
+        root / "src/devices/supported_devices.json",
+        root / "src/custom_components/switch_vision/__init__.py",
+        root / "src/faceplates/catalog.json",
+    )
+    missing = [str(path) for path in required if not path.is_file()]
+    if missing:
+        raise RuntimeError("local Core source root is incomplete: " + ", ".join(missing))
+    return root
+
+def load_core_faceplate_catalog(core_source_root: Path | None = None):
+    if core_source_root is not None:
+        path = core_source_root / "src/faceplates/catalog.json"
+        return parse_faceplate_catalog(json.loads(path.read_text(encoding="utf-8")))
+    return load_pinned_faceplate_catalog()
 
 def validate_default_faceplates(registry, labels):
     devices = registry.get("devices") if isinstance(registry, dict) else None
@@ -313,8 +331,17 @@ def main() -> int:
     )
     parser.add_argument("--core-registry-url", default=DEFAULT_CORE_REGISTRY_URL)
     parser.add_argument("--core-settings-url", default=DEFAULT_CORE_SETTINGS_URL)
+    parser.add_argument(
+        "--core-source-root",
+        default=os.environ.get("SWITCH_VISION_CORE_SOURCE_ROOT", ""),
+        help="Use an exact local Core source tree for coordinated local candidate checks.",
+    )
     parser.add_argument("--snmp-addon-config-url", default=DEFAULT_SNMP_ADDON_CONFIG_URL)
     args = parser.parse_args()
+    try:
+        core_source_root = resolve_core_source_root(args.core_source_root)
+    except Exception as exc:
+        raise SystemExit(f"Invalid local Core source root: {exc}") from exc
 
     release_contract = subprocess.run(
         [sys.executable, "tools/test_sv_release_check.py"],
@@ -351,7 +378,7 @@ def main() -> int:
 
     discovery_registry = json.loads(discovery_registry_path.read_text(encoding="utf-8"))
     try:
-        faceplate_labels = load_pinned_faceplate_catalog()
+        faceplate_labels = load_core_faceplate_catalog(core_source_root)
     except Exception as exc:
         errors.append(f"Could not load exact pinned Core faceplate catalog: {exc}")
     else:
@@ -368,13 +395,22 @@ def main() -> int:
         mapping_profile = str(item.get("mapping_profile") or "").strip()
         if mapping_profile and mapping_profile not in discovery_profiles:
             errors.append(f"{model}: mapping_profile {mapping_profile!r} is not defined in shipped profiles")
-    core_registry = json.loads(fetch_text(args.core_registry_url))
-    try:
-        core_settings_source = fetch_text(args.core_settings_url)
-    except Exception as exc:
-        errors.append(f"Could not fetch Core Hub settings contract: {exc}")
-    else:
+    if core_source_root is not None:
+        core_registry = json.loads(
+            (core_source_root / "src/devices/supported_devices.json").read_text(encoding="utf-8")
+        )
+        core_settings_source = (
+            core_source_root / "src/custom_components/switch_vision/__init__.py"
+        ).read_text(encoding="utf-8")
         errors.extend(check_core_hub_settings_contract(core_settings_source))
+    else:
+        core_registry = json.loads(fetch_text(args.core_registry_url))
+        try:
+            core_settings_source = fetch_text(args.core_settings_url)
+        except Exception as exc:
+            errors.append(f"Could not fetch Core Hub settings contract: {exc}")
+        else:
+            errors.extend(check_core_hub_settings_contract(core_settings_source))
     discovery_models = by_model(discovery_registry)
     core_models = by_model(core_registry)
 

@@ -27,10 +27,6 @@ for model in (
     assert reason is None
 
 expected_exceptions = {
-    "US 16 PoE 150W": (
-        "Discovery owns the approved stock 24+2 visual fallback; the shared "
-        "physical 16 RJ45 + 2 SFP topology remains identical to Core."
-    ),
     "USW Flex Mini": (
         "Discovery now selects Core's already-shipped unifi-5rj45.png / "
         "default_unifi_5_rj45 presentation for the exact five-RJ45 topology; "

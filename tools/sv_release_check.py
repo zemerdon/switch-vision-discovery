@@ -299,9 +299,28 @@ def main() -> int:
         description="Run the product-owned Switch Vision Discovery release validation."
     )
     parser.add_argument("--mode", choices=("release",), required=True)
+    parser.add_argument(
+        "--core-source-root",
+        default=os.environ.get("SWITCH_VISION_CORE_SOURCE_ROOT", ""),
+        help="Exact local Core source tree used for coordinated local candidate contracts.",
+    )
     args = parser.parse_args()
     if args.mode != "release":
         raise SystemExit("unsupported release-check mode")
+    if str(args.core_source_root or "").strip():
+        core_source_root = Path(args.core_source_root).expanduser().resolve()
+        required = (
+            core_source_root / "src/devices/supported_devices.json",
+            core_source_root / "src/custom_components/switch_vision/__init__.py",
+            core_source_root / "src/faceplates/catalog.json",
+        )
+        missing = [str(path) for path in required if not path.is_file()]
+        if missing:
+            raise SystemExit(
+                "Discovery local Core source contract is incomplete: " + ", ".join(missing)
+            )
+        os.environ["SWITCH_VISION_CORE_SOURCE_ROOT"] = str(core_source_root)
+        print(f"Discovery coordinated local Core source: {core_source_root}")
 
     root = ROOT
     baseline_status = git_status(root)

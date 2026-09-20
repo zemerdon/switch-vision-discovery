@@ -1,3 +1,11 @@
+## 2.4.44 — Compact UniFi exact-model faceplates
+
+- Point USW-16-PoE and US 16 PoE 150W at Core's owner-calibrated 16-RJ45 + 2-SFP faceplate.
+- Point UDM Pro, UniFi Dream Machine PRO SE and UDM Pro Max at Core's owner-calibrated 9-RJ45 + 2-SFP faceplate.
+- Point USW WAN at the front-only three-SFP+ faceplate while preserving its real rear management RJ45 as API port 4 in the physical/API contract.
+- Keep shared faceplate geometry free of WAN/LAN and maximum-speed guesses; exact-model registry/runtime metadata remains authoritative.
+- Add a local-first Core source input to coordinated release contract checks so Local candidates validate against exact local Core source rather than requiring a premature public/GitHub catalog projection.
+
 ## 2.4.43 — Model-aware port roles
 
 - Propagate optional exact-model `port_roles` metadata into generated UniFi dashboard cards.

@@ -15,7 +15,12 @@ EXPECTED = {
     "USW Pro XG 8 PoE": ((8, 2), "faceplates/unifi-8-rj45-2sfp.png", "unifi_8_rj45_2sfp"),
     "USW Pro HD 24 PoE": ((24, 4), "faceplates/unifi-24-rj45-4sfp-inline.png", "unifi_24_rj45_4sfp_inline"),
     "USW Pro Aggregation": ((0, 32), "faceplates/unifi-32sfp.png", "unifi_32sfp"),
-    "US 16 PoE 150W": ((16, 2), "faceplates/24rj45-2sfp.png", "stock_24rj45_2sfp"),
+    "USW-16-PoE": ((16, 2), "faceplates/unifi-16rj45-2sfp.png", "unifi_16_rj45_2sfp"),
+    "US 16 PoE 150W": ((16, 2), "faceplates/unifi-16rj45-2sfp.png", "unifi_16_rj45_2sfp"),
+    "UDM Pro": ((9, 2), "faceplates/unifi-9rj45-2sfp.png", "unifi_9_rj45_2sfp"),
+    "UniFi Dream Machine PRO SE": ((9, 2), "faceplates/unifi-9rj45-2sfp.png", "unifi_9_rj45_2sfp"),
+    "UDM Pro Max": ((9, 2), "faceplates/unifi-9rj45-2sfp.png", "unifi_9_rj45_2sfp"),
+    "USW WAN": ((1, 3), "faceplates/unifi-3sfp.png", "unifi_3sfp"),
 }
 
 
@@ -35,10 +40,12 @@ def main() -> None:
         assert visuals.get("recommended_faceplate") == faceplate, model
         assert visuals.get("calibration_profile") == profile, model
 
-    # Oversized fallback remains legitimate where no exact 16+2 artwork exists.
-    us16 = by_model["US 16 PoE 150W"]
-    assert us16["ports"]["rj45"] == 16
-    assert us16["ports"]["uplinks"] == 2
+    # USW WAN keeps one real rear management RJ45 in device truth even though
+    # the selected front-panel faceplate contains only three optical cages.
+    usw = by_model["USW WAN"]
+    assert usw["ports"]["rj45"] == 1
+    assert usw["ports"]["uplinks"] == 3
+    assert usw["unifi_api_port_map"] == {"rj45": [4], "sfp": [1, 2, 3]}
 
     print("Discovery 2.4.19 exact-model faceplate matrix: PASS")
 

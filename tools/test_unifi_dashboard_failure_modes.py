@@ -81,7 +81,7 @@ def main() -> int:
             registry,
             {"devices": [
                 {"vendor": "Ubiquiti", "model": "UCG Ultra", "status": "detected", "dashboard_support": False},
-                {"vendor": "Ubiquiti", "model": "US 16 PoE 150W", "status": "detected", "dashboard_support": True, "calibration_profile": "stock_24rj45_2sfp", "default_faceplate": "faceplates/24rj45-2sfp.png"},
+                {"vendor": "Ubiquiti", "model": "US 16 PoE 150W", "status": "detected", "dashboard_support": True, "calibration_profile": "unifi_16_rj45_2sfp", "default_faceplate": "faceplates/unifi-16rj45-2sfp.png"},
                 {"vendor": "Ubiquiti", "model": "USW Pro Max 24", "status": "experimental", "dashboard_support": True, "calibration_profile": "unifi_24p_rj45_2sfp", "default_faceplate": "faceplates/unifi-24p-rj45-2sfp.png"},
                 {"vendor": "Ubiquiti", "model": "USW Ultra", "status": "detected", "dashboard_support": False},
             ]},
@@ -100,9 +100,11 @@ def main() -> int:
         assert community.stdout.count("type: custom:switch-vision-3650") == 4
         for model in ("UCG Ultra", "US 16 PoE 150W", "USW Pro Max 24", "USW Ultra"):
             assert f"switch_model: {model}" in community.stdout
-        assert community.stdout.count("calibration_profile: stock_24rj45_2sfp") == 3
+        assert community.stdout.count("calibration_profile: stock_24rj45_2sfp") == 2
+        assert community.stdout.count("calibration_profile: unifi_16_rj45_2sfp") == 1
         assert community.stdout.count("calibration_profile: unifi_24p_rj45_2sfp") == 1
-        assert community.stdout.count("faceplate_file: 24rj45-2sfp.png") == 3
+        assert community.stdout.count("faceplate_file: 24rj45-2sfp.png") == 2
+        assert community.stdout.count("faceplate_file: unifi-16rj45-2sfp.png") == 1
         assert community.stdout.count("faceplate_file: unifi-24p-rj45-2sfp.png") == 1
         assert community.stdout.count("generic_faceplate: true") == 2
         assert community.stdout.count("generic_faceplate: false") == 2

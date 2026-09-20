@@ -37,6 +37,8 @@ def main() -> int:
         "docker",
         "SV_RELEASE_CHECK_PASS",
         "git_status(root)",
+        "--core-source-root",
+        "SWITCH_VISION_CORE_SOURCE_ROOT",
         "validate_archive_hygiene",
         "validate_release_transport",
         "first_digest",

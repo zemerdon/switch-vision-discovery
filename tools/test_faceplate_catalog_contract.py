@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -20,13 +21,17 @@ rows={x["model"]:x for x in registry["devices"] if isinstance(x,dict) and x.get(
 expected={
 "GS1900-8":("faceplates/24rj45-2sfp.png","stock_24rj45_2sfp",8,0),
 "SR-S25G3420F":("faceplates/24rj45-4sfp.png","stock_24rj45_4sfp",16,4),
-"US 16 PoE 150W":("faceplates/24rj45-2sfp.png","stock_24rj45_2sfp",16,2),
+"USW-16-PoE":("faceplates/unifi-16rj45-2sfp.png","unifi_16_rj45_2sfp",16,2),
+"US 16 PoE 150W":("faceplates/unifi-16rj45-2sfp.png","unifi_16_rj45_2sfp",16,2),
+"UDM Pro":("faceplates/unifi-9rj45-2sfp.png","unifi_9_rj45_2sfp",9,2),
+"UniFi Dream Machine PRO SE":("faceplates/unifi-9rj45-2sfp.png","unifi_9_rj45_2sfp",9,2),
+"UDM Pro Max":("faceplates/unifi-9rj45-2sfp.png","unifi_9_rj45_2sfp",9,2),
 "GS1900-24E":("faceplates/24rj45-2sfp.png","stock_24rj45_2sfp",24,0),
 "SG350-20":("faceplates/24rj45-4sfp.png","stock_24rj45_4sfp",16,4),
 "HP J8693A Switch 3500yl-48G":("faceplates/48rj45-4sfp.png","stock_48rj45_4sfp",44,4),
 "USW Flex Mini":("faceplates/unifi-5rj45.png","default_unifi_5_rj45",5,0),
 "USW Flex 2.5G 5":("faceplates/unifi-5rj45.png","default_unifi_5_rj45",5,0),
-"USW WAN":("faceplates/24rj45-4sfp.png","stock_24rj45_4sfp",1,3),
+"USW WAN":("faceplates/unifi-3sfp.png","unifi_3sfp",1,3),
 "USW Aggregation":("faceplates/unifi-32sfp.png","unifi_32sfp",0,8),
 "USW Pro Aggregation":("faceplates/unifi-32sfp.png","unifi_32sfp",0,32),}
 for model,(face,profile,rj,sfp) in expected.items():
@@ -37,7 +42,16 @@ assert rows["USW WAN"]["unifi_api_port_map"]=={"rj45":[4],"sfp":[1,2,3]}
 u_spec=importlib.util.spec_from_file_location("sv_unifi_cards",r/"runtime_src/unifi_dashboard_cards.py");u=importlib.util.module_from_spec(u_spec);sys.modules[u_spec.name]=u;u_spec.loader.exec_module(u)
 assert u.visual_geometry_matches("faceplates/24rj45-2sfp.png",8,0) and u.visual_geometry_matches("faceplates/24rj45-2sfp.png",16,2);assert not u.visual_geometry_matches("faceplates/24rj45-2sfp.png",24,4);assert u.generic_visual(8,0)[:2]==("stock_24rj45_2sfp","faceplates/24rj45-2sfp.png")
 def ports(rj,sfp): return [{"idx":i,"connector":"RJ45"} for i in rj]+[{"idx":i,"connector":"SFP28" if i>=29 else "SFPPLUS"} for i in sfp]
-for model,payload,rj,sfp,face in [("USW Aggregation",ports([],range(1,9)),0,8,"unifi-32sfp.png"),("USW Pro Aggregation",ports([],range(1,33)),0,32,"unifi-32sfp.png"),("US 16 PoE 150W",ports(range(1,17),range(17,19)),16,2,"24rj45-2sfp.png"),("USW WAN",ports([4],[1,2,3]),1,3,"24rj45-4sfp.png")]:
+for model,payload,rj,sfp,face in [
+("USW Aggregation",ports([],range(1,9)),0,8,"unifi-32sfp.png"),
+("USW Pro Aggregation",ports([],range(1,33)),0,32,"unifi-32sfp.png"),
+("USW-16-PoE",ports(range(1,17),range(17,19)),16,2,"unifi-16rj45-2sfp.png"),
+("US 16 PoE 150W",ports(range(1,17),range(17,19)),16,2,"unifi-16rj45-2sfp.png"),
+("UDM Pro",ports(range(1,10),range(10,12)),9,2,"unifi-9rj45-2sfp.png"),
+("UniFi Dream Machine PRO SE",ports(range(1,10),range(10,12)),9,2,"unifi-9rj45-2sfp.png"),
+("UDM Pro Max",ports(range(1,10),range(10,12)),9,2,"unifi-9rj45-2sfp.png"),
+("USW WAN",ports([4],[1,2,3]),1,3,"unifi-3sfp.png"),
+]:
  rendered=u.render({"devices":[{"model":model,"id":"fixture","name":model,"ports":payload}]},registry);text,emitted=rendered[0],rendered[1];assert emitted==1,(model,rendered[1:]);assert f"port_count: {rj}" in text and f"sfp_port_count: {sfp}" in text,model;assert f"faceplate_file: {face}" in text,model
 assert "sfp_port_count: 32" not in u.render({"devices":[{"model":"USW Aggregation","id":"agg","ports":ports([],range(1,9))}]},registry)[0]
 
@@ -49,7 +63,10 @@ assert mx, "generated-card JQ markers missing"
 program=mx.group("body")
 visual=[x for x in registry["devices"] if isinstance(x,dict) and x.get("discovery_support") is True and x.get("dashboard_support") is True]
 assert visual, "supported visual model matrix is empty"
-assert not m.validate_default_faceplates(registry, m.load_pinned_faceplate_catalog())
+core_root=os.environ.get("SWITCH_VISION_CORE_SOURCE_ROOT","").strip()
+if not core_root:
+    raise SystemExit("SWITCH_VISION_CORE_SOURCE_ROOT is required for coordinated local faceplate validation")
+assert not m.validate_default_faceplates(registry, m.load_core_faceplate_catalog(m.resolve_core_source_root(core_root)))
 for row in visual:
     model=row["model"]; face=row.get("default_faceplate"); profile=row.get("calibration_profile")
     assert isinstance(face,str) and face.startswith("faceplates/") and face.endswith(".png"), model
