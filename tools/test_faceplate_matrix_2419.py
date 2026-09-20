@@ -9,7 +9,7 @@ REGISTRY = ROOT / "runtime_src" / "opt" / "switch-vision" / "devices" / "support
 
 EXPECTED = {
     "USW Flex": ((5, 0), "faceplates/unifi-5rj45.png", "default_unifi_5_rj45"),
-    "USW Flex Mini": ((5, 0), "faceplates/unifi-5rj45.png", "default_unifi_5_rj45"),
+    "USW Flex Mini": ((5, 0), "faceplates/usw-flex-mini.png", "usw_flex_mini"),
     "USW-Lite-8-PoE": ((8, 0), "faceplates/unifi-8rj45.png", "default_unifi_8_rj45"),
     "USW-Enterprise-8-PoE": ((8, 2), "faceplates/unifi-8-rj45-2sfp.png", "unifi_8_rj45_2sfp"),
     "USW Pro XG 8 PoE": ((8, 2), "faceplates/unifi-8-rj45-2sfp.png", "unifi_8_rj45_2sfp"),

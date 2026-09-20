@@ -2051,8 +2051,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-flex-mini-api",
-      "calibration_profile": "default_unifi_5_rj45",
-      "default_faceplate": "faceplates/unifi-5rj45.png",
+      "calibration_profile": "usw_flex_mini",
+      "default_faceplate": "faceplates/usw-flex-mini.png",
       "optional_faceplates": [],
       "tested_firmware": [
         "2.1.6"
@@ -2116,9 +2116,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/unifi-5rj45.png",
+        "recommended_faceplate": "faceplates/usw-flex-mini.png",
         "optional_faceplates": [],
-        "calibration_profile": "default_unifi_5_rj45",
+        "calibration_profile": "usw_flex_mini",
         "canvas": {
           "width": 2048,
           "height": 448

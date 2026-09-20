@@ -1,3 +1,10 @@
+## 2.4.45 — Dedicated USW Flex Mini faceplate
+
+- Point USW Flex Mini at Core's dedicated owner-calibrated usw-flex-mini.png / usw_flex_mini presentation.
+- Preserve the proven exact functional contract at five 1G RJ45 ports, no PoE output metadata and no optical uplinks.
+- Remove the old Core/Discovery Flex Mini visual exception because both components now share the same exact faceplate/profile authority.
+- Keep USW Flex and USW Flex 2.5G 5 on their existing generic five-port visual contracts.
+
 ## 2.4.44 — Compact UniFi exact-model faceplates
 
 - Point USW-16-PoE and US 16 PoE 150W at Core's owner-calibrated 16-RJ45 + 2-SFP faceplate.

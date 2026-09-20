@@ -29,7 +29,7 @@ expected={
 "GS1900-24E":("faceplates/24rj45-2sfp.png","stock_24rj45_2sfp",24,0),
 "SG350-20":("faceplates/24rj45-4sfp.png","stock_24rj45_4sfp",16,4),
 "HP J8693A Switch 3500yl-48G":("faceplates/48rj45-4sfp.png","stock_48rj45_4sfp",44,4),
-"USW Flex Mini":("faceplates/unifi-5rj45.png","default_unifi_5_rj45",5,0),
+"USW Flex Mini":("faceplates/usw-flex-mini.png","usw_flex_mini",5,0),
 "USW Flex 2.5G 5":("faceplates/unifi-5rj45.png","default_unifi_5_rj45",5,0),
 "USW WAN":("faceplates/unifi-3sfp.png","unifi_3sfp",1,3),
 "USW Aggregation":("faceplates/unifi-32sfp.png","unifi_32sfp",0,8),
@@ -50,6 +50,7 @@ for model,payload,rj,sfp,face in [
 ("UDM Pro",ports(range(1,10),range(10,12)),9,2,"unifi-9rj45-2sfp.png"),
 ("UniFi Dream Machine PRO SE",ports(range(1,10),range(10,12)),9,2,"unifi-9rj45-2sfp.png"),
 ("UDM Pro Max",ports(range(1,10),range(10,12)),9,2,"unifi-9rj45-2sfp.png"),
+("USW Flex Mini",ports(range(1,6),[]),5,0,"usw-flex-mini.png"),
 ("USW WAN",ports([4],[1,2,3]),1,3,"unifi-3sfp.png"),
 ]:
  rendered=u.render({"devices":[{"model":model,"id":"fixture","name":model,"ports":payload}]},registry);text,emitted=rendered[0],rendered[1];assert emitted==1,(model,rendered[1:]);assert f"port_count: {rj}" in text and f"sfp_port_count: {sfp}" in text,model;assert f"faceplate_file: {face}" in text,model

@@ -27,12 +27,6 @@ for model in (
     assert reason is None
 
 expected_exceptions = {
-    "USW Flex Mini": (
-        "Discovery now selects Core's already-shipped unifi-5rj45.png / "
-        "default_unifi_5_rj45 presentation for the exact five-RJ45 topology; "
-        "Core 2.7.8's derivative model recommendation still carries the older "
-        "stock 24+2 fallback, but no new faceplate or geometry authority is invented."
-    ),
     "USW Pro Aggregation": (
         "Discovery consumes the exact Core 2.6.32 32-position optical canvas; "
         "the shared physical 28 SFP+ + 4 SFP28 topology remains identical to Core."
