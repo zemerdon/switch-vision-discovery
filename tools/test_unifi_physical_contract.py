@@ -22,6 +22,7 @@ def registry_device(
     profile: str,
     faceplate: str,
     api_map: dict | None = None,
+    port_roles: dict | None = None,
 ) -> dict:
     device = {
         "vendor": "Ubiquiti",
@@ -39,6 +40,8 @@ def registry_device(
     }
     if api_map is not None:
         device["unifi_api_port_map"] = api_map
+    if port_roles is not None:
+        device["port_roles"] = port_roles
     return device
 
 
@@ -139,3 +142,25 @@ assert "port_count: 8" in text and "sfp_port_count: 0" in text, text
 assert "faceplate_file: 24rj45-2sfp.png" in text, text
 
 print("Switch Vision UniFi physical-contract regressions: PASS")
+
+# Port-role regression: exact model metadata must survive Discovery card generation
+# so Core can inherit the default role without guessing from physical position.
+role_registry = registry_device(
+    "UDM Pro Role Test",
+    9,
+    2,
+    profile="stock_24rj45_2sfp",
+    faceplate="faceplates/24rj45-2sfp.png",
+    port_roles={"rj45": {"9": "wan"}},
+)
+role_snapshot = {
+    "id": "udm-role",
+    "model": "UDM Pro Role Test",
+    "name": "UDM Role",
+    "ports": [*(port(i, "RJ45") for i in range(1, 10)), port(10, "SFPPLUS"), port(11, "SFPPLUS")],
+}
+text, emitted, exact, generic, pending, issues = render(role_snapshot, role_registry)
+assert emitted == 1 and exact == 1 and generic == 0 and issues == 0, text
+assert "port_roles:" in text and "rj45:" in text and "'9': wan" in text, text
+
+print("Switch Vision UniFi port-role propagation regression: PASS")

@@ -155,8 +155,11 @@ def binding_card_fields(
         "unifi_refresh_seconds": 10,
     }
     api_port_map = reg.get("unifi_api_port_map") if isinstance((reg or {}).get("unifi_api_port_map"), dict) else None
+    port_roles = reg.get("port_roles") if isinstance((reg or {}).get("port_roles"), dict) else None
     if api_port_map is not None:
         result["unifi_api_port_map"] = api_port_map
+    if port_roles is not None:
+        result["port_roles"] = port_roles
     return result
 
 
@@ -391,6 +394,11 @@ def render(
             if isinstance((reg or {}).get("unifi_api_port_map"), dict)
             else None
         )
+        port_roles = (
+            reg.get("port_roles")
+            if isinstance((reg or {}).get("port_roles"), dict)
+            else None
+        )
 
         exact_visual = bool(
             reg
@@ -468,6 +476,8 @@ def render(
         }
         if api_port_map is not None:
             card["unifi_api_port_map"] = api_port_map
+        if port_roles is not None:
+            card["port_roles"] = port_roles
 
         dumped = yaml.safe_dump(
             [card], sort_keys=False, allow_unicode=True, default_flow_style=False

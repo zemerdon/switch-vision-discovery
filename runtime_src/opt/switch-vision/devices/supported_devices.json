@@ -1276,7 +1276,7 @@
         "The UniFi Integration API exposes nine RJ45 ports and two 10G SFP+ ports for this UDM Pro.",
         "CPU, memory, uptime and aggregate uplink traffic are present in the live API snapshot.",
         "Per-port traffic is not exposed by the current Integration API path.",
-        "One or more ports may have routed WAN/LAN roles; role semantics are not yet classified by Switch Vision.",
+        "Physical RJ45 port 9 is classified as the WAN role from owner calibration; other port roles remain Auto/unknown unless stronger controller or per-device calibration evidence provides them.",
         "v2.0.32 uses the generic 48 RJ45 + 4 SFP faceplate as the universal temporary fallback until a smaller matching generic visual is supplied.",
         "v2.0.32 dashboard generation is enabled through the UniFi API/UniFi2MQTT data path; support status remains Experimental pending wider live validation.",
         "A dedicated 9-RJ45 + 2-SFP visual is not bundled yet; v2.0.32 uses the universal generic fallback while preserving the real port counts.",
@@ -1298,6 +1298,11 @@
         "canvas": {
           "width": 2048,
           "height": 448
+        }
+      },
+      "port_roles": {
+        "rj45": {
+          "9": "wan"
         }
       }
     },
