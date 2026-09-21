@@ -1,3 +1,10 @@
+## 2.4.48 — Exact Core faceplate pin release contract
+
+- Bind Discovery's Core faceplate-catalog contract to the exact verified Core source SHA used for coordinated release validation.
+- Add deterministic release preparation tooling that regenerates `contracts/core-faceplate-catalog.json` from the exact clean Core source instead of relying on a hand-maintained pin.
+- Require release validation to prove the committed published pin, the pinned public Core catalog, and the coordinated local Core catalog all agree before publication can proceed.
+- Carry the existing 2.4.47 runtime/model/telemetry behavior unchanged; this patch closes release-integrity drift that previously blocked deterministic Topic 74 generation.
+
 ## 2.4.47 — Exact-model, combo-port and Cisco telemetry release
 
 - Publish the locally validated WS-C3750X-48P-S and HP ProCurve 1810G-24 Experimental contracts plus corrected combo-port mapping profiles.

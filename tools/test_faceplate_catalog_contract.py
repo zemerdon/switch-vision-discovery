@@ -69,8 +69,13 @@ program=mx.group("body")
 visual=[x for x in registry["devices"] if isinstance(x,dict) and x.get("discovery_support") is True and x.get("dashboard_support") is True]
 assert visual, "supported visual model matrix is empty"
 core_root=os.environ.get("SWITCH_VISION_CORE_SOURCE_ROOT","").strip()
+core_sha=os.environ.get("SWITCH_VISION_CORE_SOURCE_SHA","").strip().lower()
 if not core_root:
     raise SystemExit("SWITCH_VISION_CORE_SOURCE_ROOT is required for coordinated local faceplate validation")
+if not re.fullmatch(r"[0-9a-f]{40}",core_sha):
+    raise SystemExit("SWITCH_VISION_CORE_SOURCE_SHA is required for coordinated local faceplate validation")
+pin=m.parse_faceplate_pin(json.loads((r/"contracts/core-faceplate-catalog.json").read_text(encoding="utf-8")))
+assert pin["commit_sha"]==core_sha,(pin["commit_sha"],core_sha)
 assert not m.validate_default_faceplates(registry, m.load_core_faceplate_catalog(m.resolve_core_source_root(core_root)))
 for row in visual:
     model=row["model"]; face=row.get("default_faceplate"); profile=row.get("calibration_profile")

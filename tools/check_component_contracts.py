@@ -330,12 +330,25 @@ def main() -> int:
         default=os.environ.get("SWITCH_VISION_CORE_SOURCE_ROOT", ""),
         help="Use an exact local Core source tree for coordinated local candidate checks.",
     )
+    parser.add_argument(
+        "--core-source-sha",
+        default=os.environ.get("SWITCH_VISION_CORE_SOURCE_SHA", ""),
+        help="Exact Core commit SHA represented by --core-source-root.",
+    )
     parser.add_argument("--snmp-addon-config-url", default=DEFAULT_SNMP_ADDON_CONFIG_URL)
     args = parser.parse_args()
     try:
         core_source_root = resolve_core_source_root(args.core_source_root)
     except Exception as exc:
         raise SystemExit(f"Invalid local Core source root: {exc}") from exc
+    core_source_sha = str(args.core_source_sha or "").strip().lower()
+    if core_source_root is not None:
+        if EXACT_GIT_SHA_RE.fullmatch(core_source_sha) is None:
+            raise SystemExit(
+                "Exact --core-source-sha is required with --core-source-root"
+            )
+    elif core_source_sha:
+        raise SystemExit("--core-source-sha requires --core-source-root")
 
     release_contract = subprocess.run(
         [sys.executable, "tools/test_sv_release_check.py"],
@@ -372,6 +385,9 @@ def main() -> int:
 
     discovery_registry = json.loads(discovery_registry_path.read_text(encoding="utf-8"))
     try:
+        pin = parse_faceplate_pin(
+            json.loads(CORE_FACEPLATE_PIN_PATH.read_text(encoding="utf-8"))
+        )
         pinned_faceplate_labels = load_pinned_faceplate_catalog()
     except Exception as exc:
         errors.append(f"Could not load exact pinned Core faceplate catalog: {exc}")
@@ -379,6 +395,11 @@ def main() -> int:
         errors.extend(
             validate_default_faceplates(discovery_registry, pinned_faceplate_labels)
         )
+        if core_source_root is not None and pin["commit_sha"] != core_source_sha:
+            errors.append(
+                "Discovery published Core faceplate pin does not match coordinated "
+                f"Core source: pin={pin['commit_sha']} coordinated={core_source_sha}"
+            )
     if core_source_root is not None:
         try:
             candidate_faceplate_labels = load_core_faceplate_catalog(core_source_root)

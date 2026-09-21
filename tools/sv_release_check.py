@@ -308,9 +308,16 @@ def main() -> int:
         default=os.environ.get("SWITCH_VISION_CORE_SOURCE_ROOT", ""),
         help="Exact local Core source tree used for coordinated local candidate contracts.",
     )
+    parser.add_argument(
+        "--core-source-sha",
+        default=os.environ.get("SWITCH_VISION_CORE_SOURCE_SHA", ""),
+        help="Exact Core commit SHA represented by --core-source-root.",
+    )
     args = parser.parse_args()
     if args.mode != "release":
         raise SystemExit("unsupported release-check mode")
+    core_source_root: Path | None = None
+    core_source_sha = str(args.core_source_sha or "").strip().lower()
     if str(args.core_source_root or "").strip():
         core_source_root = Path(args.core_source_root).expanduser().resolve()
         required = (
@@ -323,10 +330,33 @@ def main() -> int:
             raise SystemExit(
                 "Discovery local Core source contract is incomplete: " + ", ".join(missing)
             )
+        if re.fullmatch(r"[0-9a-f]{40}", core_source_sha) is None:
+            raise SystemExit(
+                "Discovery release check requires exact --core-source-sha with --core-source-root"
+            )
         os.environ["SWITCH_VISION_CORE_SOURCE_ROOT"] = str(core_source_root)
-        print(f"Discovery coordinated local Core source: {core_source_root}")
+        os.environ["SWITCH_VISION_CORE_SOURCE_SHA"] = core_source_sha
+        print(
+            f"Discovery coordinated local Core source: {core_source_root} "
+            f"sha={core_source_sha}"
+        )
+    elif core_source_sha:
+        raise SystemExit("--core-source-sha requires --core-source-root")
 
     root = ROOT
+    if core_source_root is not None:
+        run(
+            [
+                sys.executable,
+                "tools/prepare_core_faceplate_pin.py",
+                "--check",
+                "--core-source-root",
+                str(core_source_root),
+                "--core-source-sha",
+                core_source_sha,
+            ],
+            root,
+        )
     baseline_status = git_status(root)
     version = resolve_version(root)
 
