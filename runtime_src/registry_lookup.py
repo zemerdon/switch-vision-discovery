@@ -87,6 +87,8 @@ def report(model: str, device: dict | None) -> str:
     lines += [
         '- Registry match: yes',
         f'- Registry status: {device.get("status", "unknown")}',
+        f'- Vendor: {device.get("vendor", "unknown")}',
+        f'- Dashboard support: {"yes" if device.get("dashboard_support") else "no"}',
         f'- Family: {device.get("family", "unknown")}',
         f'- Mapping profile: {device.get("mapping_profile") or "not assigned"}',
         f'- Calibration profile: {device.get("calibration_profile") or "not assigned"}',

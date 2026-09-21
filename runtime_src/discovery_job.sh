@@ -878,15 +878,20 @@ write_csv_diagnostics_for_walk() {
 parser_report() {
   walk_file="$1"
   target_ip="$2"
+  registry_model=""
+  registry_match="no"
   registry_status=""
   registry_mapping_profile=""
+  registry_dashboard_support="no"
   if command -v cv_cap_extract_model_text >/dev/null 2>&1 && [ -f "$REGISTRY_LOOKUP" ]; then
     registry_model=$(cv_cap_extract_model_text "$walk_file")
     registry_report=$(python3 "$REGISTRY_LOOKUP" --registry "$DEVICE_REGISTRY" --model "$registry_model" --report 2>/dev/null || true)
+    registry_match=$(printf '%s\n' "$registry_report" | awk -F': ' '/^- Registry match:/ {print $2; exit}')
     registry_status=$(printf '%s\n' "$registry_report" | awk -F': ' '/^- Registry status:/ {print $2; exit}')
     registry_mapping_profile=$(printf '%s\n' "$registry_report" | awk -F': ' '/^- Mapping profile:/ {print $2; exit}')
+    registry_dashboard_support=$(printf '%s\n' "$registry_report" | awk -F': ' '/^- Dashboard support:/ {print $2; exit}')
   fi
-  awk -v target_ip="$target_ip" -v generator_enabled="$GENERATE_SNMP2MQTT" -v source_walk="$walk_file" -v registry_status="$registry_status" -v registry_mapping_profile="$registry_mapping_profile" '
+  awk -v target_ip="$target_ip" -v generator_enabled="$GENERATE_SNMP2MQTT" -v source_walk="$walk_file" -v registry_model="$registry_model" -v registry_match="$registry_match" -v registry_status="$registry_status" -v registry_mapping_profile="$registry_mapping_profile" -v registry_dashboard_support="$registry_dashboard_support" '
     function value_of(line, v) {
       v = line
       sub(/^[^=]*= /, "", v)
@@ -951,6 +956,7 @@ parser_report() {
       # The generated supported-device registry is authoritative when an exact
       # model match exists; legacy parser tables remain fallback only.
       if (registry_status == "confirmed") return "supported"
+      if (registry_status == "community_validated") return "community_validated"
       if (registry_status == "experimental") return "experimental"
       if (registry_status == "detected") return "detected"
       if (model ~ /^WS-C3650-48/) return "supported"
@@ -971,13 +977,17 @@ parser_report() {
     }
     function support_line(status) {
       if (status == "supported") return "supported"
+      if (status == "community_validated") return "community validated"
       if (status == "experimental") return "experimental / partially validated"
+      if (status == "detected") return "detected / exact model known"
       if (status == "untested") return "untested / needs validation"
       return "unsupported"
     }
     function validation_note(status) {
       if (status == "supported") return "Validated in Switch Vision live testing."
+      if (status == "community_validated") return "Independent real-hardware field validation is recorded for this exact model."
       if (status == "experimental") return "Model detected and mapped, but not fully validated on all physical port types."
+      if (status == "detected") return "Exact model is registered, but the complete implementation contract is still pending."
       if (status == "untested") return "Family detected, but this exact layout is not validated yet."
       return "No validated Switch Vision profile matched this device."
     }
@@ -1175,13 +1185,15 @@ parser_report() {
       else if (sys_model != "") model = sys_model
       else if (candidate_model != "") model = candidate_model
       else if (generic_model != "") model = generic_model
+      report_model = model
+      if (registry_match == "yes" && registry_model != "") report_model = registry_model
       if (hostname == "unknown" && cisco_hostname != "") hostname = cisco_hostname
       print ""
       print "Discovery parser summary"
       print "------------------------"
       print "Hostname: " hostname
       if (cisco_hostname != "") print "Cisco local hostname: " cisco_hostname
-      print "Model/platform: " model
+      print "Model/platform: " report_model
       print "OS/software version: " ios
       if_total = ifname_native_total = ifdescr_fallback_total = 0
       for (idx in ifname) {
@@ -1545,28 +1557,28 @@ parser_report() {
       print ""
       print "Switch Vision mapping profile:"
       profile = "unknown"
-      profile_status = profile_status_for(model)
+      profile_status = profile_status_for(report_model)
       if (registry_mapping_profile != "" && registry_mapping_profile != "not assigned") profile = registry_mapping_profile
-      else if (model == "WS-C3850-12XS-E") profile = "cisco-3850-12xs-12x10g"
-      else if (model ~ /^WS-C3650-48/) profile = "cisco-3650-48p-2x10g"
-      else if (is_2960(model)) profile = c2960_profile(model)
-      else if (model ~ /^WS-C3750-48P/) profile = "cisco-3750-48p-48fe-4sfp"
-      else if (model ~ /^WS-C3750X-24P/) profile = "cisco-3750x-24p"
-      else if (model ~ /^WS-C3560CG-8PC/) profile = "cisco-3560cg-8pc-8p-2dual"
-      else if (model == "Juniper EX3300-48P") profile = "juniper-ex3300-48p"
-      else if (model == "SG500X-24") profile = "cisco-sg500x-24-24p-4x10g"
-      else if (model == "S5735-L8P4X-A1") profile = "huawei-s5735-l8p4x-a1"
-      else if (model == "S5720-12TP-LI-AC") profile = "huawei-s5720-12tp-li-ac"
-      else if (model == "XS1930-10") profile = "zyxel-xs1930-10"
-      else if (model == "N2128PX-ON") profile = "dell-n2128px-on"
-      else if (model == "CRS328-24P-4S+") profile = "mikrotik-crs328-24p-4splus"
-      else if (model == "UDM Pro") profile = "ubiquiti-udm-pro-api"
-      else if (model == "US 8 60W") profile = "ubiquiti-us-8-60w-api"
-      else if (model == "US-8-150W") profile = "ubiquiti-us-8-150w-snmp"
-      else if (model == "US XG 16") profile = "ubiquiti-us-xg-16-api"
-      else if (model == "US-24-250W") profile = "ubiquiti-us-24-250w-snmp"
-      else if (model == "US 48") profile = "ubiquiti-us-48-api"
-      else if (model ~ /^WS-C3650/) profile = "cisco-3650-auto"
+      else if (report_model == "WS-C3850-12XS-E") profile = "cisco-3850-12xs-12x10g"
+      else if (report_model ~ /^WS-C3650-48/) profile = "cisco-3650-48p-2x10g"
+      else if (is_2960(report_model)) profile = c2960_profile(report_model)
+      else if (report_model ~ /^WS-C3750-48P/) profile = "cisco-3750-48p-48fe-4sfp"
+      else if (report_model ~ /^WS-C3750X-24P/) profile = "cisco-3750x-24p"
+      else if (report_model ~ /^WS-C3560CG-8PC/) profile = "cisco-3560cg-8pc-8p-2dual"
+      else if (report_model == "Juniper EX3300-48P") profile = "juniper-ex3300-48p"
+      else if (report_model == "SG500X-24") profile = "cisco-sg500x-24-24p-4x10g"
+      else if (report_model == "S5735-L8P4X-A1") profile = "huawei-s5735-l8p4x-a1"
+      else if (report_model == "S5720-12TP-LI-AC") profile = "huawei-s5720-12tp-li-ac"
+      else if (report_model == "XS1930-10") profile = "zyxel-xs1930-10"
+      else if (report_model == "N2128PX-ON") profile = "dell-n2128px-on"
+      else if (report_model == "CRS328-24P-4S+") profile = "mikrotik-crs328-24p-4splus"
+      else if (report_model == "UDM Pro") profile = "ubiquiti-udm-pro-api"
+      else if (report_model == "US 8 60W") profile = "ubiquiti-us-8-60w-api"
+      else if (report_model == "US-8-150W") profile = "ubiquiti-us-8-150w-snmp"
+      else if (report_model == "US XG 16") profile = "ubiquiti-us-xg-16-api"
+      else if (report_model == "US-24-250W") profile = "ubiquiti-us-24-250w-snmp"
+      else if (report_model == "US 48") profile = "ubiquiti-us-48-api"
+      else if (report_model ~ /^WS-C3650/) profile = "cisco-3650-auto"
       print "- Matched profile: " profile
       print "- Profile status: " profile_status
       print "- Support status: " support_line(profile_status)
@@ -1754,7 +1766,8 @@ parser_report() {
       if (unmapped_rows > 0) print "- Unmapped non-front-panel interfaces: " unmapped_rows
       print ""
       print "Discovery checks:"
-      if (model == "Juniper EX3300-48P") print "- PASS: Juniper EX3300-48P model detected"
+      if (registry_match == "yes") print "- PASS: exact model matched in Switch Vision supported-device registry: " report_model " (" profile_status ")"
+      else if (model == "Juniper EX3300-48P") print "- PASS: Juniper EX3300-48P model detected"
       else if (model == "WS-C3850-12XS-E") print "- PASS: Catalyst 3850-12XS exact factory/no-module model detected"
       else if (model ~ /^WS-C3650/) print "- PASS: Catalyst 3650 model detected"
       else if (is_2960x(model) && profile_status == "supported") print "- PASS: Catalyst 2960X exact model confirmed by supported-device registry"
@@ -1774,13 +1787,14 @@ parser_report() {
       print (ios != "unknown" ? "- PASS: OS/software version detected" : "- WARN: OS/software version not detected")
       print (if_total > 0 ? "- PASS: usable interface-name table detected" : "- FAIL: neither ifName nor ifDescr interface names detected")
       print (physical_if > 0 ? "- PASS: physical switch interfaces detected" : "- FAIL: physical switch interfaces not detected")
-      if (model == "Juniper EX3300-48P") print "- PASS: Juniper VLAN/trunk mapping uses Q-BRIDGE-MIB and derived VLAN state"
-      else if (model == "XS1930-10") print (qbridge_pvid_count > 0 ? "- PASS: Zyxel PVID mapping uses Q-BRIDGE-MIB" : "- WARN: Q-BRIDGE PVID rows not detected")
-      else print (trunk_status_count > 0 ? "- PASS: Cisco trunk status OIDs detected" : "- WARN: Cisco trunk status OIDs not detected")
+      if (report_model == "Juniper EX3300-48P") print "- PASS: Juniper VLAN/trunk mapping uses Q-BRIDGE-MIB and derived VLAN state"
+      else if (report_model == "XS1930-10") print (qbridge_pvid_count > 0 ? "- PASS: Zyxel PVID mapping uses Q-BRIDGE-MIB" : "- WARN: Q-BRIDGE PVID rows not detected")
+      else if (profile ~ /^cisco-/) print (trunk_status_count > 0 ? "- PASS: Cisco trunk status OIDs detected" : "- WARN: Cisco trunk status OIDs not detected")
       if (target_ip != "unknown" && target_ip != "") print "- PASS: management target provided: " target_ip
       else print "- WARN: management target not provided; provide a switch_host in the switch list or targets CSV before generator use"
+      registry_ready = (registry_match == "yes" && registry_dashboard_support == "yes" && profile != "unknown" && if_total > 0)
       c3850_ready = (model == "WS-C3850-12XS-E" && if_total > 0 && rj45 == 0 && ten == 12)
-      ready = (c3850_ready || ((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "CRS328-24P-4S+" && if_total > 0 && rj45 == 24 && ten == 4) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48) || (model == "UDM Pro" && if_total > 0 && rj45 == 9 && ten == 2) || (model == "US 8 60W" && if_total > 0 && rj45 == 8) || (model == "US-8-150W" && if_total > 0 && rj45 == 8 && sfp_gi == 2) || (model == "US-24-250W" && if_total > 0 && rj45 == 24 && sfp_gi == 2) || (model == "US 48" && if_total > 0 && rj45 == 48 && ten == 2 && sfp_gi == 2))
+      ready = (registry_ready || c3850_ready || ((model ~ /^WS-C3650/ || model ~ /^WS-C3750X/ || is_2960(model)) && if_total > 0 && physical_if > 0) || (model == "WS-C3750-48P" && if_total > 0 && stack_member_count > 0 && rj45 == (48 * stack_member_count) && sfp_gi == (4 * stack_member_count)) || ((model == "SG500X-24" || model == "S5735-L8P4X-A1" || model == "S5720-12TP-LI-AC") && if_total > 0 && physical_if > 0) || (model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2 && qbridge_pvid_count > 0) || (model == "N2128PX-ON" && if_total > 0 && stack_member_count > 0 && rj45 == (28 * stack_member_count) && ten == (2 * stack_member_count)) || (model == "CRS328-24P-4S+" && if_total > 0 && rj45 == 24 && ten == 4) || (model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48) || (model == "UDM Pro" && if_total > 0 && rj45 == 9 && ten == 2) || (model == "US 8 60W" && if_total > 0 && rj45 == 8) || (model == "US-8-150W" && if_total > 0 && rj45 == 8 && sfp_gi == 2) || (model == "US-24-250W" && if_total > 0 && rj45 == 24 && sfp_gi == 2) || (model == "US 48" && if_total > 0 && rj45 == 48 && ten == 2 && sfp_gi == 2))
       print "- Ready for SNMP2MQTT generation: " (ready ? "yes, review-only" : "no")
       if (profile_status == "supported") print "- Generator confidence: supported profile; review generated YAML before installing"
       else if (profile_status == "community_validated") print "- Generator confidence: community-validated profile; physical layout verified on real hardware"
@@ -1791,48 +1805,63 @@ parser_report() {
       print "- SNMP2MQTT generator status: " (generator_enabled == "true" ? "enabled" : "disabled")
       print ""
       print "Model validation:"
-      print "- Exact model detected: " (model != "unknown" ? "yes" : "no")
+      print "- Exact model detected: " ((registry_match == "yes" || report_model != "unknown") ? "yes" : "no")
       print "- Profile status label: " profile_status
       print "- RJ45 mapping: " (rj45 > 0 ? "generated from IF-MIB/interface layout" : "not detected")
-      print "- SFP/uplink mapping: " sfp_note(profile_status, model)
-      if (model ~ /^S5720-12TP-LI-AC$/ || model ~ /^S5735-L8P4X-A1$/) print "- Faceplate: generic 48 RJ45 + 4 SFP fallback visual"
-      else if (model == "XS1930-10") print "- Faceplate: compact 8 RJ45 + 2 SFP temporary fallback visual"
-      else if (model == "N2128PX-ON") print "- Faceplate: dedicated Dell 28 RJ45 + 2 SFP+ visual; current-build alignment confirmed"
-      else if (model == "CRS328-24P-4S+") print "- Faceplate: neutral 24 RJ45 + 4 SFP temporary fallback visual; exact MikroTik alignment pending"
+      print "- SFP/uplink mapping: " sfp_note(profile_status, report_model)
+      if (report_model ~ /^S5720-12TP-LI-AC$/ || report_model ~ /^S5735-L8P4X-A1$/) print "- Faceplate: generic 48 RJ45 + 4 SFP fallback visual"
+      else if (report_model == "XS1930-10") print "- Faceplate: compact 8 RJ45 + 2 SFP temporary fallback visual"
+      else if (report_model == "N2128PX-ON") print "- Faceplate: dedicated Dell 28 RJ45 + 2 SFP+ visual; current-build alignment confirmed"
+      else if (report_model == "CRS328-24P-4S+") print "- Faceplate: neutral 24 RJ45 + 4 SFP temporary fallback visual; exact MikroTik alignment pending"
       else print "- Faceplate: registry-selected visual"
       print ""
       print "VLAN / trunk summary:"
       print "- VLAN name entries: " vlan_count
       if (vlan_names != "") print "- VLAN names seen: " vlan_names
-      if (model == "Juniper EX3300-48P") print "- Juniper VLAN source: Q-BRIDGE-MIB / derived VLAN sensors"
-      else if (model == "XS1930-10") print "- Zyxel VLAN source: Q-BRIDGE-MIB PVID (" qbridge_pvid_count " row(s)); trunk/access mode not inferred"
-      else print "- Cisco dynamic trunk state OIDs: " trunk_dynamic_count
-      for (s in trunk_dynamic) print "  - dynamic state " s " (" trunk_label(s) "): " trunk_dynamic[s]
-      if (model != "Juniper EX3300-48P") print "- Cisco trunk status OIDs: " trunk_status_count
-      for (s in trunk_status) print "  - trunk status " s " (" trunk_label(s) "): " trunk_status[s]
-      for (idx in trunk_status_by_if) {
-        if (trunk_status_by_if[idx] == "1" && (idx in ifname)) likely_trunks = add_unique(likely_trunks, ifname[idx])
+      if (report_model == "Juniper EX3300-48P") {
+        print "- Juniper VLAN source: Q-BRIDGE-MIB / derived VLAN sensors"
+      } else if (report_model == "XS1930-10") {
+        print "- Zyxel VLAN source: Q-BRIDGE-MIB PVID (" qbridge_pvid_count " row(s)); trunk/access mode not inferred"
+      } else if (profile ~ /^cisco-/) {
+        print "- Cisco dynamic trunk state OIDs: " trunk_dynamic_count
+        for (s in trunk_dynamic) print "  - dynamic state " s " (" trunk_label(s) "): " trunk_dynamic[s]
+        print "- Cisco trunk status OIDs: " trunk_status_count
+        for (s in trunk_status) print "  - trunk status " s " (" trunk_label(s) "): " trunk_status[s]
+        for (idx in trunk_status_by_if) {
+          if (trunk_status_by_if[idx] == "1" && (idx in ifname)) likely_trunks = add_unique(likely_trunks, ifname[idx])
+        }
+        if (likely_trunks != "") print "- Likely trunk ports: " likely_trunks
       }
-      if (likely_trunks != "") print "- Likely trunk ports: " likely_trunks
       print ""
       print "Temperature summary:"
-      print "- Cisco EnvMon temp names: " env_names
-      print "- Cisco EnvMon temp values: " env_values
-      shown = 0
-      for (idx in env_name) {
-        if (shown < 8) {
-          shown++
-          suffix = (idx in env_value ? " = " env_value[idx] " C" : "")
-          print "  - " env_name[idx] suffix
+      if (profile ~ /^cisco-/) {
+        print "- Cisco EnvMon temp names: " env_names
+        print "- Cisco EnvMon temp values: " env_values
+        shown = 0
+        for (idx in env_name) {
+          if (shown < 8) {
+            shown++
+            suffix = (idx in env_value ? " = " env_value[idx] " C" : "")
+            print "  - " env_name[idx] suffix
+          }
         }
+        if (env_names > shown) print "  - ..."
       }
-      if (env_names > shown) print "  - ..."
       print "- ENTITY-MIB temp labels: " entity_temp
       for (i = 1; i <= entity_temp && i <= 8; i++) print "  - " entity_temp_name[i]
       if (entity_temp > 8) print "  - ..."
       print ""
       print "Switch Vision recommendation:"
-      if (model == "Juniper EX3300-48P") {
+      if (registry_match == "yes") {
+        print "- Suggested profile: " profile
+        if (profile_status == "supported") print "- Confidence: high; exact registered model is confirmed supported"
+        else if (profile_status == "community_validated") print "- Confidence: high; exact registered model is community validated"
+        else if (profile_status == "experimental") print "- Confidence: experimental; exact registered model and mapping profile matched"
+        else if (profile_status == "detected") print "- Confidence: detected; exact registry identity is known but the implementation contract is incomplete"
+        else print "- Confidence: " profile_status
+        print "- Support status: " support_line(profile_status)
+        print "- Validation note: " validation_note(profile_status)
+      } else if (model == "Juniper EX3300-48P") {
         print "- Suggested profile: juniper-ex3300-48p"
         print "- Confidence: high"
         print "- Support status: supported"
@@ -2001,20 +2030,24 @@ write_walk_section() {
       echo ""
     fi
     echo "Early checks:"
-    if grep -qi "catalyst\|cisco" "$walk_file"; then
-      echo "- Cisco/Catalyst text: found"
-    else
-      echo "- Cisco/Catalyst text: not found yet"
+    if [ "${CV_ID_VENDOR:-}" = "cisco" ]; then
+      if grep -qi "catalyst\|cisco" "$walk_file"; then
+        echo "- Cisco/Catalyst text: found"
+      else
+        echo "- Cisco/Catalyst text: not found yet"
+      fi
     fi
     if grep -q "1.3.6.1.2.1.2.2.1.8" "$walk_file" || grep -q "iso.3.6.1.2.1.2.2.1.8" "$walk_file"; then
       echo "- Interface status OIDs: found"
     else
       echo "- Interface status OIDs: not found yet"
     fi
-    if awk '/\.3\.6\.1\.4\.1\.9\.9\.46\.1\.6\.1\.1\.14\.[0-9]+ = INTEGER:/ { found=1 } END { exit(found ? 0 : 1) }' "$walk_file"; then
-      echo "- Cisco trunk status OIDs: found"
-    else
-      echo "- Cisco trunk status OIDs: not found yet"
+    if [ "${CV_ID_VENDOR:-}" = "cisco" ]; then
+      if awk '/\.3\.6\.1\.4\.1\.9\.9\.46\.1\.6\.1\.1\.14\.[0-9]+ = INTEGER:/ { found=1 } END { exit(found ? 0 : 1) }' "$walk_file"; then
+        echo "- Cisco trunk status OIDs: found"
+      else
+        echo "- Cisco trunk status OIDs: not found yet"
+      fi
     fi
     parser_report "$walk_file" "$target_ip"
   else
