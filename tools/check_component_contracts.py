@@ -372,11 +372,22 @@ def main() -> int:
 
     discovery_registry = json.loads(discovery_registry_path.read_text(encoding="utf-8"))
     try:
-        faceplate_labels = load_core_faceplate_catalog(core_source_root)
+        pinned_faceplate_labels = load_pinned_faceplate_catalog()
     except Exception as exc:
         errors.append(f"Could not load exact pinned Core faceplate catalog: {exc}")
     else:
-        errors.extend(validate_default_faceplates(discovery_registry, faceplate_labels))
+        errors.extend(
+            validate_default_faceplates(discovery_registry, pinned_faceplate_labels)
+        )
+    if core_source_root is not None:
+        try:
+            candidate_faceplate_labels = load_core_faceplate_catalog(core_source_root)
+        except Exception as exc:
+            errors.append(f"Could not load coordinated local Core faceplate catalog: {exc}")
+        else:
+            errors.extend(
+                validate_default_faceplates(discovery_registry, candidate_faceplate_labels)
+            )
     profile_payload = yaml.safe_load(discovery_profiles_path.read_text(encoding="utf-8")) or {}
     discovery_profiles = profile_payload.get("profiles") or {}
     if not isinstance(discovery_profiles, dict):
