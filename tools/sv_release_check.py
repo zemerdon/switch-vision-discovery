@@ -55,6 +55,7 @@ PERMANENT_CHECKS = (
     "tools/test_calibration_core_bridge_contract.py",
     "tools/test_registry_roundtrip.py",
     "tools/test_manual_model_physical_contract.py",
+    "tools/test_cisco_telemetry.py",
 )
 SHELL_CHECKS = (
     "tools/test_production_physical_contract.sh",

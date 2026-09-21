@@ -1,3 +1,13 @@
+## 2.4.47 — Exact-model, combo-port and Cisco telemetry release
+
+- Publish the locally validated WS-C3750X-48P-S and HP ProCurve 1810G-24 Experimental contracts plus corrected combo-port mapping profiles.
+- Preserve detected exact identity separately from a selected compatibility model throughout authoritative physical-contract generation.
+- Keep dual-personality RJ45/SFP sockets bound to one logical port while retaining independent Calibration geometry.
+- Collect Cisco ENVMON fan and power-supply state tables in targeted walks.
+- Collect standard POWER-ETHERNET-MIB per-port state/class plus Cisco per-port power only when cpeExtPsePortEntPhyIndex resolves through ENTITY-MIB to one exact physical RJ45 port.
+- Fail closed on missing, zero, nonphysical, or ambiguous PoE joins; no per-port telemetry is invented from PSE port numbering.
+- Add permanent synthetic regression coverage for fan/PSU and per-port PoE generation.
+
 ## 2.4.46 — Dell visual-state metadata reconciliation
 
 - Reconcile Dell N2128PX-ON registry/report wording with Core's already-shipped dedicated 28 RJ45 + 2 SFP+ faceplate and owner-calibrated factory profile.

@@ -95,5 +95,9 @@
     "cpu": "percent",
     "memory": "percent",
     "environment": "vendor-defined"
+  },
+  "known_sensor_oids": {
+    "cpe_ext_port_power_consumption_mw": "1.3.6.1.4.1.9.9.402.1.2.1.9",
+    "cpe_ext_port_entphysical_index": "1.3.6.1.4.1.9.9.402.1.2.1.11"
   }
 }

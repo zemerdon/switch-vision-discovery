@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="2.4.46"
+SWITCH_VISION_DISCOVERY_VERSION="2.4.47"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -2319,14 +2319,18 @@ run_live_snmpwalk_current() {
 1.3.6.1.2.1.25.3.3.1.2
 1.3.6.1.2.1.47.1.1.1.1
 1.3.6.1.2.1.99.1.1.1
+1.3.6.1.2.1.105.1.1.1
 1.3.6.1.2.1.105.1.3.1
 1.3.6.1.4.1.9.2.1.3
 1.3.6.1.4.1.9.9.13.1.3.1
+1.3.6.1.4.1.9.9.13.1.4.1
+1.3.6.1.4.1.9.9.13.1.5.1
 1.3.6.1.4.1.9.9.68.1.2.2.1.2
 1.3.6.1.4.1.9.9.46.1.3.1.1.4
 1.3.6.1.4.1.9.9.46.1.6.1.1.13
 1.3.6.1.4.1.9.9.46.1.6.1.1.14
 1.3.6.1.4.1.9.9.109.1.1.1.1
+1.3.6.1.4.1.9.9.402.1.2.1
 1.3.6.1.4.1.9.9.402.1.3.1
 "
 
@@ -2900,6 +2904,14 @@ write_generated_yaml_for_walk() {
       sub(/^.*\./, "", s)
       return s + 0
     }
+    function oid_pair_key(line, s, parts, n) {
+      s = line
+      sub(/[[:space:]]*=.*/, "", s)
+      sub(/^\./, "", s)
+      n = split(s, parts, ".")
+      if (n < 2) return ""
+      return parts[n-1] "." parts[n]
+    }
     function member_label(member, letters, number) {
       # A standalone Catalyst can retain an internal member number other than 1
       # (for example Gi2/0/1 after stack history). It is still one management
@@ -3047,6 +3059,19 @@ write_generated_yaml_for_walk() {
       if ((name ~ /^Te/ || name ~ /^TenGigabitEthernet/) && parts[2] == "1") return label " SFP 10G " port
       return label " Interface " idx
     }
+    function cisco_poe_port_label(ent_idx, candidate, label) {
+      candidate = ent_name[ent_idx]
+      if (candidate != "") {
+        label = physical_label(candidate, ent_idx)
+        if (label ~ / Port [0-9]+$/) return label
+      }
+      candidate = ent_descr[ent_idx]
+      if (candidate != "") {
+        label = physical_label(candidate, ent_idx)
+        if (label ~ / Port [0-9]+$/) return label
+      }
+      return ""
+    }
     function chunk_label(start, arr) {
       split(phys_label[start], arr, " ")
       if (arr[1] != "") return arr[1]
@@ -3146,7 +3171,7 @@ write_generated_yaml_for_walk() {
       return score
     }
     BEGIN {
-      model="unknown"; manufacturer="Unknown"; maxidx=0; maxcpu=0; maxpoe=0; maxstdpoe=0; maxtemp=0; maxhostcpu=0; maxmikropoe=0; physical_count=0
+      model="unknown"; manufacturer="Unknown"; maxidx=0; maxcpu=0; maxpoe=0; maxstdpoe=0; maxtemp=0; maxfan=0; maxpsu=0; maxhostcpu=0; maxmikropoe=0; physical_count=0
       if (member_map != "") {
         split(member_map, mm_items, ",")
         for (mmi in mm_items) {
@@ -3315,6 +3340,23 @@ write_generated_yaml_for_walk() {
       if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.402\.1\.3\.1\.3\.[0-9]+ = /) { idx=oid_index(line); poe_status_idx[idx]=1; poe_idx[idx]=1; if(idx>maxpoe) maxpoe=idx }
       if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.402\.1\.3\.1\.4\.[0-9]+ = /) { idx=oid_index(line); poe_used_idx[idx]=1; poe_idx[idx]=1; if(idx>maxpoe) maxpoe=idx }
       if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.402\.1\.3\.1\.5\.[0-9]+ = /) { idx=oid_index(line); poe_budget_idx[idx]=1; poe_idx[idx]=1; if(idx>maxpoe) maxpoe=idx }
+
+      # Cisco ENVMON fan and power-supply state. These are curated read-only
+      # state tables; emit only rows actually returned by the current walk.
+      if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.13\.1\.4\.1\.2\.[0-9]+ = /) { idx=oid_index(line); fan_descr[idx]=val; if(idx>maxfan) maxfan=idx }
+      if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.13\.1\.4\.1\.3\.[0-9]+ = /) { idx=oid_index(line); fan_state_idx[idx]=1; if(idx>maxfan) maxfan=idx }
+      if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.13\.1\.5\.1\.2\.[0-9]+ = /) { idx=oid_index(line); psu_descr[idx]=val; if(idx>maxpsu) maxpsu=idx }
+      if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.13\.1\.5\.1\.3\.[0-9]+ = /) { idx=oid_index(line); psu_state_idx[idx]=1; if(idx>maxpsu) maxpsu=idx }
+
+      # RFC 3621 per-port PoE rows are indexed by group.port and the port
+      # numbering itself is implementation-specific. The Cisco extension exposes
+      # cpeExtPsePortEntPhyIndex for the authoritative ENTITY-MIB join.
+      if (line ~ /\.3\.6\.1\.2\.1\.105\.1\.1\.1\.3\.[0-9]+\.[0-9]+ = /) { key=oid_pair_key(line); std_poe_port_admin[key]=1 }
+      if (line ~ /\.3\.6\.1\.2\.1\.105\.1\.1\.1\.6\.[0-9]+\.[0-9]+ = /) { key=oid_pair_key(line); std_poe_port_detect[key]=1 }
+      if (line ~ /\.3\.6\.1\.2\.1\.105\.1\.1\.1\.10\.[0-9]+\.[0-9]+ = /) { key=oid_pair_key(line); std_poe_port_class[key]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.402\.1\.2\.1\.9\.[0-9]+\.[0-9]+ = /) { key=oid_pair_key(line); cisco_poe_power[key]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.402\.1\.2\.1\.11\.[0-9]+\.[0-9]+ = /) { key=oid_pair_key(line); cisco_poe_entphy[key]=val + 0 }
+
       # POWER-ETHERNET-MIB aggregate fallback used by Catalyst models such
       # as the 2960S when CISCO-POWER-ETHERNET-EXT-MIB totals are absent.
       # These standard aggregate values are reported in watts.
@@ -3350,6 +3392,16 @@ write_generated_yaml_for_walk() {
       if (line ~ /\.3\.6\.1\.4\.1\.2636\.3\.1\.13\.1\.8\./) { suffix=juniper_suffix(line); jnx_cpu[suffix]=1 }
       if (line ~ /\.3\.6\.1\.4\.1\.2636\.3\.1\.13\.1\.11\./) { suffix=juniper_suffix(line); jnx_buffer[suffix]=1 }
       if (line ~ /\.3\.6\.1\.4\.1\.2636\.3\.1\.13\.1\.15\./) { suffix=juniper_suffix(line); jnx_memory[suffix]=1 }
+
+      # ENTITY-MIB physical names/descriptions are also used to join Cisco
+      # per-port PoE rows to real front-panel interfaces. A PoE row is never
+      # emitted unless this join resolves to one exact physical RJ45 port.
+      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.2\.[0-9]+ = /) {
+        idx=oid_index(line); ent_descr[idx]=val
+      }
+      if (line ~ /\.3\.6\.1\.2\.1\.47\.1\.1\.1\.1\.7\.[0-9]+ = /) {
+        idx=oid_index(line); ent_name[idx]=val
+      }
 
       # Identity evidence is walk-aware. Only emit OIDs that were actually
       # returned by the switch so generated SNMP2MQTT YAML never references a
@@ -3459,6 +3511,24 @@ write_generated_yaml_for_walk() {
         }
       }
 
+      # Resolve Cisco PoE table rows to the same physical labels used by the
+      # dashboard. If multiple PSE rows resolve to one physical port, mark that
+      # port ambiguous and emit nothing for it.
+      if (manufacturer == "Cisco") {
+        for (key in cisco_poe_entphy) {
+          ent_idx=cisco_poe_entphy[key] + 0
+          if (ent_idx <= 0) continue
+          poe_label=cisco_poe_port_label(ent_idx)
+          if (poe_label == "") continue
+          for (i=1; i<=phys_n; i++) {
+            if (phys_label[i] == poe_label) {
+              if (poe_key_for_phys[i] == "") poe_key_for_phys[i]=key
+              else if (poe_key_for_phys[i] != key) poe_key_for_phys[i]="AMBIGUOUS"
+            }
+          }
+        }
+      }
+
       status_chunk_size = 12
       traffic_chunk_size = 8
       vlan_chunk_size = 8
@@ -3481,6 +3551,32 @@ write_generated_yaml_for_walk() {
           idx=phys_idx[i]
           label=phys_label[i]
           yaml_sensor("1.3.6.1.2.1.2.2.1.8." idx, label " Status")
+        }
+      }
+
+      # Cisco per-port PoE is emitted only for an exact ENTITY-MIB join.
+      # Keep chunks small to avoid oversized grouped SNMP requests.
+      poe_chunk=0
+      for (start=1; start<=phys_n; start+=8) {
+        stop=start + 7
+        if (stop > phys_n) stop=phys_n
+        poe_sensor_count=0
+        for (i=start; i<=stop; i++) {
+          key=poe_key_for_phys[i]
+          if (key == "" || key == "AMBIGUOUS") continue
+          if ((key in std_poe_port_detect) || (key in std_poe_port_class) || (key in cisco_poe_power)) poe_sensor_count++
+        }
+        if (poe_sensor_count > 0) {
+          poe_chunk++
+          yaml_target_header("Switch Vision " chunk_label(start) " PoE Ports " sprintf("%02d", poe_chunk), 30)
+          for (i=start; i<=stop; i++) {
+            key=poe_key_for_phys[i]
+            if (key == "" || key == "AMBIGUOUS") continue
+            label=phys_label[i]
+            if (key in std_poe_port_detect) yaml_sensor("1.3.6.1.2.1.105.1.1.1.6." key, label " PoE Status Code")
+            if (key in std_poe_port_class) yaml_sensor("1.3.6.1.2.1.105.1.1.1.10." key, label " PoE Class Code")
+            if (key in cisco_poe_power) yaml_sensor_meta("1.3.6.1.4.1.9.9.402.1.2.1.9." key, label " PoE Power", "value / 1000", "W", "power", "measurement", "mdi:flash")
+          }
         }
       }
 
@@ -3773,6 +3869,24 @@ write_generated_yaml_for_walk() {
             else yaml_sensor("1.3.6.1.4.1.890.1.15.3.26.1.2.1.7." idx, prefix " Temperature " descr " Status")
           }
         }
+      }
+
+      # Cisco ENVMON fan/PSU state sensors. Keep per-member naming when the
+      # ENVMON description identifies a stack member; standalone switches use
+      # the configured prefix unchanged.
+      delete fan_member_count
+      for (idx=1; idx<=maxfan; idx++) if (idx in fan_state_idx) {
+        member=temp_member(fan_descr[idx])
+        fan_member_count[member]++
+        label=member_label(member)
+        yaml_sensor("1.3.6.1.4.1.9.9.13.1.4.1.3." idx, label " Fan " fan_member_count[member] " State")
+      }
+      delete psu_member_count
+      for (idx=1; idx<=maxpsu; idx++) if (idx in psu_state_idx) {
+        member=temp_member(psu_descr[idx])
+        psu_member_count[member]++
+        label=member_label(member)
+        yaml_sensor("1.3.6.1.4.1.9.9.13.1.5.1.3." idx, label " PSU " psu_member_count[member] " State")
       }
 
       for (idx=1; idx<=maxpoe; idx++) if (idx in poe_idx) {
