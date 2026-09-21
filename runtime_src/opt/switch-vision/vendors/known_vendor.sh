@@ -40,6 +40,12 @@ cv_known_vendor_identity() {
         CV_ID_PRODUCT_MATCH="j8693a-local-sysdescr"
         CV_ID_SUPPORT_STATUS="detected"
         ;;
+      *1810G*24*|*1810g*24*)
+        CV_ID_FAMILY="1810"
+        CV_ID_MODEL_HINT="HP ProCurve 1810G-24"
+        CV_ID_PRODUCT_MATCH="1810g-24-local-sysdescr"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
       *1810-24G*|*1810-24g*)
         CV_ID_FAMILY="1810"
         CV_ID_MODEL_HINT="HP 1810-24G"

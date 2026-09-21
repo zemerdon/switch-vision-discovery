@@ -330,7 +330,7 @@ records = [
     {"walk": str(unsupported), "switch": "unsupported", "host": "192.0.2.22", "prefix": "SKIP", "community": "readonly"},
 ]
 
-def resolved_prepare(source: Path, destination: Path, work: Path):
+def resolved_prepare(source: Path, destination: Path, work: Path, *, model_override: str = ""):
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     if source.name == "unsupported.txt":
@@ -358,14 +358,14 @@ assert "unsupported" not in targets
 assert staged["input_path"].endswith("supported.txt"), staged["input_path"]
 assert not (root / "work" / "snmpwalks" / "unsupported" / "unsupported.txt").exists()
 
-module._prepare_walk = lambda source, destination, work: None
+module._prepare_walk = lambda source, destination, work, *, model_override="": None
 staged, ordered, accepted_evidence = module._stage_options(options, root / "all-unresolved", records)
 assert not ordered, ordered
 assert not accepted_evidence, accepted_evidence
 assert staged["switches"] == [], staged["switches"]
 assert [row["switch_name"] for row in staged["dashboard_switches"]] == ["2960x-48p"], staged["dashboard_switches"]
 
-def fatal_prepare(source: Path, destination: Path, work: Path):
+def fatal_prepare(source: Path, destination: Path, work: Path, *, model_override: str = ""):
     raise RuntimeError("synthetic topology conflict")
 
 module._prepare_walk = fatal_prepare
@@ -470,6 +470,8 @@ card_count=$(grep -c '^      - type: custom:switch-vision-3650$' "$retain/card.y
 grep -Fq 'Working Switch' "$retain/card.yaml" || { echo 'FAIL: responding saved switch missing from Dashboard Card' >&2; cat "$retain/card.yaml" >&2; exit 1; }
 grep -Fq 'SW7 2960X 48P' "$retain/card.yaml" || { echo 'FAIL: failed SW7 saved switch was dropped from Dashboard Card' >&2; cat "$retain/card.yaml" >&2; exit 1; }
 grep -Fq 'sensor.sw7_model' "$retain/card.yaml" || { echo 'FAIL: retained SW7 card lost its configured sensor prefix' >&2; cat "$retain/card.yaml" >&2; exit 1; }
+grep -Fq 'entity_prefix: good' "$retain/card.yaml" || { echo 'FAIL: responding card lost its explicit telemetry entity prefix' >&2; cat "$retain/card.yaml" >&2; exit 1; }
+grep -Fq 'entity_prefix: sw7' "$retain/card.yaml" || { echo 'FAIL: retained SW7 card lost its explicit telemetry entity prefix' >&2; cat "$retain/card.yaml" >&2; exit 1; }
 grep -Fq '192.0.2.71' "$retain/generated.yaml" || { echo 'FAIL: responding switch telemetry missing from generated YAML' >&2; cat "$retain/generated.yaml" >&2; exit 1; }
 if grep -Fq '192.0.2.72' "$retain/generated.yaml" || grep -Fq '# Prefix: sw7' "$retain/generated.yaml"; then
   echo 'FAIL: failed SW7 target leaked into generated telemetry' >&2

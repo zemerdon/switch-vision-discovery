@@ -112,9 +112,21 @@ class Port:
 
 def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str, Any]:
     device_info = capabilities.get("device") if isinstance(capabilities.get("device"), dict) else {}
-    model = str(device_info.get("model_text") or "").strip()
-    registry_device = _registry_device(registry, model)
+    detected_model = str(
+        device_info.get("detected_model_text")
+        or device_info.get("model_text")
+        or ""
+    ).strip()
+    model_override = str(device_info.get("model_override") or "").strip()
+    effective_model = str(
+        device_info.get("effective_model_text")
+        or model_override
+        or detected_model
+    ).strip()
+    registry_device = _registry_device(registry, effective_model)
     registry_model = _canon_model(str(registry_device.get("model") or "")) if registry_device else ""
+    registry_ports = registry_device.get("ports") if registry_device and isinstance(registry_device.get("ports"), dict) else {}
+    combo_ports_per_member = int(registry_ports.get("combo_ports") or 0)
     c3850_12xs_no_module = registry_model == "ws-c3850-12xs-e"
     interfaces = [row for row in capabilities.get("interfaces", []) if isinstance(row, dict)]
 
@@ -164,6 +176,13 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
                 compatibility = f"Te{member}/1/{position}"
             else:
                 compatibility = f"Gi{member}/1/{position}"
+
+        # Combo-port models carry logical access-port identity in their native
+        # interface names. Preserve those names through the compatibility walk
+        # so the model-aware generator can bind one logical port to both the
+        # RJ45 socket and SFP cage instead of inventing a second uplink entity.
+        if combo_ports_per_member > 0 and source_name:
+            compatibility = source_name
 
         ports.append(Port(physical_id, member, position, media, if_index, source_name, compatibility))
 
@@ -221,9 +240,22 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         "schema_version": 1,
         "authority": "switch_vision_physical_contract",
         "device": {
-            "model": str(registry_device.get("model")) if registry_device else model or "unknown",
+            "model": detected_model or "unknown",
+            "detected_model": detected_model or "unknown",
+            "effective_model": (
+                str(registry_device.get("model"))
+                if registry_device
+                else effective_model or detected_model or "unknown"
+            ),
+            "model_override": model_override or None,
+            "compatibility_mode": bool(model_override and registry_device),
             "vendor": str(registry_device.get("vendor")) if registry_device else str(device_info.get("vendor_name") or device_info.get("vendor") or "unknown"),
             "registry_match": bool(registry_device),
+            "exact_registry_match": bool(
+                registry_device
+                and _canon_model(detected_model)
+                == _canon_model(str(registry_device.get("model") or ""))
+            ),
             "mapping_profile": str(registry_device.get("mapping_profile") or "") if registry_device else "",
             "calibration_profile": str(registry_device.get("calibration_profile") or "") if registry_device else "",
             "faceplate": str(registry_device.get("default_faceplate") or "") if registry_device else "",

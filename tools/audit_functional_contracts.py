@@ -109,6 +109,7 @@ def audit_registry_and_profiles() -> None:
         ok("Mapping profile exact model patterns have no cross-profile collisions")
 
     missing_profiles: list[str] = []
+    required_profile_errors: list[str] = []
     pattern_errors: list[str] = []
     layout_errors: list[str] = []
     for device in devices:
@@ -116,7 +117,15 @@ def audit_registry_and_profiles() -> None:
             fail("Registry contains a non-object device entry")
             continue
         model = str(device.get("model") or "").strip()
+        vendor = str(device.get("vendor") or "").strip().casefold()
         mapping = str(device.get("mapping_profile") or "").strip()
+        if (
+            vendor != "ubiquiti"
+            and bool(device.get("discovery_support"))
+            and bool(device.get("dashboard_support"))
+            and not mapping
+        ):
+            required_profile_errors.append(model or "<unnamed>")
         if not mapping:
             continue
         profile = profiles.get(mapping)
@@ -137,7 +146,52 @@ def audit_registry_and_profiles() -> None:
         registry_optical = optical_count(ports)
         if layout_optical != registry_optical:
             layout_errors.append(f"{model}: registry optical={registry_optical} profile={layout_optical}")
+        layout_combo = int(layout.get("combo_ports") or 0)
+        registry_combo = int(ports.get("combo_ports") or 0)
+        if layout_combo != registry_combo:
+            layout_errors.append(f"{model}: registry combo={registry_combo} profile={layout_combo}")
+        if layout_combo > layout_optical:
+            layout_errors.append(
+                f"{model}: combo positions={layout_combo} exceed SFP-capable positions={layout_optical}"
+            )
 
+        registry_combo_map = [
+            int(value)
+            for value in (ports.get("combo_logical_ports") or [])
+            if isinstance(value, int) or (isinstance(value, str) and value.isdigit())
+        ]
+        layout_combo_map = [
+            int(value)
+            for value in (layout.get("combo_logical_ports") or [])
+            if isinstance(value, int) or (isinstance(value, str) and value.isdigit())
+        ]
+        if len(registry_combo_map) != registry_combo:
+            layout_errors.append(
+                f"{model}: registry combo map count={len(registry_combo_map)} combo_ports={registry_combo}"
+            )
+        if len(layout_combo_map) != layout_combo:
+            layout_errors.append(
+                f"{model}: profile combo map count={len(layout_combo_map)} combo_ports={layout_combo}"
+            )
+        if registry_combo_map != layout_combo_map:
+            layout_errors.append(
+                f"{model}: registry combo map={registry_combo_map} profile={layout_combo_map}"
+            )
+        if len(set(registry_combo_map)) != len(registry_combo_map):
+            layout_errors.append(f"{model}: combo logical-port map contains duplicates")
+        visible_rj45 = int(ports.get("rj45") or 0) + registry_combo
+        if any(port <= 0 or port > visible_rj45 for port in registry_combo_map):
+            layout_errors.append(
+                f"{model}: combo logical-port map={registry_combo_map} exceeds visible RJ45 range 1-{visible_rj45}"
+            )
+
+    if required_profile_errors:
+        fail(
+            "Dashboard-supported non-UniFi models missing mapping profiles: "
+            + "; ".join(required_profile_errors)
+        )
+    else:
+        ok("Every dashboard-supported non-UniFi model has a mapping profile")
     if missing_profiles:
         fail("Registry references missing mapping profiles: " + "; ".join(missing_profiles))
     else:

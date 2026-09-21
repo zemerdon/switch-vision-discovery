@@ -43,7 +43,12 @@ cv_cap_set_front_panel_profile() {
   CV_CAP_RJ45_LIMIT="48"
   CV_CAP_FRONT_PANEL_AWARE="false"
   CV_CAP_PLATFORM="generic"
-  CV_CAP_MODEL_TEXT=$(cv_cap_extract_model_text "$walk_file")
+  CV_CAP_DETECTED_MODEL_TEXT=$(cv_cap_extract_model_text "$walk_file")
+  CV_CAP_MODEL_OVERRIDE=${SWITCH_VISION_MODEL_OVERRIDE:-}
+  case "$CV_CAP_MODEL_OVERRIDE" in
+    ""|auto|Auto-detect|AUTO) CV_CAP_MODEL_OVERRIDE="" ;;
+  esac
+  CV_CAP_MODEL_TEXT=${CV_CAP_MODEL_OVERRIDE:-$CV_CAP_DETECTED_MODEL_TEXT}
 
   case "$CV_CAP_MODEL_TEXT" in
     *C3650*)
@@ -386,10 +391,12 @@ cv_write_capabilities_json() {
     --arg support "$CV_ID_SUPPORT_STATUS" \
     --arg sys_object_id "$CV_ID_SYS_OBJECT_ID" \
     --arg sys_name "$CV_ID_SYS_NAME" \
-    --arg model_text "$CV_CAP_MODEL_TEXT" \
+    --arg model_text "$CV_CAP_DETECTED_MODEL_TEXT" \
+    --arg model_override "$CV_CAP_MODEL_OVERRIDE" \
+    --arg effective_model_text "$CV_CAP_MODEL_TEXT" \
     --arg mac_address "$CV_CAP_DEVICE_MAC" \
     --arg walk_file "$walk_file" \
-    '{schema_version:($schema|tonumber),product:$product,release:$version,generated_at:(now|todateiso8601),source_walk:$walk_file,device:{vendor:$vendor,vendor_name:$vendor_name,adapter:$adapter,family:$family,model_text:$model_text,support_status:$support,sys_object_id:$sys_object_id,sys_name:$sys_name,mac_address:(if ($mac_address|length)>0 then $mac_address else null end)},capabilities:{standard_interfaces:true,identity:true,stack:null,vlan_trunk:null,environment:null,poe:null},interfaces:.,summary:{interface_count:length,physical_count:(map(select(.physical))|length),rj45_count:(map(select(.media=="rj45"))|length),sfp_count:(map(select(.media=="sfp"))|length),sfp_plus_count:(map(select(.media=="sfp_plus"))|length),sfp28_count:(map(select(.media=="sfp28"))|length),uplink_count:(map(select(.media=="sfp" or .media=="sfp_plus" or .media=="sfp28" or .media=="uplink"))|length),stack_count:(map(select(.media=="stack"))|length),virtual_count:(map(select(.media=="virtual"))|length)}}' \
+    '{schema_version:($schema|tonumber),product:$product,release:$version,generated_at:(now|todateiso8601),source_walk:$walk_file,device:{vendor:$vendor,vendor_name:$vendor_name,adapter:$adapter,family:$family,model_text:$model_text,detected_model_text:$model_text,model_override:(if ($model_override|length)>0 then $model_override else null end),effective_model_text:$effective_model_text,compatibility_mode:(($model_override|length)>0),support_status:$support,sys_object_id:$sys_object_id,sys_name:$sys_name,mac_address:(if ($mac_address|length)>0 then $mac_address else null end)},capabilities:{standard_interfaces:true,identity:true,stack:null,vlan_trunk:null,environment:null,poe:null},interfaces:.,summary:{interface_count:length,physical_count:(map(select(.physical))|length),rj45_count:(map(select(.media=="rj45"))|length),sfp_count:(map(select(.media=="sfp"))|length),sfp_plus_count:(map(select(.media=="sfp_plus"))|length),sfp28_count:(map(select(.media=="sfp28"))|length),uplink_count:(map(select(.media=="sfp" or .media=="sfp_plus" or .media=="sfp28" or .media=="uplink"))|length),stack_count:(map(select(.media=="stack"))|length),virtual_count:(map(select(.media=="virtual"))|length)}}' \
     "$tmp_ports" > "$output_path"
 
   if [ -n "${latest_path:-}" ]; then cp "$output_path" "$latest_path"; fi

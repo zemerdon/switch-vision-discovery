@@ -66,6 +66,10 @@ cv_detect_vendor_identity "$TMP/c3750x.txt"
 cv_write_capabilities_json "$TMP/c3750x.txt" "$TMP/c3750x.json" ""
 jq -e '(.device.model_text == "WS-C3750X-48P") and (.summary.physical_count == 104) and (.summary.rj45_count == 96) and (.summary.sfp_count == 4) and (.summary.sfp_plus_count == 4)' "$TMP/c3750x.json" >/dev/null
 
+make_ifname_walk "$TMP/c3750x-s.txt" "Cisco IOS Software, C3750E Software, WS-C3750X-48P-S" "1.3.6.1.4.1.9.1.516" "$@"
+cv_write_capabilities_json "$TMP/c3750x-s.txt" "$TMP/c3750x-s.json" ""
+jq -e '(.device.model_text == "WS-C3750X-48P-S") and (.summary.physical_count == 104) and (.summary.rj45_count == 96) and (.summary.sfp_count == 4) and (.summary.sfp_plus_count == 4)' "$TMP/c3750x-s.json" >/dev/null
+
 # Cisco SG350-20: 16 fixed copper + 2 dual-personality positions + 2 SFP.
 set --
 i=1
@@ -97,6 +101,18 @@ cv_detect_vendor_identity "$TMP/hp1810.txt"
 [ "$CV_ID_MODEL_HINT" = "HP 1810-24G" ]
 cv_write_capabilities_json "$TMP/hp1810.txt" "$TMP/hp1810.json" ""
 jq -e '(.device.model_text == "HP 1810-24G") and (.summary.physical_count == 26) and (.summary.rj45_count == 24) and (.summary.sfp_count == 2) and (all(.interfaces[] | select(.name == "IP" or .name == "Link Aggregate"); .physical == false))' "$TMP/hp1810.json" >/dev/null
+
+# Tom Schmidt / J9450A: 22 fixed copper ports plus two dual-personality
+# RJ45/mini-GBIC logical positions. Port 25 is the CPU interface.
+set --
+i=1
+while [ "$i" -le 25 ]; do set -- "$@" "$i"; i=$((i + 1)); done
+make_ifname_walk "$TMP/hp1810g24.txt" "HP ProCurve 1810G - 24 GE, P.2.24, eCos-2.0, CFE-2.1" "1.3.6.1.4.1.11.2.3.7.11.104" "$@"
+cv_detect_vendor_identity "$TMP/hp1810g24.txt"
+[ "$CV_ID_VENDOR" = "hp_aruba" ]
+[ "$CV_ID_MODEL_HINT" = "HP ProCurve 1810G-24" ]
+cv_write_capabilities_json "$TMP/hp1810g24.txt" "$TMP/hp1810g24.json" ""
+jq -e '(.device.model_text == "HP ProCurve 1810G-24") and (.summary.physical_count == 24) and (.summary.rj45_count == 22) and (.summary.uplink_count == 2) and (.summary.sfp_count == 0) and ([.interfaces[] | select(.media == "uplink")] | length == 2) and (all(.interfaces[] | select(.if_index == 25); .physical == false))' "$TMP/hp1810g24.json" >/dev/null
 
 # Zyxel GS1900-8: exact eight physical copper ports, with LAGs excluded.
 set --

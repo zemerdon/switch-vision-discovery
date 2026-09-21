@@ -270,6 +270,127 @@ profiles:
       sfp_10g: []
     notes:
     - Privacy-processed real-hardware evidence confirms IF-MIB indexes 1-24 as 1G copper and 25-26 as 1G SFP.
+  hp-procurve-1810g-24-22p-2dual:
+    status: experimental
+    vendor: HP
+    family: 1810
+    model_patterns:
+    - HP ProCurve 1810G-24
+    sys_object_ids:
+    - 1.3.6.1.4.1.11.2.3.7.11.104
+    layout:
+      members: 1
+      rj45_ports: 22
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+      combo_ports: 2
+      combo_logical_ports:
+      - 23
+      - 24
+    interface_patterns:
+      rj45:
+      - '{port}'
+      sfp_1g:
+      - '23'
+      - '24'
+      combo:
+      - '23'
+      - '24'
+      sfp_10g: []
+    notes:
+    - Real-hardware evidence confirms IF-MIB indexes 1-24 plus a non-physical CPU row; HPE documents this J9450A generation as 22 fixed copper plus two dual-personality RJ45/mini-GBIC positions.
+    - combo_ports is a subset of the SFP-capable positions, not an additional connector count.
+  cisco-sg350-20-16p-2dual-2sfp:
+    status: experimental
+    vendor: Cisco
+    family: Cisco Small Business SG350
+    model_patterns:
+    - SG350-20
+    sys_object_ids:
+    - 1.3.6.1.4.1.9.6.1.95.20.1
+    layout:
+      members: 1
+      rj45_ports: 16
+      sfp_1g_ports: 4
+      sfp_10g_ports: 0
+      combo_ports: 2
+      combo_logical_ports:
+      - 17
+      - 18
+    interface_patterns:
+      rj45:
+      - gi{port}
+      sfp_1g:
+      - gi17
+      - gi18
+      - gi19
+      - gi20
+      combo:
+      - gi17
+      - gi18
+      sfp_10g: []
+    notes:
+    - Real-hardware evidence confirms 16 fixed copper positions, two dual-personality copper/SFP positions and two SFP-only positions.
+    - combo_ports is a subset of the four SFP-capable positions.
+  hp-3500yl-48g-44p-4dual:
+    status: experimental
+    vendor: HP
+    family: 3500yl
+    model_patterns:
+    - HP J8693A Switch 3500yl-48G
+    sys_object_ids:
+    - 1.3.6.1.4.1.11.2.3.7.11.69
+    layout:
+      members: 1
+      rj45_ports: 44
+      sfp_1g_ports: 4
+      sfp_10g_ports: 0
+      combo_ports: 4
+      combo_logical_ports:
+      - 45
+      - 46
+      - 47
+      - 48
+    interface_patterns:
+      rj45:
+      - '{port}'
+      sfp_1g:
+      - '45'
+      - '46'
+      - '47'
+      - '48'
+      combo:
+      - '45'
+      - '46'
+      - '47'
+      - '48'
+      sfp_10g: []
+    notes:
+    - Real-hardware evidence confirms 44 fixed copper positions and four dual-personality RJ45/mini-GBIC positions.
+    - combo_ports is a subset of the four SFP-capable positions.
+  zyxel-gs1900-24e:
+    status: experimental
+    vendor: Zyxel
+    family: GS1900
+    model_patterns:
+    - GS1900-24E
+    sys_object_ids:
+    - 1.3.6.1.4.1.890.1.5.8.16
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+      combo_ports: 0
+    interface_patterns:
+      rj45:
+      - GigabitEthernet{port}
+      sfp_1g: []
+      combo: []
+      sfp_10g: []
+    notes:
+    - Real-hardware evidence confirms 24 fixed copper interfaces and no physical uplink cages.
+    - The stock 24+2 faceplate remains an oversized visual fallback; authoritative topology stays 24 copper and zero uplinks.
   zyxel-gs1900-8:
     status: experimental
     vendor: Zyxel
@@ -1179,6 +1300,7 @@ profiles:
     family: Catalyst 3750X
     model_patterns:
     - WS-C3750X-48P
+    - WS-C3750X-48P-S
     layout:
       members: auto
       rj45_ports: 48

@@ -3226,7 +3226,11 @@ assert 'record_current_run_target' in text
 assert 'current_run_target_field_for_walk "$walk_file" host' in text
 assert 'current_run_target_field_for_walk "$walk_file" prefix' in text
 assert 'current_run_target_field_for_walk "$walk_file" community' in text
-assert text.index('current_run_target_field_for_walk "$walk_file" host') < text.index('if [ -f "$TARGETS_CSV" ]')
+target_start = text.index("target_for_walk() {")
+target_end = text.index("\nmapping_key() {", target_start)
+target_host = text.index('current_run_target_field_for_walk "$walk_file" host', target_start, target_end)
+target_csv = text.index('if [ -f "$TARGETS_CSV" ]; then', target_start, target_end)
+assert target_host < target_csv
 assert 'if [ "$result" = "PASS" ] || [ "$result" = "WARN" ]; then' in text
 assert 'Current-run parse skipped for failed walk' in text
 assert 'generator_raw_tmp="/tmp/switch_vision_generator_raw_$$.yaml"' in text

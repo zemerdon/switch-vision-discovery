@@ -7,6 +7,7 @@ shipped backend functions with isolated in-memory Supervisor state and temp file
 from __future__ import annotations
 
 import copy
+import re
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -18,6 +19,7 @@ sys.path.insert(0, str(ROOT / "runtime_src"))
 import support_web as hub  # noqa: E402
 
 SOURCE_REGISTRY = ROOT / "runtime_src/opt/switch-vision/devices/supported_devices.json"
+SUPERVISOR_CONFIG = ROOT / "switch_vision_discovery/config.yaml"
 
 
 @contextmanager
@@ -101,6 +103,10 @@ def test_discovery_save_and_write_only_secrets() -> None:
         assert safe["settings"]["support_contributor_value_configured"] is True
         assert "PowerConnect 5548P" in safe["models"]
         assert "WS-C3750X-48P" in safe["models"]
+        assert "WS-C3750X-48P-S" in safe["models"]
+        assert "HP ProCurve 1810G-24" in safe["models"]
+        assert "SG350-20" in safe["models"]
+        assert "HP J8693A Switch 3500yl-48G" in safe["models"]
 
         # Rename the switch while leaving the write-only community blank. The
         # original name is the stable lookup key that must preserve the secret.
@@ -305,19 +311,25 @@ def test_saved_row_effective_config_is_canonical_fresh_and_secret_safe() -> None
 
 def test_manual_model_fallback_is_complete() -> None:
     # If the runtime registry is temporarily unreadable, the fallback must still
-    # accept every manual model allowed by the Supervisor schema.
+    # accept every manual model allowed by the Supervisor schema, with no stale
+    # hard-coded extras drifting outside that schema.
     with tempfile.TemporaryDirectory(prefix="sv-empty-registry-") as temp:
         missing = Path(temp) / "missing.json"
         with patched(DEFAULT_REGISTRY_FILE=missing):
             fallback = hub._manual_snmp_override_models()
-    required = {
-        "WS-C3750X-48P",
-        "CRS328-24P-4S+RM",
-        "XS1930-10",
-        "N2128PX-ON",
-        "PowerConnect 5548P",
+
+    schema_text = SUPERVISOR_CONFIG.read_text(encoding="utf-8")
+    match = re.search(
+        r"(?m)^\s*switch_model:\s*list\(([^)]+)\)\?\s*$",
+        schema_text,
+    )
+    assert match is not None, "Supervisor manual-model enum not found"
+    schema_models = {value.strip() for value in match.group(1).split("|") if value.strip()}
+    schema_models.discard("auto")
+    assert fallback == schema_models, {
+        "missing_from_fallback": sorted(schema_models - fallback),
+        "stale_in_fallback": sorted(fallback - schema_models),
     }
-    assert required <= fallback, sorted(required - fallback)
 
 
 def test_core_reset_contract() -> None:

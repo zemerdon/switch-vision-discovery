@@ -89,6 +89,48 @@ def _safe(value: str) -> str:
     return text or "switch"
 
 
+def _configured_model_overrides(options: dict[str, Any]) -> dict[str, str]:
+    rows = options.get("switches")
+    if not isinstance(rows, list):
+        rows = options.get("multi_switch_walks")
+    if not isinstance(rows, list):
+        return {}
+
+    result: dict[str, str] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        model = str(row.get("switch_model") or row.get("model_override") or "auto").strip()
+        if not model or model.casefold() in {"auto", "auto-detect"}:
+            continue
+        names = [
+            row.get("switch_name"),
+            row.get("switch"),
+            row.get("selected_switch"),
+            row.get("name"),
+        ]
+        output_dir = str(row.get("output_dir") or "").strip()
+        if output_dir:
+            names.append(Path(output_dir).name)
+        for name in names:
+            value = str(name or "").strip()
+            if value:
+                result[_safe(value)] = model
+    return result
+
+
+def _model_override_for_source(
+    model_overrides: dict[str, str],
+    source: Path,
+    switch: str = "",
+) -> str:
+    for candidate in (switch, source.parent.name):
+        key = _safe(candidate)
+        if key in model_overrides:
+            return model_overrides[key]
+    return ""
+
+
 def _read_options(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -145,7 +187,13 @@ def _is_walk(path: Path) -> bool:
     return False
 
 
-def _prepare_walk(source: Path, destination: Path, work: Path) -> dict[str, Any] | None:
+def _prepare_walk(
+    source: Path,
+    destination: Path,
+    work: Path,
+    *,
+    model_override: str = "",
+) -> dict[str, Any] | None:
     key = _safe(f"{source.parent.name}_{source.name}")
     capability = work / "authoritative_capabilities" / f"{key}.json"
     contract = work / "contracts" / f"{key}.json"
@@ -157,6 +205,12 @@ def _prepare_walk(source: Path, destination: Path, work: Path) -> dict[str, Any]
         shutil.copy2(source, destination)
         return None
 
+    prepare_env = os.environ.copy()
+    if model_override:
+        prepare_env["SWITCH_VISION_MODEL_OVERRIDE"] = model_override
+    else:
+        prepare_env.pop("SWITCH_VISION_MODEL_OVERRIDE", None)
+
     result = subprocess.run(
         [str(PREPARE), str(source), str(destination), str(capability), str(contract)],
         stdout=subprocess.PIPE,
@@ -164,7 +218,7 @@ def _prepare_walk(source: Path, destination: Path, work: Path) -> dict[str, Any]
         text=True,
         encoding="utf-8",
         errors="replace",
-        env=os.environ.copy(),
+        env=prepare_env,
         check=False,
     )
     if result.returncode != 0:
@@ -210,7 +264,13 @@ def _prepare_walk(source: Path, destination: Path, work: Path) -> dict[str, Any]
     }
 
 
-def _copy_tree_normalized(source_root: Path, destination_root: Path, work: Path, prepared: dict[Path, dict[str, Any] | None]) -> None:
+def _copy_tree_normalized(
+    source_root: Path,
+    destination_root: Path,
+    work: Path,
+    prepared: dict[Path, dict[str, Any] | None],
+    model_overrides: dict[str, str],
+) -> None:
     if not source_root.is_dir():
         destination_root.mkdir(parents=True, exist_ok=True)
         return
@@ -230,7 +290,12 @@ def _copy_tree_normalized(source_root: Path, destination_root: Path, work: Path,
             else:
                 shutil.copy2(source, destination)
             continue
-        info = _prepare_walk(source, destination, work)
+        info = _prepare_walk(
+            source,
+            destination,
+            work,
+            model_override=_model_override_for_source(model_overrides, source),
+        )
         prepared[resolved_source] = info
 
 
@@ -315,12 +380,22 @@ def _stage_current_run_options(
     accepted_evidence: list[dict[str, Any]] = []
     staged_records: list[dict[str, str]] = []
     by_source: dict[Path, Path] = {}
+    model_overrides = _configured_model_overrides(options)
 
     for record in current_run:
         source = Path(record["walk"])
         switch = _safe(record.get("switch") or source.parent.name)
         destination = staged_root / switch / source.name
-        info = _prepare_walk(source, destination, work)
+        info = _prepare_walk(
+            source,
+            destination,
+            work,
+            model_override=_model_override_for_source(
+                model_overrides,
+                source,
+                switch,
+            ),
+        )
         if info is None:
             destination.unlink(missing_ok=True)
             print(
@@ -477,7 +552,14 @@ def _stage_options(
     source_root = Path(str(options.get("snmpwalks_dir") or DEFAULT_WALK_ROOT))
     staged_root = work / "snmpwalks"
     prepared: dict[Path, dict[str, Any] | None] = {}
-    _copy_tree_normalized(source_root, staged_root, work, prepared)
+    model_overrides = _configured_model_overrides(options)
+    _copy_tree_normalized(
+        source_root,
+        staged_root,
+        work,
+        prepared,
+        model_overrides,
+    )
     staged["snmpwalks_dir"] = str(staged_root)
 
     input_value = str(options.get("input_path") or "").strip()
@@ -488,7 +570,15 @@ def _stage_options(
             staged["input_path"] = str(mapped)
         elif source_input.is_file():
             destination = work / "single_input" / source_input.name
-            info = _prepare_walk(source_input, destination, work)
+            info = _prepare_walk(
+                source_input,
+                destination,
+                work,
+                model_override=_model_override_for_source(
+                    model_overrides,
+                    source_input,
+                ),
+            )
             prepared[source_input.resolve()] = info
             staged["input_path"] = str(destination)
 
@@ -504,7 +594,13 @@ def _stage_options(
             mapped = _staged_path_for(source_output, source_root, staged_root)
             if mapped is None:
                 mapped = work / "switches" / _safe(name)
-                _copy_tree_normalized(source_output, mapped, work, prepared)
+                _copy_tree_normalized(
+                    source_output,
+                    mapped,
+                    work,
+                    prepared,
+                    model_overrides,
+                )
             row["output_dir"] = str(mapped)
 
     # Build the same practical order used by switch inventory parsing first,
@@ -1013,6 +1109,7 @@ def _append_display_fallbacks(
             f"        port_count: {max(0, rj45)}",
             f"        sfp_port_count: {max(0, uplinks)}",
             "        activity_hold_seconds: 12",
+            f"        entity_prefix: {_safe(prefix).lower()}",
             f"        status_entity_prefix: sensor.{_safe(prefix).lower()}_port_",
             "        status_entity_suffix: _status",
         ])

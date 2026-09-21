@@ -54,10 +54,12 @@ PERMANENT_CHECKS = (
     "tools/test_unifi_multi_controller_hub.py",
     "tools/test_calibration_core_bridge_contract.py",
     "tools/test_registry_roundtrip.py",
+    "tools/test_manual_model_physical_contract.py",
 )
 SHELL_CHECKS = (
     "tools/test_production_physical_contract.sh",
     "tools/test_contributor_interface_batch.sh",
+    "tools/test_discovery_contract_entrypoint.sh",
     "tools/test_unifi_entrypoint_source_matrix.sh",
 )
 

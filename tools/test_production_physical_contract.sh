@@ -99,7 +99,9 @@ run_case() {
 }
 EOF
 
-  if ! SWITCH_VISION_OPTIONS_FILE="$options" \
+  if ! SWITCH_VISION_RUNTIME_DIR="$RUNTIME" \
+       SWITCH_VISION_DEVICE_REGISTRY="$REGISTRY" \
+       SWITCH_VISION_OPTIONS_FILE="$options" \
        SWITCH_VISION_CAPABILITIES_DIR="$case_dir/capabilities/runtime" \
        SWITCH_VISION_SHARE_DIR="$case_dir/share" \
        sh "$RUNTIME/discovery_job.sh" > "$case_dir/stdout.txt" 2> "$case_dir/stderr.txt"; then
@@ -137,7 +139,50 @@ make_walk "$hp" 'HP J8693A Switch 3500yl-48G' '1.3.6.1.4.1.11.2.3.7.11.69'
 i=1
 while [ "$i" -le 48 ]; do append_iface "$hp" "$i" "$i"; i=$((i + 1)); done
 run_case hp-control "$hp" HP 'HP J8693A Switch 3500yl-48G' 48
+hp_card="$TMP/hp-control/card.yaml"
+grep -Fq '        port_count: 48' "$hp_card" || note_failure "hp-control: combo copper positions not included in visible RJ45 count"
+grep -Fq '        sfp_port_count: 4' "$hp_card" || note_failure "hp-control: SFP cage count changed"
+grep -Fq '        sfp_logical_port_map: [45,46,47,48]' "$hp_card" || note_failure "hp-control: shared logical-port map missing"
 
+# Tom Schmidt / J9450A: 22 fixed copper + two dual-personality logical ports;
+# ifIndex/name 25 is CPU and must never become a front-panel sensor.
+tom_hp="$TMP/hp-procurve-1810g-24.txt"
+make_walk "$tom_hp" 'HP ProCurve 1810G - 24 GE, P.2.24, eCos-2.0, CFE-2.1' '1.3.6.1.4.1.11.2.3.7.11.104'
+i=1
+while [ "$i" -le 25 ]; do append_iface "$tom_hp" "$i" "$i"; i=$((i + 1)); done
+run_case hp-procurve-1810g-24 "$tom_hp" TOMHP 'HP ProCurve 1810G-24' 24
+tom_dir="$TMP/hp-procurve-1810g-24"
+tom_yaml="$tom_dir/generated.yaml"
+tom_report="$tom_dir/report.txt"
+grep -Fq '    name: TOMHP Port 1 Status' "$tom_yaml" || note_failure "hp-procurve-1810g-24: missing Port 1 status entity"
+grep -Fq '    name: TOMHP Port 22 Status' "$tom_yaml" || note_failure "hp-procurve-1810g-24: missing Port 22 status entity"
+grep -Fq '    name: TOMHP Port 23 Status' "$tom_yaml" || note_failure "hp-procurve-1810g-24: missing dual-personality Port 23 status entity"
+grep -Fq '    name: TOMHP Port 24 Status' "$tom_yaml" || note_failure "hp-procurve-1810g-24: missing dual-personality Port 24 status entity"
+if grep -Fq '    name: TOMHP Uplink 1 Status' "$tom_yaml" || grep -Fq '    name: TOMHP Uplink 2 Status' "$tom_yaml"; then
+  note_failure "hp-procurve-1810g-24: combo positions leaked as duplicate uplink entities"
+fi
+if grep -Fq '    name: TOMHP Interface 25 Status' "$tom_yaml" || grep -Fq '    name: TOMHP Port 25 Status' "$tom_yaml"; then
+  note_failure "hp-procurve-1810g-24: CPU interface leaked into generated YAML"
+fi
+tom_card="$tom_dir/card.yaml"
+grep -Fq '        port_count: 24' "$tom_card" || note_failure "hp-procurve-1810g-24: visible RJ45 count must include shared ports 23-24"
+grep -Fq '        sfp_port_count: 2' "$tom_card" || note_failure "hp-procurve-1810g-24: physical SFP cage count must remain 2"
+grep -Fq '        sfp_logical_port_map: [23,24]' "$tom_card" || note_failure "hp-procurve-1810g-24: generated card missing shared SFP logical-port map"
+grep -Fq -- '- Matched profile: hp-procurve-1810g-24-22p-2dual' "$tom_report" || note_failure "hp-procurve-1810g-24: registry mapping profile not reported"
+
+# Cisco SG350-20: 16 fixed copper + shared ports 17-18 + SFP-only 19-20.
+# The card must expose 18 RJ45 sockets, four SFP cages, and only alias the
+# first two cages back to logical ports 17-18.
+sg350="$TMP/cisco-sg350-20.txt"
+make_walk "$sg350" 'Cisco SG350-20 20-Port Gigabit Managed Switch' '1.3.6.1.4.1.9.6.1.95.20.1'
+i=1
+while [ "$i" -le 20 ]; do append_iface "$sg350" "$i" "gi$i"; i=$((i + 1)); done
+run_case cisco-sg350-20 "$sg350" SG350 'SG350-20' 20
+sg_card="$TMP/cisco-sg350-20/card.yaml"
+grep -Fq '        port_count: 18' "$sg_card" || note_failure "cisco-sg350-20: visible RJ45 count must include combo positions 17-18"
+grep -Fq '        sfp_port_count: 4' "$sg_card" || note_failure "cisco-sg350-20: SFP-capable cage count must remain 4"
+grep -Fq '        sfp_logical_port_map: [17,18]' "$sg_card" || note_failure "cisco-sg350-20: shared SFP logical-port map missing"
+grep -Fq '        sfp_status_entity_template: sensor.sg350_sfp_1g_{port}_status' "$sg_card" || note_failure "cisco-sg350-20: fixed SFP cages lost 1G entity template"
 
 # zemerdon live check: 24-port Catalyst 2960X exposes Gi1/0/25-28, but the
 # four physical faceplate cages are logical SFP1-SFP4. Generated entity names
@@ -291,6 +336,20 @@ while [ "$member" -le 2 ]; do
   member=$((member + 1))
 done
 run_case cisco-3750x "$c3750x" C3750X 'WS-C3750X-48P' 104
+
+# Rayden: the -S license/SKU suffix uses the same contributed C3KX physical
+# contract. Exact admission must classify it directly without a manual model
+# override or the Gi aliases are miscounted as additional copper ports.
+c3750x_s="$TMP/cisco-3750x-s.txt"
+make_walk "$c3750x_s" 'Cisco IOS Software, C3750E Software, WS-C3750X-48P-S' '1.3.6.1.4.1.9.1.516'
+idx=1
+port=1
+while [ "$port" -le 48 ]; do append_iface "$c3750x_s" "$idx" "Gi1/0/${port}"; idx=$((idx + 1)); port=$((port + 1)); done
+port=1
+while [ "$port" -le 4 ]; do append_iface "$c3750x_s" "$idx" "Gi1/1/${port}"; idx=$((idx + 1)); port=$((port + 1)); done
+port=1
+while [ "$port" -le 2 ]; do append_iface "$c3750x_s" "$idx" "Te1/1/${port}"; idx=$((idx + 1)); port=$((port + 1)); done
+run_case cisco-3750x-s "$c3750x_s" C3750XS 'WS-C3750X-48P-S' 52
 
 if [ "$failures" -ne 0 ]; then
   printf '\nSwitch Vision production physical-contract regression: %s failure(s)\n' "$failures" >&2

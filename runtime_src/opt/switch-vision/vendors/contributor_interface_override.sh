@@ -23,6 +23,23 @@ cv_interface_class_for_name() {
     return 0
   fi
 
+  # HP ProCurve 1810G-24 / J9450A contribution: IF-MIB exposes 24 front-panel
+  # logical ports plus a CPU interface. HPE documents ports 1-22 as fixed
+  # copper and ports 23-24 as dual-personality RJ45/mini-GBIC positions.
+  # Keep the shared positions media-neutral unless a future capture proves the
+  # active medium; never count the CPU interface as a physical port.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "HP ProCurve 1810G-24" ]; then
+    case "${CV_CAP_IF_INDEX:-}" in
+      ''|*[!0-9]*) printf 'other' ;;
+      *)
+        if [ "$CV_CAP_IF_INDEX" -ge 1 ] && [ "$CV_CAP_IF_INDEX" -le 22 ]; then printf 'rj45';
+        elif [ "$CV_CAP_IF_INDEX" -ge 23 ] && [ "$CV_CAP_IF_INDEX" -le 24 ]; then printf 'uplink';
+        else printf 'other'; fi
+        ;;
+    esac
+    return 0
+  fi
+
   # Zyxel GS1900-8 contribution: indexes 1-8 are the eight copper sockets.
   # The later LAG interfaces are logical and must never become front-panel ports.
   if [ "${CV_CAP_MODEL_TEXT:-}" = "GS1900-8" ]; then
@@ -113,7 +130,7 @@ cv_interface_class_for_name() {
   # Catalyst 3750X-48P contribution: Gi member/0/1-48 are the access ports.
   # The C3KX network module can expose Gi aliases for cages also represented
   # by Te names; suppress those aliases so one physical cage is counted once.
-  if [ "${CV_CAP_MODEL_TEXT:-}" = "WS-C3750X-48P" ]; then
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "WS-C3750X-48P" ] || [ "${CV_CAP_MODEL_TEXT:-}" = "WS-C3750X-48P-S" ]; then
     case "$name" in
       GigabitEthernet*|Gi*)
         short_name=$(printf '%s' "$name" | sed -E 's/^GigabitEthernet//; s/^Gi//')

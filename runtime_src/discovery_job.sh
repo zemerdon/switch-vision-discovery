@@ -88,6 +88,15 @@ sv_debug() {
 # the proven v0.7.17 parser and generator remain authoritative.
 CV_MIB_DATABASE_DIR="${CV_MIB_DATABASE_DIR:-/opt/switch-vision/mib_database}"
 CV_VENDOR_DIR="${CV_VENDOR_DIR:-/opt/switch-vision/vendors}"
+RUNTIME_DIR="${SWITCH_VISION_RUNTIME_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
+REGISTRY_LOOKUP="${SWITCH_VISION_REGISTRY_LOOKUP:-/registry_lookup.py}"
+DEVICE_REGISTRY="${SWITCH_VISION_DEVICE_REGISTRY:-/opt/switch-vision/devices/supported_devices.json}"
+if [ ! -f "$REGISTRY_LOOKUP" ] && [ -f "$RUNTIME_DIR/registry_lookup.py" ]; then
+  REGISTRY_LOOKUP="$RUNTIME_DIR/registry_lookup.py"
+fi
+if [ ! -f "$DEVICE_REGISTRY" ] && [ -f "$RUNTIME_DIR/opt/switch-vision/devices/supported_devices.json" ]; then
+  DEVICE_REGISTRY="$RUNTIME_DIR/opt/switch-vision/devices/supported_devices.json"
+fi
 if [ -f "$CV_VENDOR_DIR/base.sh" ] && [ -f "$CV_VENDOR_DIR/loader.sh" ]; then
   . "$CV_VENDOR_DIR/base.sh"
   . "$CV_VENDOR_DIR/generic.sh"
@@ -584,6 +593,38 @@ current_run_target_field_for_walk() {
   return 1
 }
 
+target_switch_for_walk() {
+  walk_file="$1"
+
+  if current_switch=$(current_run_target_field_for_walk "$walk_file" switch 2>/dev/null) && [ -n "$current_switch" ]; then
+    printf '%s' "$current_switch"
+    return 0
+  fi
+
+  if [ -f "$TARGETS_CSV" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      name=$(csv_field "$line" 1)
+      [ -n "$name" ] || continue
+      case "$name" in \#*) continue ;; esac
+      if is_targets_csv_header "$name"; then
+        continue
+      fi
+      if csv_row_matches_walk "$line" "$walk_file"; then
+        printf '%s' "$name"
+        return 0
+      fi
+    done < "$TARGETS_CSV"
+  fi
+
+  parent=$(basename "$(dirname "$walk_file")")
+  if [ -n "$parent" ] && [ "$parent" != "." ] && [ "$parent" != "/" ]; then
+    printf '%s' "$parent"
+    return 0
+  fi
+
+  strip_walk_ext "$(basename "$walk_file")"
+}
+
 record_current_run_target() {
   manifest_walk="$1"
   manifest_switch="$2"
@@ -838,11 +879,14 @@ parser_report() {
   walk_file="$1"
   target_ip="$2"
   registry_status=""
-  if command -v cv_cap_extract_model_text >/dev/null 2>&1 && [ -f /registry_lookup.py ]; then
+  registry_mapping_profile=""
+  if command -v cv_cap_extract_model_text >/dev/null 2>&1 && [ -f "$REGISTRY_LOOKUP" ]; then
     registry_model=$(cv_cap_extract_model_text "$walk_file")
-    registry_status=$(python3 /registry_lookup.py --model "$registry_model" --report 2>/dev/null | awk -F': ' '/^- Registry status:/ {print $2; exit}')
+    registry_report=$(python3 "$REGISTRY_LOOKUP" --registry "$DEVICE_REGISTRY" --model "$registry_model" --report 2>/dev/null || true)
+    registry_status=$(printf '%s\n' "$registry_report" | awk -F': ' '/^- Registry status:/ {print $2; exit}')
+    registry_mapping_profile=$(printf '%s\n' "$registry_report" | awk -F': ' '/^- Mapping profile:/ {print $2; exit}')
   fi
-  awk -v target_ip="$target_ip" -v generator_enabled="$GENERATE_SNMP2MQTT" -v source_walk="$walk_file" -v registry_status="$registry_status" '
+  awk -v target_ip="$target_ip" -v generator_enabled="$GENERATE_SNMP2MQTT" -v source_walk="$walk_file" -v registry_status="$registry_status" -v registry_mapping_profile="$registry_mapping_profile" '
     function value_of(line, v) {
       v = line
       sub(/^[^=]*= /, "", v)
@@ -977,12 +1021,14 @@ parser_report() {
       if ((line ~ /\.3\.6\.1\.4\.1\.9\.2\.1\.3\.0 = STRING:/) && cisco_hostname == "") cisco_hostname = val
       if ((line ~ /\.3\.6\.1\.2\.1\.1\.1\.0 = STRING:/) && sysdescr == "") sysdescr = val
       if (line ~ /SG500X-24/) sg500_model = "SG500X-24"
+      if (line ~ /SG350-20/ || line ~ /1\.3\.6\.1\.4\.1\.9\.6\.1\.95\.20\.1/) sg350_model = "SG350-20"
       if (line ~ /S5735-L8P4X-A1/) huawei_s5735_model = "S5735-L8P4X-A1"
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model = "S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model = "XS1930-10"
       else if (line ~ /GS1915-24EP/) zyxel_model = "GS1915-24EP"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model = "CRS328-24P-4S+"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model = "HP J8693A Switch 3500yl-48G"
+      if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.104/) || (line !~ /\.1\.0\.8802\./ && tolower(line) ~ /procurve 1810g[[:space:]]*-[[:space:]]*24/)) hp_1810g_model = "HP ProCurve 1810G-24"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model = "N2128PX-ON"
       if (line ~ /N2128PX-ON, [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+,/ && match(line, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
         ios = substr(line, RSTART, RLENGTH)
@@ -1104,6 +1150,10 @@ parser_report() {
         model = huawei_s5735_model
         manufacturer = "Huawei"
       }
+      else if (sg350_model != "") {
+        model = sg350_model
+        manufacturer = "Cisco"
+      }
       else if (sg500_model != "") {
         model = sg500_model
         manufacturer = "Cisco"
@@ -1111,6 +1161,10 @@ parser_report() {
       else if (juniper_model != "") {
         model = juniper_model
         manufacturer = "Juniper"
+      }
+      else if (hp_1810g_model != "") {
+        model = hp_1810g_model
+        manufacturer = "HP"
       }
       else if (hp_3500yl_model != "") {
         model = hp_3500yl_model
@@ -1266,6 +1320,20 @@ parser_report() {
           if (!(physical_id in physical_key)) {
             physical_key[physical_id] = 1; ten_key[physical_id] = 1
             member_key[1] = 1; member_physical[1]++; member_ten[1]++
+          }
+          special = 1
+        } else if (model == "HP ProCurve 1810G-24" && n ~ /^([1-9]|1[0-9]|2[0-4])$/) {
+          port = n + 0
+          physical_id = "hp1810g-" port
+          if (!(physical_id in physical_key)) {
+            physical_key[physical_id] = 1
+            member_key[1] = 1
+            member_physical[1]++
+            if (port <= 22) {
+              rj45_key[physical_id] = 1; member_rj45[1]++
+            } else {
+              sfp_key[physical_id] = 1; member_sfp[1]++
+            }
           }
           special = 1
         } else if (model == "HP J8693A Switch 3500yl-48G" && n ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
@@ -1461,6 +1529,9 @@ parser_report() {
       } else if (model == "CRS328-24P-4S+") {
         print "- RJ45 ether1-ether24 ports: " rj45
         print "- 10G SFP+ sfp-sfpplus1-sfp-sfpplus4 uplinks: " ten
+      } else if (model == "HP ProCurve 1810G-24") {
+        print "- Fixed RJ45 logical ports 1-22: " rj45
+        print "- Dual-personality copper/SFP logical ports 23-24: " sfp_gi
       } else if (model == "HP J8693A Switch 3500yl-48G") {
         print "- Fixed RJ45 logical ports 1-44: " rj45
         print "- Dual-personality copper/SFP logical ports 45-48: " sfp_gi
@@ -1475,7 +1546,8 @@ parser_report() {
       print "Switch Vision mapping profile:"
       profile = "unknown"
       profile_status = profile_status_for(model)
-      if (model == "WS-C3850-12XS-E") profile = "cisco-3850-12xs-12x10g"
+      if (registry_mapping_profile != "" && registry_mapping_profile != "not assigned") profile = registry_mapping_profile
+      else if (model == "WS-C3850-12XS-E") profile = "cisco-3850-12xs-12x10g"
       else if (model ~ /^WS-C3650-48/) profile = "cisco-3650-48p-2x10g"
       else if (is_2960(model)) profile = c2960_profile(model)
       else if (model ~ /^WS-C3750-48P/) profile = "cisco-3750-48p-48fe-4sfp"
@@ -1575,6 +1647,15 @@ parser_report() {
         if (model == "CRS328-24P-4S+" && name ~ /^sfp-sfpplus[1-4]$/) {
           port = name; sub(/^sfp-sfpplus/, "", port)
           mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone 10G SFP+ uplink " (port + 0)
+          continue
+        }
+        if (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) {
+          port = name + 0
+          if (port <= 22) {
+            mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone RJ45 port " port
+          } else {
+            mapped_rows++; print "  - ifIndex " idx " -> " name " -> dual-personality copper/SFP uplink " (port - 22)
+          }
           continue
         }
         if (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
@@ -1850,7 +1931,7 @@ write_walk_section() {
     if command -v cv_write_vendor_identity_report >/dev/null 2>&1; then
       cv_write_vendor_identity_report "$walk_file"
       if command -v cv_write_capabilities_json >/dev/null 2>&1; then
-        cap_switch=$(basename "$(dirname "$walk_file")" | sed 's/[^A-Za-z0-9._-]/_/g')
+        cap_switch=$(target_switch_for_walk "$walk_file" | sed 's/[^A-Za-z0-9._-]/_/g')
         [ -n "$cap_switch" ] || cap_switch="switch"
         cap_path="$CAPABILITIES_DIR/${cap_switch}-capabilities.json"
         cv_write_capabilities_json "$walk_file" "$cap_path" ""
@@ -1878,12 +1959,12 @@ write_walk_section() {
           python3 /vendor_sensor_scan.py --walk "$walk_file" --enrich "$cap_path"
         fi
         registry_model="$detected_model"
-        if [ -x /registry_lookup.py ]; then
-          python3 /registry_lookup.py --model "$detected_model" --enrich "$cap_path" --enrich-key registry
+        if [ -f "$REGISTRY_LOOKUP" ]; then
+          python3 "$REGISTRY_LOOKUP" --registry "$DEVICE_REGISTRY" --model "$detected_model" --enrich "$cap_path" --enrich-key registry
           tmp_cap="${cap_path}.tmp"
           jq 'if (.registry.match // false) then .device.support_status=(.registry.status // .device.support_status) else . end' "$cap_path" > "$tmp_cap" && mv "$tmp_cap" "$cap_path"
           if [ "$model_override" != "auto" ]; then
-            python3 /registry_lookup.py --model "$effective_model" --enrich "$cap_path" --enrich-key model_override_registry
+            python3 "$REGISTRY_LOOKUP" --registry "$DEVICE_REGISTRY" --model "$effective_model" --enrich "$cap_path" --enrich-key model_override_registry
           fi
         fi
         echo "Normalized capabilities:"
@@ -1898,8 +1979,8 @@ write_walk_section() {
           python3 /vendor_sensor_scan.py --walk "$walk_file" --enrich "$cap_path" --report
           echo ""
         fi
-        if [ -x /registry_lookup.py ]; then
-          python3 /registry_lookup.py --model "$registry_model" --report
+        if [ -f "$REGISTRY_LOOKUP" ]; then
+          python3 "$REGISTRY_LOOKUP" --registry "$DEVICE_REGISTRY" --model "$registry_model" --report
           if [ "$model_override" != "auto" ]; then
             echo "Model compatibility override:"
             echo "- Detected model: $detected_model"
@@ -2878,10 +2959,20 @@ write_generated_yaml_for_walk() {
         if ((name ~ /^(Gi|GigabitEthernet)/) && parts[2] == "0" && port >= 1 && port <= 28) return label " Port " port
         if ((name ~ /^(Te|TenGigabitEthernet)/) && parts[2] == "0" && port >= 1 && port <= 2) return label " SFP 10G " port
       }
+      if (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) {
+        port = name + 0
+        return prefix " Port " port
+      }
       if (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
         port = name + 0
-        if (port <= 44) return prefix " Port " port
-        return prefix " Uplink " (port - 44)
+        return prefix " Port " port
+      }
+      if (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) {
+        port = name
+        sub(/^[Gg][Ii]/, "", port)
+        port += 0
+        if (port <= 18) return prefix " Port " port
+        return prefix " SFP 1G " (port - 16)
       }
       if (model == "SG500X-24" && name ~ /^gi1\/[0-9]+$/) {
         port = name; sub(/^gi1\//, "", port); return prefix " Port " (port + 0)
@@ -2982,6 +3073,7 @@ write_generated_yaml_for_walk() {
       if (icon != "") print "    icon: " icon
     }
     function physical_speed_cap_mbps(model, label) {
+      if (model == "HP ProCurve 1810G-24") return 1000
       if (model == "HP J8693A Switch 3500yl-48G") return 1000
       if (model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /) return 1000
       if (model == "WS-C3750-48P" && label ~ / Port /) return 100
@@ -3070,12 +3162,14 @@ write_generated_yaml_for_walk() {
         juniper_model="Juniper EX3300-48P"
       }
       if (line ~ /SG500X-24/) sg500_model="SG500X-24"
+      if (line ~ /SG350-20/ || line ~ /1\.3\.6\.1\.4\.1\.9\.6\.1\.95\.20\.1/) sg350_model="SG350-20"
       if (line ~ /S5735-L8P4X-A1/) huawei_s5735_model="S5735-L8P4X-A1"
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model="S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model="XS1930-10"
       else if (line ~ /GS1915-24EP/) zyxel_model="GS1915-24EP"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model="CRS328-24P-4S+"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
+      if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.104/) || (line !~ /\.1\.0\.8802\./ && tolower(line) ~ /procurve 1810g[[:space:]]*-[[:space:]]*24/)) hp_1810g_model="HP ProCurve 1810G-24"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
       if (line ~ /WS-C3850-12XS/) c3850_model="WS-C3850-12XS"
       if (line ~ /WS-C3750-48P/) c3750_model="WS-C3750-48P"
@@ -3130,6 +3224,9 @@ write_generated_yaml_for_walk() {
           sub(/^Gi/, "", c3750_key)
           split(c3750_key, c3750_parts, "/")
           physical_member[c3750_parts[1] + 0] = 1
+        } else if (sg350_model != "" && val ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) {
+          physical_count++
+          physical_member[1] = 1
         } else if (sg500_model != "" && val ~ /^(gi|te)1\/[0-9]+$/) {
           physical_count++
           physical_member[1] = 1
@@ -3146,6 +3243,9 @@ write_generated_yaml_for_walk() {
           physical_count++
           physical_member[1] = 1
         } else if (mikrotik_model != "" && val ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/) {
+          physical_count++
+          physical_member[1] = 1
+        } else if (hp_1810g_model != "" && val ~ /^([1-9]|1[0-9]|2[0-4])$/) {
           physical_count++
           physical_member[1] = 1
         } else if (hp_3500yl_model != "" && val ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) {
@@ -3296,6 +3396,10 @@ write_generated_yaml_for_walk() {
         model = huawei_s5735_model
         manufacturer = "Huawei"
       }
+      else if (sg350_model != "") {
+        model = sg350_model
+        manufacturer = "Cisco"
+      }
       else if (sg500_model != "") {
         model = sg500_model
         manufacturer = "Cisco"
@@ -3303,6 +3407,10 @@ write_generated_yaml_for_walk() {
       else if (juniper_model != "") {
         model = juniper_model
         manufacturer = "Juniper"
+      }
+      else if (hp_1810g_model != "") {
+        model = hp_1810g_model
+        manufacturer = "HP"
       }
       else if (hp_3500yl_model != "") {
         model = hp_3500yl_model
@@ -3338,7 +3446,7 @@ write_generated_yaml_for_walk() {
       phys_n = 0
       for (idx=1; idx<=maxidx; idx++) if (idx in ifname) {
         name=ifname[idx]
-        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
+        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
           if (model == "Juniper EX3300-48P" && name ~ /^(xe|ge)-0\/1\/[0-3]$/) continue
           if (name ~ /^ge-0\/0\/[0-9]+$/) {
             port_no=name
@@ -3838,12 +3946,17 @@ card_port_counts_for_generated_card() {
      else
        (.registry.ports // {})
      end) as $ports |
-    ($ports.rj45 // empty) as $rj45 |
+    ($ports.rj45 // empty) as $fixed_rj45 |
+    ($ports.combo_ports // 0) as $combo |
+    # A dual-personality position contributes one additional visible RJ45
+    # socket but not another logical interface. The SFP cage for that same
+    # logical port is accounted for separately by sfp_port_count.
+    (($fixed_rj45 // 0) + ($combo // 0)) as $rj45 |
     # `uplinks` is the physical cage count. Media capability fields may overlap
     # on dual-rate ports (for example EX3300 SFP/SFP+), so summing them can
     # double-count the same physical uplink positions.
     ($ports.uplinks // (($ports.gigabit_sfp // 0) + ($ports.ten_gigabit_sfp_plus // 0))) as $sfp |
-    if ($rj45 | type) == "number" and ($sfp | type) == "number" then "\($rj45)\t\($sfp)" else empty end
+    if ($fixed_rj45 | type) == "number" and ($combo | type) == "number" and ($sfp | type) == "number" then "\($rj45)\t\($sfp)" else empty end
   ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" { print; exit }'
 }
 
@@ -3857,6 +3970,30 @@ emit_generated_card_port_counts() {
   case "$card_sfp" in ''|*[!0-9]*) return 0 ;; esac
   echo "        port_count: ${card_rj45}"
   echo "        sfp_port_count: ${card_sfp}"
+}
+
+card_sfp_logical_port_map_for_generated_card() {
+  selected_name="$1"
+  [ -n "$selected_name" ] || return 0
+  safe_name=$(printf '%s' "$selected_name" | sed 's/[^A-Za-z0-9._-]/_/g')
+  cap_file="$CAPABILITIES_DIR/${safe_name}-capabilities.json"
+  [ -f "$cap_file" ] || return 0
+  jq -c '
+    (if ((.device.model_override // "") | length) > 0 then
+       (.model_override_registry.ports // .registry.ports // {})
+     else
+       (.registry.ports // {})
+     end) as $ports |
+    ($ports.combo_logical_ports // []) |
+    if type == "array" and length > 0 then . else empty end
+  ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" && $0 != "[]" { print; exit }'
+}
+
+emit_generated_card_sfp_logical_port_map() {
+  selected_name="$1"
+  logical_map=$(card_sfp_logical_port_map_for_generated_card "$selected_name")
+  [ -n "$logical_map" ] || return 0
+  echo "        sfp_logical_port_map: ${logical_map}"
 }
 
 build_juniper_port_mode_metadata() {
@@ -4025,6 +4162,7 @@ write_generated_dashboard_card() {
           printf "        switch_model: %s\n" "$(printf '%s' "$effective_model" | yaml_quote)"
         fi
         emit_generated_card_port_counts "$selected"
+        emit_generated_card_sfp_logical_port_map "$selected"
         case "${effective_model:-${detected_model:-}}" in
           *Juniper*EX3300-48P*)
             # Data/entity numbering may differ from the stock faceplate labels.
@@ -4113,20 +4251,36 @@ write_generated_dashboard_card() {
         esac
         echo "        poe_used_entity: sensor.${safe_prefix}_poe_used"
         echo "        poe_budget_entity: sensor.${safe_prefix}_poe_budget"
+        echo "        entity_prefix: ${safe_prefix}"
         echo "        status_entity_prefix: sensor.${safe_prefix}_port_"
         echo "        status_entity_suffix: _status"
         case "${effective_model:-${detected_model:-}}" in
           *J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
-          *S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
+          *SG350-20*|*S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
           *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
         esac
         emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"
       done < "$tmp_cards"
     elif truthy "${GENERATED_CARD_SNMP_ENABLED:-false}"; then
-      profile="${SELECTED_SWITCH:-${LIVE_SWITCH_LABEL:-SW1}}"
+      profile="${SELECTED_SWITCH:-}"
+      fallback_walk=""
+      if [ -z "$profile" ]; then
+        fallback_walks="/tmp/switch_vision_generated_card_fallback_walks_$$.txt"
+        collect_multi_walks "$fallback_walks"
+        fallback_walk=$(sed -n '1p' "$fallback_walks" 2>/dev/null || true)
+        if [ -n "$fallback_walk" ]; then
+          profile=$(target_switch_for_walk "$fallback_walk")
+        fi
+      fi
+      [ -n "$profile" ] || profile="${LIVE_SWITCH_LABEL:-SW1}"
       label="${LIVE_SWITCH_LABEL:-$(lower_value "$profile")}"
-      prefix="${DEFAULT_PREFIX:-$label}"
+      prefix="${DEFAULT_PREFIX:-}"
       host="${LIVE_SWITCH_IP:-${DEFAULT_HOST:-}}"
+      if [ -n "$fallback_walk" ]; then
+        [ -n "$prefix" ] || prefix=$(target_prefix_for_walk "$fallback_walk")
+        [ -n "$host" ] || host=$(target_for_walk "$fallback_walk")
+      fi
+      [ -n "$prefix" ] || prefix="$label"
       safe_prefix=$(printf '%s' "$prefix" | tr '[:upper:]' '[:lower:]')
       echo ""
       echo "      - type: custom:switch-vision-3650"
@@ -4138,6 +4292,7 @@ write_generated_dashboard_card() {
         echo "        switch_model: ${exact_model}"
       fi
       emit_generated_card_port_counts "$profile"
+      emit_generated_card_sfp_logical_port_map "$profile"
       case "${exact_model:-}" in
         *Juniper*EX3300-48P*)
           echo "        port_entity_offset: -1"
@@ -4149,11 +4304,12 @@ write_generated_dashboard_card() {
       echo "        calibration_profile_load: true"
       echo "        calibration_button: true"
       echo "        activity_hold_seconds: 12"
+      echo "        entity_prefix: ${safe_prefix}"
       echo "        status_entity_prefix: sensor.${safe_prefix}_port_"
       echo "        status_entity_suffix: _status"
       case "${exact_model:-}" in
         *J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
-        *S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
+        *SG350-20*|*S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
         *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
       esac
       emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"
