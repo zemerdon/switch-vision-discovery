@@ -65,6 +65,40 @@ def _registry_device(registry: dict[str, Any], model: str) -> dict[str, Any] | N
     return None
 
 
+def _optional_interface_specs(device: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """Return exact observed-only interface contracts keyed by casefolded ifName."""
+    if not isinstance(device, dict):
+        return {}
+    raw_groups = device.get("discovery_optional_interfaces")
+    if not isinstance(raw_groups, list):
+        return {}
+
+    specs: dict[str, dict[str, Any]] = {}
+    for raw in raw_groups:
+        if not isinstance(raw, dict):
+            continue
+        media = str(raw.get("media") or "").strip()
+        names = raw.get("interface_names")
+        if media not in {"rj45", "sfp", "sfp_plus", "sfp28", "uplink"}:
+            continue
+        if not isinstance(names, list):
+            continue
+        for raw_name in names:
+            name = str(raw_name or "").strip()
+            if not name:
+                continue
+            specs[name.casefold()] = {
+                "id": str(raw.get("id") or "").strip(),
+                "location": str(raw.get("location") or "").strip(),
+                "media": media,
+                "speed_mbps": int(raw.get("speed_mbps") or 0),
+                "telemetry_only": bool(raw.get("telemetry_only")),
+                "observed_when_present": bool(raw.get("observed_when_present")),
+                "interface_name": name,
+            }
+    return specs
+
+
 def _member_from_name(name: str) -> int:
     for pattern in (
         r"^(?:gi|te|fa|gigabitethernet|tengigabitethernet|fastethernet)(\d+)/\d+/\d+$",
@@ -186,6 +220,21 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
 
         ports.append(Port(physical_id, member, position, media, if_index, source_name, compatibility))
 
+    optional_specs = _optional_interface_specs(registry_device)
+    optional_ports: list[tuple[Port, dict[str, Any]]] = []
+    optional_errors: list[str] = []
+    for port in ports:
+        spec = optional_specs.get(port.source_name.casefold())
+        if spec is None:
+            continue
+        if port.media != spec["media"]:
+            optional_errors.append(
+                f"optional interface {port.source_name} expected media {spec['media']} "
+                f"observed {port.media}"
+            )
+            continue
+        optional_ports.append((port, spec))
+
     observed = {
         "members": member_count,
         "physical": len(ports),
@@ -196,10 +245,25 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         "sfp28": sum(1 for port in ports if port.media == "sfp28"),
         "combo_or_unspecified_uplink": sum(1 for port in ports if port.media == "uplink"),
     }
+    base_observed = dict(observed)
+    for port, _spec in optional_ports:
+        base_observed["physical"] -= 1
+        if port.media == "rj45":
+            base_observed["rj45"] -= 1
+        else:
+            base_observed["uplinks"] -= 1
+            if port.media == "sfp":
+                base_observed["sfp"] -= 1
+            elif port.media == "sfp_plus":
+                base_observed["sfp_plus"] -= 1
+            elif port.media == "sfp28":
+                base_observed["sfp28"] -= 1
+            elif port.media == "uplink":
+                base_observed["combo_or_unspecified_uplink"] -= 1
 
     expected: dict[str, Any] = {}
     status = "unregistered"
-    errors: list[str] = []
+    errors: list[str] = list(optional_errors)
     partial_uplinks_allowed = False
     if registry_device:
         registry_ports = registry_device.get("ports") if isinstance(registry_device.get("ports"), dict) else {}
@@ -217,8 +281,8 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         }
         if not stack_allowed and member_count != 1:
             errors.append(f"registry marks model non-stackable but observed {member_count} members")
-        if observed["rj45"] != expected["rj45"]:
-            errors.append(f"RJ45 expected {expected['rj45']} observed {observed['rj45']}")
+        if base_observed["rj45"] != expected["rj45"]:
+            errors.append(f"RJ45 expected {expected['rj45']} observed {base_observed['rj45']}")
         # Physical inventory and live IF-MIB observation are deliberately
         # different concepts.  In particular, an EX3300 may expose only the
         # populated dual-speed cage(s); the other supported cages are still
@@ -227,13 +291,13 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         # partial live observation into a topology conflict either.
         partial_uplinks_allowed = (
             _canon_model(str(registry_device.get("model") or "")) == "ex3300-48p"
-            and observed["rj45"] == expected["rj45"]
-            and 0 < observed["uplinks"] < expected["uplinks"]
+            and base_observed["rj45"] == expected["rj45"]
+            and 0 < base_observed["uplinks"] < expected["uplinks"]
         )
-        if observed["uplinks"] != expected["uplinks"] and not partial_uplinks_allowed:
-            errors.append(f"uplinks expected {expected['uplinks']} observed {observed['uplinks']}")
-        if observed["physical"] != expected["physical"] and not partial_uplinks_allowed:
-            errors.append(f"physical expected {expected['physical']} observed {observed['physical']}")
+        if base_observed["uplinks"] != expected["uplinks"] and not partial_uplinks_allowed:
+            errors.append(f"uplinks expected {expected['uplinks']} observed {base_observed['uplinks']}")
+        if base_observed["physical"] != expected["physical"] and not partial_uplinks_allowed:
+            errors.append(f"physical expected {expected['physical']} observed {base_observed['physical']}")
         status = "resolved" if not errors else "topology_conflict"
 
     return {
@@ -265,10 +329,24 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         "errors": errors,
         "expected": expected,
         "observed": observed,
+        "observed_base": base_observed,
+        "optional_observed": {
+            "count": len(optional_ports),
+            "ports": [
+                {
+                    **port.as_dict(),
+                    "optional_group": spec["id"],
+                    "location": spec["location"],
+                    "speed_mbps": spec["speed_mbps"],
+                    "telemetry_only": spec["telemetry_only"],
+                }
+                for port, spec in optional_ports
+            ],
+        },
         "ports": [port.as_dict() for port in ports],
         "unobserved_physical": {
-            "rj45": max(0, int(expected.get("rj45") or 0) - observed["rj45"]),
-            "uplinks": max(0, int(expected.get("uplinks") or 0) - observed["uplinks"]),
+            "rj45": max(0, int(expected.get("rj45") or 0) - base_observed["rj45"]),
+            "uplinks": max(0, int(expected.get("uplinks") or 0) - base_observed["uplinks"]),
             "reason": (
                 "known physical inventory not currently visible in IF-MIB"
                 if partial_uplinks_allowed else ""

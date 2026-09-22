@@ -306,6 +306,7 @@ cv_interface_class_for_name() {
     case "$name" in
       [1-9]|[1-3][0-9]|4[0-4]) printf 'rj45'; return 0 ;;
       4[5-8]) printf 'uplink'; return 0 ;;
+      A[1-4]) printf 'uplink'; return 0 ;;
       *) printf 'other'; return 0 ;;
     esac
   fi

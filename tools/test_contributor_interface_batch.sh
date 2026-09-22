@@ -186,6 +186,19 @@ CV_CAP_FRONT_PANEL_AWARE="false"
 [ "$(cv_interface_class_for_name 'gi1/0/1')" = "other" ]
 [ "$(cv_interface_class_for_name '17')" = "other" ]
 
+# Paul Bohall / HP 3500yl optional rear module: A1-A4 are exact-model 10G
+# telemetry interfaces only. The generic classifier must continue to reject
+# the same names on unrelated hardware.
+CV_CAP_MODEL_TEXT="HP J8693A Switch 3500yl-48G"
+CV_CAP_PLATFORM="hp_3500yl_48g"
+CV_CAP_FRONT_PANEL_AWARE="true"
+[ "$(cv_interface_class_for_name 'A1')" = "uplink" ]
+[ "$(cv_interface_class_for_name 'A4')" = "uplink" ]
+CV_CAP_MODEL_TEXT="Generic Linux"
+CV_CAP_PLATFORM="generic"
+CV_CAP_FRONT_PANEL_AWARE="false"
+[ "$(cv_interface_class_for_name 'A1')" = "other" ]
+
 # Anonymous HP evidence: both generated-card branches must bind the J8693A four
 # dual-personality positions to the `uplink_N_status` entities actually emitted
 # by Discovery, rather than the generic sfp_10g template.
@@ -202,7 +215,21 @@ jq -e '
   (dev("GS1900-24E") | .status == "experimental" and .ports.rj45 == 24) and
   (dev("WS-C3750X-48P") | .status == "experimental" and .ports.rj45 == 48 and .stack_support == true) and
   (dev("SG350-20") | .status == "experimental" and .ports.rj45 == 16 and .ports.uplinks == 4) and
-  (dev("HP J8693A Switch 3500yl-48G") | .status == "experimental" and .ports.rj45 == 44 and .ports.uplinks == 4) and
+  (dev("HP J8693A Switch 3500yl-48G") |
+    .status == "experimental"
+    and .ports.rj45 == 44
+    and .ports.uplinks == 4
+    and .ports.ten_gigabit_sfp_plus == 0
+    and .discovery_optional_interfaces == [{
+      "id":"rear_10g_module",
+      "location":"rear",
+      "media":"uplink",
+      "speed_mbps":10000,
+      "interface_names":["A1","A2","A3","A4"],
+      "telemetry_only":true,
+      "observed_when_present":true
+    }]
+  ) and
   (dev("USW Pro HD 24 PoE") | .status == "experimental" and .ports.rj45 == 24 and .ports.ten_gigabit_sfp_plus == 4) and
   (dev("USW Pro XG 8 PoE") | .status == "experimental" and (.contributions | map(.id) | index("evidence-unifi-pro-xg8-snmp-a")) != null) and
   (dev("USW Aggregation") | .status == "experimental" and .unifi_api_port_map.rj45 == [] and .unifi_api_port_map.sfp == [1,2,3,4,5,6,7,8]) and

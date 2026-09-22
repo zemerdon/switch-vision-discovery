@@ -144,6 +144,55 @@ grep -Fq '        port_count: 48' "$hp_card" || note_failure "hp-control: combo 
 grep -Fq '        sfp_port_count: 4' "$hp_card" || note_failure "hp-control: SFP cage count changed"
 grep -Fq '        sfp_logical_port_map: [45,46,47,48]' "$hp_card" || note_failure "hp-control: shared logical-port map missing"
 
+# Paul Bohall / J8693A optional rear 10G module: A1-A4 are real observed
+# telemetry ports, but the current front-panel card intentionally remains the
+# same 48 visible RJ45 sockets + four front dual-personality SFP positions.
+hp_rear="$TMP/hp-j8693a-rear-module.txt"
+make_walk "$hp_rear" 'HP J8693A Switch 3500yl-48G' '1.3.6.1.4.1.11.2.3.7.11.59'
+i=1
+while [ "$i" -le 48 ]; do append_iface "$hp_rear" "$i" "$i"; i=$((i + 1)); done
+i=1
+while [ "$i" -le 4 ]; do
+  idx=$((48 + i))
+  {
+    # Match Paul's real capture: these rear ports are present through ifDescr
+    # fallback rather than native ifName, and only A4 is currently linked.
+    printf '.1.3.6.1.2.1.2.2.1.2.%s = STRING: A%s\n' "$idx" "$i"
+    printf '.1.3.6.1.2.1.2.2.1.7.%s = INTEGER: up(1)\n' "$idx"
+    if [ "$i" -eq 4 ]; then
+      printf '.1.3.6.1.2.1.2.2.1.8.%s = INTEGER: up(1)\n' "$idx"
+    else
+      printf '.1.3.6.1.2.1.2.2.1.8.%s = INTEGER: down(2)\n' "$idx"
+    fi
+    printf '.1.3.6.1.2.1.2.2.1.5.%s = Gauge32: 4294967295\n' "$idx"
+  } >> "$hp_rear"
+  i=$((i + 1))
+done
+run_case hp-rear-module "$hp_rear" HPMOD 'HP J8693A Switch 3500yl-48G' 52
+hp_rear_dir="$TMP/hp-rear-module"
+hp_rear_card="$hp_rear_dir/card.yaml"
+hp_rear_yaml="$hp_rear_dir/generated.yaml"
+hp_rear_contract="$hp_rear_dir/physical-contract.json"
+grep -Fq '        port_count: 48' "$hp_rear_card" || note_failure "hp-rear-module: visible RJ45/card count changed"
+grep -Fq '        sfp_port_count: 4' "$hp_rear_card" || note_failure "hp-rear-module: front SFP/card count changed"
+grep -Fq '        sfp_logical_port_map: [45,46,47,48]' "$hp_rear_card" || note_failure "hp-rear-module: front shared logical-port map changed"
+jq -e '
+  .status == "resolved"
+  and .observed.physical == 52
+  and .observed.uplinks == 8
+  and .observed.sfp_plus == 0
+  and .observed.combo_or_unspecified_uplink == 8
+  and .observed_base.physical == 48
+  and .observed_base.uplinks == 4
+  and .optional_observed.count == 4
+  and ([.optional_observed.ports[].source.if_name] == ["A1","A2","A3","A4"])
+  and ([.optional_observed.ports[].speed_mbps] | all(. == 10000))
+  and ([.optional_observed.ports[].telemetry_only] | all(. == true))
+' "$hp_rear_contract" >/dev/null || note_failure "hp-rear-module: optional rear-module contract incorrect"
+[ "$(grep -Ec '^    name: HPMOD Rear 10G [1-4] Status$' "$hp_rear_yaml" || true)" -eq 4 ] || note_failure "hp-rear-module: rear 10G status telemetry missing"
+grep -Fq '    name: HPMOD Rear 10G 1 Speed Bps' "$hp_rear_yaml" || note_failure "hp-rear-module: rear 10G speed telemetry missing"
+grep -Fq 'template: "{{ 10000000000 if (value | int) >= 4294967295 else ([value | int, 10000000000] | min) }}"' "$hp_rear_yaml" || note_failure "hp-rear-module: saturated ifSpeed is not normalized to known 10G capability"
+
 # Tom Schmidt / J9450A: 22 fixed copper + two dual-personality logical ports;
 # ifIndex/name 25 is CPU and must never become a front-panel sensor.
 tom_hp="$TMP/hp-procurve-1810g-24.txt"

@@ -105,7 +105,8 @@ with tempfile.TemporaryDirectory(prefix="sv-c3850-evidence-") as temp_name:
     assert provenance["support_status"] == "community_validated", provenance
 
 job = (RUNTIME / "discovery_job.sh").read_text(encoding="utf-8")
-ready_line = next(line for line in job.splitlines() if line.strip().startswith("ready = (c3850_ready"))
+ready_line = next(line for line in job.splitlines() if line.strip().startswith("ready = ("))
+assert "registry_ready || c3850_ready" in ready_line, ready_line
 assert "is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0" not in ready_line, ready_line
 
 print("Catalyst 3850 Community Validated evidence and 2960X experimental-hold regression: PASS")

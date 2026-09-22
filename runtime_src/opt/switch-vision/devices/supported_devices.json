@@ -3576,6 +3576,22 @@
           48
         ]
       },
+      "discovery_optional_interfaces": [
+        {
+          "id": "rear_10g_module",
+          "location": "rear",
+          "media": "uplink",
+          "speed_mbps": 10000,
+          "interface_names": [
+            "A1",
+            "A2",
+            "A3",
+            "A4"
+          ],
+          "telemetry_only": true,
+          "observed_when_present": true
+        }
+      ],
       "stack_support": false,
       "discovery_support": true,
       "dashboard_support": true,
@@ -3591,6 +3607,8 @@
       "notes": [
         "The existing exact-model numeric-interface classifier maps ports 1-44 as RJ45 and 45-48 as neutral uplink positions.",
         "A community contribution confirmed that generated entities use uplink_1..uplink_4 names; Discovery 2.3.24 binds generated cards to those entities instead of incorrectly forcing sfp_10g names.",
+        "Fresh real-hardware evidence confirms an optional rear module exposes A1-A4 as four 10G interfaces. Discovery publishes them as observed telemetry-only rear ports and does not add them to the current card geometry.",
+        "The current 48-RJ45/4-SFP faceplate remains intentional until rear-module presentation is designed; no rear connector geometry is invented.",
         "The four front-panel positions are dual-personality RJ45/mini-GBIC; exact medium-specific rendered validation remains pending."
       ],
       "validation": {
