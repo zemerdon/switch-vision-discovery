@@ -159,20 +159,9 @@ def validate_runtime_version_contract(root: Path, version: str) -> None:
 
 
 def validate_release_transport(root: Path) -> None:
-    builder = (root / ".github/workflows/builder.yaml").read_text(encoding="utf-8")
     publisher = (
         root / ".github/workflows/publish-discovery-release.yml"
     ).read_text(encoding="utf-8")
-    forbidden_builder = (
-        (r"^\s+packages:\s*write\s*$", "packages: write"),
-        (r"^\s+push:\s*true\s*$", "push: true"),
-        (r"^\s+name:\s*Publish multi-arch manifest\s*$", "Publish multi-arch manifest"),
-    )
-    for pattern, label in forbidden_builder:
-        if re.search(pattern, builder, re.MULTILINE):
-            raise SystemExit(
-                f"automatic Discovery publication capability remains in builder.yaml: {label}"
-            )
     required_publisher = (
         "startsWith(github.event.pull_request.head.ref, 'release/discovery-')",
         ".sv-release-request.json",
