@@ -1,3 +1,10 @@
+## 2.4.49 — Field-validation and compatibility fixes
+
+- Align the human-readable Discovery report with authoritative exact-model registry/profile state so registered Experimental devices no longer fall through to misleading unknown/unsupported or vendor-inappropriate diagnostics.
+- Restore spaces in saved internal `switch_name` values while preserving deterministic internal/folder normalization and failing closed when two names collapse onto the same normalized key.
+- Add optional rear-module telemetry for exact HP J8693A Switch 3500yl-48G units that expose A1-A4, including 10 Gbps speed handling for legacy saturated 32-bit `ifSpeed`; keep the current 48-RJ45 + four-front-SFP faceplate/card geometry unchanged.
+- Add permanent regressions covering registered-model report authority, historical spaced-name compatibility, and the observed HP 3500yl rear-module interface contract.
+
 ## 2.4.48 — Exact Core faceplate pin release contract
 
 - Bind Discovery's Core faceplate-catalog contract to the exact verified Core source SHA used for coordinated release validation.
