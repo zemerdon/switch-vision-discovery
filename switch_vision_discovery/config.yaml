@@ -29,8 +29,9 @@ options:
   # Existing rows without an enabled field are treated as enabled and are
   # migrated to an explicit enabled state on the first v2.1.8 app start.
   # enabled = generate this switch; disabled = keep the row saved but skip it.
-  # Switch Name (Used internally only): stable internal target ID, e.g. SW5. It links walk folders,
-  # stack mappings, generated profiles, and report sections.
+  # Switch Name (Used internally only): stable internal target ID, e.g. SW5 or "Cisco 3560-C".
+  # Spaces are supported; the internal folder key normalises spaces to underscores and rejects
+  # names that would collapse to the same key. It links walk folders, stack mappings, profiles, and reports.
   # display_name is optional and intentionally omitted from the blank default row.
   # When left blank, generated cards use "Switch Vision" as the friendly title.
   run_snmp_walks: "true"

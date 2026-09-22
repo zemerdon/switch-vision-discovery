@@ -11,6 +11,13 @@ from pathlib import Path
 
 RUNTIME = Path(__file__).resolve().parent
 
+# Keep this regression independent of any prior Hub process/test owner in sticky
+# /tmp. support_web.py reads this override during import.
+_debug_temp = tempfile.TemporaryDirectory(prefix="sv-card-regeneration-debug-")
+os.environ["SV_CURRENT_DISCOVERY_DEBUG_PATH"] = str(
+    Path(_debug_temp.name) / "current-discovery-debug.log"
+)
+
 spec = importlib.util.spec_from_file_location(
     "switch_vision_support_web_card_regression",
     RUNTIME / "support_web.py",
@@ -204,4 +211,5 @@ job_source = (RUNTIME / "discovery_job.sh").read_text(encoding="utf-8")
 assert 'RUN_LIVE_SNMPWALK=$(json_get run_snmp_walks "$(json_get run_live_snmpwalk "$RUN_LIVE_SNMPWALK")")' in job_source
 assert 'if ! truthy "$RUN_LIVE_SNMPWALK"; then' in job_source
 
+_debug_temp.cleanup()
 print("Discovery stored-state Dashboard Card YAML regeneration contract: PASS")

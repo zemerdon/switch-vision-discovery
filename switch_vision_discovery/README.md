@@ -104,7 +104,7 @@ For the Experimental Zyxel `XS1930-10` profile, model-aware 8-RJ45 + 2-SFP front
 
 ## Display names and stack members
 
-- `switch_name` is the stable internal target ID.
+- `switch_name` is the stable internal target ID. Letters, numbers, spaces, `.`, `_` and `-` are accepted; spaces are normalised to `_` for the internal folder key, and names that normalise to the same key are rejected.
 - `display_name` is optional friendly card text.
 - Stack-member `display_name` becomes that member's generated card title.
 - Member/profile identity remains based on the stable sensor prefix.

@@ -591,8 +591,11 @@ def _validate_switch_row(item: Any, index: int) -> dict[str, Any]:
     # that must not turn the placeholder into a real switch identity.
     if not switch_name and not switch_host:
         sensor_prefix = ""
-    if switch_name and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", switch_name):
-        raise ValueError(f"Switch entry {index} switch_name contains unsupported characters.")
+    if switch_name and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. -]{0,63}", switch_name):
+        raise ValueError(
+            f"Switch entry {index} switch_name contains unsupported characters. "
+            "Use letters, numbers, spaces, '.', '_' or '-'."
+        )
     if switch_host and (any(ch.isspace() for ch in switch_host) or "/" in switch_host):
         raise ValueError(f"Switch entry {index} switch_host is not a valid host value.")
     if sensor_prefix and not re.fullmatch(r"[A-Za-z0-9_-]+", sensor_prefix):
@@ -632,8 +635,11 @@ def _validate_stack_row(item: Any, index: int) -> dict[str, Any]:
     row = dict(item)
     switch_name = _plain_text(row.get("switch_name", ""), f"Stack member entry {index} switch_name", max_length=64).strip()
     member = _plain_text(row.get("member", ""), f"Stack member entry {index} member", max_length=8).strip()
-    if not switch_name or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", switch_name):
-        raise ValueError(f"Stack member entry {index} has an invalid switch_name.")
+    if not switch_name or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. -]{0,63}", switch_name):
+        raise ValueError(
+            f"Stack member entry {index} has an invalid switch_name. "
+            "Use letters, numbers, spaces, '.', '_' or '-'."
+        )
     if not re.fullmatch(r"\d+", member) or not (1 <= int(member) <= 64):
         raise ValueError(f"Stack member entry {index} member must be between 1 and 64.")
     row["switch_name"] = switch_name
@@ -645,6 +651,20 @@ def _validate_stack_row(item: Any, index: int) -> dict[str, Any]:
         raise ValueError(f"Stack member entry {index} sensor_prefix contains unsupported characters.")
     return row
 
+
+
+def _switch_name_identity(value: str) -> str:
+    """Return the collision key used by filesystem/internal switch identities.
+
+    Discovery preserves the user's saved switch_name, including spaces, while
+    folders and contract lookups normalise whitespace/unsafe separators to
+    underscores. Uniqueness therefore has to be checked after the same
+    normalisation so two saved names cannot collapse onto one internal key.
+    """
+    text = re.sub(r"\s+", "_", str(value or "").strip())
+    text = re.sub(r"[^A-Za-z0-9._-]", "_", text)
+    text = re.sub(r"_+", "_", text).strip("_ .-")
+    return text.casefold()
 
 
 def _ha_prefix_identity(value: str) -> str:
@@ -669,6 +689,7 @@ def _validate_inventory_identities(configuration: dict[str, Any]) -> None:
         stack_rows = []
 
     switch_names: dict[str, str] = {}
+    switch_identity_owners: dict[str, tuple[str, str]] = {}
     prefix_owners: dict[str, tuple[str, str, str]] = {}
     parent_prefixes: dict[str, str] = {}
 
@@ -689,7 +710,20 @@ def _validate_inventory_identities(configuration: dict[str, Any]) -> None:
                 f"Switch entry {index} switch_name '{name}' duplicates {previous}. "
                 "Every saved switch_name must be unique, including disabled rows."
             )
+
+        identity_key = _switch_name_identity(name)
+        if not identity_key:
+            raise ValueError(f"Switch entry {index} does not produce a usable internal identity.")
+        previous_identity = switch_identity_owners.get(identity_key)
+        if previous_identity is not None:
+            raise ValueError(
+                f"Switch entry {index} switch_name '{name}' normalizes to internal key "
+                f"'{identity_key}', already used by {previous_identity[0]} "
+                f"switch_name '{previous_identity[1]}'. Choose a distinct stable switch_name."
+            )
+
         switch_names[name_key] = f"Switch entry {index}"
+        switch_identity_owners[identity_key] = (f"Switch entry {index}", name)
 
         effective_prefix = configured_prefix or name
         prefix_key = _ha_prefix_identity(effective_prefix)
@@ -7176,7 +7210,7 @@ $('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.valu
 'Generate SNMP2MQTT YAML':'Builds the SNMP2MQTT configuration from validated Discovery results.',
 'Clean generated output before walk':'Removes regenerable Discovery output before collecting new walk evidence so the run starts from a clean generated state.',
 'Create Support My Switch bundle after Discovery':'Creates a privacy-processed contribution archive after a successful Discovery run. Nothing is transmitted automatically.',
-'Switch Name (Used internally only)':'Stable internal target ID used to link walks, generated profiles, stack mappings and reports. Keep it stable after a switch has been configured.',
+'Switch Name (Used internally only)':'Stable internal target ID used to link walks, generated profiles, stack mappings and reports. Spaces are supported and are normalised to underscores for the internal folder key; names that collapse to the same key cannot coexist. Keep it stable after a switch has been configured.',
 'Display name':'Friendly name shown to the user for this switch or stack member.',
 'Switch host':'Hostname or IP address that Discovery uses to contact this switch.',
 'Sensor prefix':'Home Assistant/MQTT sensor identity prefix associated with this switch. Keep it stable to avoid creating a second set of entities.',
