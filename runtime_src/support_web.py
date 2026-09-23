@@ -161,6 +161,25 @@ UNIFI2MQTT_SECRET_FIELDS = {
     "mqtt_password",
 }
 
+DISCOVERY_REQUIRED_OPTION_DEFAULTS = {
+    "autodiscover_networks": [],
+}
+
+
+def _discovery_options_with_required_defaults(options: dict[str, Any]) -> dict[str, Any]:
+    """Return a Supervisor-save-safe Discovery options object.
+
+    Home Assistant retains pre-upgrade option objects verbatim. New required
+    root keys therefore have to be added before any whole-options POST, even
+    when the operator is changing an unrelated setting.
+    """
+    updated = dict(options)
+    for key, value in DISCOVERY_REQUIRED_OPTION_DEFAULTS.items():
+        if key not in updated:
+            updated[key] = copy.deepcopy(value)
+    return updated
+
+
 DISCOVERY_RESET_OPTIONS = {
     "input_path": "/share/switch_vision/snmpwalk.txt",
     "snmpwalks_dir": "/share/switch_vision/snmpwalks",
@@ -981,7 +1000,7 @@ def _import_discovery_options(imported: dict[str, Any]) -> None:
     """Persist imported Discovery configuration through Supervisor only."""
     with _OPTIONS_UPDATE_LOCK:
         current = _self_addon_options()
-        merged = dict(current)
+        merged = _discovery_options_with_required_defaults(current)
         merged.update(imported)
         _validate_inventory_identities(merged)
         create_pre_mutation_backup(current, reason="configuration_import")
@@ -2348,7 +2367,7 @@ def _set_configured_device_state(options_file: Path, request_data: Any) -> dict[
         updated_row = dict(current)
         updated_row["enabled"] = desired
         updated_rows[raw_index] = updated_row
-        updated_options = dict(options)
+        updated_options = _discovery_options_with_required_defaults(options)
         updated_options["switches"] = updated_rows
         _validate_inventory_identities(updated_options)
         create_pre_mutation_backup(options, reason="device_state_update")
@@ -2428,7 +2447,7 @@ def _move_configured_device(options_file: Path, request_data: Any) -> dict[str, 
             updated_rows[source_index], updated_rows[destination_index] = (
                 updated_rows[destination_index], updated_rows[source_index]
             )
-            updated_options = dict(options)
+            updated_options = _discovery_options_with_required_defaults(options)
             updated_options["switches"] = updated_rows
             _validate_inventory_identities(updated_options)
             create_pre_mutation_backup(options, reason="device_order_update")
@@ -2485,7 +2504,7 @@ def _reset_configured_device_order(options_file: Path) -> dict[str, Any]:
             or str(row.get("switch_name") or "").strip() not in snmp_name_set
         )
         if updated_rows != rows:
-            updated_options = dict(options)
+            updated_options = _discovery_options_with_required_defaults(options)
             updated_options["switches"] = updated_rows
             _validate_inventory_identities(updated_options)
             create_pre_mutation_backup(options, reason="device_order_reset")
@@ -3134,7 +3153,7 @@ def _save_discovery_settings(data: Any) -> dict[str, Any]:
     with _OPTIONS_UPDATE_LOCK:
         current = _self_addon_options()
         current_effective = _effective_discovery_options(current)
-        updated = dict(current)
+        updated = _discovery_options_with_required_defaults(current)
         for key in _DISCOVERY_HUB_PATH_KEYS:
             if key in requested:
                 updated[key] = _share_path(requested[key], key)

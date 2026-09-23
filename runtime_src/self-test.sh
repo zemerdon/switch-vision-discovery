@@ -2062,8 +2062,8 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.0"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.0"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.1"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.1"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -2896,6 +2896,7 @@ assert migration.main() == 0
 assert posts, "migration did not use Supervisor options POST"
 assert not migration.LEGACY_IMPORT_BACKUP.exists(), "legacy secret-bearing backup was not removed"
 assert "show_card_header" not in store
+assert store["autodiscover_networks"] == [], store
 assert store["switches"][0]["enabled"] == "enabled"
 assert store["switches"][0]["snmp_community"] == "keep-secret"
 assert store["unrelated_secret"] == "also-keep-secret"
@@ -2903,7 +2904,7 @@ assert store["unrelated_secret"] == "also-keep-secret"
 posts.clear()
 assert migration.main() == 0
 assert not posts, "no-op migration unexpectedly rewrote Supervisor options"
-print("Switch Vision Discovery v2.1.14 Supervisor migration: PASS")
+print("Switch Vision Discovery v3.0.1 Supervisor upgrade migration: PASS")
 PY_MIGRATION
 
 # v2.1.19 community-validation UniFi profile regression.

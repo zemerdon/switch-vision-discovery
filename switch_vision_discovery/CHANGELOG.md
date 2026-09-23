@@ -1,3 +1,10 @@
+## 3.0.1 — Upgrade option migration fix
+
+- Fix upgrades from pre-AutoDiscover Discovery releases where saved Supervisor options do not yet contain `autodiscover_networks`; startup migration now backfills the required non-secret option as an empty list before the first authoritative Supervisor options write.
+- Harden every Discovery-owned whole-options Supervisor write (configuration import, device enable/disable, device reorder/reset and Hub Settings **Apply Changes**) to backfill required root defaults before posting, so an unrelated change cannot reproduce the same HTTP 400 even if startup migration was skipped or failed.
+- Preserve all unrelated existing options and SNMP communities during repair, and keep subsequent starts idempotent/no-op once the key has been added.
+- Add permanent regression coverage for the exact legacy-options shape that caused Home Assistant Supervisor HTTP 400 (`Missing option 'autodiscover_networks' in root`) after updating to 3.0.0.
+
 ## 3.0.0 — AutoDiscover multi-subnet workflow
 
 - Add **Devices → AutoDiscover** between Configure Devices and Device Overview as a first-class major Discovery workflow.

@@ -123,6 +123,7 @@ def test_discovery_save_and_write_only_secrets() -> None:
         assert persisted["switch_name"] == "SW2"
         assert persisted["switch_model"] == "PowerConnect 5548P"
         assert persisted["snmp_community"] == "private-community"
+        assert state["options"]["autodiscover_networks"] == [], state["options"]
         assert backups == ["hub_settings_update"]
 
         # A brand-new switch cannot silently inherit or invent a community.
