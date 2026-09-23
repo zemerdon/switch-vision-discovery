@@ -14,8 +14,12 @@ import json
 import os
 from pathlib import Path
 import re
+import socket
+import ssl
+import time
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
 import yaml
@@ -61,6 +65,11 @@ PRIVATE_CALIBRATION_KEYS = {
 DISCOVERY_ADDON_LOG = DIAG_DIR / "discovery-addon-log.txt"
 DISCOVERY_ADDON_LOG_STATUS = DIAG_DIR / "discovery-addon-log-status.json"
 DISCOVERY_ADDON_LOG_LINES = 400
+UNIFI2MQTT_ADDON_LOG = DIAG_DIR / "unifi2mqtt-addon-log.txt"
+UNIFI2MQTT_ADDON_LOG_STATUS = DIAG_DIR / "unifi2mqtt-addon-log-status.json"
+UNIFI2MQTT_ADDON_LOG_LINES = 400
+UNIFI_CONNECTIVITY_DIAGNOSTICS = DIAG_DIR / "unifi-connectivity-diagnostics.json"
+UNIFI_DIAGNOSTIC_TIMEOUT_SECONDS = 6.0
 
 
 def capture_discovery_addon_log(
@@ -116,6 +125,434 @@ def capture_discovery_addon_log(
     })
     _write(root, DISCOVERY_ADDON_LOG_STATUS, status)
     return status
+
+
+def _supervisor_json(
+    path: str,
+    token: str,
+    *,
+    opener=urlopen,
+    timeout: float = 8.0,
+) -> Any:
+    request = Request(
+        f"http://supervisor{path}",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+    )
+    with opener(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _unifi2mqtt_supervisor_info(
+    token: str,
+    *,
+    opener=urlopen,
+) -> tuple[str, dict[str, Any]]:
+    addons_doc = _supervisor_json("/addons", token, opener=opener)
+    data = (
+        addons_doc.get("data")
+        if isinstance(addons_doc, dict) and isinstance(addons_doc.get("data"), dict)
+        else addons_doc
+    )
+    addons = data.get("addons") if isinstance(data, dict) else []
+    for addon in addons if isinstance(addons, list) else []:
+        if not isinstance(addon, dict):
+            continue
+        if _addon_kind(addon.get("slug"), addon.get("name")) != "unifi2mqtt":
+            continue
+        slug = str(addon.get("slug") or "").strip()
+        if not slug:
+            continue
+        info_doc = _supervisor_json(f"/addons/{slug}/info", token, opener=opener)
+        info = (
+            info_doc.get("data")
+            if isinstance(info_doc, dict) and isinstance(info_doc.get("data"), dict)
+            else info_doc
+        )
+        if not isinstance(info, dict):
+            raise ValueError("UniFi2MQTT add-on info was not an object")
+        return slug, info
+    raise RuntimeError("Switch Vision UniFi2MQTT is not installed")
+
+
+def capture_unifi2mqtt_addon_log(
+    root: Path,
+    *,
+    opener=urlopen,
+    token_reader=read_supervisor_token,
+) -> dict[str, Any]:
+    status: dict[str, Any] = {
+        "schema_version": 1,
+        "generated_at": _now(),
+        "requested_lines": UNIFI2MQTT_ADDON_LOG_LINES,
+        "status": "unavailable",
+    }
+    token = str(token_reader() or "").strip()
+    if not token:
+        status["reason"] = "supervisor_token_unavailable"
+        _write(root, UNIFI2MQTT_ADDON_LOG_STATUS, status)
+        return status
+    try:
+        slug, _info = _unifi2mqtt_supervisor_info(token, opener=opener)
+        request = Request(
+            f"http://supervisor/addons/{quote(slug, safe='')}/logs/latest"
+            f"?lines={UNIFI2MQTT_ADDON_LOG_LINES}&no_colors",
+            headers={"Authorization": f"Bearer {token}", "Accept": "text/plain"},
+        )
+        with opener(request, timeout=12.0) as response:
+            text = response.read().decode("utf-8", errors="replace")
+    except HTTPError as exc:
+        status["reason"] = f"supervisor_http_{exc.code}"
+        _write(root, UNIFI2MQTT_ADDON_LOG_STATUS, status)
+        return status
+    except (URLError, TimeoutError, OSError, RuntimeError, ValueError) as exc:
+        status["reason"] = f"unifi2mqtt_log_request_failed:{type(exc).__name__}"
+        _write(root, UNIFI2MQTT_ADDON_LOG_STATUS, status)
+        return status
+
+    lines = text.splitlines()[-UNIFI2MQTT_ADDON_LOG_LINES:]
+    # Never persist the private controller endpoint from a UniFi2MQTT log.
+    # The normal contribution sanitizer still runs afterwards as defense in
+    # depth for IPs, hostnames and credentials elsewhere in the copied tree.
+    lines = [
+        re.sub(
+            r"(?i)\b(https?://)[^/\s]+",
+            r"\1[redacted-controller]",
+            line,
+        )
+        for line in lines
+    ]
+    log_path = root / UNIFI2MQTT_ADDON_LOG
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("\n".join(lines).rstrip() + ("\n" if lines else ""), encoding="utf-8")
+    status.update({
+        "status": "captured",
+        "line_count": len(lines),
+        "sanitization_required": True,
+    })
+    _write(root, UNIFI2MQTT_ADDON_LOG_STATUS, status)
+    return status
+
+
+def _diagnostic_elapsed_ms(started: float) -> int:
+    return max(0, min(60000, int((time.monotonic() - started) * 1000)))
+
+
+def _unifi_stage_failure(stage: str, exc: BaseException, started: float) -> dict[str, Any]:
+    if isinstance(exc, (socket.timeout, TimeoutError)):
+        category = "timeout"
+    elif isinstance(exc, ConnectionRefusedError):
+        category = "connection_refused"
+    elif isinstance(exc, socket.gaierror):
+        category = "dns_resolution_failed"
+    elif isinstance(exc, ssl.SSLCertVerificationError):
+        category = "tls_verification_failed"
+    elif isinstance(exc, ssl.SSLError):
+        category = "tls_handshake_failed"
+    elif isinstance(exc, HTTPError):
+        if exc.code in {401, 403}:
+            category = "authentication_or_authorization_failed"
+        elif exc.code == 404:
+            category = "api_endpoint_not_found"
+        else:
+            category = f"http_{exc.code}"
+    elif isinstance(exc, URLError):
+        reason = exc.reason
+        if isinstance(reason, (socket.timeout, TimeoutError)):
+            category = "timeout"
+        elif isinstance(reason, socket.gaierror):
+            category = "dns_resolution_failed"
+        elif isinstance(reason, ConnectionRefusedError):
+            category = "connection_refused"
+        elif isinstance(reason, ssl.SSLCertVerificationError):
+            category = "tls_verification_failed"
+        elif isinstance(reason, ssl.SSLError):
+            category = "tls_handshake_failed"
+        else:
+            category = "network_connection_failed"
+    else:
+        category = "network_connection_failed"
+    return {
+        "stage": stage,
+        "status": "failed",
+        "error_type": category,
+        "elapsed_ms": _diagnostic_elapsed_ms(started),
+    }
+
+
+def capture_unifi_connectivity_diagnostics(
+    root: Path,
+    *,
+    opener=urlopen,
+    token_reader=read_supervisor_token,
+) -> dict[str, Any]:
+    """Capture privacy-safe live UniFi connection-stage evidence.
+
+    Controller addresses, resolved addresses, site identifiers/names, API keys
+    and raw exception text are intentionally never written.
+    """
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "generated_at": _now(),
+        "status": "unavailable",
+        "transport": "local",
+        "stages": [],
+        "privacy": {
+            "controller_address_included": False,
+            "resolved_addresses_included": False,
+            "api_key_included": False,
+            "site_identity_included": False,
+            "raw_exception_text_included": False,
+        },
+    }
+    token = str(token_reader() or "").strip()
+    if not token:
+        result["reason"] = "supervisor_token_unavailable"
+        _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+        return result
+
+    try:
+        _slug, info = _unifi2mqtt_supervisor_info(token, opener=opener)
+        options = info.get("options") if isinstance(info.get("options"), dict) else {}
+        legacy_transport = str(options.get("transport") or "local").strip().lower()
+        controller_url = str(options.get("local_controller_url") or "").strip()
+        api_key = str(options.get("local_api_key") or "").strip()
+        site_request = str(options.get("local_site_id") or "auto").strip() or "auto"
+        verify_ssl = _boolish(options.get("local_verify_ssl")) is True
+        if not controller_url and legacy_transport == "local":
+            controller_url = str(options.get("controller_url") or "").strip()
+        if not api_key and legacy_transport == "local":
+            api_key = str(options.get("api_key") or "").strip()
+        if "local_verify_ssl" not in options and legacy_transport == "local":
+            verify_ssl = _boolish(options.get("verify_ssl")) is True
+        if not controller_url or not api_key:
+            result["reason"] = "local_transport_not_fully_configured"
+            _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+            return result
+
+        parsed = urlsplit(controller_url)
+        scheme = parsed.scheme.lower()
+        host = parsed.hostname
+        if scheme not in {"http", "https"} or not host:
+            result["reason"] = "local_endpoint_invalid"
+            _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+            return result
+        port = parsed.port or (443 if scheme == "https" else 80)
+        result["endpoint_scheme"] = scheme
+        result["verify_ssl"] = verify_ssl
+
+        started = time.monotonic()
+        try:
+            addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+            result["stages"].append({
+                "stage": "dns",
+                "status": "ok",
+                "elapsed_ms": _diagnostic_elapsed_ms(started),
+                "address_count": min(len(addresses), 32),
+            })
+        except OSError as exc:
+            result["stages"].append(_unifi_stage_failure("dns", exc, started))
+            result["status"] = "failed"
+            _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+            return result
+
+        started = time.monotonic()
+        try:
+            with socket.create_connection(
+                (host, port), timeout=UNIFI_DIAGNOSTIC_TIMEOUT_SECONDS
+            ):
+                pass
+            result["stages"].append({
+                "stage": "tcp",
+                "status": "ok",
+                "elapsed_ms": _diagnostic_elapsed_ms(started),
+            })
+        except OSError as exc:
+            result["stages"].append(_unifi_stage_failure("tcp", exc, started))
+            result["status"] = "failed"
+            _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+            return result
+
+        context = ssl.create_default_context()
+        if scheme == "https" and not verify_ssl:
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+        if scheme == "https":
+            started = time.monotonic()
+            try:
+                with socket.create_connection(
+                    (host, port), timeout=UNIFI_DIAGNOSTIC_TIMEOUT_SECONDS
+                ) as raw_socket:
+                    with context.wrap_socket(raw_socket, server_hostname=host) as tls_socket:
+                        protocol = str(tls_socket.version() or "").strip()
+                stage: dict[str, Any] = {
+                    "stage": "tls",
+                    "status": "ok",
+                    "elapsed_ms": _diagnostic_elapsed_ms(started),
+                }
+                if protocol in {"TLSv1.2", "TLSv1.3"}:
+                    stage["protocol"] = protocol
+                result["stages"].append(stage)
+            except (OSError, ssl.SSLError) as exc:
+                result["stages"].append(_unifi_stage_failure("tls", exc, started))
+                result["status"] = "failed"
+                _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+                return result
+        else:
+            result["stages"].append({"stage": "tls", "status": "not_applicable"})
+
+        api_context = context if scheme == "https" else None
+        base = controller_url.rstrip("/")
+        started = time.monotonic()
+        try:
+            request = Request(
+                base + "/proxy/network/integration/v1/sites",
+                headers={
+                    "Accept": "application/json",
+                    "X-API-Key": api_key,
+                    "User-Agent": "Switch-Vision-Discovery/Support-Diagnostics",
+                },
+            )
+            with opener(
+                request,
+                context=api_context,
+                timeout=UNIFI_DIAGNOSTIC_TIMEOUT_SECONDS,
+            ) as response:
+                raw = response.read(4 * 1024 * 1024 + 1)
+                status_code = int(getattr(response, "status", 200) or 200)
+            if len(raw) > 4 * 1024 * 1024:
+                raise ValueError("response_too_large")
+            payload = json.loads(raw.decode("utf-8"))
+            sites: list[dict[str, Any]] = []
+            if isinstance(payload, list):
+                sites = [row for row in payload if isinstance(row, dict)]
+            elif isinstance(payload, dict):
+                value = payload.get("data")
+                if isinstance(value, list):
+                    sites = [row for row in value if isinstance(row, dict)]
+                elif isinstance(value, dict) and isinstance(value.get("sites"), list):
+                    sites = [row for row in value["sites"] if isinstance(row, dict)]
+                elif isinstance(payload.get("sites"), list):
+                    sites = [row for row in payload["sites"] if isinstance(row, dict)]
+            result["stages"].append({
+                "stage": "sites_api",
+                "status": "ok",
+                "http_status": status_code,
+                "site_count": min(len(sites), 1000),
+                "elapsed_ms": _diagnostic_elapsed_ms(started),
+            })
+        except (HTTPError, URLError, TimeoutError, OSError, ssl.SSLError) as exc:
+            result["stages"].append(_unifi_stage_failure("sites_api", exc, started))
+            result["status"] = "failed"
+            _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+            return result
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            result["stages"].append({
+                "stage": "sites_api",
+                "status": "failed",
+                "error_type": "invalid_api_response",
+                "elapsed_ms": _diagnostic_elapsed_ms(started),
+            })
+            result["status"] = "failed"
+            _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+            return result
+
+        usable = [row for row in sites if str(row.get("id") or "").strip()]
+        selected: dict[str, Any] | None = None
+        if site_request.casefold() in {"auto", "default", ""}:
+            defaults = [
+                row for row in usable
+                if str(row.get("internalReference") or "").strip().casefold() == "default"
+                or str(row.get("name") or "").strip().casefold() == "default"
+            ]
+            if len(defaults) == 1:
+                selected = defaults[0]
+            elif len(usable) == 1:
+                selected = usable[0]
+        else:
+            key = site_request.casefold()
+            matches = [
+                row for row in usable
+                if str(row.get("id") or "").strip() == site_request
+                or str(row.get("internalReference") or "").strip().casefold() == key
+                or str(row.get("name") or "").strip().casefold() == key
+            ]
+            if len(matches) == 1:
+                selected = matches[0]
+        if selected is None:
+            result["stages"].append({
+                "stage": "site_resolution",
+                "status": "failed",
+                "error_type": "site_resolution_failed",
+            })
+            result["status"] = "failed"
+            _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+            return result
+        result["stages"].append({"stage": "site_resolution", "status": "ok"})
+
+        site_id = str(selected.get("id") or "").strip()
+        started = time.monotonic()
+        try:
+            request = Request(
+                base + "/proxy/network/integration/v1/sites/"
+                + quote(site_id, safe="")
+                + "/devices",
+                headers={
+                    "Accept": "application/json",
+                    "X-API-Key": api_key,
+                    "User-Agent": "Switch-Vision-Discovery/Support-Diagnostics",
+                },
+            )
+            with opener(
+                request,
+                context=api_context,
+                timeout=UNIFI_DIAGNOSTIC_TIMEOUT_SECONDS,
+            ) as response:
+                raw = response.read(4 * 1024 * 1024 + 1)
+                status_code = int(getattr(response, "status", 200) or 200)
+            if len(raw) > 4 * 1024 * 1024:
+                raise ValueError("response_too_large")
+            payload = json.loads(raw.decode("utf-8"))
+            devices: list[Any] = []
+            if isinstance(payload, list):
+                devices = payload
+            elif isinstance(payload, dict):
+                value = payload.get("data")
+                if isinstance(value, list):
+                    devices = value
+                elif isinstance(value, dict) and isinstance(value.get("devices"), list):
+                    devices = value["devices"]
+                elif isinstance(payload.get("devices"), list):
+                    devices = payload["devices"]
+            result["stages"].append({
+                "stage": "devices_api",
+                "status": "ok",
+                "http_status": status_code,
+                "device_count": min(len(devices), 10000),
+                "elapsed_ms": _diagnostic_elapsed_ms(started),
+            })
+        except (HTTPError, URLError, TimeoutError, OSError, ssl.SSLError) as exc:
+            result["stages"].append(_unifi_stage_failure("devices_api", exc, started))
+            result["status"] = "failed"
+            _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+            return result
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            result["stages"].append({
+                "stage": "devices_api",
+                "status": "failed",
+                "error_type": "invalid_api_response",
+                "elapsed_ms": _diagnostic_elapsed_ms(started),
+            })
+            result["status"] = "failed"
+            _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+            return result
+
+        result["status"] = "ok"
+    except (HTTPError, URLError, TimeoutError, OSError, RuntimeError, ValueError) as exc:
+        result["status"] = "unavailable"
+        result["reason"] = f"probe_setup_failed:{type(exc).__name__}"
+
+    _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, result)
+    return result
 
 
 def _now() -> str:
@@ -1354,6 +1791,32 @@ def capture_support_diagnostics(root: Path) -> None:
             "requested_lines": DISCOVERY_ADDON_LOG_LINES,
             "status": "unavailable",
             "reason": f"unexpected_capture_failure:{type(exc).__name__}",
+        })
+    try:
+        capture_unifi2mqtt_addon_log(root)
+    except Exception as exc:  # Diagnostic capture must never block a support bundle.
+        _write(root, UNIFI2MQTT_ADDON_LOG_STATUS, {
+            "schema_version": 1,
+            "generated_at": _now(),
+            "requested_lines": UNIFI2MQTT_ADDON_LOG_LINES,
+            "status": "unavailable",
+            "reason": f"unexpected_capture_failure:{type(exc).__name__}",
+        })
+    try:
+        capture_unifi_connectivity_diagnostics(root)
+    except Exception as exc:  # Live connectivity diagnostics are best-effort only.
+        _write(root, UNIFI_CONNECTIVITY_DIAGNOSTICS, {
+            "schema_version": 1,
+            "generated_at": _now(),
+            "status": "unavailable",
+            "reason": f"unexpected_capture_failure:{type(exc).__name__}",
+            "privacy": {
+                "controller_address_included": False,
+                "resolved_addresses_included": False,
+                "api_key_included": False,
+                "site_identity_included": False,
+                "raw_exception_text_included": False,
+            },
         })
     if ha_error:
         runtime_versions.setdefault("warnings", []).append(ha_error)

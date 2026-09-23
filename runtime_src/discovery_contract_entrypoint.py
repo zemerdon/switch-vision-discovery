@@ -1261,12 +1261,6 @@ def main() -> int:
         )
 
         if not ordered:
-            # A reachable switch with unsupported/incomplete topology is a
-            # successful diagnostic Discovery, not a failed run. Preserve the
-            # evidence, show the safest display we can, and ask for a Support My
-            # Switch contribution. The existing generated SNMP2MQTT YAML is not
-            # replaced or activated because there are no trusted bindings.
-            notices = _append_report_fallback_notices(report, accepted_evidence, replace=True)
             # Dashboard sources are independent. Rebuild the presentation file
             # from current source data instead of treating zero accepted SNMP
             # walks as permission to erase valid UniFi cards. SNMP2MQTT YAML is
@@ -1275,38 +1269,88 @@ def main() -> int:
             fresh_card = work / "fresh_dashboard.yaml"
             fresh_card.unlink(missing_ok=True)
             unifi_cards, unifi_issues = _append_unifi_dashboard_cards(fresh_card)
-            fallback_cards, card_notices = _append_display_fallbacks(fresh_card, accepted_evidence, options)
+            fallback_cards, card_notices = _append_display_fallbacks(
+                fresh_card, accepted_evidence, options
+            )
             _ensure_dashboard_card_base(fresh_card)
             _project_generated_dashboard(generated_card, options, fresh_path=fresh_card)
 
-            if not report.is_file():
-                report.parent.mkdir(parents=True, exist_ok=True)
-                report.write_text(
-                    "Switch Vision Discovery\n"
-                    "=======================\n"
-                    "No exact SNMP telemetry contract was available for this run.\n",
-                    encoding="utf-8",
+            clean_api_only = (
+                not accepted_evidence
+                and not current_run
+                and unifi_cards > 0
+                and unifi_issues == 0
+                and fallback_cards == 0
+            )
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report_lines = [
+                "Switch Vision Discovery",
+                "=======================",
+                "",
+                "Status: success" if clean_api_only else "Status: complete with warnings",
+                "SNMP telemetry contracts: none required for this run"
+                if clean_api_only
+                else "SNMP telemetry contracts: no exact contract available",
+                f"UniFi API dashboard cards emitted: {unifi_cards}; issues: {unifi_issues}.",
+                f"Display-only SNMP fallback cards emitted: {fallback_cards}.",
+            ]
+            if not unifi_cards and not fallback_cards:
+                report_lines.append(
+                    "No current device card could be emitted. Use Support My Switch for reachable hardware that still lacks a safe visual contract."
                 )
-            with report.open("a", encoding="utf-8") as handle:
-                handle.write(
-                    f"UniFi API dashboard cards emitted: {unifi_cards}; issues: {unifi_issues}.\n"
-                    f"Display-only SNMP fallback cards emitted: {fallback_cards}.\n"
-                )
-                if not unifi_cards and not fallback_cards:
-                    handle.write(
-                        "No current device card could be emitted. Use Support My Switch for reachable hardware that still lacks a safe visual contract.\n"
-                    )
+            report.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+            notices = _append_report_fallback_notices(report, accepted_evidence)
 
-            print(
-                "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"
-                "target=|command=Physical contract|"
-                "activity=No exact SNMP telemetry contract was available; independent UniFi cards and safe display fallbacks were preserved"
+            last_run = Path(
+                str(
+                    options.get("last_run_summary_path")
+                    or "/share/switch_vision/last-discovery-run.txt"
+                )
             )
-            print(
-                f"SV_DEBUG|Physical contract authority: unifi cards={unifi_cards}; unifi issues={unifi_issues}; "
-                f"display-only fallback cards={fallback_cards}; support notices={max(notices, card_notices)}"
-            )
-            print("SV_RESULT|warnings=true|degraded=true")
+            last_run.parent.mkdir(parents=True, exist_ok=True)
+            generated = datetime.now().astimezone().isoformat(timespec="seconds")
+            runtime_seconds = max(0, int(time.time()) - ENTRYPOINT_STARTED_EPOCH)
+            last_lines = [
+                "Switch Vision Discovery last run",
+                f"Discovery app loaded: {ENTRYPOINT_STARTED_ISO}",
+                f"Generated: {generated}",
+                f"Discovery runtime so far: {runtime_seconds}s",
+                "Mode: API/UniFi-only" if clean_api_only else "Mode: display/support fallback",
+                "SNMP2MQTT handoff: not required",
+                "Result: SUCCESS" if clean_api_only else "Result: COMPLETE_WITH_WARNINGS",
+                f"Report: {report}",
+                f"Generated dashboard card: {generated_card}",
+                f"UniFi API dashboard cards emitted: {unifi_cards}; issues: {unifi_issues}",
+                f"Display-only SNMP fallback cards emitted: {fallback_cards}",
+            ]
+            last_run.write_text("\n".join(last_lines) + "\n", encoding="utf-8")
+
+            if clean_api_only:
+                print(
+                    "SV_STATUS|stage=Complete|switch=UniFi/API devices|"
+                    "target=|command=Physical contract|"
+                    "activity=Discovery completed from independent UniFi/API sources; SNMP2MQTT is not required"
+                )
+                print(
+                    f"SV_DEBUG|Physical contract authority: clean API-only success; "
+                    f"unifi cards={unifi_cards}; unifi issues={unifi_issues}"
+                )
+                print(
+                    "SV_RESULT|warnings=false|degraded=false|snmp2mqtt_required=false"
+                )
+            else:
+                print(
+                    "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"
+                    "target=|command=Physical contract|"
+                    "activity=No exact SNMP telemetry contract was available; independent UniFi cards and safe display fallbacks were preserved"
+                )
+                print(
+                    f"SV_DEBUG|Physical contract authority: unifi cards={unifi_cards}; unifi issues={unifi_issues}; "
+                    f"display-only fallback cards={fallback_cards}; support notices={max(notices, card_notices)}"
+                )
+                print(
+                    "SV_RESULT|warnings=true|degraded=true|snmp2mqtt_required=false"
+                )
             return 0
 
         stage_path = work / "resolved_options.json"

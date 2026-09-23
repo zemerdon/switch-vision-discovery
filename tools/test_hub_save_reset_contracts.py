@@ -462,12 +462,14 @@ def test_discovery_exit10_warning_and_handoff_contract() -> None:
         options_path.write_text("{}\n", encoding="utf-8")
 
         class FakeProcess:
-            def __init__(self, return_code: int):
+            def __init__(self, return_code: int, result_marker: str = ""):
                 self.pid = 4242
                 self.stdout = [
                     "SV_STATUS|stage=Generating|switch=Audit|target=|command=synthetic|activity=running\n",
                     "synthetic discovery output\n",
                 ]
+                if result_marker:
+                    self.stdout.append(result_marker.rstrip("\n") + "\n")
                 self._return_code = return_code
 
             def wait(self):
@@ -476,12 +478,12 @@ def test_discovery_exit10_warning_and_handoff_contract() -> None:
             def poll(self):
                 return self._return_code
 
-        def run_case(return_code: int):
+        def run_case(return_code: int, result_marker: str = ""):
             bundle_calls: list[dict] = []
             handoff_calls: list[int] = []
 
             def fake_popen(*_args, **_kwargs):
-                return FakeProcess(return_code)
+                return FakeProcess(return_code, result_marker)
 
             def fake_handoff(*_args, **_kwargs):
                 handoff_calls.append(return_code)
@@ -542,6 +544,22 @@ def test_discovery_exit10_warning_and_handoff_contract() -> None:
             "evidence_quality": "complete",
             "discovery_result": "success",
             "snmp2mqtt_handoff": "verified",
+        }]
+
+        api_only, api_only_handoff, api_only_bundle = run_case(
+            0,
+            "SV_RESULT|warnings=false|degraded=false|snmp2mqtt_required=false",
+        )
+        assert api_only["success"] is True
+        assert api_only["phase"] == "complete"
+        assert api_only["stage"] == "Complete"
+        assert api_only["snmp2mqtt"]["status"] == "Not required"
+        assert api_only["snmp2mqtt"]["action"] == "not_required"
+        assert api_only_handoff == [], "API-only success must not start or restart SNMP2MQTT"
+        assert api_only_bundle == [{
+            "evidence_quality": "complete",
+            "discovery_result": "success",
+            "snmp2mqtt_handoff": "not_required",
         }]
 
 

@@ -191,6 +191,7 @@ def execute_home_assistant_ws(
     *,
     read_token: Callable[[], str],
     websocket_connect: Callable[..., Any],
+    max_size: int = 4 * 1024 * 1024,
 ) -> Any:
     """Execute one Switch Vision Home Assistant WebSocket command."""
     command_type = str(command.get("type") or "").strip()
@@ -218,7 +219,7 @@ def execute_home_assistant_ws(
             "ws://supervisor/core/websocket",
             open_timeout=12,
             close_timeout=5,
-            max_size=4 * 1024 * 1024,
+            max_size=max_size,
         )
     except Exception as exc:
         raise HomeAssistantWebSocketError(
@@ -476,7 +477,11 @@ def install(support_web_module: Any) -> None:
         _persist_calibration_diagnostic
     )
 
-    def _home_assistant_ws(command: dict[str, Any]) -> Any:
+    def _home_assistant_ws(
+        command: dict[str, Any],
+        *,
+        max_size: int = 4 * 1024 * 1024,
+    ) -> Any:
         operation = _operation_name(command)
         command_type = str(command.get("type") or "").strip() or "unknown"
 
@@ -493,6 +498,7 @@ def install(support_web_module: Any) -> None:
                 command,
                 read_token=lambda: cached_token,
                 websocket_connect=support_web_module.websocket_connect,
+                max_size=max_size,
             )
         except HomeAssistantWebSocketError as exc:
             exc.error_class = _stable_error_class(exc)

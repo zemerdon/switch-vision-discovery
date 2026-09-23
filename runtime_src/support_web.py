@@ -1568,6 +1568,9 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
         result_markers = [line for line in lines if line.startswith("SV_RESULT|")]
         soft_warning_result = any("warnings=true" in line for line in result_markers)
         soft_degraded_result = any("degraded=true" in line for line in result_markers)
+        snmp2mqtt_required = not any(
+            "snmp2mqtt_required=false" in line for line in result_markers
+        )
         degraded_result = return_code == 10 or soft_degraded_result
         partial_result = return_code == 11 or soft_warning_result
         if return_code not in {0, 10, 11}:
@@ -1594,6 +1597,24 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
             _set_discovery_state(
                 stage="Complete with warnings" if card_warning else "Finalizing Dashboard Card YAML",
                 activity=card_message,
+                command="",
+                phase="running",
+                snmp2mqtt=snmp2mqtt_result,
+            )
+        elif not snmp2mqtt_required:
+            snmp2mqtt_result = {
+                "status": "Not required",
+                "action": "not_required",
+                "slug": None,
+                "state": None,
+                "activation_verified": False,
+                "handoff_failed": False,
+                "degraded": False,
+                "message": "SNMP2MQTT is not required for this API/UniFi-only Discovery run.",
+            }
+            _set_discovery_state(
+                stage="Finalizing API/UniFi-only Discovery",
+                activity=snmp2mqtt_result["message"],
                 command="",
                 phase="running",
                 snmp2mqtt=snmp2mqtt_result,
@@ -1637,9 +1658,13 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
                 evidence_quality="degraded" if (degraded_result or partial_result) else "complete",
                 discovery_result="complete_with_warnings" if (degraded_result or partial_result) else "success",
                 snmp2mqtt_handoff=(
-                    "blocked_degraded"
-                    if degraded_result
-                    else ("failed" if snmp2mqtt_result.get("handoff_failed") else "verified")
+                    "not_required"
+                    if not snmp2mqtt_required
+                    else (
+                        "blocked_degraded"
+                        if degraded_result
+                        else ("failed" if snmp2mqtt_result.get("handoff_failed") else "verified")
+                    )
                 ),
             )
             snmp2mqtt_result["support_bundle_after_handoff"] = (

@@ -103,11 +103,19 @@ def _parse_dashboard(text: str) -> tuple[str, list[Any], list[str]]:
     return prefix, cards, blocks
 
 
-def _write_if_changed(path: Path, text: str, *, mode: int | None = None) -> bool:
+def _write_if_changed(
+    path: Path,
+    text: str,
+    *,
+    mode: int | None = None,
+    touch_if_unchanged: bool = False,
+) -> bool:
     current = path.read_text(encoding="utf-8") if path.is_file() else None
     if current == text:
         if mode is not None and path.is_file():
             os.chmod(path, mode)
+        if touch_if_unchanged and path.is_file():
+            os.utime(path, None)
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.projection.{os.getpid()}.tmp")
@@ -259,7 +267,10 @@ def apply_dashboard_order(
     output.extend(unknown)
 
     updated = "".join(output)
-    changed = _write_if_changed(path, updated)
+    # The visible dashboard file's mtime is the native panel's generation
+    # timestamp/change detector. A successful regeneration must advance it even
+    # when the YAML projection is byte-for-byte identical.
+    changed = _write_if_changed(path, updated, touch_if_unchanged=True)
     return {
         "cards": len(cards),
         "device_keys": len(keyed),

@@ -1,3 +1,14 @@
+## 3.0.2 — Brendan field-state and UniFi diagnostics repair
+
+- Fix API/UniFi-only Discovery so a successful run with no SNMP targets is a normal success instead of `degraded=true`; the Hub now reports SNMP2MQTT as **Not required** and never starts/restarts it against retained SNMP YAML for that run.
+- Replace stale `discovery-report.txt` and `last-discovery-run.txt` state on successful API/UniFi-only runs so old SNMP failure text cannot survive newer successful Discovery runs.
+- Advance the visible generated-dashboard YAML modification time after every successful projection, even when the YAML content is unchanged, so Core 2.7.26's native panel **Last generated** timestamp and refresh detector reflect the current run.
+- Preserve the Core bridge `max_size` keyword used by Complete Configuration custom-asset backup/export and restore, fixing the field `TypeError` raised by the installed bridge wrapper.
+- Stop manually captured Support My Switch bundles from inventing `success / verified` evidence metadata when no authoritative run context was supplied; manual captures now default those fields to `unknown`.
+- Add privacy-safe live UniFi connectivity diagnostics to Support My Switch: DNS, TCP, TLS, sites-API, site-resolution and devices-API stages with bounded timings/error categories, while excluding controller/resolved addresses, API keys, site identity and raw exception text.
+- Add a bounded recent UniFi2MQTT add-on log to Support My Switch; it remains subject to the normal contribution sanitizer before the archive can be shared.
+- Add permanent regressions for Brendan's stale dashboard timestamp/report/last-run path, clean API-only SNMP2MQTT skip, Core bridge large-message contract, UniFi diagnostic privacy/staging, and UniFi2MQTT log capture.
+
 ## 3.0.1 — Upgrade option migration fix
 
 - Fix upgrades from pre-AutoDiscover Discovery releases where saved Supervisor options do not yet contain `autodiscover_networks`; startup migration now backfills the required non-secret option as an empty list before the first authoritative Supervisor options write.

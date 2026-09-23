@@ -26,6 +26,7 @@ python3 "$BASE_DIR/device_added_order_regression.py"
 python3 "$BASE_DIR/configuration_backup_regression.py"
 python3 "$BASE_DIR/restore_pending_state_regression.py"
 python3 "$BASE_DIR/support_addon_log_regression.py"
+python3 "$BASE_DIR/brendan_field_regression.py"
 python3 "$BASE_DIR/calibration_manager_regression.py"
 python3 "$BASE_DIR/hub_settings_tabs_regression.py"
 python3 "$BASE_DIR/autodiscover_regression.py"
@@ -900,6 +901,9 @@ expected = (
     "runtime-versions.json",
     "configuration-snapshot.json",
     "calibration-storage.json",
+    "discovery-addon-log-status.json",
+    "unifi2mqtt-addon-log-status.json",
+    "unifi-connectivity-diagnostics.json",
     "diagnostic-summary.json",
 )
 with zipfile.ZipFile(path) as archive:
@@ -912,11 +916,11 @@ with zipfile.ZipFile(path) as archive:
         assert names.count(wanted) == 1, (wanted, names.count(wanted))
     assert not any(name.startswith(f"{root}/diagnostics/") for name in names), "duplicate top-level diagnostics"
     manifest = json.loads(archive.read(f"{root}/MANIFEST.json"))
-    assert manifest["bundle_version"] == 13
+    assert manifest["bundle_version"] == 14
     assert manifest["evidence"] == {
         "quality": "complete",
-        "discovery_result": "success",
-        "snmp2mqtt_handoff": "verified",
+        "discovery_result": "unknown",
+        "snmp2mqtt_handoff": "unknown",
     }
     summary = json.loads(archive.read(f"{root}/switch_vision/diagnostics/diagnostic-summary.json"))
     assert summary["privacy"] == {
@@ -2062,8 +2066,8 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.1"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.1"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.2"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.2"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -2904,7 +2908,7 @@ assert store["unrelated_secret"] == "also-keep-secret"
 posts.clear()
 assert migration.main() == 0
 assert not posts, "no-op migration unexpectedly rewrote Supervisor options"
-print("Switch Vision Discovery v3.0.1 Supervisor upgrade migration: PASS")
+print("Switch Vision Discovery v3.0.2 Supervisor upgrade migration: PASS")
 PY_MIGRATION
 
 # v2.1.19 community-validation UniFi profile regression.
