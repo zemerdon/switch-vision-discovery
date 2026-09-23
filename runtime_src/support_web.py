@@ -60,6 +60,7 @@ from discovery_history import (
 )
 import device_control as device_control_state
 import dashboard_device_order
+import autodiscover
 
 SUPPORT_ADDRESS = "switch-vision@zemerdon.com"
 SUPERVISOR_INGRESS_IP = "172.30.32.2"
@@ -6847,6 +6848,7 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 <h2>Devices</h2>
 <div class="hub-settings-tabs" role="tablist" aria-label="Device sections">
 <button id="devicesTab-configure" class="hub-settings-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="devicesPanel-configure" data-devices-tab="configure">Configure Devices</button>
+<button id="devicesTab-autodiscover" class="hub-settings-tab" type="button" role="tab" aria-selected="false" aria-controls="devicesPanel-autodiscover" data-devices-tab="autodiscover">AutoDiscover</button>
 <button id="devicesTab-overview" class="hub-settings-tab" type="button" role="tab" aria-selected="false" aria-controls="devicesPanel-overview" data-devices-tab="overview">Device Overview</button>
 </div>
 <section id="devicesPanel-configure" role="tabpanel" aria-labelledby="devicesTab-configure">
@@ -6857,6 +6859,18 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 <button id="devicesConfigReload" type="button">Reload</button>
 <p id="devicesConfigStatus" class="muted hub-settings-status">Device configuration has not been loaded yet.</p>
 </div>
+</section>
+<section id="devicesPanel-autodiscover" role="tabpanel" aria-labelledby="devicesTab-autodiscover" hidden>
+<h3>AutoDiscover</h3>
+<p class="muted">Find switches on a network using only SNMP communities you explicitly provide or already saved on configured switches. Switch Vision never guesses communities. Existing UniFi API inventory is included automatically when available. Add All Ready Devices includes only exact registry matches that already have dashboard support; other SNMP responders stay reviewable one at a time.</p>
+<div class="grid">
+<label class="field"><span><b>Network / subnet</b></span><input id="autodiscoverSubnet" type="text" maxlength="64" placeholder="192.168.1.0/24" autocomplete="off"><small>IPv4 CIDR only. A scan is limited to 1024 usable addresses.</small></label>
+<label class="option"><input id="autodiscoverUseSaved" type="checkbox" checked><span><b>Use saved SNMP communities</b><br><small>Uses communities already attached to configured switches. Secret values are never shown here.</small></span></label>
+<label class="field"><span><b>One-time SNMP community</b></span><input id="autodiscoverCommunity" type="password" maxlength="256" autocomplete="new-password" placeholder="Optional"><small>Used for this scan/add flow only. It becomes a saved device credential only if you add a device found with it.</small></label>
+</div>
+<div class="actions"><button class="primary" id="autodiscoverScanButton" type="button">Scan Network</button><button id="autodiscoverAddAllButton" type="button" disabled>Add All Ready Devices</button></div>
+<p id="autodiscoverStatus" class="muted">AutoDiscover has not been loaded yet.</p>
+<div id="autodiscoverResults"></div>
 </section>
 <section id="devicesPanel-overview" role="tabpanel" aria-labelledby="devicesTab-overview" hidden>
 <h3>Switches</h3>
@@ -7003,10 +7017,17 @@ async function installUnifi2mqtt(){const btn=$('installUnifi2mqttButton');btn.di
 function openUnifiAppConfig(){if(window.unifi2mqttConfigUrl)openHomeAssistantPath(window.unifi2mqttConfigUrl)}
 function showLatest(latest){if(!latest){$('readyCard').classList.add('hidden');return}const ready=!!latest.ready_to_send;const processing=latest.processing||{};$('readyHeading').textContent=ready?'Contribution ready':'Contribution requires review';$('contributionId').textContent=latest.contribution_id;$('version').textContent=latest.version;$('archiveName').textContent=latest.archive;$('archiveSize').textContent=fmtBytes(latest.archive_size);const q=$('qualityBanner');q.className=ready?'success':'failure';q.textContent=`Bundle quality: ${latest.quality}${ready?'':' — do not share until reviewed'}`;const issueCount=Number(processing.issue_count||0);$('qualityDetails').textContent=issueCount?`${issueCount} file(s) could not be fully inspected or sanitized. Download the archive and read SANITIZATION_REPORT.txt for privacy-safe issue identifiers.`:(ready?'All files were inspected by the privacy processor.':'Review SANITIZATION_REPORT.txt before sharing.');$('devices').innerHTML='';for(const d of latest.devices||[])$('devices').appendChild(deviceCard(d));if(!(latest.devices||[]).length)$('devices').textContent='No devices were detected.';const emailReady=ready&&!!latest.email;$('prepareEmail').classList.toggle('hidden',!emailReady);if(emailReady)$('prepareEmail').href=endpoint(`download/${encodeURIComponent(latest.email)}`);$('downloadArchive').href=endpoint(`download/${encodeURIComponent(latest.archive)}`);$('mailto').classList.toggle('hidden',!ready);if(ready)$('mailto').href=mailto(latest)}
 
+function autoDiscoverProgress(item){const states=['Found'];if(String(item?.source||'').includes('SNMP'))states.push('Accessed');if(item?.registry_match)states.push('Identified');else if(item?.model_hint||item?.model)states.push('Model observed');if(item?.ready_to_add)states.push('Ready');else if(item?.addable)states.push('Review');else if(item?.configured||item?.already_managed)states.push('Already managed');return states.join(' → ')}
+function renderAutoDiscoverResults(data){lastAutoDiscoverResults=data||null;const root=$('autodiscoverResults'),addAll=$('autodiscoverAddAllButton');if(!root)return;root.innerHTML='';const devices=Array.isArray(data?.devices)?data.devices:[];const ready=devices.filter(item=>item?.ready_to_add===true);if(addAll)addAll.disabled=!ready.length;if(!devices.length){const p=document.createElement('p');p.className='muted';p.textContent='No switches answered with the selected saved/one-time SNMP communities, and no UniFi API devices were available.';root.append(p);return}for(const item of devices){const card=document.createElement('div');card.className='device-card';const head=document.createElement('div');head.className='device-head';const title=document.createElement('strong');title.textContent=item.sys_name||item.model||item.model_hint||item.host||'Discovered device';const source=document.createElement('span');source.className='device-source-chip';source.textContent=item.source||'SNMP';head.append(title,source);const detail=document.createElement('div');detail.className='muted';const registryText=item.registry_match?('Registry: '+(item.registry_status||'matched')):'Registry: exact match pending';const bits=[item.host,item.model||item.model_hint,item.vendor,registryText].filter(Boolean);detail.textContent=bits.join(' · ');const progress=document.createElement('div');progress.className='muted';progress.textContent=autoDiscoverProgress(item);card.append(head,detail,progress);if(item.addable){const actions=document.createElement('div');actions.className='actions';const add=document.createElement('button');add.type='button';if(item.ready_to_add)add.className='primary';add.textContent='Add Device';add.title=item.ready_to_add?'Add this dashboard-ready device.':'Add this authenticated device and let normal Discovery perform authoritative identification.';add.addEventListener('click',()=>addAutoDiscoverDevices([item],add));actions.append(add);card.append(actions)}root.append(card)}}
+async function loadAutoDiscoverStatus(){const status=$('autodiscoverStatus');if(status)status.textContent='Loading AutoDiscover…';try{const r=await fetch(endpoint('api/autodiscover/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load AutoDiscover');const subnet=$('autodiscoverSubnet');if(subnet&&!subnet.value&&d.suggested_network)subnet.value=d.suggested_network;if(status){const creds=Number(d.saved_credential_count||0),unifi=Number(d.unifi_device_count||0);status.textContent='Ready · SNMPv'+(d.snmp_version||'2c')+' · '+creds+' saved credential '+(creds===1?'source':'sources')+' · '+unifi+' UniFi device'+(unifi===1?'':'s')+' available. '+(d.policy||'')}}catch(e){if(status)status.textContent='Could not load AutoDiscover: '+(e.message||e)}}
+async function scanAutoDiscover(){const btn=$('autodiscoverScanButton'),status=$('autodiscoverStatus'),addAll=$('autodiscoverAddAllButton');if(btn)btn.disabled=true;if(addAll)addAll.disabled=true;if(status)status.textContent='Scanning network with the selected authorized credential sources…';try{const body={network:$('autodiscoverSubnet')?.value||'',use_saved:!!$('autodiscoverUseSaved')?.checked,manual_community:$('autodiscoverCommunity')?.value||''};const r=await fetch(endpoint('api/autodiscover/scan'),{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'AutoDiscover scan failed');renderAutoDiscoverResults(d);if(status){const networkHosts=Number(d.network_hosts||0),probed=Number(d.snmp_probe_hosts??d.scanned_hosts??0),creds=Number(d.credential_count||0);status.textContent=creds?('Scan complete · '+probed+' of '+networkHosts+' addresses probed with authorized SNMP credentials · '+Number(d.devices?.length||0)+' device result(s). Hosts that do not answer remain undiscovered.'):('Scan complete · '+networkHosts+' addresses in range · no SNMP probes sent because no SNMP credential source was selected · '+Number(d.devices?.length||0)+' UniFi/API result(s).')}}}catch(e){renderAutoDiscoverResults(null);if(status)status.textContent='AutoDiscover failed: '+(e.message||e)}finally{if(btn)btn.disabled=false}}
+async function addAutoDiscoverDevices(devices,button=null){const status=$('autodiscoverStatus'),addAll=$('autodiscoverAddAllButton');const candidates=(Array.isArray(devices)?devices:[]).filter(item=>item?.addable===true);if(!candidates.length){if(status)status.textContent='No addable SNMP devices are selected.';return}if(button)button.disabled=true;if(addAll)addAll.disabled=true;if(status)status.textContent='Re-validating and adding '+candidates.length+' device'+(candidates.length===1?'':'s')+'…';try{const body={network:$('autodiscoverSubnet')?.value||'',manual_community:$('autodiscoverCommunity')?.value||'',devices:candidates.map(item=>({host:item.host,credential_ref:item.credential_ref}))};const r=await fetch(endpoint('api/autodiscover/add'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not add AutoDiscover devices');const addedHosts=new Set((d.added||[]).map(item=>String(item.host||'')));if(lastAutoDiscoverResults?.devices){for(const item of lastAutoDiscoverResults.devices){if(addedHosts.has(String(item.host||''))){item.ready_to_add=false;item.configured=true;item.already_managed=true}}renderAutoDiscoverResults(lastAutoDiscoverResults)}await window.SwitchVisionHubSettings?.loadDeviceConfiguration?.();await refreshConfiguredDevices(false);if(status)status.textContent='Added '+Number(d.added_count||0)+' device'+(Number(d.added_count||0)===1?'':'s')+'. Run normal Discovery to perform authoritative model detection and generate dashboard output.'}catch(e){if(status)status.textContent='Could not add device'+(candidates.length===1?'':'s')+': '+(e.message||e);if(addAll)addAll.disabled=!lastAutoDiscoverResults?.devices?.some(item=>item?.ready_to_add)}finally{if(button)button.disabled=false}}
+
 function diagTile(label,value,state=''){const tile=document.createElement('div');tile.className='diag-tile';const l=document.createElement('div');l.className='muted';l.textContent=label;const v=document.createElement('div');v.className=`diag-value ${state}`;v.textContent=value;tile.append(l,v);return tile}
 function renderDeviceDiagnosticsSummary(d){const summary=$('devicesDiagnosticsSummary');if(!summary)return;summary.innerHTML='';const discovery=d.discovery||{};const registry=d.registry||{};const files=d.files||{};summary.append(diagTile('Switch Vision version',`v${d.version||'Unknown'}`),diagTile('Discovery app',d.service||'Unknown',d.service==='Running'?'diag-good':'diag-bad'),diagTile('Discovery status',discovery.running?'Running':(discovery.message||'Idle / Ready'),discovery.success===false?'diag-bad':'diag-good'),diagTile('Device registry',registry.loaded?`Loaded · ${registry.entries||0} entries`:'Unavailable',registry.loaded?'diag-good':'diag-bad'),diagTile('SNMP2MQTT YAML',files.generated_yaml?.found?'Found':'Missing',files.generated_yaml?.found?'diag-good':'diag-warn'),diagTile('Dashboard YAML',files.generated_card?.found?'Found':'Missing',files.generated_card?.found?'diag-good':'diag-warn'),diagTile('Contribution workflow',d.contribution_workflow?.ready?'Ready':'Unavailable',d.contribution_workflow?.ready?'diag-good':'diag-bad'));const messages=$('devicesDiagnosticsMessages');messages.innerHTML='';for(const [kind,items] of [['failure',d.errors||[]],['warning',d.warnings||[]]]){if(!items.length)continue;const box=document.createElement('div');box.className=kind;const ul=document.createElement('ul');ul.className='diag-list';for(const item of items){const li=document.createElement('li');li.textContent=`${kind==='failure'?'ERROR':'WARNING'}: ${item}`;ul.appendChild(li)}box.appendChild(ul);messages.appendChild(box)}}
 let lastConfiguredDevices=null;
 let lastDevicesDiagnostics=null;
+let lastAutoDiscoverResults=null;
 let expandedUnifiedDevices=new Set();
 function configuredDeviceTitle(item){return item.display_name||item.switch_name||item.switch_host||'Configured switch'}
 function normalizedDeviceIdentity(value){return String(value||'').trim().toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9._-]+/g,'_').replace(/_+/g,'_').replace(/^[_ .-]+|[_ .-]+$/g,'')}
@@ -7154,7 +7175,7 @@ async function create(){const btn=$('createButton');btn.disabled=true;setView('p
 const DISCOVERY_TOOLTIP_HELP={runDiscoveryButton:'Contact each enabled switch, collect current evidence, identify hardware, and regenerate Switch Vision outputs.',regenerateYamlButton:'Rebuild SNMP2MQTT YAML from saved Discovery evidence without running new SNMP walks.',regenerateCardYamlButton:'Rebuild dashboard-card YAML from saved Discovery evidence without running new SNMP walks.',previewGeneratedDashboardYamlButton:'Preview the selected new-dashboard export format before pasting it into Home Assistant.',copyGeneratedDashboardYamlButton:'Copy the selected complete dashboard format for Home Assistant Raw configuration editor.',copyGeneratedCardsOnlyButton:"Copy only the generated card list for pasting beneath an existing view's cards: key.",downloadGeneratedDashboardYamlButton:'Download the selected complete Home Assistant dashboard export.',generatedDashboardExportMode:'Choose Custom dashboard to preserve the generated vertical Layout Card view, or Standard dashboard to remove that third-party view dependency.',stopDiscoveryButton:'Request a clean stop of the active Discovery or regeneration operation.',viewResultsButton:'Open the unified Devices list and current detected hardware details.',toggleDebugButton:'Show the complete credential-sanitized debug session for the current or most recent operation.',copyDebugButton:'Copy the complete current-session credential-sanitized debug output.',devicesRunDiscoveryButton:'Start a fresh Discovery run for the currently enabled saved switches.',resetDeviceOrderButton:'Restore the device list and Native dashboard to immutable first-added order.',devicesRegenerateCardYamlButton:'Regenerate the dashboard card from current saved device order/state.',copyDiagnosticsButton:'Copy the privacy-safe Switch Vision diagnostics report.',resetSnmpDiscoveryButton:'Retire known Switch Vision SNMP MQTT entities and clear saved SNMP Discovery state for a clean rebuild.',addUnifiControllerButton:'Add another Local or Remote UniFi controller/site to this UniFi2MQTT instance.',testUnifiLocalButton:'Test Local UniFi API reachability, authentication, site resolution, and adopted-device access without saving.',testUnifiRemoteButton:'Test Remote Site Manager reachability, authentication, host/site resolution, and adopted-device access without saving.',unifi_priority_transport:'The connection path tried first on every UniFi poll.',unifi_fallback_transport:'The alternate connection used only when the priority path is unavailable.',unifi_local_controller_url:'Local UniFi Network Integration API origin. Self-hosted controllers normally use HTTPS port 11443.',unifi_remote_host_id:'UniFi Site Manager console host selector; auto is recommended when unambiguous.'};
 function installDiscoveryTooltips(root=document){const selector='button,input,select,a.button,summary';for(const el of root.querySelectorAll?root.querySelectorAll(selector):[]){if(el.title)continue;let help=DISCOVERY_TOOLTIP_HELP[el.id]||'';const label=el.closest?.('label');if(!help&&label){const small=label.querySelector('small');if(small)help=small.textContent.trim()}if(help)el.title=help}}
 const discoveryTooltipObserver=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===Node.ELEMENT_NODE){if(node.matches?.('button,input,select,a.button,summary'))installDiscoveryTooltips(node.parentElement||document);else installDiscoveryTooltips(node)}});discoveryTooltipObserver.observe(document.body,{childList:true,subtree:true});installDiscoveryTooltips(document);
-$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();$('hubMotdToggle').addEventListener('click',toggleHubMotdVisibility);initHubMotdVisibility();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('generatedDashboardExportMode').addEventListener('change',()=>syncGeneratedDashboardExportMode(true));$('previewGeneratedDashboardYamlButton').addEventListener('click',previewGeneratedDashboardYaml);$('copyGeneratedDashboardYamlButton').addEventListener('click',copyGeneratedDashboardYaml);$('copyGeneratedCardsOnlyButton').addEventListener('click',copyGeneratedCardsOnly);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('refreshDevicesButton').addEventListener('click',loadDevices);$('resetDeviceOrderButton').addEventListener('click',resetConfiguredDeviceOrder);$('devicesRegenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYamlFromDevices);$('openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()});$('openIntegrationSettingsButton').addEventListener('click',()=>window.SwitchVisionHubSettings?.open('core'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('testUnifiLocalButton').addEventListener('click',()=>testUnifiConnection('local'));$('testUnifiRemoteButton').addEventListener('click',()=>testUnifiConnection('remote'));$('clearUnifiConnectionTestDebugButton').addEventListener('click',clearUnifiConnectionTestDebug);$('addUnifiControllerButton').addEventListener('click',addUnifiController);$('unifi_priority_transport').addEventListener('change',syncUnifiFallbackOptions);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('importSwitchesButton').addEventListener('click',importSwitchesConfiguration);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('hubSharedPrimary').addEventListener('click',runSharedHubPrimary);$('hubSharedReload').addEventListener('click',reloadSharedHubView);$('hubSharedBack').addEventListener('click',goBack);installStaticSecretControls();setView('home');startElapsedTicker();refresh();
+$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();$('hubMotdToggle').addEventListener('click',toggleHubMotdVisibility);initHubMotdVisibility();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('generatedDashboardExportMode').addEventListener('change',()=>syncGeneratedDashboardExportMode(true));$('previewGeneratedDashboardYamlButton').addEventListener('click',previewGeneratedDashboardYaml);$('copyGeneratedDashboardYamlButton').addEventListener('click',copyGeneratedDashboardYaml);$('copyGeneratedCardsOnlyButton').addEventListener('click',copyGeneratedCardsOnly);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('autodiscoverScanButton').addEventListener('click',scanAutoDiscover);$('autodiscoverAddAllButton').addEventListener('click',()=>addAutoDiscoverDevices((lastAutoDiscoverResults?.devices||[]).filter(item=>item?.ready_to_add)));$('refreshDevicesButton').addEventListener('click',loadDevices);$('resetDeviceOrderButton').addEventListener('click',resetConfiguredDeviceOrder);$('devicesRegenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYamlFromDevices);$('openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()});$('openIntegrationSettingsButton').addEventListener('click',()=>window.SwitchVisionHubSettings?.open('core'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('testUnifiLocalButton').addEventListener('click',()=>testUnifiConnection('local'));$('testUnifiRemoteButton').addEventListener('click',()=>testUnifiConnection('remote'));$('clearUnifiConnectionTestDebugButton').addEventListener('click',clearUnifiConnectionTestDebug);$('addUnifiControllerButton').addEventListener('click',addUnifiController);$('unifi_priority_transport').addEventListener('change',syncUnifiFallbackOptions);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('importSwitchesButton').addEventListener('click',importSwitchesConfiguration);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('hubSharedPrimary').addEventListener('click',runSharedHubPrimary);$('hubSharedReload').addEventListener('click',reloadSharedHubView);$('hubSharedBack').addEventListener('click',goBack);installStaticSecretControls();setView('home');startElapsedTicker();refresh();
 </script>
 <script src="credits_v25.js"></script>
 <script>
@@ -7281,14 +7302,265 @@ try{const d=await req('api/settings/discovery',{method:'POST',headers:{'Content-
 }
 async function loadDeviceConfiguration(){if(!state.discovery?.settings)return loadDiscoverySurface('devices');renderDeviceConfiguration();const st=q('devicesConfigStatus');if(st&&!dirty.has('discovery'))st.textContent='Device configuration loaded.'}
 async function loadMaintenanceBackupSettings(){if(!state.discovery?.settings)return loadDiscoverySurface('backups');renderDiscoveryBackupSettings();const st=q('maintenanceBackupSettingsStatus');if(st&&!dirty.has('discovery'))st.textContent='Backup settings loaded.'}
-function selectDevicesTab(which='configure',focus=false){const ids=['configure','overview'],selected=ids.includes(which)?which:'configure';for(const id of ids){const active=id===selected,pane=q(`devicesPanel-${id}`),tab=q(`devicesTab-${id}`);if(pane)pane.hidden=!active;if(tab){tab.classList.toggle('is-active',active);tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1}}if(focus)q(`devicesTab-${selected}`)?.focus();if(selected==='configure')loadDeviceConfiguration()}
-function devicesTabKeydown(e){const ids=['configure','overview'],current=q('devicesTab-configure')?.classList.contains('is-active')?'configure':'overview',i=ids.indexOf(current);let next=null;if(e.key==='ArrowRight')next=ids[(i+1)%ids.length];else if(e.key==='ArrowLeft')next=ids[(i-1+ids.length)%ids.length];else if(e.key==='Home')next=ids[0];else if(e.key==='End')next=ids[ids.length-1];if(next){e.preventDefault();selectDevicesTab(next,true)}}
+function selectDevicesTab(which='configure',focus=false){const ids=['configure','autodiscover','overview'],selected=ids.includes(which)?which:'configure';for(const id of ids){const active=id===selected,pane=q('devicesPanel-'+id),tab=q('devicesTab-'+id);if(pane)pane.hidden=!active;if(tab){tab.classList.toggle('is-active',active);tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1}}if(focus)q('devicesTab-'+selected)?.focus();if(selected==='configure')loadDeviceConfiguration();else if(selected==='autodiscover')loadAutoDiscoverStatus()}
+function devicesTabKeydown(e){const ids=['configure','autodiscover','overview'],current=ids.find(id=>q('devicesTab-'+id)?.classList.contains('is-active'))||'configure',i=ids.indexOf(current);let next=null;if(e.key==='ArrowRight')next=ids[(i+1)%ids.length];else if(e.key==='ArrowLeft')next=ids[(i-1+ids.length)%ids.length];else if(e.key==='Home')next=ids[0];else if(e.key==='End')next=ids[ids.length-1];if(next){e.preventDefault();selectDevicesTab(next,true)}}
 function cleanDiscovery(){const s=clone(state.discovery.settings);delete s.support_contributor_value_configured;s.switches=(s.switches||[]).map(row=>{const x={...row};delete x.snmp_community_configured;delete x.restore_pending;return x});return s}async function load(){status('Loading settings…');const a=await Promise.allSettled([req('api/settings/core'),req('api/settings/snmp2mqtt'),req('api/settings/discovery')]);state.core=a[0].status==='fulfilled'?clone(a[0].value):null;state.snmp2mqtt=a[1].status==='fulfilled'?clone(a[1].value):{installed:false};if(a[2].status==='fulfilled'){state.discovery=clone(a[2].value);state.models=[...(a[2].value.models||[])]}else state.discovery=null;renderCore();renderSnmp();renderDiscovery();renderDeviceConfiguration();renderDiscoveryBackupSettings();if(state.core?.settings?.discovery)applyDiscoveryAppearancePreview(state.core.settings.discovery.discovery_ui_density,state.core.settings.discovery.discovery_content_width);dirty.clear();q('hubSettingsSave').disabled=true;syncDiscoverySurfaceButtons();const e=a.filter(x=>x.status==='rejected').map(x=>x.reason?.message||String(x.reason));status(e.length?`Loaded with ${e.length} unavailable section(s): ${e.join(' · ')}`:'All settings loaded from their authoritative components.',e.length?'failure':'success')}async function save(){if(!dirty.size)return;const b=q('hubSettingsSave'),done=[];b.disabled=true;try{for(const o of ['core','snmp2mqtt','discovery']){if(!dirty.has(o))continue;status(`Saving ${o==='core'?'Core':o==='snmp2mqtt'?'SNMP2MQTT':'Discovery'}…`);const body=o==='core'?{settings:state.core.settings}:o==='snmp2mqtt'?{settings:state.snmp2mqtt.settings}:{settings:cleanDiscovery()};const d=await req(`api/settings/${o}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(o==='core')state.core=clone(d);else if(o==='snmp2mqtt')state.snmp2mqtt=clone(d);else{state.discovery=clone(d);state.models=[...(d.models||state.models)]}done.push(o);clear(o)}renderCore();renderSnmp();renderDiscovery();renderDeviceConfiguration();renderDiscoveryBackupSettings();status('Saved successfully.','success')}catch(e){status(`${done.length?`Saved ${done.join(', ')}. `:''}Save stopped: ${e.message||e}`,'failure');b.disabled=!dirty.size}}async function resetCore(){if(!confirm('Reset all Switch Vision Core settings to their factory defaults? SNMP2MQTT and Discovery settings are not changed.'))return;try{status('Resetting Core settings…');state.core=clone(await req('api/settings/core',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_to_defaults:true})}));clear('core');renderCore();status('Core settings reset to defaults.','success')}catch(e){status(`Core reset failed: ${e.message||e}`,'failure')}}function styles(){if(q('hubSettingsStyles'))return;const s=document.createElement('style');s.id='hubSettingsStyles';s.textContent='.hub-settings-page,.hub-profiles-page{margin:0;padding:0}.hub-settings-section{border:1px solid var(--line-soft);border-radius:10px;padding:12px;margin:10px 0;background:var(--surface-inset);box-shadow:inset 0 1px 0 var(--heading-soft)}.hub-settings-section:first-child{margin-top:0}.hub-settings-section h3{margin:.1rem 0 .3rem;padding-left:11px;position:relative;color:var(--heading)}.hub-settings-section h3::before{content:"";position:absolute;left:0;top:.12em;width:3px;height:1.05em;border-radius:999px;background:var(--heading-line);box-shadow:0 0 12px var(--heading-glow)}.hub-settings-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.hub-range-control{display:grid;gap:4px;width:100%}.hub-range-control input[type=range]{width:100%;margin:0;accent-color:var(--accent)}.hub-range-ends,.hub-range-ticks{display:flex;justify-content:space-between;gap:4px;color:var(--muted);font-size:var(--sv-font-small)}.hub-range-ticks span{min-width:1.2em;text-align:center}.hub-range-control output{font-weight:700;color:var(--heading);font-size:var(--sv-font-small)}.installer-appearance-preview{border:1px solid var(--line-soft);border-radius:9px;padding:10px;margin-top:8px;background:var(--surface-inset);overflow:hidden}.installer-preview-frame{width:var(--preview-width,70%);max-width:100%;margin:auto;border:1px solid var(--line);border-radius:8px;padding:var(--preview-pad,12px);display:grid;gap:var(--preview-gap,8px);background:var(--surface)}.installer-preview-head{display:flex;justify-content:space-between;gap:8px}.installer-preview-head>span:first-child{width:38%;height:8px;border-radius:99px;background:var(--accent-soft)}.installer-preview-label{font-size:var(--sv-font-small);color:var(--muted)}.installer-preview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--preview-gap,8px)}.installer-preview-grid i,.installer-preview-card{display:block;height:26px;border:1px solid var(--line-soft);border-radius:6px;background:var(--surface-button)}.installer-preview-card{height:42px}.hub-setting-field{margin:6px 0;gap:4px;align-self:start;align-content:start}.hub-setting-field>span{font-weight:600;line-height:1.2}.hub-setting-field>input,.hub-setting-field>select{width:100%;height:38px;min-height:38px;padding:6px 10px}.hub-setting-field>small{line-height:1.25;margin-top:1px}.hub-settings-section .grid{align-items:start;gap:8px 14px}.hub-discovery-workflow-grid .hub-field-label{min-height:2.4em;align-items:flex-start}.hub-discovery-workflow-grid .hub-setting-field>select{align-self:start}.hub-order-list{border:1px solid var(--line-soft);border-radius:9px;padding:10px;margin-top:12px}.hub-order-row{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center;padding:5px 0}.hub-order-row button{padding:5px 9px}.hub-settings-actions{position:sticky;bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface-inset);border:1px solid var(--line-soft);padding:8px 10px;margin:10px 0 0;z-index:3;box-shadow:0 8px 22px -18px var(--heading-glow);border-radius:10px}.hub-settings-status{margin:0 0 0 auto;line-height:1.2}.hub-settings-status.success{color:var(--ok)}.hub-settings-status.failure{color:var(--bad)}.hub-settings-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto;padding:2px 2px 8px;margin:0 0 10px;border-bottom:1px solid var(--line-soft)}.hub-settings-tab{flex:0 0 auto;font-weight:750;color:var(--muted);background:var(--surface-button)!important;border-color:var(--line-soft)!important}.hub-settings-tab.is-active{color:var(--heading-strong)!important;border-color:var(--accent-strong)!important;background:var(--accent-soft)!important;box-shadow:inset 0 -2px 0 var(--accent)}.hub-settings-tab:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-soft),inset 0 -2px 0 var(--accent)}.hub-component{border:1px solid var(--line-soft);border-radius:12px;padding:10px;margin:10px 0;background:linear-gradient(180deg,var(--heading-soft),var(--surface-inset) 64px);box-shadow:inset 0 1px 0 var(--heading-soft)}.hub-settings-pane[hidden]{display:none!important}.hub-switch-setting-body[hidden]{display:none!important}.hub-setting-row{margin:12px 0}.hub-field-label,.hub-toggle-label{display:inline-flex;align-items:center;gap:6px}.hub-help{position:relative;display:inline-flex;align-items:center}.hub-help-button{width:20px!important;height:20px!important;min-height:20px!important;padding:1px!important;border:0!important;border-radius:5px!important;background:transparent!important;color:var(--muted)!important;box-shadow:none!important;display:inline-grid!important;place-items:center!important;line-height:1!important}.hub-help-button:hover,.hub-help-button:focus-visible{color:var(--accent)!important;background:var(--heading-soft)!important;box-shadow:0 0 0 2px var(--accent-soft)!important;outline:none!important}.hub-help-icon{width:16px;height:16px;display:block;overflow:visible}.hub-help-icon rect,.hub-help-icon path{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.hub-help-popover{position:absolute;z-index:20;left:24px;top:50%;transform:translateY(-50%);width:max-content;max-width:min(320px,72vw);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card-strong);color:var(--text);box-shadow:0 8px 24px var(--shadow);white-space:normal}.hub-help-popover[hidden]{display:none}@media(max-width:700px){.hub-settings-status{width:100%;margin:0}.hub-settings-actions{padding-bottom:4px}}#settingsCard{--hub-control-height:var(--control-height);--hub-control-radius:var(--control-radius);--hub-field-gap:4px;--hub-grid-row-gap:6px;--hub-grid-column-gap:12px;--hub-toggle-min-height:24px;--hub-sub-radius:10px}#settingsCard .grid,.hub-control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--hub-grid-row-gap) var(--hub-grid-column-gap);align-items:start}.hub-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(240px,300px));column-gap:10px;justify-content:start;align-items:start}.hub-setting-toggle{min-height:var(--hub-toggle-min-height);padding:2px 0;display:grid;grid-template-columns:18px minmax(0,auto) 20px;column-gap:7px;align-items:center;justify-content:start;font-weight:400;line-height:1.2}.hub-setting-toggle input{margin:0;width:16px;height:16px;align-self:center;justify-self:start}.hub-setting-toggle .hub-option-label{font-weight:400;display:block;min-width:0;line-height:1.2}.hub-setting-toggle>.hub-help{align-self:center;justify-self:start}.hub-setting-field{display:grid;margin:4px 0;gap:var(--hub-field-gap);align-self:start;align-content:start}.hub-setting-field>span{font-weight:600;line-height:1.2}.hub-setting-field>input,.hub-setting-field>select{width:100%;height:var(--hub-control-height);min-height:var(--hub-control-height);padding:var(--control-pad-y) var(--control-pad-x);border-radius:var(--hub-control-radius)}.hub-setting-field>small{line-height:1.25;margin-top:1px}.hub-header-layout{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(420px,1.2fr);gap:12px;align-items:start}.hub-header-group{border:1px solid var(--line-soft);border-radius:9px;padding:9px 10px;background:var(--surface);min-width:0}.hub-header-group h4{margin:0 0 7px;color:var(--heading);font-size:var(--sv-font-body)}.hub-header-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));column-gap:10px;align-content:start}.hub-header-shortcuts h4{grid-column:1/-1}.hub-header-presentation .hub-toggle-grid{grid-template-columns:1fr}.hub-header-presentation-width{grid-template-columns:1fr!important;margin-top:6px}.hub-order-list{width:100%;max-width:none;align-self:start;margin-top:0;padding:9px 10px}.hub-order-help{margin:0 0 5px;line-height:1.25}.hub-order-row{min-height:30px;padding:1px 0;gap:5px}.hub-order-row.is-disabled>span{opacity:.55}.hub-order-row button{width:32px;height:30px;min-height:30px;padding:0;border-radius:7px}.hub-grid-dense{grid-template-columns:repeat(4,minmax(0,1fr))!important}.hub-setting-row{border-radius:var(--hub-sub-radius);padding:12px;margin:10px 0}.hub-setting-row .grid{margin-top:8px}.hub-switch-setting-row{padding:0;overflow:hidden}.hub-switch-setting-summary{display:flex;align-items:center;gap:10px;padding:10px 12px}.hub-switch-setting-toggle{display:flex!important;align-items:center!important;gap:10px!important;min-width:0!important;flex:1!important;justify-content:space-between!important;text-align:left!important;background:transparent!important;border:0!important;box-shadow:none!important;padding:2px 4px!important}.hub-switch-setting-toggle:hover{background:var(--heading-soft)!important}.hub-switch-setting-label{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.hub-switch-setting-chevron{flex:0 0 auto;color:var(--muted);transition:transform .12s ease}.hub-switch-setting-row.is-open .hub-switch-setting-chevron{transform:rotate(90deg)}.hub-switch-setting-label>strong{color:var(--accent-strong);text-shadow:0 0 10px var(--heading-glow);letter-spacing:.01em}.hub-switch-setting-meta{font-size:var(--sv-font-small)}.hub-switch-setting-body{padding:10px 12px 12px;border-top:1px solid var(--line-soft);margin-top:0!important}#settingsCard button{min-height:var(--hub-control-height);border-radius:var(--hub-control-radius);padding:6px 11px}#settingsCard .hub-order-row button{min-height:30px;padding:0}.hub-component .actions{gap:6px;margin-top:7px}@media(max-width:1150px){.hub-header-layout{grid-template-columns:1fr}.hub-header-shortcuts{grid-template-columns:repeat(2,minmax(180px,1fr))}.hub-order-list{grid-column:auto}.hub-grid-dense{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:800px){#settingsCard .grid,.hub-control-grid,.hub-toggle-grid,.hub-grid-dense{grid-template-columns:1fr!important}.hub-header-layout{grid-template-columns:1fr}.hub-header-shortcuts{grid-template-columns:1fr}.hub-order-list{grid-column:auto}}body.density-spacious #settingsCard{--hub-control-height:42px;--hub-grid-row-gap:12px}body.density-spacious .hub-settings-section{padding:16px}body.density-spacious .hub-component{padding:14px}body.density-spacious .hub-switch-setting-summary{gap:12px;padding:14px 16px}body.density-spacious .hub-switch-setting-body{padding:14px 16px 16px}body.density-spacious .hub-setting-row{margin:12px 0}body.density-comfortable #settingsCard{--hub-control-height:38px;--hub-grid-row-gap:10px}body.density-comfortable .hub-settings-section{padding:12px}body.density-comfortable .hub-component{padding:10px}body.density-comfortable .hub-switch-setting-summary{gap:10px;padding:10px 12px}body.density-comfortable .hub-switch-setting-body{padding:10px 12px 12px}body.density-comfortable .hub-setting-row{margin:10px 0}body.density-compact #settingsCard{--hub-control-height:36px;--hub-grid-row-gap:8px}body.density-compact .hub-settings-section{padding:10px}body.density-compact .hub-component{padding:8px}body.density-compact .hub-switch-setting-summary{gap:8px;padding:8px 10px}body.density-compact .hub-switch-setting-body{padding:8px 10px 10px}body.density-compact .hub-setting-row{margin:8px 0}body.density-dense #settingsCard{--hub-control-height:34px;--hub-grid-row-gap:7px}body.density-dense .hub-settings-section{padding:8px}body.density-dense .hub-component{padding:7px}body.density-dense .hub-switch-setting-summary{gap:7px;padding:6px 8px}body.density-dense .hub-switch-setting-body{padding:6px 8px 8px}body.density-dense .hub-setting-row{margin:6px 0}body.density-ultra_dense #settingsCard{--hub-control-height:32px;--hub-grid-row-gap:5px}body.density-ultra_dense .hub-settings-section{padding:6px}body.density-ultra_dense .hub-component{padding:6px}body.density-ultra_dense .hub-switch-setting-summary{gap:5px;padding:4px 6px}body.density-ultra_dense .hub-switch-setting-body{padding:4px 6px 6px}body.density-ultra_dense .hub-setting-row{margin:4px 0}';document.head.append(s)}async function open(which='core'){styles();setView('settings');await load();selectTab(which)}function init(){styles();document.querySelectorAll('[data-hub-settings-tab]').forEach(tab=>{tab.addEventListener('click',()=>selectTab(tab.dataset.hubSettingsTab));tab.addEventListener('keydown',tabKeydown)});document.querySelectorAll('[data-devices-tab]').forEach(tab=>{tab.addEventListener('click',()=>selectDevicesTab(tab.dataset.devicesTab));tab.addEventListener('keydown',devicesTabKeydown)});selectTab(state.activeTab);selectDevicesTab('configure');attachActionHelp('hubSettingsSave','Save all changed Switch Vision Hub settings to their authoritative components.');attachActionHelp('hubSettingsReload','Reload authoritative component settings and discard unsaved Hub values.');attachActionHelp('hubCoreReset','Reset Switch Vision Core settings to factory defaults.');attachActionHelp('hubCoreFallback','Open native Home Assistant Switch Vision integration settings.');attachActionHelp('hubSnmpFallback','Open native SNMP2MQTT app configuration.');attachActionHelp('hubDiscoveryFallback','Open native Discovery app configuration.');q('hubSettingsSave')?.addEventListener('click',save);q('hubSettingsReload')?.addEventListener('click',load);q('hubSettingsBack')?.addEventListener('click',goBack);q('hubCoreReset')?.addEventListener('click',resetCore);q('hubCoreFallback')?.addEventListener('click',()=>openHomeAssistantPath('/config/integrations/integration/switch_vision'));q('hubSnmpFallback')?.addEventListener('click',()=>openResolvedApp('snmp2mqtt'));q('hubDiscoveryFallback')?.addEventListener('click',()=>openResolvedApp('discovery'));q('devicesConfigSave')?.addEventListener('click',()=>saveDiscoverySurface('devices'));q('devicesConfigReload')?.addEventListener('click',()=>loadDiscoverySurface('devices'));q('maintenanceBackupSettingsSave')?.addEventListener('click',()=>saveDiscoverySurface('backups'));q('maintenanceBackupSettingsReload')?.addEventListener('click',()=>loadDiscoverySurface('backups'))}window.SwitchVisionHubSettings={open,load,save,selectDevicesTab,loadDeviceConfiguration,loadMaintenanceBackupSettings,saveDeviceConfiguration:()=>saveDiscoverySurface('devices'),saveMaintenanceBackupSettings:()=>saveDiscoverySurface('backups'),hasUnsavedCore:()=>dirty.has('core')};document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init,{once:true}):init()})();
 </script>
 <script src="maintenance.js"></script>
 <script src="calibration_profiles.js"></script>
 <script src="calibration_profiles_manager.js"></script>
 </body></html>"""
+
+
+
+def _autodiscover_registry() -> dict[str, Any]:
+    data = _read_json(DEFAULT_REGISTRY_FILE)
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, list):
+        return {"devices": data}
+    return {"devices": []}
+
+
+def _autodiscover_unifi_snapshot() -> dict[str, Any]:
+    data = _read_json(DEFAULT_UNIFI_SNAPSHOT)
+    return data if isinstance(data, dict) else {"devices": []}
+
+
+def _autodiscover_suggested_network(options: dict[str, Any], unifi_snapshot: dict[str, Any]) -> str:
+    """Return an editable /24 suggestion from existing device evidence only."""
+    addresses: list[str] = []
+    rows = options.get("switches") if isinstance(options.get("switches"), list) else []
+    for row in rows:
+        if isinstance(row, dict):
+            addresses.append(str(row.get("switch_host") or "").strip())
+    unifi_rows = unifi_snapshot.get("devices") if isinstance(unifi_snapshot.get("devices"), list) else []
+    for row in unifi_rows:
+        if isinstance(row, dict):
+            addresses.append(str(row.get("ip_address") or "").strip())
+    for value in addresses:
+        try:
+            address = ipaddress.ip_address(value)
+        except ValueError:
+            continue
+        if isinstance(address, ipaddress.IPv4Address):
+            return str(ipaddress.ip_network(f"{address}/24", strict=False))
+    return ""
+
+
+def _autodiscover_status() -> dict[str, Any]:
+    options = _effective_discovery_options(_self_addon_options())
+    unifi_snapshot = _autodiscover_unifi_snapshot()
+    credentials = autodiscover.credential_specs(options, use_saved=True)
+    rows = options.get("switches") if isinstance(options.get("switches"), list) else []
+    unifi_rows = unifi_snapshot.get("devices") if isinstance(unifi_snapshot.get("devices"), list) else []
+    return {
+        "schema_version": 1,
+        "snmp_version": "2c",
+        "max_scan_hosts": autodiscover.MAX_SCAN_HOSTS,
+        "saved_switch_count": sum(
+            1
+            for row in rows
+            if isinstance(row, dict)
+            and str(row.get("switch_name") or "").strip()
+            and str(row.get("switch_host") or "").strip()
+        ),
+        "saved_credential_count": len(credentials),
+        "saved_credentials": [
+            {"ref": str(item.get("ref") or ""), "label": str(item.get("label") or "")}
+            for item in credentials
+        ],
+        "unifi_device_count": len([row for row in unifi_rows if isinstance(row, dict)]),
+        "suggested_network": _autodiscover_suggested_network(options, unifi_snapshot),
+        "policy": (
+            "AutoDiscover uses only SNMP communities already saved on real configured "
+            "switches and/or a one-time community you enter for this scan. It never guesses communities."
+        ),
+    }
+
+
+def _autodiscover_request(data: Any) -> tuple[str, bool, str]:
+    if not isinstance(data, dict):
+        raise ValueError("AutoDiscover request must contain a JSON object.")
+    unknown = sorted(set(data) - {"network", "use_saved", "manual_community"})
+    if unknown:
+        raise ValueError(f"Unsupported AutoDiscover field: {unknown[0]}")
+    network = _plain_text(data.get("network", ""), "network", max_length=64, allow_empty=False).strip()
+    autodiscover.validate_subnet(network)
+    use_saved_value = data.get("use_saved", True)
+    if isinstance(use_saved_value, bool):
+        use_saved = use_saved_value
+    elif str(use_saved_value).strip().lower() in {"true", "1", "yes", "on"}:
+        use_saved = True
+    elif str(use_saved_value).strip().lower() in {"false", "0", "no", "off"}:
+        use_saved = False
+    else:
+        raise ValueError("use_saved must be true or false.")
+    manual = _plain_text(
+        data.get("manual_community", ""),
+        "manual_community",
+        max_length=256,
+    ).strip()
+    return network, use_saved, manual
+
+
+def _autodiscover_scan(data: Any) -> dict[str, Any]:
+    network, use_saved, manual = _autodiscover_request(data)
+    options = _effective_discovery_options(_self_addon_options())
+    try:
+        configured_timeout = float(str(options.get("snmp_timeout") or "1"))
+    except ValueError:
+        configured_timeout = 1.0
+    timeout = min(1.5, max(0.5, configured_timeout))
+    result = autodiscover.scan(
+        network,
+        options=options,
+        manual_community=manual,
+        use_saved=use_saved,
+        registry_data=_autodiscover_registry(),
+        unifi_snapshot=_autodiscover_unifi_snapshot(),
+        timeout=timeout,
+    )
+    # This invariant is intentionally checked immediately before the payload
+    # crosses the Hub API boundary.
+    serialized = json.dumps(result, sort_keys=True)
+    for credential in autodiscover.credential_specs(
+        options,
+        use_saved=use_saved,
+        manual_community=manual,
+    ):
+        secret = str(credential.get("community") or "")
+        if secret and secret in serialized:
+            raise RuntimeError("AutoDiscover refused a response containing credential material.")
+    return result
+
+
+def _autodiscover_add(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("AutoDiscover add request must contain a JSON object.")
+    unknown = sorted(set(data) - {"network", "manual_community", "devices"})
+    if unknown:
+        raise ValueError(f"Unsupported AutoDiscover add field: {unknown[0]}")
+    network_text = _plain_text(data.get("network", ""), "network", max_length=64, allow_empty=False).strip()
+    network = autodiscover.validate_subnet(network_text)
+    manual = _plain_text(
+        data.get("manual_community", ""),
+        "manual_community",
+        max_length=256,
+    ).strip()
+    requested = data.get("devices")
+    if not isinstance(requested, list) or not requested or len(requested) > 256:
+        raise ValueError("AutoDiscover add requires between 1 and 256 candidate devices.")
+
+    options = _effective_discovery_options(_self_addon_options())
+    current_rows = options.get("switches") if isinstance(options.get("switches"), list) else []
+    configured_hosts = {
+        str(row.get("switch_host") or "").strip()
+        for row in current_rows
+        if isinstance(row, dict) and str(row.get("switch_host") or "").strip()
+    }
+    existing_names = {
+        str(row.get("switch_name") or "").strip()
+        for row in current_rows
+        if isinstance(row, dict) and str(row.get("switch_name") or "").strip()
+    }
+    registry = _autodiscover_registry()
+    try:
+        configured_timeout = float(str(options.get("snmp_timeout") or "1"))
+    except ValueError:
+        configured_timeout = 1.0
+    timeout = min(1.5, max(0.5, configured_timeout))
+
+    additions: list[dict[str, Any]] = []
+    added_safe: list[dict[str, str]] = []
+    seen_hosts: set[str] = set()
+    for index, raw in enumerate(requested, start=1):
+        if not isinstance(raw, dict):
+            raise ValueError(f"AutoDiscover candidate {index} must be an object.")
+        unexpected = sorted(set(raw) - {"host", "credential_ref"})
+        if unexpected:
+            raise ValueError(f"Unsupported AutoDiscover candidate field: {unexpected[0]}")
+        host = _plain_text(raw.get("host", ""), f"AutoDiscover candidate {index} host", max_length=64, allow_empty=False).strip()
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError as exc:
+            raise ValueError(f"AutoDiscover candidate {index} host must be IPv4.") from exc
+        if not isinstance(address, ipaddress.IPv4Address):
+            raise ValueError(f"AutoDiscover candidate {index} host must be IPv4.")
+        if address not in network:
+            raise ValueError(f"AutoDiscover candidate {index} is outside the scanned network.")
+        if host in configured_hosts or host in seen_hosts:
+            raise ValueError(f"AutoDiscover candidate {host} is already configured or duplicated.")
+        credential_ref = _plain_text(
+            raw.get("credential_ref", ""),
+            f"AutoDiscover candidate {index} credential_ref",
+            max_length=128,
+            allow_empty=False,
+        ).strip()
+        community = autodiscover.resolve_credential(
+            options,
+            credential_ref,
+            manual_community=manual,
+        )
+        verified = autodiscover.probe_host(
+            host,
+            {"ref": credential_ref, "label": "", "community": community},
+            registry_data=registry,
+            timeout=timeout,
+        )
+        if verified is None:
+            raise ValueError(
+                f"AutoDiscover candidate {host} no longer responds with the selected SNMP credential. "
+                "Run the scan again."
+            )
+        switch_name = autodiscover.suggest_switch_name(verified, existing_names)
+        existing_names.add(switch_name)
+        display_name = (
+            str(verified.get("sys_name") or "").strip()
+            or str(verified.get("model") or verified.get("model_hint") or "").strip()
+            or host
+        )[:120]
+        row = {
+            "switch_name": switch_name,
+            "display_name": display_name,
+            "switch_host": host,
+            "sensor_prefix": autodiscover.sensor_prefix_for_name(switch_name),
+            "snmp_community": community,
+            "enabled": "enabled",
+            "walk_mode": "targeted",
+            # AutoDiscover may show a preliminary model hint, but normal
+            # Discovery owns exact identification after the device is saved.
+            "switch_model": "auto",
+            "card_header_title": "",
+        }
+        additions.append(_validate_switch_row(row, len(current_rows) + len(additions) + 1))
+        added_safe.append(
+            {
+                "host": host,
+                "switch_name": switch_name,
+                "display_name": display_name,
+                "model_hint": str(verified.get("model") or verified.get("model_hint") or "")[:160],
+            }
+        )
+        seen_hosts.add(host)
+
+    # Remove only the factory placeholder when at least one real switch is
+    # being added. Existing real saved rows, including disabled rows, remain.
+    retained = [
+        dict(row)
+        for row in current_rows
+        if isinstance(row, dict)
+        and (
+            str(row.get("switch_name") or "").strip()
+            or str(row.get("switch_host") or "").strip()
+        )
+    ]
+    _save_discovery_settings({"settings": {"switches": retained + additions}})
+    return {
+        "ok": True,
+        "added_count": len(added_safe),
+        "added": added_safe,
+    }
 
 
 class SupportHandler(BaseHTTPRequestHandler):
@@ -7526,6 +7798,11 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json(_unifi2mqtt_settings_status())
             except RuntimeError as exc:
                 self._json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+        elif path == "/api/autodiscover/status":
+            try:
+                self._json(_autodiscover_status())
+            except (ValueError, RuntimeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         elif path == "/api/configured-devices":
             self._json(_configured_devices_snapshot(self.app.options_file))
         elif path == "/api/diagnostics":
@@ -7857,6 +8134,32 @@ class SupportHandler(BaseHTTPRequestHandler):
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/autodiscover/scan":
+            try:
+                with _exclusive_operation("AutoDiscover scan"):
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 16384:
+                        raise ValueError("Invalid AutoDiscover scan request size.")
+                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    self._json(_autodiscover_scan(data))
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/autodiscover/add":
+            try:
+                with _device_configuration_update("AutoDiscover add devices"):
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 65536:
+                        raise ValueError("Invalid AutoDiscover add request size.")
+                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    self._json(_autodiscover_add(data))
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if path == "/api/configured-devices/state":

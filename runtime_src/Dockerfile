@@ -36,6 +36,7 @@ COPY support_diagnostics.py /support_diagnostics.py
 COPY walk_correlation.py /walk_correlation.py
 COPY make_support_email.py /make_support_email.py
 COPY support_web.py /support_web.py
+COPY autodiscover.py /autodiscover.py
 COPY core_bridge.py /core_bridge.py
 COPY unifi_multi_controller_bridge.py /unifi_multi_controller_bridge.py
 COPY support_web_entry.py /support_web_entry.py

@@ -1,4 +1,4 @@
-# Switch Vision Discovery v2.4.3
+# Switch Vision Discovery v2.4.50
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
 
@@ -16,6 +16,12 @@ Switch Vision Discovery is a read-only Home Assistant app that walks or imports 
 - Run Discovery manually when adding, validating, or re-walking switches
 - Use targeted mode for known switches
 - Use full mode when investigating new hardware
+
+### Devices AutoDiscover
+
+**Switch Vision Hub → Devices → AutoDiscover** can scan an editable IPv4 CIDR for SNMP-managed switches and include the current UniFi API device inventory. SNMP probing uses only communities explicitly entered for the scan or already saved on real configured switches. Communities are never guessed and are never returned by the Hub API.
+
+A scan is limited to 1024 usable addresses. **Add Device** and **Add All Ready Devices** revalidate SNMP access immediately before saving; an Add All batch is atomic, so a stale candidate prevents the batch from being persisted. Newly added SNMP rows keep **Switch Model = Auto** because normal Discovery remains authoritative for exact model, topology, mapping/profile selection, and dashboard generation.
 
 Discovery v2.1.10 hardens **full-walk** handling. On Juniper EX devices, full mode walks the standard MIB and Juniper enterprise tree independently so a timeout in one branch cannot hide the other. A partial full walk is marked **warning**, never pass.
 

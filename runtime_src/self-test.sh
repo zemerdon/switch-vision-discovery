@@ -22,6 +22,7 @@ python3 "$BASE_DIR/device_added_order_regression.py"
 python3 "$BASE_DIR/configuration_backup_regression.py"
 python3 "$BASE_DIR/calibration_manager_regression.py"
 python3 "$BASE_DIR/hub_settings_tabs_regression.py"
+python3 "$BASE_DIR/autodiscover_regression.py"
 python3 "$BASE_DIR/hub_tooltips_regression.py"
 python3 "$BASE_DIR/devices_diagnostics_regression.py"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/reporting_cardinality_regression.py"
@@ -2013,8 +2014,8 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.49"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.49"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.50"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.50"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"

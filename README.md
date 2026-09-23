@@ -24,6 +24,8 @@ Switch Vision components are independently versioned. The main Switch Vision Cor
 
 ## Hub updates
 
+Discovery v2.4.50 adds **Devices → AutoDiscover**. Enter an IPv4 CIDR and optionally a one-time SNMPv2c community, or reuse communities already saved on real configured switches. AutoDiscover never guesses communities or returns secret values to the browser. Existing UniFi API inventory is included automatically. A scan is limited to 1024 usable addresses; each SNMP candidate is revalidated before **Add Device** or **Add All Ready Devices** saves it, and normal Discovery remains authoritative for exact model/topology detection and dashboard generation.
+
 Discovery v2.4.41 makes **Devices → Configure Devices** easier to scan by starting every previously saved switch row collapsed. A newly added switch still opens immediately so its fields are ready for entry without an extra click.
 
 Discovery v2.4.40 added the new-dashboard YAML format selector in Hub → Discovery. **Custom dashboard** remains the default and preserves the generated `custom:vertical-layout` wrapper plus `layout:` settings for a manually created Home Assistant dashboard using Layout Card; **Standard dashboard** keeps the dependency-free export. Preview, Copy, and Download follow the selected format, while **Copy Cards Only** remains unchanged for existing dashboards.

@@ -20,6 +20,12 @@ The authoritative app version is defined in `config.yaml`. Switch Vision compone
 - Use targeted mode for known switches
 - Use full mode when investigating new hardware
 
+### Devices AutoDiscover
+
+Discovery v2.4.50 adds **Switch Vision Hub → Devices → AutoDiscover**. AutoDiscover scans an editable IPv4 CIDR with only SNMPv2c communities that the user explicitly enters for the scan or that are already saved on real configured switches. It never guesses communities, never returns saved community values to the browser, and ignores the blank factory placeholder as a credential source.
+
+Each scan is limited to 1024 usable addresses. Existing UniFi API inventory is included automatically when available. SNMP candidates can be added individually or with **Add All Ready Devices**; every candidate is re-probed immediately before saving and a batch is persisted only if every requested candidate still validates. AutoDiscover records new SNMP targets with model selection set to **Auto** so the normal Discovery pipeline remains authoritative for exact model, topology, profile, and dashboard generation.
+
 Discovery v2.1.10 hardens **full-walk** handling. On Juniper EX devices, full mode walks the standard MIB and Juniper enterprise tree independently so a timeout in one branch cannot hide the other. A partial full walk is marked **warning**, never pass.
 
 ## User-first Discovery behavior

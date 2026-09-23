@@ -1,3 +1,11 @@
+## 2.4.50 — Devices AutoDiscover
+
+- Add **Devices → AutoDiscover** between Configure Devices and Device Overview.
+- Scan a user-selected IPv4 CIDR of up to 1024 usable addresses with only explicitly supplied or already-saved SNMPv2c communities; communities are never guessed or returned by the Hub API.
+- Include the existing normalized UniFi API inventory without requiring per-device SNMP credentials, while avoiding duplicate add actions for devices already managed through UniFi.
+- Revalidate every SNMP candidate immediately before saving, preserve normal Discovery as the authority for exact model/topology identification, and make **Add All Ready Devices** atomic so one stale candidate prevents the entire batch from being persisted.
+- Add permanent regressions for credential redaction, placeholder-community exclusion, bounded scanning, exact registry hints, stale-result revalidation, atomic add behavior, and Devices tab ordering.
+
 ## 2.4.49 — Field-validation and compatibility fixes
 
 - Align the human-readable Discovery report with authoritative exact-model registry/profile state so registered Experimental devices no longer fall through to misleading unknown/unsupported or vendor-inappropriate diagnostics.
