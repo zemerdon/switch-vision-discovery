@@ -66,6 +66,27 @@ options = {
 }
 
 assert str(autodiscover.validate_subnet("192.168.50.1/30")) == "192.168.50.0/30"
+nets, host_map, raw_hosts = autodiscover.validate_subnets([
+    "192.168.50.0/24", "192.168.50.0/25", "192.168.50.0/24"
+])
+assert [str(item) for item in nets] == ["192.168.50.0/24", "192.168.50.0/25"], nets
+assert len(host_map) == 254, len(host_map)
+assert raw_hosts == 380, raw_hosts
+assert host_map["192.168.50.2"] == ["192.168.50.0/24", "192.168.50.0/25"], host_map["192.168.50.2"]
+try:
+    autodiscover.validate_subnets([
+        "10.0.0.0/22", "10.0.4.0/22", "10.0.8.0/22", "10.0.12.0/22", "10.0.16.0/22"
+    ])
+except ValueError as exc:
+    assert "4096 unique addresses" in str(exc)
+else:
+    raise AssertionError("oversized combined subnet set should fail")
+try:
+    autodiscover.validate_subnets([f"10.1.{index}.0/30" for index in range(33)])
+except ValueError as exc:
+    assert "at most 32 subnets" in str(exc)
+else:
+    raise AssertionError("too many subnets should fail")
 try:
     autodiscover.validate_subnet("192.168.0.0/21")
 except ValueError as exc:
@@ -107,6 +128,8 @@ result = autodiscover.scan(
     runner=fake_runner,
 )
 assert result["network"] == "192.168.50.0/30"
+assert result["networks"] == ["192.168.50.0/30"]
+assert result["network_count"] == 1
 assert result["network_hosts"] == 2
 assert result["snmp_probe_hosts"] == 2
 assert result["scanned_hosts"] == 2
@@ -118,6 +141,7 @@ assert snmp["registry_match"] is True, snmp
 assert snmp["model"] == "WS-C2960X-24PS-L", snmp
 assert snmp["suggested_switch_name"] == "switch-two"
 assert snmp["ready_to_add"] is True
+assert snmp["networks"] == ["192.168.50.0/30"], snmp
 unifi = [row for row in result["devices"] if row["host"] == "192.168.50.3"][0]
 assert unifi["already_managed"] is True
 assert unifi["ready_to_add"] is False
@@ -125,6 +149,34 @@ assert unifi["model"] == "USW Pro 24"
 encoded = json.dumps(result)
 for secret in ("private-secret", "one-time-secret", "readonly"):
     assert secret not in encoded, secret
+
+# Multiple ranges share one bounded worker pool and overlapping hosts are probed once.
+multi_calls = []
+def overlap_runner(command, **kwargs):
+    host = command[-4] if command[0] == "snmpget" else command[-2]
+    if command[0] == "snmpget":
+        multi_calls.append(host)
+    return fake_runner(command, **kwargs)
+
+multi = autodiscover.scan(
+    ["192.168.50.0/30", "192.168.50.0/31"],
+    options=options,
+    manual_community="one-time-secret",
+    use_saved=False,
+    registry_data=registry,
+    unifi_snapshot={"devices": []},
+    timeout=0.2,
+    workers=2,
+    runner=overlap_runner,
+)
+assert multi["networks"] == ["192.168.50.0/30", "192.168.50.0/31"], multi
+assert multi["network_count"] == 2, multi
+assert multi["network_hosts"] == 3, multi
+assert multi["raw_network_hosts"] == 4, multi
+assert multi["overlap_deduplicated_hosts"] == 1, multi
+assert multi_calls.count("192.168.50.0") == 1, multi_calls
+assert multi_calls.count("192.168.50.1") == 1, multi_calls
+assert multi_calls.count("192.168.50.2") == 1, multi_calls
 
 # With no selected SNMP credential source, AutoDiscover still returns UniFi/API
 # inventory but must not pretend the IPv4 range was probed.
@@ -159,6 +211,11 @@ for marker in (
     "const ids=['configure','autodiscover','overview']",
     "if(item.addable){const actions=document.createElement('div')",
     "filter(item=>item?.addable===true)",
+    'id="autodiscoverNetworks"',
+    'id="autodiscoverAddNetworkButton"',
+    "function autoDiscoverNetworkValues()",
+    "function addAutoDiscoverNetwork()",
+    "networks:autoDiscoverNetworkValues()",
 ):
     assert marker in WEB_SOURCE, marker
 
@@ -166,8 +223,10 @@ assert WEB_SOURCE.index('id="devicesTab-configure"') < WEB_SOURCE.index('id="dev
 assert "guess" in WEB_SOURCE.lower()
 assert "brute" not in WEB_SOURCE.lower()
 assert "autodiscoverCommunity').value=''" not in WEB_SOURCE
-# Hub status never reveals saved credential values.
-with mock.patch.object(web, "_self_addon_options", return_value=options), mock.patch.object(
+# Hub status never reveals saved credential values and returns persisted non-secret networks.
+status_options = dict(options)
+status_options["autodiscover_networks"] = ["192.168.50.0/24", "192.168.60.0/24"]
+with mock.patch.object(web, "_self_addon_options", return_value=status_options), mock.patch.object(
     web, "_effective_discovery_options", side_effect=lambda value: value
 ), mock.patch.object(
     web,
@@ -177,25 +236,54 @@ with mock.patch.object(web, "_self_addon_options", return_value=options), mock.p
     status = web._autodiscover_status()
 assert status["saved_credential_count"] == 1, status
 assert status["unifi_device_count"] == 1, status
+assert status["saved_networks"] == ["192.168.50.0/24", "192.168.60.0/24"], status
+assert status["max_scan_hosts"] == 1024, status
+assert status["max_total_hosts"] == 4096, status
+assert status["max_subnets"] == 32, status
 assert status["suggested_network"] == "192.168.50.0/24", status
 status_json = json.dumps(status)
 assert "private-secret" not in status_json
 assert "readonly" not in status_json
 
-# A scan payload is fail-closed if any credential material somehow enters its result.
+# A scan payload is fail-closed if any credential material somehow enters its result,
+# and that failure must occur before the remembered subnet list is mutated.
+scan_saves = []
 with mock.patch.object(web, "_self_addon_options", return_value=options), mock.patch.object(
     web, "_effective_discovery_options", side_effect=lambda value: value
 ), mock.patch.object(
     web.autodiscover, "scan", return_value={"devices": [], "leak": "private-secret"}
+), mock.patch.object(
+    web, "_save_discovery_settings", side_effect=lambda payload: scan_saves.append(payload)
 ):
     try:
         web._autodiscover_scan(
-            {"network": "192.168.50.0/30", "use_saved": True, "manual_community": ""}
+            {"networks": ["192.168.50.0/30", "192.168.60.0/30"], "use_saved": True, "manual_community": ""}
         )
     except RuntimeError as exc:
         assert "credential material" in str(exc)
     else:
         raise AssertionError("credential-bearing AutoDiscover response should fail closed")
+assert scan_saves == [], scan_saves
+
+# A clean scan persists only the canonical non-secret subnet list.
+scan_saves = []
+clean_scan = {
+    "networks": ["192.168.50.0/30", "192.168.60.0/30"],
+    "devices": [],
+    "credential_count": 1,
+}
+with mock.patch.object(web, "_self_addon_options", return_value=options), mock.patch.object(
+    web, "_effective_discovery_options", side_effect=lambda value: value
+), mock.patch.object(
+    web.autodiscover, "scan", return_value=clean_scan
+), mock.patch.object(
+    web, "_save_discovery_settings", side_effect=lambda payload: scan_saves.append(payload) or {"saved": True}
+):
+    returned = web._autodiscover_scan(
+        {"networks": ["192.168.50.1/30", "192.168.60.1/30"], "use_saved": True, "manual_community": ""}
+    )
+assert returned is clean_scan
+assert scan_saves == [{"settings": {"autodiscover_networks": ["192.168.50.0/30", "192.168.60.0/30"]}}], scan_saves
 
 # Add revalidates the candidate, keeps exact model ownership with normal Discovery,
 # removes only the factory placeholder, and saves all requested additions atomically.
@@ -219,9 +307,9 @@ with mock.patch.object(web, "_self_addon_options", return_value=options), mock.p
 ):
     added = web._autodiscover_add(
         {
-            "network": "192.168.50.0/24",
+            "networks": ["192.168.50.0/24", "192.168.60.0/24"],
             "manual_community": "",
-            "devices": [{"host": "192.168.50.2", "credential_ref": "saved:Existing"}],
+            "devices": [{"host": "192.168.60.2", "credential_ref": "saved:Existing"}],
         }
     )
 assert added["added_count"] == 1, added
@@ -229,7 +317,7 @@ assert "settings" not in added, added
 assert len(captured) == 1, captured
 saved_rows = captured[0]["settings"]["switches"]
 assert len(saved_rows) == 3, saved_rows
-new_row = [row for row in saved_rows if row["switch_host"] == "192.168.50.2"][0]
+new_row = [row for row in saved_rows if row["switch_host"] == "192.168.60.2"][0]
 assert new_row["switch_model"] == "auto", new_row
 assert new_row["snmp_community"] == "private-secret", new_row
 assert not any(not row.get("switch_name") and not row.get("switch_host") for row in saved_rows)
@@ -254,7 +342,7 @@ with mock.patch.object(web, "_self_addon_options", return_value=options), mock.p
     try:
         web._autodiscover_add(
             {
-                "network": "192.168.50.0/24",
+                "networks": ["192.168.50.0/24", "192.168.60.0/24"],
                 "manual_community": "",
                 "devices": [
                     {"host": "192.168.50.2", "credential_ref": "saved:Existing"},

@@ -178,6 +178,7 @@ DISCOVERY_RESET_OPTIONS = {
         "card_header_title": "",
     }],
     "stack_member_prefixes": [],
+    "autodiscover_networks": [],
     "parse_all_walks": "false",
     "generate_snmp2mqtt": "true",
     "clean_output_before_walk": "false",
@@ -328,7 +329,7 @@ DISCOVERY_IMPORT_FORMATS = {
 }
 DISCOVERY_CONFIG_KEYS = {
     "input_path", "snmpwalks_dir", "report_path", "run_snmp_walks",
-    "enable_switch_list", "switches", "stack_member_prefixes",
+    "enable_switch_list", "switches", "stack_member_prefixes", "autodiscover_networks",
     "parse_all_walks", "generate_snmp2mqtt", "clean_output_before_walk",
     "targets_csv", "last_run_summary_path", "generated_yaml_path",
     "generated_card_path", "snmp_timeout", "snmp_retries",
@@ -946,6 +947,9 @@ def _validate_discovery_import(data: Any) -> dict[str, Any]:
     if len(switches) > 256:
         raise ValueError("The configuration contains too many switches.")
     validated["switches"] = [_validate_switch_row(item, index) for index, item in enumerate(switches, start=1)]
+
+    if "autodiscover_networks" in validated:
+        validated["autodiscover_networks"] = _validated_autodiscover_networks(validated["autodiscover_networks"])
 
     stack = validated.get("stack_member_prefixes", [])
     if not isinstance(stack, list):
@@ -2999,7 +3003,7 @@ def _discovery_settings_status() -> dict[str, Any]:
     options = _effective_discovery_options(_self_addon_options())
     defaults = {
         "input_path": "/share/switch_vision/snmpwalk.txt", "snmpwalks_dir": "/share/switch_vision/snmpwalks", "report_path": "/share/switch_vision/discovery-report.txt",
-        "run_snmp_walks": "true", "enable_switch_list": "true", "switches": [], "stack_member_prefixes": [], "parse_all_walks": "false", "generate_snmp2mqtt": "true", "clean_output_before_walk": "false",
+        "run_snmp_walks": "true", "enable_switch_list": "true", "switches": [], "stack_member_prefixes": [], "autodiscover_networks": [], "parse_all_walks": "false", "generate_snmp2mqtt": "true", "clean_output_before_walk": "false",
         "targets_csv": "/share/switch_vision/discovery-targets.csv", "last_run_summary_path": "/share/switch_vision/last-discovery-run.txt", "generated_yaml_path": "/share/switch_vision/generated-snmp2mqtt.yaml", "generated_card_path": "/share/switch_vision/generated-dashboard-card.yaml",
         "snmp_timeout": "3", "snmp_retries": "1", "snmp_log_path": "/share/switch_vision/snmpwalk.log", "minimum_valid_walk_lines": "100", "backup_retention_enabled": "true", "backup_retention_count": 5,
         "generate_support_my_switch_bundle": "true", "support_mask_management_ips": "true", "support_mask_mac_addresses": "true", "support_mask_hostnames": "true", "support_mask_vlan_names": "true", "support_mask_interface_descriptions": "true",
@@ -3139,6 +3143,10 @@ def _save_discovery_settings(data: Any) -> dict[str, Any]:
                 updated["support_contributor_value"] = current_value
             else:
                 raise ValueError("Enter the name or username for the selected recognition type.")
+        if "autodiscover_networks" in requested:
+            updated["autodiscover_networks"] = _validated_autodiscover_networks(
+                requested["autodiscover_networks"]
+            )
         if "switches" in requested:
             rows = requested["switches"]
             if not isinstance(rows, list) or len(rows) > 256:
@@ -6862,13 +6870,18 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 </section>
 <section id="devicesPanel-autodiscover" role="tabpanel" aria-labelledby="devicesTab-autodiscover" hidden>
 <h3>AutoDiscover</h3>
-<p class="muted">Find switches on a network using only SNMP communities you explicitly provide or already saved on configured switches. Switch Vision never guesses communities. Existing UniFi API inventory is included automatically when available. Add All Ready Devices includes only exact registry matches that already have dashboard support; other SNMP responders stay reviewable one at a time.</p>
+<p class="muted">Find switches across one or more routed IPv4 networks using only SNMP communities you explicitly provide or already saved on configured switches. Switch Vision never guesses communities. Existing UniFi API inventory is included automatically when available. Add All Ready Devices includes only exact registry matches that already have dashboard support; other SNMP responders stay reviewable one at a time.</p>
+<div class="hub-setting-row">
+<div><b>Networks / subnets</b></div>
+<div id="autodiscoverNetworks"></div>
+<div class="actions"><button id="autodiscoverAddNetworkButton" type="button">+ Add subnet</button></div>
+<small class="muted">Up to 32 IPv4 CIDRs. Each subnet is limited to 1024 usable addresses and each scan to 4096 unique addresses. Overlapping ranges are deduplicated automatically and the list is remembered.</small>
+</div>
 <div class="grid">
-<label class="field"><span><b>Network / subnet</b></span><input id="autodiscoverSubnet" type="text" maxlength="64" placeholder="192.168.1.0/24" autocomplete="off"><small>IPv4 CIDR only. A scan is limited to 1024 usable addresses.</small></label>
 <label class="option"><input id="autodiscoverUseSaved" type="checkbox" checked><span><b>Use saved SNMP communities</b><br><small>Uses communities already attached to configured switches. Secret values are never shown here.</small></span></label>
 <label class="field"><span><b>One-time SNMP community</b></span><input id="autodiscoverCommunity" type="password" maxlength="256" autocomplete="new-password" placeholder="Optional"><small>Used for this scan/add flow only. It becomes a saved device credential only if you add a device found with it.</small></label>
 </div>
-<div class="actions"><button class="primary" id="autodiscoverScanButton" type="button">Scan Network</button><button id="autodiscoverAddAllButton" type="button" disabled>Add All Ready Devices</button></div>
+<div class="actions"><button class="primary" id="autodiscoverScanButton" type="button">Scan Networks</button><button id="autodiscoverAddAllButton" type="button" disabled>Add All Ready Devices</button></div>
 <p id="autodiscoverStatus" class="muted">AutoDiscover has not been loaded yet.</p>
 <div id="autodiscoverResults"></div>
 </section>
@@ -7018,10 +7031,14 @@ function openUnifiAppConfig(){if(window.unifi2mqttConfigUrl)openHomeAssistantPat
 function showLatest(latest){if(!latest){$('readyCard').classList.add('hidden');return}const ready=!!latest.ready_to_send;const processing=latest.processing||{};$('readyHeading').textContent=ready?'Contribution ready':'Contribution requires review';$('contributionId').textContent=latest.contribution_id;$('version').textContent=latest.version;$('archiveName').textContent=latest.archive;$('archiveSize').textContent=fmtBytes(latest.archive_size);const q=$('qualityBanner');q.className=ready?'success':'failure';q.textContent=`Bundle quality: ${latest.quality}${ready?'':' — do not share until reviewed'}`;const issueCount=Number(processing.issue_count||0);$('qualityDetails').textContent=issueCount?`${issueCount} file(s) could not be fully inspected or sanitized. Download the archive and read SANITIZATION_REPORT.txt for privacy-safe issue identifiers.`:(ready?'All files were inspected by the privacy processor.':'Review SANITIZATION_REPORT.txt before sharing.');$('devices').innerHTML='';for(const d of latest.devices||[])$('devices').appendChild(deviceCard(d));if(!(latest.devices||[]).length)$('devices').textContent='No devices were detected.';const emailReady=ready&&!!latest.email;$('prepareEmail').classList.toggle('hidden',!emailReady);if(emailReady)$('prepareEmail').href=endpoint(`download/${encodeURIComponent(latest.email)}`);$('downloadArchive').href=endpoint(`download/${encodeURIComponent(latest.archive)}`);$('mailto').classList.toggle('hidden',!ready);if(ready)$('mailto').href=mailto(latest)}
 
 function autoDiscoverProgress(item){const states=['Found'];if(String(item?.source||'').includes('SNMP'))states.push('Accessed');if(item?.registry_match)states.push('Identified');else if(item?.model_hint||item?.model)states.push('Model observed');if(item?.ready_to_add)states.push('Ready');else if(item?.addable)states.push('Review');else if(item?.configured||item?.already_managed)states.push('Already managed');return states.join(' → ')}
-function renderAutoDiscoverResults(data){lastAutoDiscoverResults=data||null;const root=$('autodiscoverResults'),addAll=$('autodiscoverAddAllButton');if(!root)return;root.innerHTML='';const devices=Array.isArray(data?.devices)?data.devices:[];const ready=devices.filter(item=>item?.ready_to_add===true);if(addAll)addAll.disabled=!ready.length;if(!devices.length){const p=document.createElement('p');p.className='muted';p.textContent='No switches answered with the selected saved/one-time SNMP communities, and no UniFi API devices were available.';root.append(p);return}for(const item of devices){const card=document.createElement('div');card.className='device-card';const head=document.createElement('div');head.className='device-head';const title=document.createElement('strong');title.textContent=item.sys_name||item.model||item.model_hint||item.host||'Discovered device';const source=document.createElement('span');source.className='device-source-chip';source.textContent=item.source||'SNMP';head.append(title,source);const detail=document.createElement('div');detail.className='muted';const registryText=item.registry_match?('Registry: '+(item.registry_status||'matched')):'Registry: exact match pending';const bits=[item.host,item.model||item.model_hint,item.vendor,registryText].filter(Boolean);detail.textContent=bits.join(' · ');const progress=document.createElement('div');progress.className='muted';progress.textContent=autoDiscoverProgress(item);card.append(head,detail,progress);if(item.addable){const actions=document.createElement('div');actions.className='actions';const add=document.createElement('button');add.type='button';if(item.ready_to_add)add.className='primary';add.textContent='Add Device';add.title=item.ready_to_add?'Add this dashboard-ready device.':'Add this authenticated device and let normal Discovery perform authoritative identification.';add.addEventListener('click',()=>addAutoDiscoverDevices([item],add));actions.append(add);card.append(actions)}root.append(card)}}
-async function loadAutoDiscoverStatus(){const status=$('autodiscoverStatus');if(status)status.textContent='Loading AutoDiscover…';try{const r=await fetch(endpoint('api/autodiscover/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load AutoDiscover');const subnet=$('autodiscoverSubnet');if(subnet&&!subnet.value&&d.suggested_network)subnet.value=d.suggested_network;if(status){const creds=Number(d.saved_credential_count||0),unifi=Number(d.unifi_device_count||0);status.textContent='Ready · SNMPv'+(d.snmp_version||'2c')+' · '+creds+' saved credential '+(creds===1?'source':'sources')+' · '+unifi+' UniFi device'+(unifi===1?'':'s')+' available. '+(d.policy||'')}}catch(e){if(status)status.textContent='Could not load AutoDiscover: '+(e.message||e)}}
-async function scanAutoDiscover(){const btn=$('autodiscoverScanButton'),status=$('autodiscoverStatus'),addAll=$('autodiscoverAddAllButton');if(btn)btn.disabled=true;if(addAll)addAll.disabled=true;if(status)status.textContent='Scanning network with the selected authorized credential sources…';try{const body={network:$('autodiscoverSubnet')?.value||'',use_saved:!!$('autodiscoverUseSaved')?.checked,manual_community:$('autodiscoverCommunity')?.value||''};const r=await fetch(endpoint('api/autodiscover/scan'),{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'AutoDiscover scan failed');renderAutoDiscoverResults(d);if(status){const networkHosts=Number(d.network_hosts||0),probed=Number(d.snmp_probe_hosts??d.scanned_hosts??0),creds=Number(d.credential_count||0);status.textContent=creds?('Scan complete · '+probed+' of '+networkHosts+' addresses probed with authorized SNMP credentials · '+Number(d.devices?.length||0)+' device result(s). Hosts that do not answer remain undiscovered.'):('Scan complete · '+networkHosts+' addresses in range · no SNMP probes sent because no SNMP credential source was selected · '+Number(d.devices?.length||0)+' UniFi/API result(s).')}}}catch(e){renderAutoDiscoverResults(null);if(status)status.textContent='AutoDiscover failed: '+(e.message||e)}finally{if(btn)btn.disabled=false}}
-async function addAutoDiscoverDevices(devices,button=null){const status=$('autodiscoverStatus'),addAll=$('autodiscoverAddAllButton');const candidates=(Array.isArray(devices)?devices:[]).filter(item=>item?.addable===true);if(!candidates.length){if(status)status.textContent='No addable SNMP devices are selected.';return}if(button)button.disabled=true;if(addAll)addAll.disabled=true;if(status)status.textContent='Re-validating and adding '+candidates.length+' device'+(candidates.length===1?'':'s')+'…';try{const body={network:$('autodiscoverSubnet')?.value||'',manual_community:$('autodiscoverCommunity')?.value||'',devices:candidates.map(item=>({host:item.host,credential_ref:item.credential_ref}))};const r=await fetch(endpoint('api/autodiscover/add'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not add AutoDiscover devices');const addedHosts=new Set((d.added||[]).map(item=>String(item.host||'')));if(lastAutoDiscoverResults?.devices){for(const item of lastAutoDiscoverResults.devices){if(addedHosts.has(String(item.host||''))){item.ready_to_add=false;item.configured=true;item.already_managed=true}}renderAutoDiscoverResults(lastAutoDiscoverResults)}await window.SwitchVisionHubSettings?.loadDeviceConfiguration?.();await refreshConfiguredDevices(false);if(status)status.textContent='Added '+Number(d.added_count||0)+' device'+(Number(d.added_count||0)===1?'':'s')+'. Run normal Discovery to perform authoritative model detection and generate dashboard output.'}catch(e){if(status)status.textContent='Could not add device'+(candidates.length===1?'':'s')+': '+(e.message||e);if(addAll)addAll.disabled=!lastAutoDiscoverResults?.devices?.some(item=>item?.ready_to_add)}finally{if(button)button.disabled=false}}
+let autoDiscoverNetworksDraft=[];
+function autoDiscoverNetworkValues(){return autoDiscoverNetworksDraft.map(value=>String(value||'').trim()).filter(Boolean)}
+function renderAutoDiscoverNetworks(){const root=$('autodiscoverNetworks');if(!root)return;if(!autoDiscoverNetworksDraft.length)autoDiscoverNetworksDraft=[''];root.innerHTML='';autoDiscoverNetworksDraft.forEach((value,index)=>{const row=document.createElement('div');row.className='actions';const input=document.createElement('input');input.type='text';input.maxLength=64;input.autocomplete='off';input.placeholder='192.168.1.0/24';input.value=value||'';input.setAttribute('aria-label','AutoDiscover subnet '+(index+1));input.addEventListener('input',()=>{autoDiscoverNetworksDraft[index]=input.value});const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.disabled=autoDiscoverNetworksDraft.length<=1;remove.addEventListener('click',()=>{autoDiscoverNetworksDraft.splice(index,1);renderAutoDiscoverNetworks()});row.append(input,remove);root.append(row)})}
+function addAutoDiscoverNetwork(){if(autoDiscoverNetworksDraft.length>=32)return;autoDiscoverNetworksDraft.push('');renderAutoDiscoverNetworks()}
+function renderAutoDiscoverResults(data){lastAutoDiscoverResults=data||null;const root=$('autodiscoverResults'),addAll=$('autodiscoverAddAllButton');if(!root)return;root.innerHTML='';const devices=Array.isArray(data?.devices)?data.devices:[];const ready=devices.filter(item=>item?.ready_to_add===true);if(addAll)addAll.disabled=!ready.length;if(!devices.length){const p=document.createElement('p');p.className='muted';p.textContent='No switches answered with the selected saved/one-time SNMP communities, and no UniFi API devices were available.';root.append(p);return}for(const item of devices){const card=document.createElement('div');card.className='device-card';const head=document.createElement('div');head.className='device-head';const title=document.createElement('strong');title.textContent=item.sys_name||item.model||item.model_hint||item.host||'Discovered device';const source=document.createElement('span');source.className='device-source-chip';source.textContent=item.source||'SNMP';head.append(title,source);const detail=document.createElement('div');detail.className='muted';const registryText=item.registry_match?('Registry: '+(item.registry_status||'matched')):'Registry: exact match pending';const memberships=Array.isArray(item.networks)?item.networks.filter(Boolean):[];const networkText=memberships.length?('Subnet: '+memberships.join(', ')):'';const bits=[item.host,item.model||item.model_hint,item.vendor,networkText,registryText].filter(Boolean);detail.textContent=bits.join(' · ');const progress=document.createElement('div');progress.className='muted';progress.textContent=autoDiscoverProgress(item);card.append(head,detail,progress);if(item.addable){const actions=document.createElement('div');actions.className='actions';const add=document.createElement('button');add.type='button';if(item.ready_to_add)add.className='primary';add.textContent='Add Device';add.title=item.ready_to_add?'Add this dashboard-ready device.':'Add this authenticated device and let normal Discovery perform authoritative identification.';add.addEventListener('click',()=>addAutoDiscoverDevices([item],add));actions.append(add);card.append(actions)}root.append(card)}}
+async function loadAutoDiscoverStatus(){const status=$('autodiscoverStatus');if(status)status.textContent='Loading AutoDiscover…';try{const r=await fetch(endpoint('api/autodiscover/status'),{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load AutoDiscover');const saved=Array.isArray(d.saved_networks)?d.saved_networks.filter(Boolean):[];autoDiscoverNetworksDraft=saved.length?saved:(d.suggested_network?[d.suggested_network]:['']);renderAutoDiscoverNetworks();if(status){const creds=Number(d.saved_credential_count||0),unifi=Number(d.unifi_device_count||0);status.textContent='Ready · SNMPv'+(d.snmp_version||'2c')+' · '+creds+' saved credential '+(creds===1?'source':'sources')+' · '+unifi+' UniFi device'+(unifi===1?'':'s')+' available · '+autoDiscoverNetworksDraft.filter(Boolean).length+' saved subnet'+(autoDiscoverNetworksDraft.filter(Boolean).length===1?'':'s')+'. '+(d.policy||'')}}catch(e){if(status)status.textContent='Could not load AutoDiscover: '+(e.message||e)}}
+async function scanAutoDiscover(){const btn=$('autodiscoverScanButton'),status=$('autodiscoverStatus'),addAll=$('autodiscoverAddAllButton');if(btn)btn.disabled=true;if(addAll)addAll.disabled=true;if(status)status.textContent='Scanning networks with the selected authorized credential sources…';try{const body={networks:autoDiscoverNetworkValues(),use_saved:!!$('autodiscoverUseSaved')?.checked,manual_community:$('autodiscoverCommunity')?.value||''};const r=await fetch(endpoint('api/autodiscover/scan'),{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'AutoDiscover scan failed');if(Array.isArray(d.networks)&&d.networks.length){autoDiscoverNetworksDraft=[...d.networks];renderAutoDiscoverNetworks()}renderAutoDiscoverResults(d);if(status){const networkHosts=Number(d.network_hosts||0),probed=Number(d.snmp_probe_hosts??d.scanned_hosts??0),creds=Number(d.credential_count||0),networkCount=Number(d.network_count||d.networks?.length||0),deduped=Number(d.overlap_deduplicated_hosts||0);const overlap=deduped?(' · '+deduped+' overlapping address'+(deduped===1?'':'es')+' deduplicated'):'';status.textContent=creds?('Scan complete · '+networkCount+' subnet'+(networkCount===1?'':'s')+' · '+probed+' of '+networkHosts+' unique addresses probed with authorized SNMP credentials'+overlap+' · '+Number(d.devices?.length||0)+' device result(s). Hosts that do not answer remain undiscovered.'):('Scan complete · '+networkCount+' subnet'+(networkCount===1?'':'s')+' · '+networkHosts+' unique addresses in range'+overlap+' · no SNMP probes sent because no SNMP credential source was selected · '+Number(d.devices?.length||0)+' UniFi/API result(s).')}}catch(e){renderAutoDiscoverResults(null);if(status)status.textContent='AutoDiscover failed: '+(e.message||e)}finally{if(btn)btn.disabled=false}}
+async function addAutoDiscoverDevices(devices,button=null){const status=$('autodiscoverStatus'),addAll=$('autodiscoverAddAllButton');const candidates=(Array.isArray(devices)?devices:[]).filter(item=>item?.addable===true);if(!candidates.length){if(status)status.textContent='No addable SNMP devices are selected.';return}if(button)button.disabled=true;if(addAll)addAll.disabled=true;if(status)status.textContent='Re-validating and adding '+candidates.length+' device'+(candidates.length===1?'':'s')+'…';try{const body={networks:autoDiscoverNetworkValues(),manual_community:$('autodiscoverCommunity')?.value||'',devices:candidates.map(item=>({host:item.host,credential_ref:item.credential_ref}))};const r=await fetch(endpoint('api/autodiscover/add'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not add AutoDiscover devices');const addedHosts=new Set((d.added||[]).map(item=>String(item.host||'')));if(lastAutoDiscoverResults?.devices){for(const item of lastAutoDiscoverResults.devices){if(addedHosts.has(String(item.host||''))){item.ready_to_add=false;item.addable=false;item.configured=true;item.already_managed=true}}renderAutoDiscoverResults(lastAutoDiscoverResults)}await window.SwitchVisionHubSettings?.loadDeviceConfiguration?.();await refreshConfiguredDevices(false);if(status)status.textContent='Added '+Number(d.added_count||0)+' device'+(Number(d.added_count||0)===1?'':'s')+'. Run normal Discovery to perform authoritative model detection and generate dashboard output.'}catch(e){if(status)status.textContent='Could not add device'+(candidates.length===1?'':'s')+': '+(e.message||e);if(addAll)addAll.disabled=!lastAutoDiscoverResults?.devices?.some(item=>item?.ready_to_add)}finally{if(button)button.disabled=false}}
 
 function diagTile(label,value,state=''){const tile=document.createElement('div');tile.className='diag-tile';const l=document.createElement('div');l.className='muted';l.textContent=label;const v=document.createElement('div');v.className=`diag-value ${state}`;v.textContent=value;tile.append(l,v);return tile}
 function renderDeviceDiagnosticsSummary(d){const summary=$('devicesDiagnosticsSummary');if(!summary)return;summary.innerHTML='';const discovery=d.discovery||{};const registry=d.registry||{};const files=d.files||{};summary.append(diagTile('Switch Vision version',`v${d.version||'Unknown'}`),diagTile('Discovery app',d.service||'Unknown',d.service==='Running'?'diag-good':'diag-bad'),diagTile('Discovery status',discovery.running?'Running':(discovery.message||'Idle / Ready'),discovery.success===false?'diag-bad':'diag-good'),diagTile('Device registry',registry.loaded?`Loaded · ${registry.entries||0} entries`:'Unavailable',registry.loaded?'diag-good':'diag-bad'),diagTile('SNMP2MQTT YAML',files.generated_yaml?.found?'Found':'Missing',files.generated_yaml?.found?'diag-good':'diag-warn'),diagTile('Dashboard YAML',files.generated_card?.found?'Found':'Missing',files.generated_card?.found?'diag-good':'diag-warn'),diagTile('Contribution workflow',d.contribution_workflow?.ready?'Ready':'Unavailable',d.contribution_workflow?.ready?'diag-good':'diag-bad'));const messages=$('devicesDiagnosticsMessages');messages.innerHTML='';for(const [kind,items] of [['failure',d.errors||[]],['warning',d.warnings||[]]]){if(!items.length)continue;const box=document.createElement('div');box.className=kind;const ul=document.createElement('ul');ul.className='diag-list';for(const item of items){const li=document.createElement('li');li.textContent=`${kind==='failure'?'ERROR':'WARNING'}: ${item}`;ul.appendChild(li)}box.appendChild(ul);messages.appendChild(box)}}
@@ -7175,7 +7192,7 @@ async function create(){const btn=$('createButton');btn.disabled=true;setView('p
 const DISCOVERY_TOOLTIP_HELP={runDiscoveryButton:'Contact each enabled switch, collect current evidence, identify hardware, and regenerate Switch Vision outputs.',regenerateYamlButton:'Rebuild SNMP2MQTT YAML from saved Discovery evidence without running new SNMP walks.',regenerateCardYamlButton:'Rebuild dashboard-card YAML from saved Discovery evidence without running new SNMP walks.',previewGeneratedDashboardYamlButton:'Preview the selected new-dashboard export format before pasting it into Home Assistant.',copyGeneratedDashboardYamlButton:'Copy the selected complete dashboard format for Home Assistant Raw configuration editor.',copyGeneratedCardsOnlyButton:"Copy only the generated card list for pasting beneath an existing view's cards: key.",downloadGeneratedDashboardYamlButton:'Download the selected complete Home Assistant dashboard export.',generatedDashboardExportMode:'Choose Custom dashboard to preserve the generated vertical Layout Card view, or Standard dashboard to remove that third-party view dependency.',stopDiscoveryButton:'Request a clean stop of the active Discovery or regeneration operation.',viewResultsButton:'Open the unified Devices list and current detected hardware details.',toggleDebugButton:'Show the complete credential-sanitized debug session for the current or most recent operation.',copyDebugButton:'Copy the complete current-session credential-sanitized debug output.',devicesRunDiscoveryButton:'Start a fresh Discovery run for the currently enabled saved switches.',resetDeviceOrderButton:'Restore the device list and Native dashboard to immutable first-added order.',devicesRegenerateCardYamlButton:'Regenerate the dashboard card from current saved device order/state.',copyDiagnosticsButton:'Copy the privacy-safe Switch Vision diagnostics report.',resetSnmpDiscoveryButton:'Retire known Switch Vision SNMP MQTT entities and clear saved SNMP Discovery state for a clean rebuild.',addUnifiControllerButton:'Add another Local or Remote UniFi controller/site to this UniFi2MQTT instance.',testUnifiLocalButton:'Test Local UniFi API reachability, authentication, site resolution, and adopted-device access without saving.',testUnifiRemoteButton:'Test Remote Site Manager reachability, authentication, host/site resolution, and adopted-device access without saving.',unifi_priority_transport:'The connection path tried first on every UniFi poll.',unifi_fallback_transport:'The alternate connection used only when the priority path is unavailable.',unifi_local_controller_url:'Local UniFi Network Integration API origin. Self-hosted controllers normally use HTTPS port 11443.',unifi_remote_host_id:'UniFi Site Manager console host selector; auto is recommended when unambiguous.'};
 function installDiscoveryTooltips(root=document){const selector='button,input,select,a.button,summary';for(const el of root.querySelectorAll?root.querySelectorAll(selector):[]){if(el.title)continue;let help=DISCOVERY_TOOLTIP_HELP[el.id]||'';const label=el.closest?.('label');if(!help&&label){const small=label.querySelector('small');if(small)help=small.textContent.trim()}if(help)el.title=help}}
 const discoveryTooltipObserver=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===Node.ELEMENT_NODE){if(node.matches?.('button,input,select,a.button,summary'))installDiscoveryTooltips(node.parentElement||document);else installDiscoveryTooltips(node)}});discoveryTooltipObserver.observe(document.body,{childList:true,subtree:true});installDiscoveryTooltips(document);
-$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();$('hubMotdToggle').addEventListener('click',toggleHubMotdVisibility);initHubMotdVisibility();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('generatedDashboardExportMode').addEventListener('change',()=>syncGeneratedDashboardExportMode(true));$('previewGeneratedDashboardYamlButton').addEventListener('click',previewGeneratedDashboardYaml);$('copyGeneratedDashboardYamlButton').addEventListener('click',copyGeneratedDashboardYaml);$('copyGeneratedCardsOnlyButton').addEventListener('click',copyGeneratedCardsOnly);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('autodiscoverScanButton').addEventListener('click',scanAutoDiscover);$('autodiscoverAddAllButton').addEventListener('click',()=>addAutoDiscoverDevices((lastAutoDiscoverResults?.devices||[]).filter(item=>item?.ready_to_add)));$('refreshDevicesButton').addEventListener('click',loadDevices);$('resetDeviceOrderButton').addEventListener('click',resetConfiguredDeviceOrder);$('devicesRegenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYamlFromDevices);$('openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()});$('openIntegrationSettingsButton').addEventListener('click',()=>window.SwitchVisionHubSettings?.open('core'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('testUnifiLocalButton').addEventListener('click',()=>testUnifiConnection('local'));$('testUnifiRemoteButton').addEventListener('click',()=>testUnifiConnection('remote'));$('clearUnifiConnectionTestDebugButton').addEventListener('click',clearUnifiConnectionTestDebug);$('addUnifiControllerButton').addEventListener('click',addUnifiController);$('unifi_priority_transport').addEventListener('change',syncUnifiFallbackOptions);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('importSwitchesButton').addEventListener('click',importSwitchesConfiguration);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('hubSharedPrimary').addEventListener('click',runSharedHubPrimary);$('hubSharedReload').addEventListener('click',reloadSharedHubView);$('hubSharedBack').addEventListener('click',goBack);installStaticSecretControls();setView('home');startElapsedTicker();refresh();
+$('themeSelect').addEventListener('change',e=>applyManagementTheme(e.target.value));initManagementTheme();$('hubMotdToggle').addEventListener('click',toggleHubMotdVisibility);initHubMotdVisibility();syncDensityUi([...document.body.classList].find(v=>v.startsWith('density-'))?.slice(8)||'comfortable');for(const id of ['mask_management_ips','mask_mac_addresses','mask_hostnames'])$(id).addEventListener('change',updateWarning);$('contributor_type').addEventListener('change',updateRecognition);$('createButton').addEventListener('click',create);$('createAnother').addEventListener('click',()=>setView('support'));$('backButton').addEventListener('click',goBack);$('openDiscoveryButton').addEventListener('click',()=>{setView('discovery');Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()])});$('openDevicesButton').addEventListener('click',loadDevices);$('openSupportButton').addEventListener('click',()=>setView('support'));$('runDiscoveryButton').addEventListener('click',runDiscovery);$('regenerateYamlButton').addEventListener('click',regenerateSnmp2mqttYaml);$('regenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYaml);$('stopDiscoveryButton').addEventListener('click',stopDiscovery);$('resetSnmpDiscoveryButton').addEventListener('click',resetSnmpDiscoveryData);$('viewResultsButton').addEventListener('click',loadDevices);$('toggleDebugButton').addEventListener('click',toggleDebug);$('copyDebugButton').addEventListener('click',copyDebugInfo);$('generatedDashboardExportMode').addEventListener('change',()=>syncGeneratedDashboardExportMode(true));$('previewGeneratedDashboardYamlButton').addEventListener('click',previewGeneratedDashboardYaml);$('copyGeneratedDashboardYamlButton').addEventListener('click',copyGeneratedDashboardYaml);$('copyGeneratedCardsOnlyButton').addEventListener('click',copyGeneratedCardsOnly);$('previewGeneratedYamlButton').addEventListener('click',previewGeneratedYaml);$('devicesRunDiscoveryButton').addEventListener('click',()=>{setView('discovery');runDiscovery()});$('autodiscoverAddNetworkButton').addEventListener('click',addAutoDiscoverNetwork);$('autodiscoverScanButton').addEventListener('click',scanAutoDiscover);$('autodiscoverAddAllButton').addEventListener('click',()=>addAutoDiscoverDevices((lastAutoDiscoverResults?.devices||[]).filter(item=>item?.ready_to_add)));$('refreshDevicesButton').addEventListener('click',loadDevices);$('resetDeviceOrderButton').addEventListener('click',resetConfiguredDeviceOrder);$('devicesRegenerateCardYamlButton').addEventListener('click',regenerateDashboardCardYamlFromDevices);$('openCreditsButton').addEventListener('click',()=>{setView('credits');startCreditsV25Animation()});$('openIntegrationSettingsButton').addEventListener('click',()=>window.SwitchVisionHubSettings?.open('core'));$('openUnifi2mqttSettingsButton').addEventListener('click',()=>{const btn=$('openUnifi2mqttSettingsButton');if(btn?.dataset.unifiAction==='blocked')return;loadUnifi2mqttSettings()});$('saveUnifi2mqttButton').addEventListener('click',saveUnifi2mqttSettings);$('testUnifiLocalButton').addEventListener('click',()=>testUnifiConnection('local'));$('testUnifiRemoteButton').addEventListener('click',()=>testUnifiConnection('remote'));$('clearUnifiConnectionTestDebugButton').addEventListener('click',clearUnifiConnectionTestDebug);$('addUnifiControllerButton').addEventListener('click',addUnifiController);$('unifi_priority_transport').addEventListener('change',syncUnifiFallbackOptions);$('installUnifi2mqttButton').addEventListener('click',installUnifi2mqtt);$('openUnifiAppConfigButton').addEventListener('click',openUnifiAppConfig);$('importConfigurationButton').addEventListener('click',importConfiguration);$('importSwitchesButton').addEventListener('click',importSwitchesConfiguration);$('copyDiagnosticsButton').addEventListener('click',copyDiagnostics);$('hubSharedPrimary').addEventListener('click',runSharedHubPrimary);$('hubSharedReload').addEventListener('click',reloadSharedHubView);$('hubSharedBack').addEventListener('click',goBack);installStaticSecretControls();setView('home');startElapsedTicker();refresh();
 </script>
 <script src="credits_v25.js"></script>
 <script>
@@ -7327,6 +7344,17 @@ def _autodiscover_unifi_snapshot() -> dict[str, Any]:
     return data if isinstance(data, dict) else {"devices": []}
 
 
+def _validated_autodiscover_networks(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list):
+        raise ValueError("autodiscover_networks must be a list.")
+    if not value:
+        return []
+    networks, _hosts, _raw_count = autodiscover.validate_subnets(value)
+    return [str(network) for network in networks]
+
+
 def _autodiscover_suggested_network(options: dict[str, Any], unifi_snapshot: dict[str, Any]) -> str:
     """Return an editable /24 suggestion from existing device evidence only."""
     addresses: list[str] = []
@@ -7354,10 +7382,13 @@ def _autodiscover_status() -> dict[str, Any]:
     credentials = autodiscover.credential_specs(options, use_saved=True)
     rows = options.get("switches") if isinstance(options.get("switches"), list) else []
     unifi_rows = unifi_snapshot.get("devices") if isinstance(unifi_snapshot.get("devices"), list) else []
+    saved_networks = _validated_autodiscover_networks(options.get("autodiscover_networks", []))
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "snmp_version": "2c",
         "max_scan_hosts": autodiscover.MAX_SCAN_HOSTS,
+        "max_total_hosts": autodiscover.MAX_SCAN_TOTAL_HOSTS,
+        "max_subnets": autodiscover.MAX_SCAN_SUBNETS,
         "saved_switch_count": sum(
             1
             for row in rows
@@ -7371,6 +7402,7 @@ def _autodiscover_status() -> dict[str, Any]:
             for item in credentials
         ],
         "unifi_device_count": len([row for row in unifi_rows if isinstance(row, dict)]),
+        "saved_networks": saved_networks,
         "suggested_network": _autodiscover_suggested_network(options, unifi_snapshot),
         "policy": (
             "AutoDiscover uses only SNMP communities already saved on real configured "
@@ -7379,14 +7411,19 @@ def _autodiscover_status() -> dict[str, Any]:
     }
 
 
-def _autodiscover_request(data: Any) -> tuple[str, bool, str]:
+def _autodiscover_request(data: Any) -> tuple[list[str], bool, str]:
     if not isinstance(data, dict):
         raise ValueError("AutoDiscover request must contain a JSON object.")
-    unknown = sorted(set(data) - {"network", "use_saved", "manual_community"})
+    unknown = sorted(set(data) - {"network", "networks", "use_saved", "manual_community"})
     if unknown:
         raise ValueError(f"Unsupported AutoDiscover field: {unknown[0]}")
-    network = _plain_text(data.get("network", ""), "network", max_length=64, allow_empty=False).strip()
-    autodiscover.validate_subnet(network)
+    if "network" in data and "networks" in data:
+        raise ValueError("Use networks, not both network and networks.")
+    raw_networks = data.get("networks")
+    if raw_networks is None and "network" in data:
+        raw_networks = [data.get("network")]
+    networks, _hosts, _raw_count = autodiscover.validate_subnets(raw_networks)
+    network_values = [str(network) for network in networks]
     use_saved_value = data.get("use_saved", True)
     if isinstance(use_saved_value, bool):
         use_saved = use_saved_value
@@ -7401,11 +7438,11 @@ def _autodiscover_request(data: Any) -> tuple[str, bool, str]:
         "manual_community",
         max_length=256,
     ).strip()
-    return network, use_saved, manual
+    return network_values, use_saved, manual
 
 
 def _autodiscover_scan(data: Any) -> dict[str, Any]:
-    network, use_saved, manual = _autodiscover_request(data)
+    networks, use_saved, manual = _autodiscover_request(data)
     options = _effective_discovery_options(_self_addon_options())
     try:
         configured_timeout = float(str(options.get("snmp_timeout") or "1"))
@@ -7413,7 +7450,7 @@ def _autodiscover_scan(data: Any) -> dict[str, Any]:
         configured_timeout = 1.0
     timeout = min(1.5, max(0.5, configured_timeout))
     result = autodiscover.scan(
-        network,
+        networks,
         options=options,
         manual_community=manual,
         use_saved=use_saved,
@@ -7421,8 +7458,9 @@ def _autodiscover_scan(data: Any) -> dict[str, Any]:
         unifi_snapshot=_autodiscover_unifi_snapshot(),
         timeout=timeout,
     )
-    # This invariant is intentionally checked immediately before the payload
-    # crosses the Hub API boundary.
+    # This invariant is intentionally checked before any settings mutation or
+    # Hub API response. A credential-bearing result fails closed without saving
+    # even the otherwise non-secret subnet list.
     serialized = json.dumps(result, sort_keys=True)
     for credential in autodiscover.credential_specs(
         options,
@@ -7432,17 +7470,25 @@ def _autodiscover_scan(data: Any) -> dict[str, Any]:
         secret = str(credential.get("community") or "")
         if secret and secret in serialized:
             raise RuntimeError("AutoDiscover refused a response containing credential material.")
+    # Remember only the non-secret CIDR list after the scan result passes the
+    # credential boundary invariant. One-time communities are never persisted
+    # by the scan action itself.
+    _save_discovery_settings({"settings": {"autodiscover_networks": networks}})
     return result
 
 
 def _autodiscover_add(data: Any) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("AutoDiscover add request must contain a JSON object.")
-    unknown = sorted(set(data) - {"network", "manual_community", "devices"})
+    unknown = sorted(set(data) - {"network", "networks", "manual_community", "devices"})
     if unknown:
         raise ValueError(f"Unsupported AutoDiscover add field: {unknown[0]}")
-    network_text = _plain_text(data.get("network", ""), "network", max_length=64, allow_empty=False).strip()
-    network = autodiscover.validate_subnet(network_text)
+    if "network" in data and "networks" in data:
+        raise ValueError("Use networks, not both network and networks.")
+    raw_networks = data.get("networks")
+    if raw_networks is None and "network" in data:
+        raw_networks = [data.get("network")]
+    networks, _host_networks, _raw_count = autodiscover.validate_subnets(raw_networks)
     manual = _plain_text(
         data.get("manual_community", ""),
         "manual_community",
@@ -7487,8 +7533,8 @@ def _autodiscover_add(data: Any) -> dict[str, Any]:
             raise ValueError(f"AutoDiscover candidate {index} host must be IPv4.") from exc
         if not isinstance(address, ipaddress.IPv4Address):
             raise ValueError(f"AutoDiscover candidate {index} host must be IPv4.")
-        if address not in network:
-            raise ValueError(f"AutoDiscover candidate {index} is outside the scanned network.")
+        if not any(address in network for network in networks):
+            raise ValueError(f"AutoDiscover candidate {index} is outside the scanned networks.")
         if host in configured_hosts or host in seen_hosts:
             raise ValueError(f"AutoDiscover candidate {host} is already configured or duplicated.")
         credential_ref = _plain_text(

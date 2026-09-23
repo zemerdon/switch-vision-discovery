@@ -488,7 +488,7 @@ def _safe_discovery_options(options: Any) -> dict[str, Any]:
     known = {
         *DEFAULT_DISCOVERY_PATHS,
         "run_snmp_walks", "enable_switch_list", "switches",
-        "stack_member_prefixes", "parse_all_walks", "generate_snmp2mqtt",
+        "stack_member_prefixes", "autodiscover_networks", "parse_all_walks", "generate_snmp2mqtt",
         "clean_output_before_walk", "snmp_timeout", "snmp_retries",
         "minimum_valid_walk_lines", "backup_retention_enabled",
         "backup_retention_count", "generate_support_my_switch_bundle",

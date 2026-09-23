@@ -1,5 +1,5 @@
 name: Switch Vision Discovery / Hub
-version: "2.4.50"
+version: "3.0.0"
 slug: switch_vision_discovery
 description: Read-only multi-vendor switch discovery, capability reporting, and review-only SNMP2MQTT/dashboard generation for Switch Vision.
 url: https://github.com/zemerdon/switch-vision-discovery
@@ -48,6 +48,9 @@ options:
 
   # Optional stack member map. Each member may have its own friendly display name.
   stack_member_prefixes: []
+
+  # AutoDiscover remembers only non-secret scan ranges.
+  autodiscover_networks: []
 
   # Parser / generator controls
   parse_all_walks: "false"
@@ -108,6 +111,8 @@ schema:
       display_name: str?
       sensor_prefix: str
       card_header_title: str?
+  autodiscover_networks:
+    - str
   parse_all_walks: list(false|true)
   generate_snmp2mqtt: list(false|true)
   clean_output_before_walk: list(false|true)

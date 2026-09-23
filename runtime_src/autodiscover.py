@@ -17,6 +17,8 @@ from typing import Any, Callable
 from registry_lookup import lookup as registry_lookup
 
 MAX_SCAN_HOSTS = 1024
+MAX_SCAN_TOTAL_HOSTS = 4096
+MAX_SCAN_SUBNETS = 32
 DEFAULT_WORKERS = 64
 SYS_DESCR_OID = ".1.3.6.1.2.1.1.1.0"
 SYS_OBJECT_ID_OID = ".1.3.6.1.2.1.1.2.0"
@@ -42,10 +44,52 @@ def validate_subnet(value: Any, *, max_hosts: int = MAX_SCAN_HOSTS) -> ipaddress
         host_count = max(0, network.num_addresses - 2)
     if host_count > max_hosts:
         raise ValueError(
-            f"AutoDiscover is limited to {max_hosts} usable addresses per scan. "
+            f"AutoDiscover is limited to {max_hosts} usable addresses per subnet. "
             "Use a smaller subnet."
         )
     return network
+
+
+def validate_subnets(
+    values: Any,
+    *,
+    max_hosts_per_subnet: int = MAX_SCAN_HOSTS,
+    max_total_hosts: int = MAX_SCAN_TOTAL_HOSTS,
+    max_subnets: int = MAX_SCAN_SUBNETS,
+) -> tuple[list[ipaddress.IPv4Network], dict[str, list[str]], int]:
+    """Validate CIDRs and return canonical networks plus a deduplicated host map."""
+    raw_values = [values] if isinstance(values, str) else values
+    if not isinstance(raw_values, list) or not raw_values:
+        raise ValueError("AutoDiscover requires at least one IPv4 network.")
+    if len(raw_values) > max_subnets:
+        raise ValueError(f"AutoDiscover supports at most {max_subnets} subnets per scan.")
+
+    networks: list[ipaddress.IPv4Network] = []
+    seen_networks: set[str] = set()
+    for raw in raw_values:
+        network = validate_subnet(raw, max_hosts=max_hosts_per_subnet)
+        canonical = str(network)
+        if canonical in seen_networks:
+            continue
+        seen_networks.add(canonical)
+        networks.append(network)
+    if not networks:
+        raise ValueError("AutoDiscover requires at least one IPv4 network.")
+
+    host_networks: dict[str, list[str]] = {}
+    raw_host_count = 0
+    for network in networks:
+        network_text = str(network)
+        for address in network.hosts():
+            raw_host_count += 1
+            host = str(address)
+            host_networks.setdefault(host, []).append(network_text)
+            if len(host_networks) > max_total_hosts:
+                raise ValueError(
+                    f"AutoDiscover is limited to {max_total_hosts} unique addresses per scan. "
+                    "Use fewer or smaller subnets."
+                )
+    return networks, host_networks, raw_host_count
 
 
 def credential_specs(
@@ -372,7 +416,7 @@ def sensor_prefix_for_name(name: str) -> str:
 
 
 def scan(
-    subnet: Any,
+    subnets: Any,
     *,
     options: dict[str, Any],
     manual_community: str = "",
@@ -383,7 +427,8 @@ def scan(
     workers: int = DEFAULT_WORKERS,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> dict[str, Any]:
-    network = validate_subnet(subnet)
+    networks, host_networks, raw_host_count = validate_subnets(subnets)
+    network_texts = [str(network) for network in networks]
     registry = registry_data if isinstance(registry_data, dict) else {"devices": []}
     credentials = credential_specs(
         options,
@@ -402,7 +447,7 @@ def scan(
     }
 
     snmp_results: list[dict[str, Any]] = []
-    hosts = [str(host) for host in network.hosts()]
+    hosts = list(host_networks)
     if credentials and hosts:
         max_workers = max(1, min(int(workers), DEFAULT_WORKERS, len(hosts)))
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="sv-autodiscover") as pool:
@@ -425,6 +470,9 @@ def scan(
                 if candidate is None:
                     continue
                 host = str(candidate.get("host") or "")
+                memberships = list(host_networks.get(host, []))
+                candidate["networks"] = memberships
+                candidate["network"] = memberships[0] if memberships else ""
                 candidate["configured"] = host in configured_hosts
                 candidate["addable"] = not candidate["configured"]
                 candidate["ready_to_add"] = bool(
@@ -445,6 +493,9 @@ def scan(
     results = list(snmp_results)
     for item in _unifi_candidates(unifi_snapshot, registry_data=registry):
         host = str(item.get("host") or "")
+        memberships = list(host_networks.get(host, []))
+        item["networks"] = memberships
+        item["network"] = memberships[0] if memberships else ""
         existing = by_host.get(host) if host else None
         if existing is not None:
             existing["source"] = "SNMP + UniFi API"
@@ -469,8 +520,12 @@ def scan(
 
     results.sort(key=sort_key)
     return {
-        "network": str(network),
+        "network": network_texts[0] if len(network_texts) == 1 else "",
+        "networks": network_texts,
+        "network_count": len(network_texts),
         "network_hosts": len(hosts),
+        "raw_network_hosts": raw_host_count,
+        "overlap_deduplicated_hosts": max(0, raw_host_count - len(hosts)),
         "scanned_hosts": len(hosts) if credentials else 0,
         "snmp_probe_hosts": len(hosts) if credentials else 0,
         "credential_count": len(credentials),
@@ -478,6 +533,8 @@ def scan(
         "manual_credential_used": any(item.get("ref") == "manual" for item in credentials),
         "snmp_version": "2c",
         "max_scan_hosts": MAX_SCAN_HOSTS,
+        "max_total_hosts": MAX_SCAN_TOTAL_HOSTS,
+        "max_subnets": MAX_SCAN_SUBNETS,
         "devices": results,
         "snmp_devices": sum(1 for item in results if "SNMP" in str(item.get("source") or "")),
         "unifi_devices": sum(1 for item in results if "UniFi API" in str(item.get("source") or "")),

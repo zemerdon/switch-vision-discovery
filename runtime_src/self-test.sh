@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
 set -eu
+export PYTHONDONTWRITEBYTECODE=1
+export SV_SELF_TEST_TMP_DIR="/tmp/switch-vision-discovery-self-test-$$"
 
 # Early Hub regression checks use a diagnostic literal helper so CI identifies
 # the exact missing contract instead of failing silently under set -e.
@@ -7,8 +9,10 @@ BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export SV_CURRENT_DISCOVERY_DEBUG_PATH="${SV_CURRENT_DISCOVERY_DEBUG_PATH:-/tmp/switch-vision-current-discovery-debug.log}"
 export SV_DEVICE_CONTROL_PATH="${SV_DEVICE_CONTROL_PATH:-/tmp/switch-vision-self-test-device-control-$$.json}"
 rm -f "$SV_DEVICE_CONTROL_PATH"
+rm -rf "$SV_SELF_TEST_TMP_DIR"
 sv_self_test_cleanup() {
     rm -f "$SV_DEVICE_CONTROL_PATH"
+    rm -rf "$SV_SELF_TEST_TMP_DIR"
 }
 trap 'sv_self_test_cleanup' EXIT HUP INT TERM
 SV_COPY_DEBUG_TEST_DIR="$BASE_DIR"
@@ -92,6 +96,30 @@ if grep -Fq 'credits-fade-out' "$BASE_DIR/credits_v25.js" "$BASE_DIR/credits_v25
 fi
 if command -v node >/dev/null 2>&1; then
     node --check "$BASE_DIR/credits_v25.js"
+    python3 - "$BASE_DIR" "$SV_SELF_TEST_TMP_DIR" <<'PY_INLINE_JS'
+from pathlib import Path
+import re
+import sys
+
+base = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+sys.path.insert(0, str(base))
+import support_web
+
+destination.mkdir(parents=True, exist_ok=True)
+scripts = re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>', support_web._PAGE, flags=re.S)
+written = 0
+for index, body in enumerate(scripts, start=1):
+    if not body.strip():
+        continue
+    path = destination / f'hub-inline-{index}.js'
+    path.write_text(body, encoding='utf-8')
+    written += 1
+assert written > 0, 'Hub page contains no inline JavaScript to validate'
+PY_INLINE_JS
+    for inline_script in "$SV_SELF_TEST_TMP_DIR"/hub-inline-*.js; do
+        node --check "$inline_script"
+    done
 fi
 echo 'Switch Vision Discovery locked Credits presentation: PASS'
 
@@ -372,7 +400,24 @@ print("Switch Vision Discovery v2.3.1 Supervisor ingress source gate: PASS")
 PY_INGRESS_GATE
 
 # v2.2.0 Maintenance Hub MQTT ownership/reconciliation regression
-python3 -m py_compile "$BASE_DIR/discovery_backups.py" "$BASE_DIR/discovery_backups_regression.py" "$BASE_DIR/mqtt_maintenance.py" "$BASE_DIR/mqtt_maintenance_runtime.py" "$BASE_DIR/support_diagnostics.py" "$BASE_DIR/supervisor_runtime.py" "$BASE_DIR/walk_correlation.py"
+python3 - "$BASE_DIR" <<'PY_MAINTENANCE_SYNTAX'
+import ast
+from pathlib import Path
+import sys
+
+base = Path(sys.argv[1])
+for name in (
+    "discovery_backups.py",
+    "discovery_backups_regression.py",
+    "mqtt_maintenance.py",
+    "mqtt_maintenance_runtime.py",
+    "support_diagnostics.py",
+    "supervisor_runtime.py",
+    "walk_correlation.py",
+):
+    path = base / name
+    ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+PY_MAINTENANCE_SYNTAX
 grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
 grep -Fq '<span>Backups</span>' "$BASE_DIR/support_web.py"
 grep -Fq 'data-maintenance-tab="snmp">SNMP</button>' "$BASE_DIR/support_web.py"
@@ -2014,8 +2059,8 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.50"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="2.4.50"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.0"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.0"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"

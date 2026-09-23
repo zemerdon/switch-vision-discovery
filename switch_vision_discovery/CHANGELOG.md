@@ -1,10 +1,12 @@
-## 2.4.50 — Devices AutoDiscover
+## 3.0.0 — AutoDiscover multi-subnet workflow
 
-- Add **Devices → AutoDiscover** between Configure Devices and Device Overview.
-- Scan a user-selected IPv4 CIDR of up to 1024 usable addresses with only explicitly supplied or already-saved SNMPv2c communities; communities are never guessed or returned by the Hub API.
+- Add **Devices → AutoDiscover** between Configure Devices and Device Overview as a first-class major Discovery workflow.
+- Persist up to 32 operator-selected IPv4 CIDRs in normal Discovery configuration/export/backup state; each subnet is limited to 1024 usable addresses and each scan to 4096 unique addresses.
+- Canonicalize duplicate CIDRs, deduplicate overlapping address space before probing, and use one bounded shared worker pool across all selected ranges.
+- Probe only with explicitly supplied or already-saved SNMPv2c communities; communities are never guessed, never returned by the Hub API, and a credential-boundary failure occurs before the subnet list can be persisted.
 - Include the existing normalized UniFi API inventory without requiring per-device SNMP credentials, while avoiding duplicate add actions for devices already managed through UniFi.
-- Revalidate every SNMP candidate immediately before saving, preserve normal Discovery as the authority for exact model/topology identification, and make **Add All Ready Devices** atomic so one stale candidate prevents the entire batch from being persisted.
-- Add permanent regressions for credential redaction, placeholder-community exclusion, bounded scanning, exact registry hints, stale-result revalidation, atomic add behavior, and Devices tab ordering.
+- Revalidate every SNMP candidate immediately before saving, allow authenticated unmatched devices to be added individually for normal Discovery processing, preserve normal Discovery as the authority for exact model/topology identification, and keep **Add All Ready Devices** atomic and restricted to dashboard-ready exact matches.
+- Add permanent regressions for multi-subnet limits, overlap deduplication, persisted non-secret networks, credential redaction, placeholder-community exclusion, exact registry hints, second-subnet add behavior, stale-result revalidation, atomic add behavior, and Devices tab ordering.
 
 ## 2.4.49 — Field-validation and compatibility fixes
 
