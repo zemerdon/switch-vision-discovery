@@ -8,6 +8,10 @@
 - Revalidate every SNMP candidate immediately before saving, allow authenticated unmatched devices to be added individually for normal Discovery processing, preserve normal Discovery as the authority for exact model/topology identification, and keep **Add All Ready Devices** atomic and restricted to dashboard-ready exact matches.
 - Add permanent regressions for multi-subnet limits, overlap deduplication, persisted non-secret networks, credential redaction, placeholder-community exclusion, exact registry hints, second-subnet add behavior, stale-result revalidation, atomic add behavior, and Devices tab ordering.
 - Fix API/UniFi-only Discovery runs so an intentionally empty SNMP target set is a successful no-op instead of exit code 2; preserve independent UniFi/dashboard generation, prohibit stale stored-walk fallback for that live run, and retain hard failure when configured SNMP targets are actually attempted and all fail.
+- Reconcile stale configuration-restore rows against the live Supervisor switch list so a previously restored switch with a saved SNMP community cannot keep shadowing newer enabled/disabled or presentation state.
+- Add a bounded latest-startup Discovery app log to Support My Switch diagnostics through the Supervisor log API; the captured log remains subject to the existing bundle sanitizer before an archive is marked ready to share.
+- Promote **WS-C2960X-24PS-L** to **Community Validated** after the established real-hardware contract plus current owner dashboard/faceplate/uplink/PoE/system-sensor field validation.
+- Promote **USW Flex Mini** to **Community Validated** after independent repeated UniFi API topology evidence plus current owner live dashboard, port-behavior, and dedicated-faceplate validation.
 
 ## 2.4.49 — Field-validation and compatibility fixes
 

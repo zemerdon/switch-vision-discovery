@@ -42,11 +42,20 @@ VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {
 # only the listed support fields may differ from the current public Core baseline.
 SUPPORT_CONTRACT_EXCEPTIONS: dict[str, dict[str, object]] = {
     "WS-C2960X-24PS-L": {
-        "fields": ("validation",),
+        "fields": ("status", "validation"),
         "reason": (
-            "Discovery records newer owner field validation that all four 1G SFP "
-            "uplinks work with a real 1G DAC; Core 2.7.8's derivative registry "
-            "still marks that validation pending while topology/status/evidence remain aligned."
+            "Discovery is the support-confidence authority and promotes the exact 24PS-L "
+            "contract to Community Validated after the established real-hardware evidence "
+            "plus current owner field/render validation; Core's derivative registry may lag "
+            "the status and older uplink-validation marker."
+        ),
+    },
+    "USW Flex Mini": {
+        "fields": ("status",),
+        "reason": (
+            "Discovery is the support-confidence authority and promotes Flex Mini to "
+            "Community Validated after independent API corroboration plus current owner "
+            "dashboard/faceplate field validation; Core's derivative registry may lag status."
         ),
     },
     "USW Pro Aggregation": {

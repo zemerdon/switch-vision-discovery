@@ -3028,34 +3028,61 @@ def _discovery_settings_status() -> dict[str, Any]:
             for row in safe_switches
             if isinstance(row, dict) and str(row.get("switch_name") or "").strip()
         }
-        if not current_by_name:
-            # Replace the blank Home Assistant placeholder with the backed-up
-            # rows so a fresh install only needs its communities entered.
-            safe_switches = []
-        else:
-            pending_names = {
-                str(row.get("switch_name") or "").strip()
-                for row in pending_switches
-                if isinstance(row, dict) and str(row.get("switch_name") or "").strip()
-            }
-            safe_switches = [
-                row
-                for row in safe_switches
-                if str(row.get("switch_name") or "").strip() not in pending_names
-            ]
-        for raw in pending_switches:
-            if not isinstance(raw, dict):
-                continue
-            name = str(raw.get("switch_name") or "").strip()
-            current_row = current_by_name.get(name)
-            row = dict(raw)
-            row["snmp_community"] = ""
-            row["snmp_community_configured"] = bool(
-                current_row and current_row.get("snmp_community_configured")
+
+        # A restored row stops being pending as soon as the live Supervisor
+        # configuration contains that same switch with a saved community.
+        # Do not let stale restore metadata shadow newer enabled/disabled or
+        # presentation state indefinitely after an import/restore completes.
+        resolved_pending_names = {
+            str(row.get("switch_name") or "").strip()
+            for row in pending_switches
+            if isinstance(row, dict)
+            and str(row.get("switch_name") or "").strip()
+            and bool(
+                current_by_name.get(str(row.get("switch_name") or "").strip(), {}).get(
+                    "snmp_community_configured"
+                )
             )
-            row["original_switch_name"] = name
-            row["restore_pending"] = not row["snmp_community_configured"]
-            safe_switches.append(row)
+        }
+        if resolved_pending_names:
+            pending_restore["discovery_switches"] = [
+                dict(row)
+                for row in pending_switches
+                if isinstance(row, dict)
+                and str(row.get("switch_name") or "").strip() not in resolved_pending_names
+            ]
+            _save_configuration_restore_pending(pending_restore)
+            pending_switches = pending_restore["discovery_switches"]
+
+        if pending_switches:
+            if not current_by_name:
+                # Replace the blank Home Assistant placeholder with the backed-up
+                # rows so a fresh install only needs its communities entered.
+                safe_switches = []
+            else:
+                pending_names = {
+                    str(row.get("switch_name") or "").strip()
+                    for row in pending_switches
+                    if isinstance(row, dict) and str(row.get("switch_name") or "").strip()
+                }
+                safe_switches = [
+                    row
+                    for row in safe_switches
+                    if str(row.get("switch_name") or "").strip() not in pending_names
+                ]
+            for raw in pending_switches:
+                if not isinstance(raw, dict):
+                    continue
+                name = str(raw.get("switch_name") or "").strip()
+                current_row = current_by_name.get(name)
+                row = dict(raw)
+                row["snmp_community"] = ""
+                row["snmp_community_configured"] = bool(
+                    current_row and current_row.get("snmp_community_configured")
+                )
+                row["original_switch_name"] = name
+                row["restore_pending"] = not row["snmp_community_configured"]
+                safe_switches.append(row)
     settings["switches"] = safe_switches
 
     stack = settings.get("stack_member_prefixes")

@@ -24,6 +24,8 @@ python3 "$BASE_DIR/management_ip_display_regression.py"
 python3 "$BASE_DIR/device_ordering_regression.py"
 python3 "$BASE_DIR/device_added_order_regression.py"
 python3 "$BASE_DIR/configuration_backup_regression.py"
+python3 "$BASE_DIR/restore_pending_state_regression.py"
+python3 "$BASE_DIR/support_addon_log_regression.py"
 python3 "$BASE_DIR/calibration_manager_regression.py"
 python3 "$BASE_DIR/hub_settings_tabs_regression.py"
 python3 "$BASE_DIR/autodiscover_regression.py"
@@ -2991,6 +2993,9 @@ assert devices["USW Pro 24"]["ports"]["ten_gigabit_sfp_plus"] == 2
 assert devices["US 8 60W"]["validation"]["poe"] == "live_api_confirmed_ports_5_8_802_3af"
 assert devices["UniFi Dream Machine PRO SE"]["validation"]["poe"] == "live_api_confirmed_ports_1_8"
 assert devices["USW Flex Mini"]["validation"]["exact_model_detection"] == "live_api_confirmed_three_devices"
+assert devices["USW Flex Mini"]["status"] == "community_validated"
+assert devices["USW Flex Mini"]["last_validated_version"] == "3.0.0"
+assert devices["USW Flex Mini"]["visuals"]["status"] == "community_validated"
 assert profiles["ubiquiti-usw-pro-24-api"]["layout"]["sfp_10g_ports"] == 2
 assert profiles["ubiquiti-usw-24-poe-api"]["layout"]["sfp_1g_ports"] == 2
 print("Switch Vision Discovery v2.1.19 community-validation profile regression: PASS")
@@ -3095,9 +3100,10 @@ for model in pending_experimental:
     assert models[model]["status"] == "experimental", model
 
 c2960x24ps = models["WS-C2960X-24PS-L"]
-assert c2960x24ps["status"] == "experimental"
-assert c2960x24ps["last_validated_version"] == "2.4.16"
+assert c2960x24ps["status"] == "community_validated"
+assert c2960x24ps["last_validated_version"] == "3.0.0"
 assert c2960x24ps["validation"]["uplinks"] == "confirmed"
+assert c2960x24ps["visuals"]["status"] == "community_validated"
 assert c2960x24ps["ports"]["gigabit_sfp"] == 4
 assert c2960x24ps["ports"]["ten_gigabit_sfp_plus"] == 0
 assert models["WS-C2960X-24TS-L"]["validation"]["uplinks"] == "pending"

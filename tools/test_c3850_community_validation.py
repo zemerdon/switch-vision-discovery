@@ -41,11 +41,12 @@ assert c3850["validation"]["system_sensors"].startswith("community_confirmed_cis
 assert c3850["validation"]["uplinks"].startswith("community_confirmed_te_member_0_1_12"), c3850["validation"]
 assert c3850["visuals"]["status"] == "community_validated", c3850["visuals"]
 
-# Owner field validation: all four 1G SFP uplinks on the 24PS-L are now
-# confirmed with a real 1G DAC. The model remains Experimental under the
-# acceptance workflow; the separate 24TS-L hardware still has pending uplinks.
+# Owner field validation: all four 1G SFP uplinks on the 24PS-L are confirmed
+# with a real 1G DAC, and the 2026-09-23 dashboard/faceplate field session closes
+# the Community Validated presentation gate. The separate 24TS-L remains pending.
 c2960 = rows["WS-C2960X-24PS-L"]
-assert c2960["status"] == "experimental", c2960
+assert c2960["status"] == "community_validated", c2960
+assert c2960["visuals"]["status"] == "community_validated", c2960["visuals"]
 assert c2960["ports"]["rj45"] == 24 and c2960["ports"]["uplinks"] == 4, c2960["ports"]
 assert c2960["validation"]["uplinks"] == "confirmed", c2960["validation"]
 c2960ts = rows["WS-C2960X-24TS-L"]
@@ -109,4 +110,4 @@ ready_line = next(line for line in job.splitlines() if line.strip().startswith("
 assert "registry_ready || c3850_ready" in ready_line, ready_line
 assert "is_2960(model)) && if_total > 0 && physical_if > 0 && trunk_status_count > 0" not in ready_line, ready_line
 
-print("Catalyst 3850 Community Validated evidence and 2960X experimental-hold regression: PASS")
+print("Catalyst 3850 and 2960X-24PS-L Community Validated evidence regression: PASS")

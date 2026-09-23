@@ -58,6 +58,65 @@ PRIVATE_CALIBRATION_KEYS = {
     "profile_name", "base_profile_name", "display_name", "custom_title",
     "file", "logo_file", "faceplate_file",
 }
+DISCOVERY_ADDON_LOG = DIAG_DIR / "discovery-addon-log.txt"
+DISCOVERY_ADDON_LOG_STATUS = DIAG_DIR / "discovery-addon-log-status.json"
+DISCOVERY_ADDON_LOG_LINES = 400
+
+
+def capture_discovery_addon_log(
+    root: Path,
+    *,
+    opener=urlopen,
+    token_reader=read_supervisor_token,
+) -> dict[str, Any]:
+    """Capture a bounded latest-startup Discovery app log for support bundles.
+
+    This is diagnostic evidence only. The copied log is processed by the normal
+    Support My Switch sanitizer before the bundle can be marked ready to share.
+    """
+    token = str(token_reader() or "").strip()
+    status: dict[str, Any] = {
+        "schema_version": 1,
+        "generated_at": _now(),
+        "requested_lines": DISCOVERY_ADDON_LOG_LINES,
+        "status": "unavailable",
+    }
+    if not token:
+        status["reason"] = "supervisor_token_unavailable"
+        _write(root, DISCOVERY_ADDON_LOG_STATUS, status)
+        return status
+
+    request = Request(
+        f"http://supervisor/addons/self/logs/latest?lines={DISCOVERY_ADDON_LOG_LINES}&no_colors",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "text/plain",
+        },
+    )
+    try:
+        with opener(request, timeout=12.0) as response:
+            text = response.read().decode("utf-8", errors="replace")
+    except HTTPError as exc:
+        status["reason"] = f"supervisor_http_{exc.code}"
+        _write(root, DISCOVERY_ADDON_LOG_STATUS, status)
+        return status
+    except (URLError, TimeoutError, OSError) as exc:
+        status["reason"] = f"supervisor_log_request_failed:{type(exc).__name__}"
+        _write(root, DISCOVERY_ADDON_LOG_STATUS, status)
+        return status
+
+    lines = text.splitlines()[-DISCOVERY_ADDON_LOG_LINES:]
+    log_path = root / DISCOVERY_ADDON_LOG
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("\n".join(lines).rstrip() + ("\n" if lines else ""), encoding="utf-8")
+    status.update({
+        "status": "captured",
+        "line_count": len(lines),
+        "sanitization_required": True,
+    })
+    _write(root, DISCOVERY_ADDON_LOG_STATUS, status)
+    return status
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -1286,6 +1345,16 @@ def capture_support_diagnostics(root: Path) -> None:
     runtime_versions = build_runtime_versions()
     configuration_snapshot = build_configuration_snapshot(root)
     calibration_storage = capture_calibration_storage_snapshot()
+    try:
+        capture_discovery_addon_log(root)
+    except Exception as exc:  # Add-on log capture must never block a support bundle.
+        _write(root, DISCOVERY_ADDON_LOG_STATUS, {
+            "schema_version": 1,
+            "generated_at": _now(),
+            "requested_lines": DISCOVERY_ADDON_LOG_LINES,
+            "status": "unavailable",
+            "reason": f"unexpected_capture_failure:{type(exc).__name__}",
+        })
     if ha_error:
         runtime_versions.setdefault("warnings", []).append(ha_error)
 
