@@ -7,6 +7,7 @@
 - Include the existing normalized UniFi API inventory without requiring per-device SNMP credentials, while avoiding duplicate add actions for devices already managed through UniFi.
 - Revalidate every SNMP candidate immediately before saving, allow authenticated unmatched devices to be added individually for normal Discovery processing, preserve normal Discovery as the authority for exact model/topology identification, and keep **Add All Ready Devices** atomic and restricted to dashboard-ready exact matches.
 - Add permanent regressions for multi-subnet limits, overlap deduplication, persisted non-secret networks, credential redaction, placeholder-community exclusion, exact registry hints, second-subnet add behavior, stale-result revalidation, atomic add behavior, and Devices tab ordering.
+- Fix API/UniFi-only Discovery runs so an intentionally empty SNMP target set is a successful no-op instead of exit code 2; preserve independent UniFi/dashboard generation, prohibit stale stored-walk fallback for that live run, and retain hard failure when configured SNMP targets are actually attempted and all fail.
 
 ## 2.4.49 — Field-validation and compatibility fixes
 

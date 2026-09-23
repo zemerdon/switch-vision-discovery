@@ -546,7 +546,7 @@ def _stage_options(
     staged["run_live_snmpwalk"] = "false"
     staged["clean_output_before_walk"] = "false"
 
-    if current_run:
+    if current_run is not None:
         return _stage_current_run_options(options, staged, work, current_run)
 
     source_root = Path(str(options.get("snmpwalks_dir") or DEFAULT_WALK_ROOT))
@@ -1195,9 +1195,9 @@ def _write_live_collection_failure_outputs(
 def _stage_live_collection(
     options: dict[str, Any],
     work: Path,
-) -> tuple[list[dict[str, str]], bool]:
+) -> tuple[list[dict[str, str]] | None, bool]:
     if not _bool(options.get("run_snmp_walks", options.get("run_live_snmpwalk", False))):
-        return [], False
+        return None, False
     stage = copy.deepcopy(options)
     stage["generate_snmp2mqtt"] = "false"
     stage["generate_support_my_switch_bundle"] = "false"

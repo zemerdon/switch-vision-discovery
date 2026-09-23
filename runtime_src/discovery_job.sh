@@ -4900,14 +4900,25 @@ if truthy "$COLLECTION_ONLY"; then
     mkdir -p "$(dirname "$collection_summary_path")"
     cp "$LIVE_WALK_SUMMARY" "$collection_summary_path"
   fi
+  collection_no_snmp_targets="false"
   if [ "$DISCOVERY_EXIT_STATUS" = "0" ] && [ ! -s "$CURRENT_RUN_WALKS" ]; then
-    DISCOVERY_EXIT_STATUS="2"
+    if truthy "$MULTI_SWITCH_WALKS_ENABLED" && ! json_has_enabled_switch_rows; then
+      collection_no_snmp_targets="true"
+    else
+      DISCOVERY_EXIT_STATUS="2"
+    fi
   fi
   case "$DISCOVERY_EXIT_STATUS" in
     0)
-      sv_status "Evidence collection complete" "All configured switches" "complete" "SNMP collection" "Live SNMP evidence collected; validating physical contracts"
-      sv_debug "STAGE: Evidence collection complete"
-      echo "Switch Vision live evidence collection complete. Physical-contract validation is next."
+      if truthy "$collection_no_snmp_targets"; then
+        sv_status "Evidence collection skipped" "All configured switches" "not configured" "SNMP collection" "No enabled SNMP targets are configured; continuing with independent API/dashboard sources"
+        sv_debug "STAGE: Evidence collection skipped; no enabled SNMP targets"
+        echo "Switch Vision live SNMP collection skipped because no enabled SNMP targets are configured. Continuing with independent API/dashboard sources."
+      else
+        sv_status "Evidence collection complete" "All configured switches" "complete" "SNMP collection" "Live SNMP evidence collected; validating physical contracts"
+        sv_debug "STAGE: Evidence collection complete"
+        echo "Switch Vision live evidence collection complete. Physical-contract validation is next."
+      fi
       exit 0
       ;;
     11)
