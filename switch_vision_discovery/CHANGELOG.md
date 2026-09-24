@@ -7,6 +7,10 @@
 - Record the two rear SFP chassis positions as documented capability only; no independent entities or dashboard bindings are fabricated until trustworthy IF-MIB/telemetry evidence exists.
 - Add a permanent exact-model regression covering Avaya detection, physical-contract resolution, registry enrichment, card counts and shared SFP mapping.
 - Remove unapproved contributor/tester identity wording from carried public changelog history; public attribution remains neutral unless explicitly approved.
+- Add **Settings → Activity LEDs → Activity LED test** with Slow, Medium and Fast **Test LED** buttons driven only by the last successfully saved Core timing values; unsaved field edits are ignored until Save succeeds.
+- Keep the authoritative **120–2000 ms** timing range and use the same randomized Slow/Medium/Fast dwell model as Core, including the finalized Fast hardware profile at the saved 120 ms factory period.
+- Add explicit Test LED accessibility labels and authored tooltips covering saved-only timing, temporary sampling, automatic stop and reduced-motion steady-indicator behavior.
+- Extend the maintained browser harness so it executes the exact Discovery sampler JavaScript and verifies all three Test LED controls, saved-rate display, tooltip interaction and reduced-motion cleanup.
 
 ## 3.0.2 — Field-state and UniFi diagnostics repair
 

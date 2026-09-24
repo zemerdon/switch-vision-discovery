@@ -13,7 +13,11 @@ required = {
     "medium row": "activitySampleRow('Medium traffic','activity_medium_period_ms')",
     "fast row": "activitySampleRow('Fast traffic','activity_fast_period_ms')",
     "saved rate display": "rate.textContent=`Saved: ${period} ms`",
-    "sample button": "button.textContent='Sample'",
+    "test button": "button.textContent='Test LED'",
+    "test button aria label": "button.setAttribute('aria-label',`Test ${label} Activity LED at saved ${period} ms cadence`)",
+    "test button tooltip": "button.title='Test this Activity LED using only the last successfully saved timing. Unsaved edits are ignored until Save succeeds.'",
+    "test section title": "title.textContent='Activity LED test'",
+    "test section note": "Save timing changes first, then use Test LED to preview the last successfully saved cadence.",
     "reduced motion": "prefers-reduced-motion: reduce",
     "temporary stop": "activitySampleStopTimer=setTimeout(stopActivitySample",
     "tab cleanup": "if(selected!=='core')stopActivitySample()",
@@ -41,6 +45,8 @@ assert "state.core.settings.activity_leds?.[key]" not in source
 for label in ("Slow blink period (ms)", "Medium blink period (ms)", "Fast blink period (ms)"):
     assert f"'{label}':'" in source
 assert source.count("Allowed range: 120–2000 ms.") >= 4
+assert source.count("The Test LED preview uses only the last successfully saved value.") == 3
+assert "Test LED uses the last successfully saved period only." in source
 for key in ("activity_slow_period_ms", "activity_medium_period_ms", "activity_fast_period_ms"):
     assert f"['{key}'" in source
 assert "120,2000,1" in source
