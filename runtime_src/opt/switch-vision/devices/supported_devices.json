@@ -4151,7 +4151,7 @@
       "model": "3524GT-PWR+",
       "status": "experimental",
       "confirmed_since": "3.0.3",
-      "last_validated_version": "3.0.3",
+      "last_validated_version": "3.0.4",
       "evidence": "support_my_switch_real_hardware_contribution",
       "ports": {
         "rj45": 20,

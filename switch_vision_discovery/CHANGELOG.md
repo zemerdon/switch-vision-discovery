@@ -1,4 +1,6 @@
-## 3.0.3 — Avaya ERS 3524GT-PWR+ support and attribution privacy hardening
+## 3.0.4 — Activity LED tests, device-state reconciliation and port-identity hardening
+
+- Supersede the unreleased 3.0.3 same-version local candidate so standard Home Assistant update detection installs the finalized Hub/runtime source instead of treating an older 3.0.3 build as Latest.
 
 - Add exact Experimental support for Avaya Ethernet Routing Switch 3524GT-PWR+ (`1.3.6.1.4.1.45.3.80.4`) from verified real-hardware SNMP evidence.
 - Add the Avaya vendor pack and exact physical classifier: 20 fixed copper logical ports plus four dual-personality front copper/SFP positions on logical ports 21-24.

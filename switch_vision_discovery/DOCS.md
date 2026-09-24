@@ -1,10 +1,10 @@
-# Switch Vision Discovery v3.0.3
+# Switch Vision Discovery v3.0.4
 
 Switch Vision Discovery is a read-only Home Assistant app that walks or imports SNMP data, identifies exact switch hardware, classifies interfaces, writes capability reports, and generates SNMP2MQTT and dashboard YAML.
 
-## Discovery 3.0.3 model support
+## Discovery 3.0.4 model support
 
-Discovery 3.0.3 adds **Experimental Avaya Ethernet Routing Switch 3524GT-PWR+** support. Exact detection uses sysObjectID `1.3.6.1.4.1.45.3.80.4`. The current dashboard contract renders 24 RJ45 sockets with four shared front SFP cages mapped to logical ports 21-24, so combo positions reuse the same telemetry instead of creating duplicate entities. Standard PoE evidence is supported; the two rear SFP chassis positions remain documented capability only until a trustworthy independent telemetry binding is observed.
+Discovery 3.0.4 carries the **Experimental Avaya Ethernet Routing Switch 3524GT-PWR+** support introduced in the 3.0.3 development candidate. Exact detection uses sysObjectID `1.3.6.1.4.1.45.3.80.4`. The current dashboard contract renders 24 RJ45 sockets with four shared front SFP cages mapped to logical ports 21-24, so combo positions reuse the same telemetry instead of creating duplicate entities. Standard PoE evidence is supported; the two rear SFP chassis positions remain documented capability only until a trustworthy independent telemetry binding is observed.
 
 ## Requirements
 
