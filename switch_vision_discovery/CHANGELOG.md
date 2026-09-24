@@ -1,3 +1,9 @@
+## 3.0.5 — Contribution history browser
+
+- Add a **History** tab to Support My Switch that lists previously generated local contribution bundles without rebuilding them.
+- Show privacy-safe contribution metadata including contribution ID, Switch Vision version, creation time, archive size, readiness/quality, and detected-model summary.
+- Offer direct re-downloads for retained ZIP, prepared EML, and Actions HTML files when present. Nothing is transmitted automatically, and protected contribution/source originals remain outside the Hub download surface.
+
 ## 3.0.4 — Activity LED tests, device-state reconciliation and port-identity hardening
 
 - Supersede the unreleased 3.0.3 same-version local candidate so standard Home Assistant update detection installs the finalized Hub/runtime source instead of treating an older 3.0.3 build as Latest.
