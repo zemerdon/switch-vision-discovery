@@ -23,8 +23,8 @@ required = {
     "Slow OFF dwell": "Math.max(140,Math.round(cadence*(0.70+(a*1.15)+(b*0.35))))",
     "Medium ON dwell": "Math.max(120,Math.round(cadence*(0.45+(a*0.30))))",
     "Medium OFF dwell": "Math.max(100,Math.round(cadence*(0.35+(a*0.70)+(b*0.20))))",
-    "Fast ON dwell": "Math.max(150,Math.round(cadence*(1.35+(a*1.65))))",
-    "Fast OFF dwell": "Math.max(80,Math.round(cadence*(0.15+(a*0.55)+(b*0.15))))",
+    "Fast ON dwell": "Math.max(90,Math.round(cadence*(1.04+(a*0.13))))",
+    "Fast OFF dwell": "Math.max(25,Math.round(cadence*(0.24+(a*0.06)+(b*0.03))))",
     "dwell-driven sample loop": "setTimeout(toggle,activitySampleDurationMs(key,on))",
 }
 
@@ -49,5 +49,19 @@ assert "120,2000,1" in source
 assert "@keyframes" not in source[source.find(".hub-activity-samples"):source.find(".hub-setting-row{", source.find(".hub-activity-samples"))]
 assert "animation:infinite" not in source
 assert "setTimeout(toggle,period)" not in source, "sampler must use Core dwell logic, not raw period toggles"
+
+# Fast preview stays aligned with Core's physical-switch reference at the 120 ms default.
+cadence = 120
+on_min = round(cadence * 1.04)
+on_max = round(cadence * (1.04 + 0.13))
+off_min = round(cadence * 0.24)
+off_max = round(cadence * (0.24 + 0.06 + 0.03))
+average_on = cadence * (1.04 + (0.5 * 0.13))
+average_off = cadence * (0.24 + (0.5 * 0.06) + (0.5 * 0.03))
+average_cycle = average_on + average_off
+assert (on_min, on_max) == (125, 140)
+assert (off_min, off_max) == (29, 40)
+assert 5.8 <= 1000 / average_cycle <= 6.2
+assert 0.78 <= average_on / average_cycle <= 0.82
 
 print("PASS: Hub Activity LED saved-setting sampler contract")
