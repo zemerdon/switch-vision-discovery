@@ -165,6 +165,67 @@ with tempfile.TemporaryDirectory(prefix="sv-device-diagnostics-") as tmp_name:
     assert "2960x-48p" in names, names
     assert "2960x-48-rj45" not in names, names
 
+    # Existing historical walk folders must not become extra Devices rows when
+    # the saved inventory contains the current identities. This reproduces the
+    # field case where two configured switches appeared as four after older
+    # switch_name folders remained on disk.
+    stale_walk.parent.mkdir(parents=True)
+    stale_walk.write_text(
+        '# Switch IP: 192.0.2.103\n.1.3.6.1.2.1.1.1.0 = STRING: "historical"\n',
+        encoding="utf-8",
+    )
+    c3560_current_dir = walks / "Cisco3560C"
+    c3560_stale_dir = walks / "Cisco_3560-C"
+    c3560_current_dir.mkdir(parents=True)
+    c3560_stale_dir.mkdir(parents=True)
+    c3560_current_walk = c3560_current_dir / "live-full-snmpwalk.txt"
+    c3560_stale_walk = c3560_stale_dir / "live-full-snmpwalk.txt"
+    c3560_current_walk.write_text(
+        '# Switch IP: 192.0.2.104\n.1.3.6.1.2.1.1.1.0 = STRING: "current-3560"\n',
+        encoding="utf-8",
+    )
+    c3560_stale_walk.write_text(
+        '# Switch IP: 192.0.2.104\n.1.3.6.1.2.1.1.1.0 = STRING: "historical-3560"\n',
+        encoding="utf-8",
+    )
+    c3560_cap = {
+        "source_walk": str(c3560_current_walk),
+        "generated_at": "2026-09-25T00:02:00+00:00",
+        "device": {"model_text": "WS-C3560CG-8PC-S", "support_status": "experimental"},
+        "interfaces": [],
+    }
+    c3560_stale_cap = {
+        **c3560_cap,
+        "source_walk": str(c3560_stale_walk),
+        "generated_at": "2026-08-30T00:02:00+00:00",
+    }
+    live_cap["generated_at"] = "2026-09-25T00:01:00+00:00"
+    stale_cap["generated_at"] = "2026-08-30T00:01:00+00:00"
+    (caps / "2960x-48p-capabilities.json").write_text(json.dumps(live_cap), encoding="utf-8")
+    (caps / "2960x-48-rj45-capabilities.json").write_text(json.dumps(stale_cap), encoding="utf-8")
+    (caps / "Cisco3560C-capabilities.json").write_text(json.dumps(c3560_cap), encoding="utf-8")
+    (caps / "Cisco_3560-C-capabilities.json").write_text(json.dumps(c3560_stale_cap), encoding="utf-8")
+    configured_options = {
+        "switches": [
+            {
+                "switch_name": "2960x-48p",
+                "switch_host": "192.0.2.103",
+                "sensor_prefix": "cisco2960",
+            },
+            {
+                "switch_name": "Cisco3560C",
+                "switch_host": "192.0.2.104",
+                "sensor_prefix": "cisco3560",
+            },
+        ]
+    }
+    options_file = tmp / "options.json"
+    options_file.write_text(json.dumps(configured_options), encoding="utf-8")
+    web._self_addon_options = lambda: configured_options
+    snapshot = web._diagnostics_snapshot("test", options_file)
+    names = [item.get("name") for item in snapshot.get("devices", [])]
+    assert names == ["2960x-48p", "Cisco3560C"], names
+
     # One physical chassis observed by both SNMP and UniFi must be one Hub row.
     # Hardware MAC is stronger than management address, so an internal UniFi IP
     # can safely reconcile with an SNMP target reached through another address.

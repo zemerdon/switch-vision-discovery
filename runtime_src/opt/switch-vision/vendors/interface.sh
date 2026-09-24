@@ -64,6 +64,13 @@ cv_cap_set_front_panel_profile() {
       CV_CAP_PLATFORM="c3750_48p"
       CV_CAP_RJ45_LIMIT="48"
       ;;
+    *C3560CG-8PC*)
+      # The last two Gi0/N interfaces are dual-purpose copper/SFP positions,
+      # not two additional fixed access ports.
+      CV_CAP_FRONT_PANEL_AWARE="true"
+      CV_CAP_PLATFORM="c3560cg_8pc"
+      CV_CAP_RJ45_LIMIT="8"
+      ;;
     *C2960S*|*C2960X*)
       CV_CAP_FRONT_PANEL_AWARE="true"
       CV_CAP_PLATFORM="c2960"
@@ -228,7 +235,6 @@ cv_interface_class_for_name() {
           return 0
           ;;
       esac
-
       if [ "${CV_CAP_PLATFORM:-generic}" = "c3750_48p" ]; then
         case "$short_name" in
           [0-9]*/0/[1-4]) printf 'sfp' ;;

@@ -106,6 +106,18 @@ cv_interface_class_for_name() {
         case "$port_number" in 1|2) printf 'sfp_plus' ;; *) printf 'other' ;; esac
         return 0
         ;;
+    esac
+  fi
+
+  # Catalyst 3560-C contribution: Gi0/1-8 are fixed access ports and
+  # Gi0/9-10 are the two dual-purpose copper/SFP positions. Keep the shared
+  # positions media-neutral so one logical port can drive both card sockets.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "WS-C3560CG-8PC-S" ]; then
+    case "$name" in
+      Gi0/[1-8]|GigabitEthernet0/[1-8]) printf 'rj45'; return 0 ;;
+      Gi0/9|Gi0/10|GigabitEthernet0/9|GigabitEthernet0/10) printf 'uplink'; return 0 ;;
+      StackPort*|StackSub*|Stack*) printf 'stack'; return 0 ;;
+      Vlan*|Vl*|Loopback*|Port-channel*|Null*|Control*) printf 'virtual'; return 0 ;;
       *) printf 'other'; return 0 ;;
     esac
   fi

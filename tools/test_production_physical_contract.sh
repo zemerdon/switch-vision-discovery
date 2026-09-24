@@ -233,6 +233,42 @@ grep -Fq '        sfp_port_count: 4' "$sg_card" || note_failure "cisco-sg350-20:
 grep -Fq '        sfp_logical_port_map: [17,18]' "$sg_card" || note_failure "cisco-sg350-20: shared SFP logical-port map missing"
 grep -Fq '        sfp_status_entity_template: sensor.sg350_sfp_1g_{port}_status' "$sg_card" || note_failure "cisco-sg350-20: fixed SFP cages lost 1G entity template"
 
+# Catalyst 3560-C: Gi0/1-8 are fixed copper while Gi0/9-10 are the two
+# dual-purpose copper/SFP positions already represented by the existing
+# 8-access + 2-uplink product contract.
+c3560="$TMP/cisco-3560cg-8pc.txt"
+make_walk "$c3560" 'Cisco IOS Software, C3560C Software, WS-C3560CG-8PC-S' '1.3.6.1.4.1.9.1.1317'
+idx=10101
+i=1
+while [ "$i" -le 10 ]; do append_iface "$c3560" "$idx" "Gi0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+run_case cisco-3560cg-8pc "$c3560" C3560 'WS-C3560CG-8PC-S' 10
+c3560_dir="$TMP/cisco-3560cg-8pc"
+c3560_cap="$c3560_dir/capabilities/resolved.json"
+c3560_contract="$c3560_dir/physical-contract.json"
+c3560_yaml="$c3560_dir/generated.yaml"
+c3560_card="$c3560_dir/card.yaml"
+jq -e '
+  .summary.physical_count == 10
+  and .summary.rj45_count == 8
+  and .summary.uplink_count == 2
+  and ([.interfaces[] | select(.name == "Gi0/9" or .name == "Gi0/10") | .media] == ["uplink","uplink"])
+' "$c3560_cap" >/dev/null || note_failure "cisco-3560cg-8pc: dual-purpose interfaces were not classified as uplinks"
+jq -e '
+  .status == "resolved"
+  and .observed.physical == 10
+  and .observed.rj45 == 8
+  and .observed.uplinks == 2
+  and (.errors | length) == 0
+' "$c3560_contract" >/dev/null || note_failure "cisco-3560cg-8pc: physical contract did not resolve 8 fixed + 2 shared positions"
+grep -Fq '    name: C3560 Uplink 1 Status' "$c3560_yaml" || note_failure "cisco-3560cg-8pc: dual-purpose Uplink 1 status entity missing"
+grep -Fq '    name: C3560 Uplink 2 Status' "$c3560_yaml" || note_failure "cisco-3560cg-8pc: dual-purpose Uplink 2 status entity missing"
+grep -Fq '        port_count: 8' "$c3560_card" || note_failure "cisco-3560cg-8pc: fixed access-port count changed"
+grep -Fq '        sfp_port_count: 2' "$c3560_card" || note_failure "cisco-3560cg-8pc: dual-purpose SFP cage count changed"
+grep -Fq '        sfp_status_entity_template: sensor.c3560_uplink_{port}_status' "$c3560_card" || note_failure "cisco-3560cg-8pc: card is not bound directly to dual-purpose uplink telemetry"
+if grep -Fq 'sfp_logical_port_map:' "$c3560_card"; then
+  note_failure "cisco-3560cg-8pc: unexpected new shared-logical-port registry contract leaked into card"
+fi
+
 # zemerdon live check: 24-port Catalyst 2960X exposes Gi1/0/25-28, but the
 # four physical faceplate cages are logical SFP1-SFP4. Generated entity names
 # and card bindings must use that logical 1-4 namespace rather than 25-28 or

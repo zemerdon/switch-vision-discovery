@@ -202,7 +202,7 @@ CV_CAP_FRONT_PANEL_AWARE="false"
 # Anonymous HP evidence: both generated-card branches must bind the J8693A four
 # dual-personality positions to the `uplink_N_status` entities actually emitted
 # by Discovery, rather than the generic sfp_10g template.
-hp_binding='*J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;'
+hp_binding='*J8693A*|*3500yl-48G*|*WS-C3560CG-8PC-S*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;'
 [ "$(grep -Fc "$hp_binding" "$DISCOVERY_JOB")" -eq 2 ]
 
 # Registry contracts distilled from anonymous contributor evidence. Match model

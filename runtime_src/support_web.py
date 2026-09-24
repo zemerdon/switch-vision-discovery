@@ -6157,7 +6157,104 @@ def _walk_management_target(path: Path) -> str:
     return ""
 
 
-def _diagnostics_snapshot(version: str) -> dict[str, Any]:
+def _configured_snmp_diagnostics_inventory(options: dict[str, Any]) -> list[dict[str, str]]:
+    """Return the authoritative saved SNMP identities used to reconcile cache rows."""
+    rows = options.get("switches") if isinstance(options.get("switches"), list) else []
+    inventory: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in rows:
+        if not isinstance(raw, dict):
+            continue
+        switch_name = str(raw.get("switch_name") or "").strip()
+        if not switch_name:
+            continue
+        identity = _switch_name_identity(switch_name)
+        if not identity or identity in seen:
+            continue
+        seen.add(identity)
+        management_target = ""
+        for key in ("switch_host", "host", "manual_switch_host"):
+            value = str(raw.get(key) or "").strip()
+            if value:
+                management_target = value.casefold()
+                break
+        inventory.append({
+            "identity": identity,
+            "switch_name": switch_name,
+            "management_target": management_target,
+        })
+    return inventory
+
+
+def _reconcile_snmp_diagnostics_devices(
+    devices: list[dict[str, Any]], options: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Collapse stale capability aliases onto the current saved switch inventory.
+
+    Capability files are generated cache, but older folders can remain on disk
+    after a saved switch_name is renamed. When a current inventory exists, its
+    switch_name is authoritative. A unique management target is a fallback for
+    a renamed folder; exact current-name matches always win.
+    """
+    inventory = _configured_snmp_diagnostics_inventory(options)
+    if not inventory:
+        return devices
+
+    by_identity = {item["identity"]: item for item in inventory}
+    targets: dict[str, list[str]] = {}
+    for item in inventory:
+        target = item["management_target"]
+        if target:
+            targets.setdefault(target, []).append(item["identity"])
+
+    selected: dict[str, tuple[tuple[int, str, str], dict[str, Any]]] = {}
+    for item in devices:
+        source_identity = _switch_name_identity(
+            str(item.get("source_switch_name") or item.get("name") or "")
+        )
+        owner = ""
+        strength = 0
+        if source_identity and source_identity in by_identity:
+            owner = source_identity
+            strength = 2
+        else:
+            target = str(item.get("management_target") or "").strip().casefold()
+            matches = targets.get(target, []) if target else []
+            if len(matches) == 1:
+                owner = matches[0]
+                strength = 1
+
+        if not owner:
+            continue
+
+        score = (
+            strength,
+            str(item.get("generated_at") or ""),
+            str(item.get("name") or ""),
+        )
+        current = selected.get(owner)
+        if current is None or score > current[0]:
+            selected[owner] = (score, item)
+
+    return [
+        selected[item["identity"]][1]
+        for item in inventory
+        if item["identity"] in selected
+    ]
+
+
+def _diagnostics_options(options_file: Path | None) -> dict[str, Any]:
+    if options_file is None:
+        return {}
+    try:
+        return _self_addon_options()
+    except RuntimeError:
+        return _load_options(options_file)
+
+
+def _diagnostics_snapshot(
+    version: str, options_file: Path | None = None
+) -> dict[str, Any]:
     share = DEFAULT_SHARE_DIR
     registry_raw = _read_json(DEFAULT_REGISTRY_FILE)
     if isinstance(registry_raw, dict):
@@ -6229,6 +6326,10 @@ def _diagnostics_snapshot(version: str) -> dict[str, Any]:
             ),
             "_identity_ip": management_target,
         })
+
+    diagnostics_options = _diagnostics_options(options_file)
+    if diagnostics_options:
+        devices = _reconcile_snmp_diagnostics_devices(devices, diagnostics_options)
 
     # Merge normalized UniFi2MQTT devices into the same Devices/Diagnostics
     # view without requiring duplicate SNMP target rows.
@@ -7842,7 +7943,7 @@ class SupportHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _diagnostics_download(self) -> None:
-        data = _diagnostics_snapshot(self.app.version)
+        data = _diagnostics_snapshot(self.app.version, self.app.options_file)
         body = _diagnostics_text(data).encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -7979,7 +8080,7 @@ class SupportHandler(BaseHTTPRequestHandler):
         elif path == "/api/configured-devices":
             self._json(_configured_devices_snapshot(self.app.options_file))
         elif path == "/api/diagnostics":
-            self._json(_diagnostics_snapshot(self.app.version))
+            self._json(_diagnostics_snapshot(self.app.version, self.app.options_file))
         elif path == "/api/generated-card-yaml/status":
             self._json(_generated_card_yaml_status())
         elif path == "/api/generated-card-yaml/preview":

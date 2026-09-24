@@ -4440,7 +4440,7 @@ write_generated_dashboard_card() {
         echo "        status_entity_prefix: sensor.${safe_prefix}_port_"
         echo "        status_entity_suffix: _status"
         case "${effective_model:-${detected_model:-}}" in
-          *J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
+          *J8693A*|*3500yl-48G*|*WS-C3560CG-8PC-S*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
           *SG350-20*|*S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
           *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
         esac
@@ -4493,7 +4493,7 @@ write_generated_dashboard_card() {
       echo "        status_entity_prefix: sensor.${safe_prefix}_port_"
       echo "        status_entity_suffix: _status"
       case "${exact_model:-}" in
-        *J8693A*|*3500yl-48G*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
+        *J8693A*|*3500yl-48G*|*WS-C3560CG-8PC-S*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
         *SG350-20*|*S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
         *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
       esac
