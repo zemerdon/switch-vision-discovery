@@ -102,7 +102,7 @@ cv_detect_vendor_identity "$TMP/hp1810.txt"
 cv_write_capabilities_json "$TMP/hp1810.txt" "$TMP/hp1810.json" ""
 jq -e '(.device.model_text == "HP 1810-24G") and (.summary.physical_count == 26) and (.summary.rj45_count == 24) and (.summary.sfp_count == 2) and (all(.interfaces[] | select(.name == "IP" or .name == "Link Aggregate"); .physical == false))' "$TMP/hp1810.json" >/dev/null
 
-# Tom Schmidt / J9450A: 22 fixed copper ports plus two dual-personality
+# J9450A: 22 fixed copper ports plus two dual-personality
 # RJ45/mini-GBIC logical positions. Port 25 is the CPU interface.
 set --
 i=1
@@ -186,7 +186,7 @@ CV_CAP_FRONT_PANEL_AWARE="false"
 [ "$(cv_interface_class_for_name 'gi1/0/1')" = "other" ]
 [ "$(cv_interface_class_for_name '17')" = "other" ]
 
-# Paul Bohall / HP 3500yl optional rear module: A1-A4 are exact-model 10G
+# HP 3500yl optional rear module: A1-A4 are exact-model 10G
 # telemetry interfaces only. The generic classifier must continue to reject
 # the same names on unrelated hardware.
 CV_CAP_MODEL_TEXT="HP J8693A Switch 3500yl-48G"
@@ -240,7 +240,7 @@ jq -e '
   (dev("USW Flex Mini") | (.contributions | map(.id) | index("evidence-unifi-flex-mini-refresh-a")) != null)
 ' "$REGISTRY" >/dev/null
 
-# Ian legacy-UniFi SNMP regression: exact local identities only.
+# Legacy-UniFi SNMP regression: exact local identities only.
 set --
 i=0
 while [ "$i" -le 10 ]; do set -- "$@" "eth$i"; i=$((i + 1)); done

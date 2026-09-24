@@ -13,11 +13,7 @@ CONTRIBUTION_BREADCRUMB = re.compile(
 )
 PACKAGE_NAME = re.compile(r"(?i)Switch[_ -]Vision[_ -]Contribution")
 PUBLIC_CREDITS = [
-    ("Finni", "Discovery / Hub • UniFi2MQTT"),
-    ("Paul B", "Discovery / Hub • SNMP2MQTT • Support My Switch"),
-    ("Timb320", "Core • Discovery / Hub • UniFi2MQTT"),
-    ("Brendan P", "Discovery / Hub • UniFi2MQTT • Support My Switch"),
-    ("iangr", "Core • Discovery / Hub • UniFi2MQTT • Support My Switch"),
+    ("Community contributors", "Testing • feedback • hardware validation"),
 ]
 
 
@@ -80,7 +76,7 @@ def check_public_credits() -> None:
         row = f'<span class="credit-name">{name}</span><span class="credit-components">{scope}</span>'
         if block.count(row) != 2:
             raise SystemExit(f"Public Credits row mismatch for {name!r}")
-    forbidden = ("@hotmail.com", "Timothy B Green", "Brendan Pratt")
+    forbidden = ("private@example.invalid", "Private Person")
     for value in forbidden:
         if value.casefold() in block.casefold():
             raise SystemExit(f"Private/non-approved Credits attribution remains public: {value!r}")

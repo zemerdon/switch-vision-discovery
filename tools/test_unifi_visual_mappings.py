@@ -21,4 +21,4 @@ for model,(profile,face,rj45,uplinks,poe) in expected.items():
     assert row['visuals']['recommended_faceplate']==face, model
     assert row['ports']['rj45']==rj45 and row['ports']['uplinks']==uplinks, model
     assert row['ports']['poe'] is poe, model
-print('Ian UniFi exact visual mappings: PASS')
+print('UniFi exact visual mappings: PASS')

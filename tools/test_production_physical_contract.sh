@@ -144,7 +144,7 @@ grep -Fq '        port_count: 48' "$hp_card" || note_failure "hp-control: combo 
 grep -Fq '        sfp_port_count: 4' "$hp_card" || note_failure "hp-control: SFP cage count changed"
 grep -Fq '        sfp_logical_port_map: [45,46,47,48]' "$hp_card" || note_failure "hp-control: shared logical-port map missing"
 
-# Paul Bohall / J8693A optional rear 10G module: A1-A4 are real observed
+# J8693A optional rear 10G module: A1-A4 are real observed
 # telemetry ports, but the current front-panel card intentionally remains the
 # same 48 visible RJ45 sockets + four front dual-personality SFP positions.
 hp_rear="$TMP/hp-j8693a-rear-module.txt"
@@ -155,7 +155,7 @@ i=1
 while [ "$i" -le 4 ]; do
   idx=$((48 + i))
   {
-    # Match Paul's real capture: these rear ports are present through ifDescr
+    # Match the verified real-hardware capture: these rear ports are present through ifDescr
     # fallback rather than native ifName, and only A4 is currently linked.
     printf '.1.3.6.1.2.1.2.2.1.2.%s = STRING: A%s\n' "$idx" "$i"
     printf '.1.3.6.1.2.1.2.2.1.7.%s = INTEGER: up(1)\n' "$idx"
@@ -193,7 +193,7 @@ jq -e '
 grep -Fq '    name: HPMOD Rear 10G 1 Speed Bps' "$hp_rear_yaml" || note_failure "hp-rear-module: rear 10G speed telemetry missing"
 grep -Fq 'template: "{{ 10000000000 if (value | int) >= 4294967295 else ([value | int, 10000000000] | min) }}"' "$hp_rear_yaml" || note_failure "hp-rear-module: saturated ifSpeed is not normalized to known 10G capability"
 
-# Tom Schmidt / J9450A: 22 fixed copper + two dual-personality logical ports;
+# J9450A: 22 fixed copper + two dual-personality logical ports;
 # ifIndex/name 25 is CPU and must never become a front-panel sensor.
 tom_hp="$TMP/hp-procurve-1810g-24.txt"
 make_walk "$tom_hp" 'HP ProCurve 1810G - 24 GE, P.2.24, eCos-2.0, CFE-2.1' '1.3.6.1.4.1.11.2.3.7.11.104'
@@ -292,7 +292,7 @@ if grep -Eq 'name: C2960XR (Uplink [1-4]|SFP 1G (49|50|51|52)|SFP 10G [1-4]) Sta
   note_failure "cisco-2960xr: source numbering/type leaked into logical four-SFP faceplate namespace"
 fi
 
-# Bernard: 48 lowercase Gi access ports + two lowercase Te uplinks.
+# PowerConnect 5548P: 48 lowercase Gi access ports + two lowercase Te uplinks.
 dell="$TMP/dell-5548p.txt"
 make_walk "$dell" 'Dell Networking PowerConnect 5548P' '1.3.6.1.4.1.674.10895.3057'
 idx=1
@@ -302,35 +302,35 @@ i=1
 while [ "$i" -le 2 ]; do append_iface "$dell" "$idx" "te1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
 run_case dell-5548p "$dell" DELL 'PowerConnect 5548P' 50
 
-# Paul: a local Dell N2128PX-ON with an HP 3500yl visible only as an LLDP
+# Dell N2128PX-ON with an HP 3500yl visible only as an LLDP
 # remote neighbour must remain Dell through the legacy report/YAML generator.
 # The two Te1/0/N interfaces must retain the Dell SFP 10G entity contract; a
 # neighbour-model contamination regression would relabel them Interface 29/30.
-paul_dell="$TMP/paul-dell-with-hp-neighbour.txt"
-make_walk "$paul_dell" 'Dell EMC Networking N2128PX-ON, 6.7.1.27' '1.3.6.1.4.1.674.10895.3077'
+dell_neighbour="$TMP/dell-hp-neighbour.txt"
+make_walk "$dell_neighbour" 'Dell EMC Networking N2128PX-ON, 6.7.1.27' '1.3.6.1.4.1.674.10895.3077'
 printf '.1.0.8802.1.1.2.1.4.1.1.10.118.30.2 = STRING: "HP J8693A Switch 3500yl-48G, revision K.16.02.0036"
-' >> "$paul_dell"
+' >> "$dell_neighbour"
 idx=1
 i=1
-while [ "$i" -le 28 ]; do append_iface "$paul_dell" "$idx" "Gi1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+while [ "$i" -le 28 ]; do append_iface "$dell_neighbour" "$idx" "Gi1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
 i=1
-while [ "$i" -le 2 ]; do append_iface "$paul_dell" "$idx" "Te1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
-run_case paul-dell-hp-neighbour "$paul_dell" PAUL 'N2128PX-ON' 30
-paul_yaml="$TMP/paul-dell-hp-neighbour/generated.yaml"
-grep -Fq '    name: PAUL SFP 10G 1 Status' "$paul_yaml" || note_failure "paul-dell-hp-neighbour: missing SFP 10G 1 status entity"
-grep -Fq '    name: PAUL SFP 10G 2 Status' "$paul_yaml" || note_failure "paul-dell-hp-neighbour: missing SFP 10G 2 status entity"
-if grep -Fq '    name: PAUL Interface 29 Status' "$paul_yaml" || grep -Fq '    name: PAUL Interface 30 Status' "$paul_yaml"; then
-  note_failure "paul-dell-hp-neighbour: Dell uplink regressed to generic Interface 29/30 labels"
+while [ "$i" -le 2 ]; do append_iface "$dell_neighbour" "$idx" "Te1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done
+run_case dell-hp-neighbour "$dell_neighbour" DELLNB 'N2128PX-ON' 30
+neighbour_yaml="$TMP/dell-hp-neighbour/generated.yaml"
+grep -Fq '    name: DELLNB SFP 10G 1 Status' "$neighbour_yaml" || note_failure "dell-hp-neighbour: missing SFP 10G 1 status entity"
+grep -Fq '    name: DELLNB SFP 10G 2 Status' "$neighbour_yaml" || note_failure "dell-hp-neighbour: missing SFP 10G 2 status entity"
+if grep -Fq '    name: DELLNB Interface 29 Status' "$neighbour_yaml" || grep -Fq '    name: DELLNB Interface 30 Status' "$neighbour_yaml"; then
+  note_failure "dell-hp-neighbour: Dell uplink regressed to generic Interface 29/30 labels"
 fi
 
-# Bernard: GS1900 uses GigabitEthernet1..24 without slash-separated members.
+# GS1900-24E uses GigabitEthernet1..24 without slash-separated members.
 zyxel="$TMP/zyxel-gs1900.txt"
 make_walk "$zyxel" 'Zyxel GS1900-24E' '1.3.6.1.4.1.890.1.5.8.16'
 i=1
 while [ "$i" -le 24 ]; do append_iface "$zyxel" "$i" "GigabitEthernet$i"; i=$((i + 1)); done
 run_case zyxel-gs1900 "$zyxel" ZYXEL 'GS1900-24E' 24
 
-# escapeedv: 16 fixed copper + two combo positions + two SFP-only positions.
+# SG350-20: 16 fixed copper + two combo positions + two SFP-only positions.
 sg350="$TMP/cisco-sg350.txt"
 make_walk "$sg350" 'Cisco SG350-20 20-Port Gigabit Managed Switch' '1.3.6.1.4.1.9.6.1.95.20.1'
 i=1
@@ -369,7 +369,7 @@ if [ -f "$c3850_card" ] && grep -Eq 'Te1/1/|TenGigabitEthernet1/1/|Interface (13
   note_failure "cisco-3850-12xs-no-module: empty-bay interfaces leaked into generated card"
 fi
 
-# Zayed: Gi aliases for C3KX cages 1-2 collapse onto Te, leaving 52 physical
+# C3750X: Gi aliases for C3KX cages 1-2 collapse onto Te, leaving 52 physical
 # positions per member rather than 54 interface aliases.
 c3750x="$TMP/cisco-3750x.txt"
 make_walk "$c3750x" 'Cisco IOS Software, C3750E Software, WS-C3750X-48P' '1.3.6.1.4.1.9.1.1226'
@@ -386,7 +386,7 @@ while [ "$member" -le 2 ]; do
 done
 run_case cisco-3750x "$c3750x" C3750X 'WS-C3750X-48P' 104
 
-# Rayden: the -S license/SKU suffix uses the same contributed C3KX physical
+# C3750X -S SKU: the -S license/SKU suffix uses the same contributed C3KX physical
 # contract. Exact admission must classify it directly without a manual model
 # override or the Gi aliases are miscounted as additional copper ports.
 c3750x_s="$TMP/cisco-3750x-s.txt"

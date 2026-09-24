@@ -23,7 +23,7 @@ def load_entrypoint():
     return module
 
 
-def write_rayden_walk(path: Path) -> None:
+def write_manual_fixture_walk(path: Path) -> None:
     lines = [
         '.1.3.6.1.2.1.1.1.0 = STRING: "Cisco IOS Software, C3750E Software (C3750E-UNIVERSALK9-M), Version 15.2(4)E10"',
         '.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.9.1.516',
@@ -44,16 +44,16 @@ def test_manual_model_survives_authoritative_physical_contract() -> None:
     entry = load_entrypoint()
     with tempfile.TemporaryDirectory(prefix="sv_manual_model_contract_") as tmp:
         root = Path(tmp)
-        walk_dir = root / "walks" / "rayden"
+        walk_dir = root / "walks" / "manual_fixture"
         walk_dir.mkdir(parents=True)
         walk = walk_dir / "live-targeted-snmpwalk.txt"
-        write_rayden_walk(walk)
+        write_manual_fixture_walk(walk)
         options = {
             "snmpwalks_dir": str(root / "walks"),
             "input_path": str(walk),
             "switches": [
                 {
-                    "switch_name": "rayden",
+                    "switch_name": "manual_fixture",
                     "output_dir": str(walk_dir),
                     "switch_model": "WS-C3750X-48P",
                     "enabled": "enabled",

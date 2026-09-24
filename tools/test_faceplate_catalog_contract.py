@@ -9,7 +9,7 @@ m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
 checker_source=(r/"tools/check_component_contracts.py").read_text(encoding="utf-8")
 assert "pinned_faceplate_labels = load_pinned_faceplate_catalog()" in checker_source
 assert "validate_default_faceplates(discovery_registry, pinned_faceplate_labels)" in checker_source
-assert "candidate_faceplate_labels = load_core_faceplate_catalog(core_source_root)" in checker_source
+assert "pinned_faceplate_labels = load_core_faceplate_catalog(core_source_root)" in checker_source
 labels=m.parse_faceplate_catalog({"schema":m.FACEPLATE_CATALOG_SCHEMA,"faceplates":[
 {"filename":"unifi-24-rj45-2sfp-inline.png","display_name":"UniFi 24-Port · 2 × SFP · Inline"},
 {"filename":"unifi-4-rj45-12sfp.png","display_name":"UniFi 4-Port · 12 × SFP"}]})

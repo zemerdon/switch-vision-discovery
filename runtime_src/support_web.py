@@ -590,7 +590,7 @@ def _manual_snmp_override_models() -> set[str]:
         "S5720-12TP-LI-AC", "S5735-L8P4X-A1", "CRS328-24P-4S+RM", "XS1930-10",
         "N2128PX-ON", "PowerConnect 5548P", "HP J8693A Switch 3500yl-48G",
         "HP 1810-24G", "HP ProCurve 1810G-24", "GS1900-24E", "GS1900-8",
-        "GS1915-24EP", "SR-S25G3420F",
+        "GS1915-24EP", "3524GT-PWR+", "SR-S25G3420F",
     }
 
 
@@ -6705,21 +6705,13 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 <div id="creditsBuildSource" class="credits-roll-block">
 <h2 class="credits-title">Switch Vision Credits</h2>
 <div id="creditsList" class="credits-list-v25">
-<div class="credit-entry"><span class="credit-name">Finni</span><span class="credit-components">Discovery / Hub • UniFi2MQTT</span></div>
-<div class="credit-entry"><span class="credit-name">Paul B</span><span class="credit-components">Discovery / Hub • SNMP2MQTT • Support My Switch</span></div>
-<div class="credit-entry"><span class="credit-name">Timb320</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT</span></div>
-<div class="credit-entry"><span class="credit-name">Brendan P</span><span class="credit-components">Discovery / Hub • UniFi2MQTT • Support My Switch</span></div>
-<div class="credit-entry"><span class="credit-name">iangr</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT • Support My Switch</span></div>
+<div class="credit-entry"><span class="credit-name">Community contributors</span><span class="credit-components">Testing • feedback • hardware validation</span></div>
 </div>
 </div>
 <div class="credits-roll-block" aria-hidden="true">
 <h2 class="credits-title">Switch Vision Credits</h2>
 <div class="credits-list-v25">
-<div class="credit-entry"><span class="credit-name">Finni</span><span class="credit-components">Discovery / Hub • UniFi2MQTT</span></div>
-<div class="credit-entry"><span class="credit-name">Paul B</span><span class="credit-components">Discovery / Hub • SNMP2MQTT • Support My Switch</span></div>
-<div class="credit-entry"><span class="credit-name">Timb320</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT</span></div>
-<div class="credit-entry"><span class="credit-name">Brendan P</span><span class="credit-components">Discovery / Hub • UniFi2MQTT • Support My Switch</span></div>
-<div class="credit-entry"><span class="credit-name">iangr</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT • Support My Switch</span></div>
+<div class="credit-entry"><span class="credit-name">Community contributors</span><span class="credit-components">Testing • feedback • hardware validation</span></div>
 </div>
 </div>
 </div>

@@ -1,5 +1,5 @@
 name: Switch Vision Discovery / Hub
-version: "3.0.2"
+version: "3.0.3"
 slug: switch_vision_discovery
 description: Read-only multi-vendor switch discovery, capability reporting, and review-only SNMP2MQTT/dashboard generation for Switch Vision.
 url: https://github.com/zemerdon/switch-vision-discovery
@@ -103,7 +103,7 @@ schema:
       snmp_community: password
       enabled: list(enabled|disabled)?
       walk_mode: list(targeted|full)
-      switch_model: list(auto|WS-C3650-48PD-E|WS-C3650-48PD-L|WS-C2960X-48FPD-L|WS-C2960X-24PS-L|WS-C2960X-24TS-L|WS-C2960XR-48LPS-I|WS-C2960S-48FPD-L|WS-C3560CG-8PC-S|WS-C3750-48P|WS-C3750X-48P|WS-C3750X-48P-S|WS-C3850-12XS-E|EX3300-48P|SG500X-24|SG350-20|S5720-12TP-LI-AC|S5735-L8P4X-A1|CRS328-24P-4S+RM|XS1930-10|N2128PX-ON|PowerConnect 5548P|HP J8693A Switch 3500yl-48G|HP 1810-24G|HP ProCurve 1810G-24|GS1900-24E|GS1900-8|GS1915-24EP|SR-S25G3420F)?
+      switch_model: list(auto|WS-C3650-48PD-E|WS-C3650-48PD-L|WS-C2960X-48FPD-L|WS-C2960X-24PS-L|WS-C2960X-24TS-L|WS-C2960XR-48LPS-I|WS-C2960S-48FPD-L|WS-C3560CG-8PC-S|WS-C3750-48P|WS-C3750X-48P|WS-C3750X-48P-S|WS-C3850-12XS-E|EX3300-48P|SG500X-24|SG350-20|S5720-12TP-LI-AC|S5735-L8P4X-A1|CRS328-24P-4S+RM|XS1930-10|N2128PX-ON|PowerConnect 5548P|HP J8693A Switch 3500yl-48G|HP 1810-24G|HP ProCurve 1810G-24|GS1900-24E|GS1900-8|GS1915-24EP|3524GT-PWR+|SR-S25G3420F)?
       card_header_title: str?
   stack_member_prefixes:
     - switch_name: str

@@ -9,6 +9,18 @@
 cv_interface_class_for_name() {
   name="$1"
 
+  # Avaya ERS 3524GT-PWR+ contribution: numeric IF-MIB indexes 1-20
+  # are fixed copper and 21-24 are dual-personality front copper/SFP
+  # positions. Preserve one logical identity for each shared connector pair.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "3524GT-PWR+" ]; then
+    case "${CV_CAP_IF_INDEX:-}:$name" in
+      1:1|2:2|3:3|4:4|5:5|6:6|7:7|8:8|9:9|10:10|11:11|12:12|13:13|14:14|15:15|16:16|17:17|18:18|19:19|20:20) printf 'rj45' ;;
+      21:21|22:22|23:23|24:24) printf 'uplink' ;;
+      *) printf 'other' ;;
+    esac
+    return 0
+  fi
+
   # HP 1810-24G contribution: IF-MIB indexes 1-24 are fixed 1G copper,
   # 25-26 are the two 1G SFP cages. Logical IP/LAG rows remain non-physical.
   if [ "${CV_CAP_MODEL_TEXT:-}" = "HP 1810-24G" ]; then

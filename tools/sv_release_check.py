@@ -25,7 +25,8 @@ RUNTIME_VERSION_FILES = (
 )
 PERMANENT_CHECKS = (
     "tools/test_unifi_dashboard_failure_modes.py",
-    "tools/test_ian_unifi_visual_mappings.py",
+    "tools/test_unifi_visual_mappings.py",
+    "tools/test_avaya_ers3524gt_pwrplus.py",
     "tools/test_local_model_identity.py",
     "tools/test_switch_name_space_compatibility.py",
     "tools/test_registered_report_contract.py",

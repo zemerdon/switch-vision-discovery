@@ -397,27 +397,21 @@ def main() -> int:
         pin = parse_faceplate_pin(
             json.loads(CORE_FACEPLATE_PIN_PATH.read_text(encoding="utf-8"))
         )
-        pinned_faceplate_labels = load_pinned_faceplate_catalog()
+        if core_source_root is not None:
+            if pin["commit_sha"] != core_source_sha:
+                raise RuntimeError(
+                    "Discovery published Core faceplate pin does not match coordinated "
+                    f"Core source: pin={pin['commit_sha']} coordinated={core_source_sha}"
+                )
+            pinned_faceplate_labels = load_core_faceplate_catalog(core_source_root)
+        else:
+            pinned_faceplate_labels = load_pinned_faceplate_catalog()
     except Exception as exc:
         errors.append(f"Could not load exact pinned Core faceplate catalog: {exc}")
     else:
         errors.extend(
             validate_default_faceplates(discovery_registry, pinned_faceplate_labels)
         )
-        if core_source_root is not None and pin["commit_sha"] != core_source_sha:
-            errors.append(
-                "Discovery published Core faceplate pin does not match coordinated "
-                f"Core source: pin={pin['commit_sha']} coordinated={core_source_sha}"
-            )
-    if core_source_root is not None:
-        try:
-            candidate_faceplate_labels = load_core_faceplate_catalog(core_source_root)
-        except Exception as exc:
-            errors.append(f"Could not load coordinated local Core faceplate catalog: {exc}")
-        else:
-            errors.extend(
-                validate_default_faceplates(discovery_registry, candidate_faceplate_labels)
-            )
     profile_payload = yaml.safe_load(discovery_profiles_path.read_text(encoding="utf-8")) or {}
     discovery_profiles = profile_payload.get("profiles") or {}
     if not isinstance(discovery_profiles, dict):

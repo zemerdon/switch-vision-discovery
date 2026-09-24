@@ -87,6 +87,20 @@ def main() -> None:
         )
         assert shell_model(dell) == "N2128PX-ON"
 
+        avaya = tmpdir / "avaya-local-with-cisco-neighbour.walk"
+        avaya.write_text(
+            '.1.3.6.1.2.1.1.1.0 = STRING: "Ethernet Routing Switch 3524GT-PWR+ SW:v5.1.0.007 (c) Avaya Networks"\n'
+            '.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.45.3.80.4\n'
+            '.1.0.8802.1.1.2.1.4.1.1.9.1.1 = STRING: "WS-C3650-48PD-E"\n',
+            encoding="utf-8",
+        )
+        vendor, family, hint, model = shell_identity(avaya)
+        assert vendor == "avaya", vendor
+        assert family == "Ethernet Routing Switch 3500", family
+        assert hint == "3524GT-PWR+", hint
+        assert model == "3524GT-PWR+", model
+        assert shell_model(avaya) == "3524GT-PWR+"
+
         mikrotik = tmpdir / "mikrotik-local-with-cisco-neighbour.walk"
         rows = [
             '.1.3.6.1.2.1.1.1.0 = STRING: "RouterOS CRS328-24P-4S+"',

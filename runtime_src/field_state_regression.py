@@ -18,7 +18,7 @@ import support_diagnostics as diagnostics
 
 # 1. A successful unchanged visible-dashboard projection must still advance the
 # generation mtime consumed by the native Switch Vision panel.
-with tempfile.TemporaryDirectory(prefix="sv-brendan-mtime-") as tmp:
+with tempfile.TemporaryDirectory(prefix="sv-field-state-mtime-") as tmp:
     root = Path(tmp)
     dashboard = root / "generated-dashboard-card.yaml"
     dashboard.write_text(
@@ -65,7 +65,7 @@ for name in (
     originals[name] = getattr(authority, name)
 
 try:
-    with tempfile.TemporaryDirectory(prefix="sv-brendan-api-only-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="sv-field-state-api-only-") as tmp:
         root = Path(tmp)
         for name in ("legacy.sh", "prepare.sh", "registry.json"):
             (root / name).write_text("{}\n", encoding="utf-8")
@@ -160,7 +160,7 @@ finally:
 
 # 4. UniFi connectivity diagnostics must be privacy-safe even when the private
 # controller URL/key/site are used internally.
-with tempfile.TemporaryDirectory(prefix="sv-brendan-unifi-diag-") as tmp:
+with tempfile.TemporaryDirectory(prefix="sv-field-state-unifi-diag-") as tmp:
     root = Path(tmp)
     original_info = diagnostics._unifi2mqtt_supervisor_info
     original_getaddrinfo = diagnostics.socket.getaddrinfo
@@ -250,4 +250,4 @@ with tempfile.TemporaryDirectory(prefix="sv-brendan-unifi-diag-") as tmp:
         diagnostics.socket.create_connection = original_create_connection
         diagnostics.ssl.create_default_context = original_ssl_context
 
-print("Brendan field regression: PASS")
+print("Field-state regression: PASS")

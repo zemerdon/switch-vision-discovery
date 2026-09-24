@@ -65,6 +65,15 @@ def main() -> int:
     assert pins == ["PyYAML==6.0.2", "websockets==15.0.1"]
     assert all(PIN_RE.fullmatch(line) for line in pins)
 
+    component_contracts = (ROOT / "tools" / "check_component_contracts.py").read_text(encoding="utf-8")
+    for marker in (
+        'if core_source_root is not None:',
+        'pinned_faceplate_labels = load_core_faceplate_catalog(core_source_root)',
+        'pinned_faceplate_labels = load_pinned_faceplate_catalog()',
+        'Discovery published Core faceplate pin does not match coordinated',
+    ):
+        assert marker in component_contracts, marker
+
     module = load_entrypoint()
     version = module.resolve_version(ROOT)
     module.validate_runtime_version_contract(ROOT, version)

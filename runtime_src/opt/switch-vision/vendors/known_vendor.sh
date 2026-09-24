@@ -66,6 +66,17 @@ cv_known_vendor_identity() {
     esac
   fi
 
+  if [ "$vendor_id" = "avaya" ]; then
+    case "${CV_ID_SYS_OBJECT_ID:-}|${CV_ID_SYS_DESCR:-}" in
+      1.3.6.1.4.1.45.3.80.4\|*3524GT-PWR+*|*\|*3524GT-PWR+*)
+        CV_ID_FAMILY="Ethernet Routing Switch 3500"
+        CV_ID_MODEL_HINT="3524GT-PWR+"
+        CV_ID_PRODUCT_MATCH="ers3524gt-pwrplus"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
+    esac
+  fi
+
   if [ "$vendor_id" = "mikrotik" ]; then
     case "${CV_ID_SYS_OBJECT_ID:-}|${CV_ID_SYS_DESCR:-}" in
       1.3.6.1.4.1.14988.*'|'*CRS328-24P-4S+*|*'|'*CRS328-24P-4S+*)

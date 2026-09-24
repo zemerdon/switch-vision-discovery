@@ -1,4 +1,14 @@
-## 3.0.2 — Brendan field-state and UniFi diagnostics repair
+## 3.0.3 — Avaya ERS 3524GT-PWR+ support and attribution privacy hardening
+
+- Add exact Experimental support for Avaya Ethernet Routing Switch 3524GT-PWR+ (`1.3.6.1.4.1.45.3.80.4`) from verified real-hardware SNMP evidence.
+- Add the Avaya vendor pack and exact physical classifier: 20 fixed copper logical ports plus four dual-personality front copper/SFP positions on logical ports 21-24.
+- Generate the conservative stock 24-RJ45/4-SFP dashboard contract with shared SFP logical-port mapping `[21,22,23,24]`, avoiding duplicate entities for combo positions.
+- Record standard POWER-ETHERNET-MIB confirmation for all 24 PSE rows and the 370 W PoE budget; optional environment telemetry remains non-blocking Experimental follow-up.
+- Record the two rear SFP chassis positions as documented capability only; no independent entities or dashboard bindings are fabricated until trustworthy IF-MIB/telemetry evidence exists.
+- Add a permanent exact-model regression covering Avaya detection, physical-contract resolution, registry enrichment, card counts and shared SFP mapping.
+- Remove unapproved contributor/tester identity wording from carried public changelog history; public attribution remains neutral unless explicitly approved.
+
+## 3.0.2 — Field-state and UniFi diagnostics repair
 
 - Fix API/UniFi-only Discovery so a successful run with no SNMP targets is a normal success instead of `degraded=true`; the Hub now reports SNMP2MQTT as **Not required** and never starts/restarts it against retained SNMP YAML for that run.
 - Replace stale `discovery-report.txt` and `last-discovery-run.txt` state on successful API/UniFi-only runs so old SNMP failure text cannot survive newer successful Discovery runs.
@@ -7,7 +17,7 @@
 - Stop manually captured Support My Switch bundles from inventing `success / verified` evidence metadata when no authoritative run context was supplied; manual captures now default those fields to `unknown`.
 - Add privacy-safe live UniFi connectivity diagnostics to Support My Switch: DNS, TCP, TLS, sites-API, site-resolution and devices-API stages with bounded timings/error categories, while excluding controller/resolved addresses, API keys, site identity and raw exception text.
 - Add a bounded recent UniFi2MQTT add-on log to Support My Switch; it remains subject to the normal contribution sanitizer before the archive can be shared.
-- Add permanent regressions for Brendan's stale dashboard timestamp/report/last-run path, clean API-only SNMP2MQTT skip, Core bridge large-message contract, UniFi diagnostic privacy/staging, and UniFi2MQTT log capture.
+- Add permanent regressions for the stale dashboard timestamp/report/last-run path, clean API-only SNMP2MQTT skip, Core bridge large-message contract, UniFi diagnostic privacy/staging, and UniFi2MQTT log capture.
 
 ## 3.0.1 — Upgrade option migration fix
 
@@ -319,7 +329,7 @@
 
 ## 2.4.12
 
-- Publish the reviewed public Credits roster using only the approved aliases `Finni`, `Paul B`, `Timb320`, `Brendan P`, and `iangr`, with concise Switch Vision component-only contribution scopes.
+- Publish the reviewed public Credits presentation using only explicitly approved public attribution and concise Switch Vision component-only contribution scopes.
 - Replace boxed/narrative credit rows with the locked centered single-line presentation: the exact final credits layout assembles from four-pixel fragments, holds briefly, then that same layout scrolls upward indefinitely with no fade, crossfade, scene swap, or geometry morph.
 - Keep protected contributor provenance private and add permanent runtime/privacy checks for the exact public aliases, component scopes, and Credits presentation contract.
 
@@ -526,11 +536,11 @@
 
 ## 2.3.31
 
-- Replace the Credits v25 preview placeholder entries with the first owner-approved public community credit: **Finni** — UniFi multi-controller, field testing, port telemetry and UI feedback.
+- Replace the Credits v25 preview placeholder entries with an owner-approved public community-credit presentation for field testing, port telemetry and UI feedback.
 - Remove the preview/test warning badge and all four synthetic contributor aliases from the Credits view.
 - Preserve the existing Credits v25 opening tile-build scene, progress transition, settled card, spotlights, sweep lighting, navigation placement and acknowledgement copy unchanged.
 - Keep contributor evidence/provenance separate from the public Credits display; no contribution IDs, email addresses, raw evidence identifiers or private attribution are published.
-- Update the packaged-runtime self-test so the approved Finni credit is required and the retired placeholder aliases/badge remain forbidden.
+- Update the packaged-runtime self-test so the approved public-credit presentation is required and retired placeholder aliases/badge remain forbidden.
 
 ## 2.3.30
 

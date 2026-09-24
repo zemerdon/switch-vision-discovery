@@ -95,7 +95,7 @@ def _run_collection(
     return result, current_walks, current_targets, collection_summary
 
 
-# Brendan's UniFi/API-only shape: switch-list mode is enabled but the only
+# Field-reported UniFi/API-only shape: switch-list mode is enabled but the only
 # stored row is the empty placeholder, so there is no SNMP target to attempt.
 with tempfile.TemporaryDirectory(prefix="sv-unifi-only-no-target-") as temp:
     root = Path(temp)

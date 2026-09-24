@@ -26,7 +26,7 @@ python3 "$BASE_DIR/device_added_order_regression.py"
 python3 "$BASE_DIR/configuration_backup_regression.py"
 python3 "$BASE_DIR/restore_pending_state_regression.py"
 python3 "$BASE_DIR/support_addon_log_regression.py"
-python3 "$BASE_DIR/brendan_field_regression.py"
+python3 "$BASE_DIR/field_state_regression.py"
 python3 "$BASE_DIR/calibration_manager_regression.py"
 python3 "$BASE_DIR/hub_settings_tabs_regression.py"
 python3 "$BASE_DIR/autodiscover_regression.py"
@@ -53,28 +53,16 @@ sv_require_literal 'Debug sanitizer' 'function sanitizeDebugText(text)' "$SV_COP
 sv_require_literal 'Copy Debug function' 'async function copyDebugInfo()' "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
 sv_require_literal 'Copy Debug event binding' "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
 
-# Credits presentation continuity. The approved public roster uses only
-# zemerdon-reviewed aliases and component-only contribution scopes.
+# Credits presentation continuity. Public attribution is identity-neutral by
+# default; exact named credit requires explicit owner approval outside source.
 sv_require_literal 'Credits canvas' 'id="creditsMatrix"' "$BASE_DIR/support_web.py"
 sv_require_literal 'Credits roll track' 'id="creditsRollTrack"' "$BASE_DIR/support_web.py"
 sv_require_literal 'Credits build source' 'id="creditsBuildSource"' "$BASE_DIR/support_web.py"
 sv_require_literal 'Credits heading' '<h2 class="credits-title">Switch Vision Credits</h2>' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits Finni' '<span class="credit-name">Finni</span><span class="credit-components">Discovery / Hub • UniFi2MQTT</span>' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits Paul B' '<span class="credit-name">Paul B</span><span class="credit-components">Discovery / Hub • SNMP2MQTT • Support My Switch</span>' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits Timb320' '<span class="credit-name">Timb320</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT</span>' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits Brendan P' '<span class="credit-name">Brendan P</span><span class="credit-components">Discovery / Hub • UniFi2MQTT • Support My Switch</span>' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits iangr' '<span class="credit-name">iangr</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT • Support My Switch</span>' "$BASE_DIR/support_web.py"
+sv_require_literal 'Credits neutral community row' '<span class="credit-name">Community contributors</span><span class="credit-components">Testing • feedback • hardware validation</span>' "$BASE_DIR/support_web.py"
 sv_require_literal 'Credits navigation card' 'id="openCreditsButton"' "$BASE_DIR/support_web.py"
 ! grep -Fq 'PREVIEW PLACEHOLDER' "$BASE_DIR/support_web.py"
 ! grep -Fq 'TEST ENTRIES, NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
-! grep -Fq 'DemoAlias-01' "$BASE_DIR/support_web.py"
-! grep -Fq 'PixelNomad_TEST' "$BASE_DIR/support_web.py"
-! grep -Fq 'SampleAlias42' "$BASE_DIR/support_web.py"
-! grep -Fq 'CircuitGhost-DEMO' "$BASE_DIR/support_web.py"
-! grep -Fiq 'KC1KOC' "$BASE_DIR/support_web.py"
-! grep -Fiq 'Timb320@hotmail.com' "$BASE_DIR/support_web.py"
-! grep -Fiq 'Timothy B Green' "$BASE_DIR/support_web.py"
-! grep -Fiq 'Brendan Pratt' "$BASE_DIR/support_web.py"
 echo 'Switch Vision Discovery Credits public content: PASS'
 
 # Locked Credits motion contract: four-pixel build of the exact scroll source,
@@ -2066,8 +2054,8 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.2"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.2"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.3"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.3"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
@@ -3628,7 +3616,7 @@ print("Switch Vision Discovery v2.1.36 UniFi-only SNMP2MQTT status regression: P
 PYTEST_V2136_UNIFI_ONLY
 
 # community-hardware Community UniFi exact-model contract regression.
-python3 - "$RUNTIME_REGISTRY" "$BASE_DIR/profiles/switch-vision-profiles.yaml" <<'PYTEST_BRENDAN_UNIFI'
+python3 - "$RUNTIME_REGISTRY" "$BASE_DIR/profiles/switch-vision-profiles.yaml" <<'PYTEST_FIELD_UNIFI'
 import json
 import sys
 from pathlib import Path
@@ -3675,9 +3663,9 @@ assert profiles["ubiquiti-us-16-poe-150w-api"]["interface_patterns"]["sfp_1g"] =
 assert "ports_1_7_only" in models["USW Ultra"]["validation"]["poe"]
 assert "2p5g_capable" in promax["validation"]["rj45_mapping"]
 print("Switch Vision Discovery Community registry/profile contract: PASS")
-PYTEST_BRENDAN_UNIFI
+PYTEST_FIELD_UNIFI
 
-python3 - "$tmp_dir/community-unifi.json" <<'PYTEST_BRENDAN_SNAPSHOT'
+python3 - "$tmp_dir/community-unifi.json" <<'PYTEST_FIELD_SNAPSHOT'
 import json
 import sys
 from pathlib import Path
@@ -3694,7 +3682,7 @@ snapshot = {"devices": [
     {"id": "community-ultra", "name": "USW Ultra", "model": "USW Ultra", "api_capabilities": {"port_detail": True, "per_port_traffic": False}, "ports": ports(8)},
 ]}
 Path(sys.argv[1]).write_text(json.dumps(snapshot), encoding="utf-8")
-PYTEST_BRENDAN_SNAPSHOT
+PYTEST_FIELD_SNAPSHOT
 
 python3 "$BASE_DIR/unifi_dashboard_cards.py" \
     --snapshot "$tmp_dir/community-unifi.json" \

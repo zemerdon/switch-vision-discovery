@@ -4,7 +4,7 @@ cv_cap_extract_model_text() {
   walk_file="$1"
   # ENTITY-MIB model names are more precise than sysDescr for 24/48-port
   # variants. Fall back to sysDescr/family when no explicit model is present.
-  model=$(grep -Eio 'WS-C[0-9A-Za-z][0-9A-Za-z._-]*|SG500X-24|S5735-L8P4X-A1|S5720-12TP-LI-AC|XS1930-10|N2128PX-ON|ex3300-48p' "$walk_file" 2>/dev/null | head -n 1 || true)
+  model=$(grep -Eio 'WS-C[0-9A-Za-z][0-9A-Za-z._-]*|SG500X-24|S5735-L8P4X-A1|S5720-12TP-LI-AC|XS1930-10|N2128PX-ON|3524GT-PWR\+|ex3300-48p' "$walk_file" 2>/dev/null | head -n 1 || true)
   if [ -n "$model" ]; then
     case "$model" in
       [Ee][Xx]3300-48[Pp]) printf 'Juniper EX3300-48P' ;;
@@ -96,6 +96,11 @@ cv_cap_set_front_panel_profile() {
       CV_CAP_FRONT_PANEL_AWARE="true"
       CV_CAP_PLATFORM="dell_n2128px_on"
       CV_CAP_RJ45_LIMIT="28"
+      ;;
+    *3524GT-PWR+*)
+      CV_CAP_FRONT_PANEL_AWARE="true"
+      CV_CAP_PLATFORM="avaya_ers3524gt_pwr_plus"
+      CV_CAP_RJ45_LIMIT="20"
       ;;
     *J8693A*3500yl-48G*|*J8693A*3500YL-48G*|*3500yl-48G*J8693A*|*3500YL-48G*J8693A*)
       # Exact HP 3500yl-48G hardware: 44 fixed copper logical ports and
