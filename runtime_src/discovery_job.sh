@@ -3802,13 +3802,29 @@ write_generated_yaml_for_walk() {
         }
         if (!member_seen) yaml_sensor("1.3.6.1.2.1.1.1.0", prefix " System Description")
       }
+      # Multiple ENTITY-MIB rows can describe one member. Select one observed
+      # row per entity, preferring entPhysicalModelName over description and
+      # then the lowest index, rather than publishing competing bindings.
       for (idx in identity_idx) {
         member_no=int(idx / 1000)
         if (member_no < 1) member_no=1
         label=member_label(member_no)
+        rank=(idx in identity_model_name_idx) ? 0 : 1
+        prior=model_identity_index[label]
+        if (!prior || rank < model_identity_rank[label] || (rank == model_identity_rank[label] && idx+0 < prior+0)) {
+          model_identity_index[label]=idx
+          model_identity_rank[label]=rank
+        }
+        if ((idx in identity_serial_idx) && (!serial_identity_index[label] || idx+0 < serial_identity_index[label]+0)) serial_identity_index[label]=idx
+      }
+      for (label in model_identity_index) {
+        idx=model_identity_index[label]
         if (idx in identity_model_name_idx) yaml_sensor("1.3.6.1.2.1.47.1.1.1.1.13." idx, label " Model")
-        else if (idx in identity_model_descr_idx) yaml_sensor("1.3.6.1.2.1.47.1.1.1.1.2." idx, label " Model")
-        if (idx in identity_serial_idx) yaml_sensor("1.3.6.1.2.1.47.1.1.1.1.11." idx, label " Serial")
+        else yaml_sensor("1.3.6.1.2.1.47.1.1.1.1.2." idx, label " Model")
+      }
+      for (label in serial_identity_index) {
+        idx=serial_identity_index[label]
+        yaml_sensor("1.3.6.1.2.1.47.1.1.1.1.11." idx, label " Serial")
       }
 
       if (model == "XS1930-10" || model == "GS1915-24EP") {
@@ -3886,7 +3902,7 @@ write_generated_yaml_for_walk() {
             if (suffix in jnx_memory) yaml_sensor("1.3.6.1.4.1.2636.3.1.13.1.15." suffix, prefix " Memory Total MB")
           }
           if (descr ~ /FAN|Fan|fan/) {
-            if (suffix in jnx_state) yaml_sensor("1.3.6.1.4.1.2636.3.1.13.1.6." suffix, prefix " Fans")
+            if (suffix in jnx_state) yaml_sensor("1.3.6.1.4.1.2636.3.1.13.1.6." suffix, prefix " Fan " suffix " State")
           }
           if (descr ~ /Power Supply|PEM|PSU/) {
             if (suffix in jnx_state) yaml_sensor("1.3.6.1.4.1.2636.3.1.13.1.6." suffix, prefix " PSU Status")

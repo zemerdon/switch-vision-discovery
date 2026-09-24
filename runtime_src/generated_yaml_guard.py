@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +61,7 @@ def validate(path: Path) -> tuple[bool, str]:
         return False, "generated YAML does not contain a non-empty targets list"
 
     host_evidence: dict[str, dict[str, int]] = {}
+    identities: dict[tuple[str, str], int] = {}
     for index, target in enumerate(targets, start=1):
         if not isinstance(target, dict):
             return False, f"target {index} is not a mapping"
@@ -69,6 +71,24 @@ def validate(path: Path) -> tuple[bool, str]:
         sensors = target.get("sensors")
         if sensors is not None and not isinstance(sensors, list):
             return False, f"target {index} sensors is not a list"
+
+        # Home Assistant discovery identities are global across polling groups
+        # and hosts. Duplicate names can overwrite another interface's binding.
+        for sensor in sensors or []:
+            if not isinstance(sensor, dict):
+                return False, f"target {index} contains a non-mapping sensor"
+            name = str(sensor.get("name") or "")
+            slug = unicodedata.normalize("NFKD", name.lower().replace("-", "_").replace("~", "_"))
+            slug = slug.encode("ascii", "ignore").decode("ascii")
+            slug = re.sub(r"[^a-z0-9_]+", "_", slug).strip("_")
+            identity = str(sensor.get("object_id") or slug)
+            domain = "binary_sensor" if sensor.get("binary_sensor") else "sensor"
+            if not identity:
+                return False, f"target {index} contains an empty sensor identity"
+            key = (domain, identity)
+            if key in identities:
+                return False, f"duplicate sensor identity {domain}.{identity} in targets {identities[key]} and {index}"
+            identities[key] = index
 
         sensor_oids = {
             oid

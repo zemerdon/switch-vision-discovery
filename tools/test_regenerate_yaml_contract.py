@@ -215,7 +215,7 @@ targets:
     )
     valid, reason = guard.validate(duplicate_stale_candidate)
     assert valid is False, reason
-    assert "duplicate uptime-only groups" in reason, reason
+    assert "duplicate sensor identity sensor.sw1_uptime" in reason, reason
 
 with tempfile.TemporaryDirectory() as temp_dir:
     temp = Path(temp_dir)

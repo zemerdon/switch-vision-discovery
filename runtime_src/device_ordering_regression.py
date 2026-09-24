@@ -319,8 +319,8 @@ assert "Toggle whether this device is actively polled" in source
 state_handler = source.split('if path == "/api/configured-devices/state":', 1)[1].split('if path == "/api/configured-devices/order":', 1)[0]
 assert "_apply_saved_device_order_to_dashboard()" in state_handler
 assert "_start_dashboard_card_regeneration" not in state_handler
-assert "_start_device_state_application()" in state_handler
-assert "_start_device_state_application(self.app.discovery_script)" not in state_handler
+assert "_start_device_state_application(self.app.discovery_script)" in state_handler
+assert web.DEFAULT_DISCOVERY_SCRIPT == Path("/discovery_contract_entrypoint.py")
 assert 'with _device_configuration_update("Device configuration update"):' in state_handler
 
 order_handler = source.split('if path == "/api/configured-devices/order":', 1)[1].split('if path == "/api/configuration/import":', 1)[0]

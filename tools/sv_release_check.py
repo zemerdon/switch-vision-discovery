@@ -45,6 +45,7 @@ PERMANENT_CHECKS = (
     "tools/check_speed_contracts.py",
     "tools/check_hub_identity.py",
     "tools/test_regenerate_yaml_contract.py",
+    "tools/test_port_identity_collision.py",
     "tools/test_support_email_mime.py",
     "tools/test_c3750_48p_contract.py",
     "tools/test_c3750_48p_live_mapping.py",

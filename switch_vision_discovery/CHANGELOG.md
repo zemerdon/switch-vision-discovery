@@ -11,6 +11,9 @@
 - Keep the authoritative **120–2000 ms** timing range and use the same randomized Slow/Medium/Fast dwell model as Core, including the finalized Fast hardware profile at the saved 120 ms factory period.
 - Add explicit Test LED accessibility labels and authored tooltips covering saved-only timing, temporary sampling, automatic stop and reduced-motion steady-indicator behavior.
 - Extend the maintained browser harness so it executes the exact Discovery sampler JavaScript and verifies all three Test LED controls, saved-rate display, tooltip interaction and reduced-motion cleanup.
+- Fix **Devices → Enable/Disable** for SNMP devices so state reconciliation always reuses the configured physical-contract Discovery entrypoint instead of falling back to the legacy raw generator. This prevents toggle-triggered interface aliases, empty bays and combo identities from bypassing the reviewed model contract.
+- Add a global generated-YAML identity guard that rejects duplicate Home Assistant sensor identities before publication and preserves the previously valid generated configuration on failure.
+- Add a permanent 3850 regression proving `Te1/0/1-12` remain the only published 12XS activity/status interfaces while raw `Te1/1/1-4` empty-bay aliases cannot overwrite logical ports 1-4; the same guard is model-agnostic and is exercised alongside Juniper alias handling and the full physical-contract model suite.
 
 ## 3.0.2 — Field-state and UniFi diagnostics repair
 

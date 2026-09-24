@@ -215,7 +215,9 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         # interface names. Preserve those names through the compatibility walk
         # so the model-aware generator can bind one logical port to both the
         # RJ45 socket and SFP cage instead of inventing a second uplink entity.
-        if combo_ports_per_member > 0 and source_name:
+        # Juniper dynamic cage and VLAN sensors consume native ge/xe names.
+        # Renaming them to Gi/Te reintroduces static sensors for the same cage.
+        if (combo_ports_per_member > 0 or registry_model == "ex3300-48p") and source_name:
             compatibility = source_name
 
         ports.append(Port(physical_id, member, position, media, if_index, source_name, compatibility))

@@ -77,7 +77,7 @@ HUB_MOTD_MAX_CHARS = 500
 DEFAULT_CONTRIBUTIONS_DIR = Path("/share/switch_vision/contributions")
 DEFAULT_OPTIONS_FILE = Path("/data/options.json")
 DEFAULT_SUPPORT_SCRIPT = Path("/support_my_switch.sh")
-DEFAULT_DISCOVERY_SCRIPT = Path("/discovery_job.sh")
+DEFAULT_DISCOVERY_SCRIPT = Path("/discovery_contract_entrypoint.py")
 DEFAULT_SHARE_DIR = Path("/share/switch_vision")
 DEFAULT_INSTALLER_MAINTENANCE_RESPONSE = DEFAULT_SHARE_DIR / "installer-maintenance-response.json"
 DEFAULT_REGISTRY_FILE = Path("/opt/switch-vision/devices/supported_devices.json")
@@ -8291,7 +8291,7 @@ class SupportHandler(BaseHTTPRequestHandler):
                         result["dashboard_refresh_warning"] = str(exc)[:240]
                     result["polling_refresh_started"] = False
                     if key.startswith("snmp:"):
-                        queued = _start_device_state_application()
+                        queued = _start_device_state_application(self.app.discovery_script)
                         result["polling_refresh_started"] = bool(queued.get("started"))
                         result["polling_refresh_pending"] = True
                         result["polling_refresh_coalesced"] = bool(queued.get("coalesced"))
