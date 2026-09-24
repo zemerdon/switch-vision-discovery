@@ -56,4 +56,7 @@ assert "label.querySelector(':scope > span')" not in block
 assert "el.textContent.trim()" not in block
 
 assert "'Hysteresis (%)':'Adds a buffer around the Slow/Medium/Fast traffic thresholds" in SOURCE
+for label in ('Slow blink period (ms)', 'Medium blink period (ms)', 'Fast blink period (ms)'):
+    assert 'Allowed range: 120–2000 ms.' in entries[label], f'missing real allowed range in {label} help'
+    assert 'last successfully saved value' in entries[label], f'missing saved-setting sampling note in {label} help'
 print('Switch Vision Hub authored-help tooltip regression: PASS')

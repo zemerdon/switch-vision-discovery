@@ -162,6 +162,13 @@ print("SV_STATUS|stage=Generating dashboard card YAML|switch=LAB-SW1|target=stor
     web._ensure_snmp2mqtt_running = forbidden("_ensure_snmp2mqtt_running")
     web._generate_automatic_support_bundle = forbidden("_generate_automatic_support_bundle")
 
+    # Keep the run-time snapshot inside this disposable fixture as well. A live
+    # Hub/add-on process may legitimately own the default sticky-/tmp path.
+    real_snapshot_writer = web._write_dashboard_card_regeneration_options_snapshot
+    web._write_dashboard_card_regeneration_options_snapshot = lambda: real_snapshot_writer(
+        temp / "run-card-options.json"
+    )
+
     web._run_discovery(fake_discovery, "regenerate_card")
 
     state = web._discovery_state_snapshot()

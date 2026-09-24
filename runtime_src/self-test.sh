@@ -32,6 +32,7 @@ python3 "$BASE_DIR/hub_settings_tabs_regression.py"
 python3 "$BASE_DIR/autodiscover_regression.py"
 python3 "$BASE_DIR/unifi_only_collection_regression.py"
 python3 "$BASE_DIR/hub_tooltips_regression.py"
+python3 "$BASE_DIR/hub_activity_led_sampler_regression.py"
 python3 "$BASE_DIR/devices_diagnostics_regression.py"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/reporting_cardinality_regression.py"
 sv_require_literal() {
