@@ -69,9 +69,13 @@ def main() -> None:
             '.1.3.6.1.4.1.9.9.13.1.5.1.2.1 = STRING: "Power Supply 1"',
             '.1.3.6.1.4.1.9.9.13.1.5.1.3.1 = INTEGER: 1',
 
-            # Existing aggregate telemetry remains intact.
+            # Existing aggregate telemetry remains intact. Two PSE aggregate
+            # rows reproduce the cross-model collision that previously emitted
+            # duplicate Home Assistant identities on standalone switches.
             '.1.3.6.1.2.1.105.1.3.1.1.2.1 = Gauge32: 370',
             '.1.3.6.1.2.1.105.1.3.1.1.4.1 = Gauge32: 6',
+            '.1.3.6.1.2.1.105.1.3.1.1.2.2 = Gauge32: 370',
+            '.1.3.6.1.2.1.105.1.3.1.1.4.2 = Gauge32: 7',
         ]
         walk.write_text("\n".join(lines) + "\n", encoding="utf-8")
         targets.write_text(
@@ -145,6 +149,10 @@ def main() -> None:
             "oid: 1.3.6.1.4.1.9.9.402.1.2.1.9.1.1",
             "transform: value / 1000",
             'unit_of_measurement: "W"',
+            "name: CISCO PoE Used W",
+            "name: CISCO PoE Used W Group 2",
+            "name: CISCO PoE Budget W",
+            "name: CISCO PoE Budget W Group 2",
         )
         for marker in required:
             assert marker in yaml_text, marker

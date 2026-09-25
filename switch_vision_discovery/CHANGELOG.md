@@ -1,10 +1,11 @@
-## 3.0.5 — Contribution history browser
+## 3.0.5 — Contribution history and field fixes
 
 - Add a **History** tab to Support My Switch that lists previously generated local contribution bundles without rebuilding them.
 - Show privacy-safe contribution metadata including contribution ID, Switch Vision version, creation time, archive size, readiness/quality, and detected-model summary.
 - Offer direct re-downloads for retained ZIP, prepared EML, and Actions HTML files when present. Nothing is transmitted automatically, and protected contribution/source originals remain outside the Hub download surface.
 - Reconcile Devices diagnostics against the authoritative saved SNMP inventory so historical switch-name walk/capability folders cannot appear as extra detected switches; an exact current switch identity wins, with a unique management target used only as a rename fallback.
 - Fix Catalyst WS-C3560CG-8PC-S physical classification so Gi0/1-8 remain fixed copper and Gi0/9-10 retain their two dual-purpose copper/SFP identities, restoring trusted status/activity bindings while preserving the established 8-access + 2-uplink hardware contract.
+- Make aggregate PoE telemetry naming collision-safe across all models and vendors: the first chassis/PSE total keeps its historical entity identity, while repeated standard POWER-ETHERNET-MIB, Cisco extended, or MikroTik aggregate rows receive deterministic `Group N` suffixes so multi-PSE hardware cannot block the complete generated SNMP2MQTT handoff.
 
 ## 3.0.4 — Activity LED tests, device-state reconciliation and port-identity hardening
 

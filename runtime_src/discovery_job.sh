@@ -3150,6 +3150,21 @@ write_generated_yaml_for_walk() {
       if (state_class != "") print "    state_class: " state_class
       if (icon != "") print "    icon: " icon
     }
+    function poe_aggregate_name(name, ordinal) {
+      # Preserve the historical primary entity identity for the first
+      # chassis/PSE aggregate. Some devices expose multiple aggregate rows;
+      # suffix only repeated names so generated Home Assistant identities
+      # remain globally unique without model- or vendor-specific exceptions.
+      ordinal = ++poe_aggregate_name_count[name]
+      if (ordinal == 1) return name
+      return name " Group " ordinal
+    }
+    function yaml_poe_aggregate_sensor(oid, name) {
+      yaml_sensor(oid, poe_aggregate_name(name))
+    }
+    function yaml_poe_aggregate_sensor_meta(oid, name, transform, unit, device_class, state_class, icon) {
+      yaml_sensor_meta(oid, poe_aggregate_name(name), transform, unit, device_class, state_class, icon)
+    }
     function physical_speed_cap_mbps(model, label) {
       if (model == "HP ProCurve 1810G-24") return 1000
       if (model == "HP J8693A Switch 3500yl-48G" && label ~ / Rear 10G /) return 10000
@@ -3856,7 +3871,7 @@ write_generated_yaml_for_walk() {
           } else if (lname ~ /^board-temperature/ && unit_code == 1) {
             yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.3.100.1.3." idx, prefix " Board Temperature", "", "°C", "temperature", "measurement", "mdi:thermometer")
           } else if (lname == "poe-out-consumption" && unit_code == 5) {
-            yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.3.100.1.3." idx, prefix " PoE Used", "value / 10", "W", "power", "measurement", "mdi:flash")
+            yaml_poe_aggregate_sensor_meta("1.3.6.1.4.1.14988.1.1.3.100.1.3." idx, prefix " PoE Used", "value / 10", "W", "power", "measurement", "mdi:flash")
           } else if (lname ~ /^fan[0-9]+-speed$/ && unit_code == 2) {
             fan_label=lname; sub(/^fan/, "", fan_label); sub(/-speed$/, "", fan_label)
             yaml_sensor_meta("1.3.6.1.4.1.14988.1.1.3.100.1.3." idx, prefix " Fan " fan_label " RPM", "", "rpm", "", "measurement", "mdi:fan")
@@ -3962,11 +3977,11 @@ write_generated_yaml_for_walk() {
 
       for (idx=1; idx<=maxpoe; idx++) if (idx in poe_idx) {
         label=member_label(idx)
-        if (idx in poe_name_idx) yaml_sensor("1.3.6.1.4.1.9.9.402.1.3.1.2." idx, label " PoE Supply Name")
-        if (idx in poe_status_idx) yaml_sensor("1.3.6.1.4.1.9.9.402.1.3.1.3." idx, label " PoE Supply Status")
+        if (idx in poe_name_idx) yaml_poe_aggregate_sensor("1.3.6.1.4.1.9.9.402.1.3.1.2." idx, label " PoE Supply Name")
+        if (idx in poe_status_idx) yaml_poe_aggregate_sensor("1.3.6.1.4.1.9.9.402.1.3.1.3." idx, label " PoE Supply Status")
         poe_unit = (model ~ /2960X|2960S/ ? "W" : "mW")
-        if (idx in poe_used_idx) yaml_sensor("1.3.6.1.4.1.9.9.402.1.3.1.4." idx, label " PoE Used " poe_unit)
-        if (idx in poe_budget_idx) yaml_sensor("1.3.6.1.4.1.9.9.402.1.3.1.5." idx, label " PoE Budget " poe_unit)
+        if (idx in poe_used_idx) yaml_poe_aggregate_sensor("1.3.6.1.4.1.9.9.402.1.3.1.4." idx, label " PoE Used " poe_unit)
+        if (idx in poe_budget_idx) yaml_poe_aggregate_sensor("1.3.6.1.4.1.9.9.402.1.3.1.5." idx, label " PoE Budget " poe_unit)
       }
 
       # Prefer Cisco extended totals when present. Fall back independently for
@@ -3978,8 +3993,8 @@ write_generated_yaml_for_walk() {
       for (idx in poe_budget_idx) ext_budget_present=1
       for (idx=1; idx<=maxstdpoe; idx++) {
         label=member_label(idx)
-        if (!ext_used_present && (idx in std_poe_used_idx)) yaml_sensor("1.3.6.1.2.1.105.1.3.1.1.4." idx, label " PoE Used W")
-        if (!ext_budget_present && (idx in std_poe_budget_idx)) yaml_sensor("1.3.6.1.2.1.105.1.3.1.1.2." idx, label " PoE Budget W")
+        if (!ext_used_present && (idx in std_poe_used_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.4." idx, label " PoE Used W")
+        if (!ext_budget_present && (idx in std_poe_budget_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.2." idx, label " PoE Budget W")
       }
       for (idx=1; idx<=maxtemp; idx++) if (idx in temp_idx) {
         role=temp_role(temp_name[idx])

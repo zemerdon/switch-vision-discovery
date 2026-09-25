@@ -61,6 +61,8 @@ PERMANENT_CHECKS = (
     "tools/test_registry_roundtrip.py",
     "tools/test_manual_model_physical_contract.py",
     "tools/test_cisco_telemetry.py",
+    "tools/test_crs328_telemetry.py",
+    "tools/test_poe_aggregate_identity_contract.py",
 )
 SHELL_CHECKS = (
     "tools/test_production_physical_contract.sh",
