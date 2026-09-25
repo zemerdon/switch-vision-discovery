@@ -62,7 +62,7 @@ with tempfile.TemporaryDirectory(prefix="sv-avaya-3524-") as td:
     walk.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     env = os.environ.copy()
-    env["SWITCH_VISION_DISCOVERY_VERSION"] = "3.0.5"
+    env["SWITCH_VISION_DISCOVERY_VERSION"] = "3.0.6"
     run([str(PREPARE), str(walk), str(normalized), str(capabilities), str(contract)], env=env)
 
     cap = json.loads(capabilities.read_text(encoding="utf-8"))

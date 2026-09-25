@@ -13,7 +13,7 @@ import support_web
 
 source = (RUNTIME / "support_web.py").read_text(encoding="utf-8")
 config = (ROOT / "switch_vision_discovery/config.yaml").read_text(encoding="utf-8")
-assert 'version: "3.0.5"' in config
+assert 'version: "3.0.6"' in config
 assert 'id="supportTab-history"' in source
 assert 'id="contributionHistoryList"' in source
 assert '"/api/contributions/history"' in source
@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix="sv-contribution-history-") as td:
             "Switch_Vision_Contribution_SV-2026-000099/MANIFEST.json",
             json.dumps({
                 "contribution_id": "SV-2026-000099",
-                "switch_vision_version": "3.0.5",
+                "switch_vision_version": "3.0.6",
                 "bundle_quality": "verified",
                 "ready_to_send": True,
                 "created_at": "2026-09-25T01:02:03Z",
@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory(prefix="sv-contribution-history-") as td:
     assert len(history) == 1
     item = history[0]
     assert item["contribution_id"] == "SV-2026-000099"
-    assert item["version"] == "3.0.5"
+    assert item["version"] == "3.0.6"
     assert item["quality"] == "verified"
     assert item["ready_to_send"] is True
     assert item["device_count"] == 2
@@ -71,4 +71,4 @@ with tempfile.TemporaryDirectory(prefix="sv-contribution-history-") as td:
     else:
         assert all(row["archive"] != outside.name for row in support_web._contribution_history(root))
 
-print("Discovery 3.0.5 contribution history regression: PASS")
+print("Discovery 3.0.6 contribution history regression: PASS")

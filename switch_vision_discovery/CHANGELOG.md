@@ -1,3 +1,7 @@
+## 3.0.6 — Dashboard export control placement
+
+- Move the New dashboard format selector into the dashboard action row between Preview Dashboard YAML and Copy Dashboard YAML, keeping Preview, Copy, and Download behavior unchanged.
+
 ## 3.0.5 — Contribution history and field fixes
 
 - Add a **History** tab to Support My Switch that lists previously generated local contribution bundles without rebuilding them.
