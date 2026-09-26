@@ -1,3 +1,9 @@
+## 3.0.7 — Device-state dashboard failure reporting
+
+- Fix Devices enable/disable reconciliation so a failed final dashboard projection is reported as a failed operation instead of silently leaving the Hub in `success / complete` state after polling changes were applied.
+- Add a permanent fault-injection regression proving the background state reconciler quiesces cleanly while surfacing the dashboard refresh failure, and persist device-state History only after the final coalesced dashboard projection so current status and History cannot disagree.
+- Align Support My Switch latest-contribution metadata with the History/download safety boundary so symlinked ZIP, EML, or Actions HTML paths are ignored rather than followed.
+
 ## 3.0.6 — Dashboard export control placement
 
 - Move the New dashboard format selector into the dashboard action row between Preview Dashboard YAML and Copy Dashboard YAML, keeping Preview, Copy, and Download behavior unchanged.

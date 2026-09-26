@@ -1181,7 +1181,10 @@ def _zip_member_json(archive: Path, suffix: str) -> Any:
 
 def _latest_contribution(contributions_dir: Path) -> dict[str, Any] | None:
     archives = sorted(
-        contributions_dir.glob("Switch_Vision_Contribution_SV-*.zip"),
+        (
+            path for path in contributions_dir.glob("Switch_Vision_Contribution_SV-*.zip")
+            if path.is_file() and not path.is_symlink()
+        ),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     ) if contributions_dir.is_dir() else []
@@ -1204,8 +1207,8 @@ def _latest_contribution(contributions_dir: Path) -> dict[str, Any] | None:
         "created_at": manifest.get("created_at") or "",
         "archive": archive.name,
         "archive_size": archive.stat().st_size,
-        "email": email_path.name if email_path.is_file() else None,
-        "actions": actions_path.name if actions_path.is_file() else None,
+        "email": email_path.name if email_path.is_file() and not email_path.is_symlink() else None,
+        "actions": actions_path.name if actions_path.is_file() and not actions_path.is_symlink() else None,
         "devices": devices if isinstance(devices, list) else [],
         "privacy": privacy if isinstance(privacy, dict) else {},
         "processing": processing if isinstance(processing, dict) else {},
@@ -1770,10 +1773,11 @@ def _run_discovery(discovery_script: Path, mode: str = "discovery") -> None:
             _DISCOVERY_PROCESS = None
         _DISCOVERY_STOP_REQUESTED.clear()
         _set_discovery_state(running=False, finished_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"))
-        try:
-            append_discovery_history(_discovery_state_snapshot())
-        except Exception:  # History is non-authoritative and must not block operation cleanup.
-            pass
+        if not apply_device_state:
+            try:
+                append_discovery_history(_discovery_state_snapshot())
+            except Exception:  # History is non-authoritative and must not block operation cleanup.
+                pass
         _release_operation(operation_name)
 
 
@@ -1848,13 +1852,35 @@ def _device_state_application_worker(discovery_script: Path) -> None:
             # changes were being saved. Re-project the dashboard from the current
             # authoritative state immediately before deciding whether another pass
             # is required, so stale work cannot leave a stale visible card.
+            projection_error: OSError | RuntimeError | ValueError | None = None
             try:
                 _apply_saved_device_order_to_dashboard()
-            except (OSError, RuntimeError, ValueError):
-                pass
+            except (OSError, RuntimeError, ValueError) as exc:
+                projection_error = exc
 
             with _DEVICE_STATE_RECONCILE_LOCK:
                 if _DEVICE_STATE_RECONCILE_REQUESTED == target_generation:
+                    # Publish the final visible-card result before quiescence so a
+                    # later request cannot be overwritten by this worker's stale
+                    # completion state.
+                    if projection_error is not None:
+                        message = (
+                            "Device state polling applied, but the dashboard refresh failed: "
+                            f"{projection_error}"
+                        )
+                        _set_discovery_state(
+                            success=False,
+                            message=message,
+                            stage="Dashboard refresh failed",
+                            activity=message,
+                            phase="failed",
+                        )
+                    try:
+                        append_discovery_history(_discovery_state_snapshot())
+                    except Exception:
+                        # History is non-authoritative and must not block device
+                        # state cleanup or a later state-change request.
+                        pass
                     # Publish quiescence atomically with the generation check. A
                     # new request after this point starts a new worker; this worker
                     # must not clear that newer worker's running flag or operation.
