@@ -114,6 +114,13 @@ cv_cap_set_front_panel_profile() {
       CV_CAP_PLATFORM="avaya_ers3524gt_pwr_plus"
       CV_CAP_RJ45_LIMIT="20"
       ;;
+    *J9774A*2530-8G-PoEP*|*J9774A*2530-8g-poep*|*2530-8G-PoEP*J9774A*|*2530-8g-poep*J9774A*)
+      # Exact HP 2530-8G-PoEP hardware: eight fixed PoE+ copper logical
+      # ports and two dual-personality copper/SFP logical ports.
+      CV_CAP_FRONT_PANEL_AWARE="true"
+      CV_CAP_PLATFORM="hp_2530_8g_poep"
+      CV_CAP_RJ45_LIMIT="8"
+      ;;
     *J8693A*3500yl-48G*|*J8693A*3500YL-48G*|*3500yl-48G*J8693A*|*3500YL-48G*J8693A*)
       # Exact HP 3500yl-48G hardware: 44 fixed copper logical ports and
       # four dual-personality copper/mini-GBIC logical ports.
@@ -136,6 +143,17 @@ cv_cap_set_front_panel_profile() {
 
 cv_interface_class_for_name() {
   name="$1"
+
+  # HP J9774A / 2530-8G-PoEP exposes its physical logical ports as
+  # numeric ifName values. Keep this exact-model exception ahead of the
+  # generic name parser so numeric interfaces on other vendors stay excluded.
+  if [ "${CV_CAP_PLATFORM:-generic}" = "hp_2530_8g_poep" ]; then
+    case "$name" in
+      [1-8]) printf 'rj45'; return 0 ;;
+      9|10) printf 'uplink'; return 0 ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
 
   # HP J8693A / 3500yl-48G exposes its physical logical ports as
   # numeric ifName values. Keep this exact-model exception ahead of the

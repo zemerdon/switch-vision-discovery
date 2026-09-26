@@ -41,6 +41,19 @@ cv_interface_class_for_name() {
     return 0
   fi
 
+  # HP J9774A / 2530-8G-PoEP contribution: IF-MIB exposes physical
+  # logical ports as numeric names 1-10. Ports 1-8 are fixed PoE+ copper;
+  # 9-10 are dual-personality RJ45/SFP positions. Never classify later
+  # logical/CPU rows as front-panel ports.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "HP J9774A 2530-8G-PoEP" ]; then
+    case "$name" in
+      [1-8]) printf 'rj45' ;;
+      9|10) printf 'uplink' ;;
+      *) printf 'other' ;;
+    esac
+    return 0
+  fi
+
   # HP ProCurve 1810G-24 / J9450A contribution: IF-MIB exposes 24 front-panel
   # logical ports plus a CPU interface. HPE documents ports 1-22 as fixed
   # copper and ports 23-24 as dual-personality RJ45/mini-GBIC positions.

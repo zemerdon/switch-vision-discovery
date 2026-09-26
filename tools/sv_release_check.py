@@ -29,6 +29,7 @@ PERMANENT_CHECKS = (
     "tools/test_avaya_ers3524gt_pwrplus.py",
     "tools/test_dell_n4032f.py",
     "tools/test_dell_n2128px_optics.py",
+    "tools/test_hp_j9774a_2530_8g_poep.py",
     "tools/test_sv_release_check.py",
     "tools/test_local_model_identity.py",
     "tools/test_switch_name_space_compatibility.py",

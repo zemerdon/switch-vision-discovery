@@ -1035,6 +1035,7 @@ parser_report() {
       else if (line ~ /GS1915-24EP/) zyxel_model = "GS1915-24EP"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model = "CRS328-24P-4S+"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model = "HP J8693A Switch 3500yl-48G"
+      if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.138/) || (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && (tolower(line) ~ /j9774a/ || tolower(line) ~ /2530-8g-poep/))) hp_2530_model = "HP J9774A 2530-8G-PoEP"
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.104/) || (line !~ /\.1\.0\.8802\./ && tolower(line) ~ /procurve 1810g[[:space:]]*-[[:space:]]*24/)) hp_1810g_model = "HP ProCurve 1810G-24"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N4032F/) dell_n4032f_model = "N4032F"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model = "N2128PX-ON"
@@ -1170,6 +1171,10 @@ parser_report() {
       else if (juniper_model != "") {
         model = juniper_model
         manufacturer = "Juniper"
+      }
+      else if (hp_2530_model != "") {
+        model = hp_2530_model
+        manufacturer = "HP"
       }
       else if (hp_1810g_model != "") {
         model = hp_1810g_model
@@ -1339,6 +1344,20 @@ parser_report() {
           if (!(physical_id in physical_key)) {
             physical_key[physical_id] = 1; ten_key[physical_id] = 1
             member_key[1] = 1; member_physical[1]++; member_ten[1]++
+          }
+          special = 1
+        } else if (model == "HP J9774A 2530-8G-PoEP" && n ~ /^([1-9]|10)$/) {
+          port = n + 0
+          physical_id = "hp2530-" port
+          if (!(physical_id in physical_key)) {
+            physical_key[physical_id] = 1
+            member_key[1] = 1
+            member_physical[1]++
+            if (port <= 8) {
+              rj45_key[physical_id] = 1; member_rj45[1]++
+            } else {
+              sfp_key[physical_id] = 1; member_sfp[1]++
+            }
           }
           special = 1
         } else if (model == "HP ProCurve 1810G-24" && n ~ /^([1-9]|1[0-9]|2[0-4])$/) {
@@ -1557,6 +1576,9 @@ parser_report() {
       } else if (model == "CRS328-24P-4S+") {
         print "- RJ45 ether1-ether24 ports: " rj45
         print "- 10G SFP+ sfp-sfpplus1-sfp-sfpplus4 uplinks: " ten
+      } else if (model == "HP J9774A 2530-8G-PoEP") {
+        print "- Fixed PoE+ RJ45 logical ports 1-8: " rj45
+        print "- Dual-personality copper/SFP logical ports 9-10: " sfp_gi
       } else if (model == "HP ProCurve 1810G-24") {
         print "- Fixed RJ45 logical ports 1-22: " rj45
         print "- Dual-personality copper/SFP logical ports 23-24: " sfp_gi
@@ -1675,6 +1697,15 @@ parser_report() {
         if (model == "CRS328-24P-4S+" && name ~ /^sfp-sfpplus[1-4]$/) {
           port = name; sub(/^sfp-sfpplus/, "", port)
           mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone 10G SFP+ uplink " (port + 0)
+          continue
+        }
+        if (model == "HP J9774A 2530-8G-PoEP" && name ~ /^([1-9]|10)$/) {
+          port = name + 0
+          if (port <= 8) {
+            mapped_rows++; print "  - ifIndex " idx " -> " name " -> standalone PoE+ RJ45 port " port
+          } else {
+            mapped_rows++; print "  - ifIndex " idx " -> " name " -> dual-personality copper/SFP uplink " (port - 8)
+          }
           continue
         }
         if (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) {
@@ -3050,6 +3081,10 @@ write_generated_yaml_for_walk() {
         if ((name ~ /^(Gi|GigabitEthernet)/) && parts[2] == "0" && port >= 1 && port <= 28) return label " Port " port
         if ((name ~ /^(Te|TenGigabitEthernet)/) && parts[2] == "0" && port >= 1 && port <= 2) return label " SFP 10G " port
       }
+      if (model == "HP J9774A 2530-8G-PoEP" && name ~ /^([1-9]|10)$/) {
+        port = name + 0
+        return prefix " Port " port
+      }
       if (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) {
         port = name + 0
         return prefix " Port " port
@@ -3221,6 +3256,7 @@ write_generated_yaml_for_walk() {
       yaml_sensor_meta(oid, poe_aggregate_name(name), transform, unit, device_class, state_class, icon)
     }
     function physical_speed_cap_mbps(model, label) {
+      if (model == "HP J9774A 2530-8G-PoEP") return 1000
       if (model == "HP ProCurve 1810G-24") return 1000
       if (model == "HP J8693A Switch 3500yl-48G" && label ~ / Rear 10G /) return 10000
       if (model == "HP J8693A Switch 3500yl-48G") return 1000
@@ -3319,6 +3355,7 @@ write_generated_yaml_for_walk() {
       else if (line ~ /GS1915-24EP/) zyxel_model="GS1915-24EP"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model="CRS328-24P-4S+"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
+      if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.138/) || (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && (tolower(line) ~ /j9774a/ || tolower(line) ~ /2530-8g-poep/))) hp_2530_model="HP J9774A 2530-8G-PoEP"
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.104/) || (line !~ /\.1\.0\.8802\./ && tolower(line) ~ /procurve 1810g[[:space:]]*-[[:space:]]*24/)) hp_1810g_model="HP ProCurve 1810G-24"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N4032F/) dell_n4032f_model="N4032F"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
@@ -3395,6 +3432,9 @@ write_generated_yaml_for_walk() {
           physical_count++
           physical_member[1] = 1
         } else if (mikrotik_model != "" && val ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/) {
+          physical_count++
+          physical_member[1] = 1
+        } else if (hp_2530_model != "" && val ~ /^([1-9]|10)$/) {
           physical_count++
           physical_member[1] = 1
         } else if (hp_1810g_model != "" && val ~ /^([1-9]|1[0-9]|2[0-4])$/) {
@@ -3601,6 +3641,10 @@ write_generated_yaml_for_walk() {
         model = juniper_model
         manufacturer = "Juniper"
       }
+      else if (hp_2530_model != "") {
+        model = hp_2530_model
+        manufacturer = "HP"
+      }
       else if (hp_1810g_model != "") {
         model = hp_1810g_model
         manufacturer = "HP"
@@ -3647,7 +3691,7 @@ write_generated_yaml_for_walk() {
       phys_n = 0
       for (idx=1; idx<=maxidx; idx++) if (idx in ifname) {
         name=ifname[idx]
-        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) || ((model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^A[1-4]$/)) || (model == "N4032F" && name ~ /^(Fo|FortyGigabitEthernet)1\/1\/[12]$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
+        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "HP J9774A 2530-8G-PoEP" && name ~ /^([1-9]|10)$/) || (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) || ((model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^A[1-4]$/)) || (model == "N4032F" && name ~ /^(Fo|FortyGigabitEthernet)1\/1\/[12]$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
           if (model == "Juniper EX3300-48P" && name ~ /^(xe|ge)-0\/1\/[0-3]$/) continue
           if (name ~ /^ge-0\/0\/[0-9]+$/) {
             port_no=name
@@ -4198,7 +4242,7 @@ walk_model_for_generated_card() {
     if command -v cv_cap_extract_model_text >/dev/null 2>&1; then
       cv_cap_extract_model_text "$walk_file"
     else
-      grep -Eio 'N4032F|N2128PX-ON|3524GT-PWR\+|HP J8693A Switch 3500yl-48G' "$walk_file" 2>/dev/null | head -n 1 || true
+      grep -Eio 'N4032F|N2128PX-ON|3524GT-PWR\+|HP J9774A 2530-8G-PoEP|J9774A|HP J8693A Switch 3500yl-48G' "$walk_file" 2>/dev/null | head -n 1 || true
     fi
     rm -f "$tmp_walks"
     return 0
@@ -4393,16 +4437,34 @@ card_sfp_logical_port_map_for_generated_card() {
   [ -n "$selected_name" ] || return 0
   safe_name=$(printf '%s' "$selected_name" | sed 's/[^A-Za-z0-9._-]/_/g')
   cap_file="$CAPABILITIES_DIR/${safe_name}-capabilities.json"
-  [ -f "$cap_file" ] || return 0
-  jq -c '
-    (if ((.device.model_override // "") | length) > 0 then
-       (.model_override_registry.ports // .registry.ports // {})
-     else
-       (.registry.ports // {})
-     end) as $ports |
-    ($ports.combo_logical_ports // []) |
-    if type == "array" and length > 0 then . else empty end
-  ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" && $0 != "[]" { print; exit }'
+  logical_map=""
+
+  if [ -f "$cap_file" ]; then
+    logical_map=$(jq -c '
+      (if ((.device.model_override // "") | length) > 0 then
+         (.model_override_registry.ports // .registry.ports // {})
+       else
+         (.registry.ports // {})
+       end) as $ports |
+      ($ports.combo_logical_ports // []) |
+      if type == "array" and length > 0 then . else empty end
+    ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" && $0 != "[]" { print; exit }')
+  fi
+
+  if [ -z "$logical_map" ] && [ -f "$DEVICE_REGISTRY" ]; then
+    model=$(exact_model_for_generated_card "$selected_name")
+    if [ -n "$model" ]; then
+      logical_map=$(jq -c --arg model "$model" '
+        first(.devices[]? | select((.model // "") == $model) | .ports.combo_logical_ports // empty) as $map |
+        if ($map | type) == "array" and ($map | length) > 0 then $map else empty end
+      ' "$DEVICE_REGISTRY" 2>/dev/null | awk 'NF && $0 != "null" && $0 != "[]" { print; exit }')
+    fi
+  fi
+
+  if [ -n "$logical_map" ]; then
+    printf '%s\n' "$logical_map"
+  fi
+  return 0
 }
 
 emit_generated_card_sfp_logical_port_map() {

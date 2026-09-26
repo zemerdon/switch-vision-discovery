@@ -34,6 +34,12 @@ cv_known_vendor_identity() {
 
   if [ "$vendor_id" = "hp_aruba" ]; then
     case "${CV_ID_SYS_DESCR:-}" in
+      *J9774A*|*j9774a*|*2530-8G-PoEP*|*2530-8g-poep*)
+        CV_ID_FAMILY="2530"
+        CV_ID_MODEL_HINT="HP J9774A 2530-8G-PoEP"
+        CV_ID_PRODUCT_MATCH="j9774a-2530-8g-poep-local-sysdescr"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
       *J8693A*|*j8693a*|*3500yl-48G*|*3500YL-48G*)
         CV_ID_FAMILY="3500yl"
         CV_ID_MODEL_HINT="HP J8693A Switch 3500yl-48G"

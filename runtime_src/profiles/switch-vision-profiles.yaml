@@ -270,6 +270,36 @@ profiles:
       sfp_10g: []
     notes:
     - Privacy-processed real-hardware evidence confirms IF-MIB indexes 1-24 as 1G copper and 25-26 as 1G SFP.
+  hp-2530-8g-poep-8p-2dual:
+    status: experimental
+    vendor: HP
+    family: 2530
+    model_patterns:
+    - HP J9774A 2530-8G-PoEP
+    sys_object_ids:
+    - 1.3.6.1.4.1.11.2.3.7.11.138
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+      combo_ports: 2
+      combo_logical_ports:
+      - 9
+      - 10
+    interface_patterns:
+      rj45:
+      - '{port}'
+      sfp_1g:
+      - '9'
+      - '10'
+      combo:
+      - '9'
+      - '10'
+      sfp_10g: []
+    notes:
+    - Real-hardware evidence confirms numeric IF-MIB logical ports 1-10 on exact J9774A hardware: ports 1-8 are fixed PoE+ copper and ports 9-10 are dual-personality RJ45/SFP positions.
+    - combo_ports is a subset of the two SFP-capable positions, not an additional connector count.
   hp-procurve-1810g-24-22p-2dual:
     status: experimental
     vendor: HP
