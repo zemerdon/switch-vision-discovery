@@ -12,8 +12,6 @@ sys.path.insert(0, str(RUNTIME))
 import support_web
 
 source = (RUNTIME / "support_web.py").read_text(encoding="utf-8")
-config = (ROOT / "switch_vision_discovery/config.yaml").read_text(encoding="utf-8")
-assert 'version: "3.0.6"' in config
 assert 'id="supportTab-history"' in source
 assert 'id="contributionHistoryList"' in source
 assert '"/api/contributions/history"' in source
@@ -63,12 +61,36 @@ with tempfile.TemporaryDirectory(prefix="sv-contribution-history-") as td:
 
     outside = root / "Switch_Vision_Contribution_SV-2026-000100_20260925-010204.zip"
     target = root / "real.zip"
-    target.write_bytes(b"not a contribution")
+    with zipfile.ZipFile(target, "w") as zf:
+        zf.writestr(
+            "outside/MANIFEST.json",
+            json.dumps({"contribution_id": "OUTSIDE", "switch_vision_version": "9.9.9"}),
+        )
+        zf.writestr("outside/DEVICE_SUMMARY.json", "[]")
     try:
         outside.symlink_to(target)
     except OSError:
         pass
     else:
         assert all(row["archive"] != outside.name for row in support_web._contribution_history(root))
+        latest = support_web._latest_contribution(root)
+        assert latest is not None
+        assert latest["archive"] == archive.name
+        assert latest["contribution_id"] == "SV-2026-000099"
 
-print("Discovery 3.0.6 contribution history regression: PASS")
+        email_path = archive.with_suffix(".eml")
+        actions_path = archive.with_name(archive.stem + "_Actions.html")
+        email_path.unlink()
+        actions_path.unlink()
+        outside_email = root / "outside.eml"
+        outside_actions = root / "outside.html"
+        outside_email.write_text("external mail", encoding="utf-8")
+        outside_actions.write_text("<html>external</html>", encoding="utf-8")
+        email_path.symlink_to(outside_email)
+        actions_path.symlink_to(outside_actions)
+        latest = support_web._latest_contribution(root)
+        assert latest is not None
+        assert latest["email"] is None
+        assert latest["actions"] is None
+
+print("Discovery contribution history regression: PASS")

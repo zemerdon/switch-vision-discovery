@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -61,8 +62,11 @@ with tempfile.TemporaryDirectory(prefix="sv-avaya-3524-") as td:
         lines.append(f".1.3.6.1.2.1.105.1.1.1.6.1.{port} = INTEGER: off(2)")
     walk.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
+    config = (ROOT / "switch_vision_discovery/config.yaml").read_text(encoding="utf-8")
+    version_match = re.search(r'^version:\s*"([^"]+)"', config, re.MULTILINE)
+    assert version_match is not None, "Discovery config version unavailable"
     env = os.environ.copy()
-    env["SWITCH_VISION_DISCOVERY_VERSION"] = "3.0.6"
+    env["SWITCH_VISION_DISCOVERY_VERSION"] = version_match.group(1)
     run([str(PREPARE), str(walk), str(normalized), str(capabilities), str(contract)], env=env)
 
     cap = json.loads(capabilities.read_text(encoding="utf-8"))

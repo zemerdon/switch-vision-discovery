@@ -353,12 +353,14 @@ finally:
 # _run_discovery releases the operation; the fake mirrors that lifecycle.
 original_run = web._run_discovery
 original_projection = web._apply_saved_device_order_to_dashboard
+original_history = web.append_discovery_history
 original_debounce = web._DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS
 original_retry = web._DEVICE_STATE_RECONCILE_RETRY_SECONDS
 started = threading.Event()
 release_first = threading.Event()
 passes: list[str] = []
 projections: list[int] = []
+history_rows: list[dict] = []
 try:
     web._DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS = 0.01
     web._DEVICE_STATE_RECONCILE_RETRY_SECONDS = 0.005
@@ -379,6 +381,7 @@ try:
 
     web._run_discovery = fake_run
     web._apply_saved_device_order_to_dashboard = fake_projection
+    web.append_discovery_history = lambda snapshot: history_rows.append(copy.deepcopy(snapshot)) or {}
     first = web._start_device_state_application(Path("/tmp/fake-discovery-job.sh"))
     assert first["started"] is True and first["coalesced"] is False, first
     assert started.wait(2.0), "first coalesced state pass did not start"
@@ -392,12 +395,68 @@ try:
     assert web._DEVICE_STATE_RECONCILE_RUNNING is False, "state reconciler did not quiesce"
     assert passes == ["apply_device_state", "apply_device_state"], passes
     assert len(projections) == 2, projections
+    assert len(history_rows) == 1, history_rows
 finally:
     release_first.set()
     web._run_discovery = original_run
     web._apply_saved_device_order_to_dashboard = original_projection
+    web.append_discovery_history = original_history
     web._DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS = original_debounce
     web._DEVICE_STATE_RECONCILE_RETRY_SECONDS = original_retry
+    web._release_operation("Device state application")
+    web._DEVICE_STATE_RECONCILE_RUNNING = False
+
+# A required final dashboard projection failure must not be swallowed as a
+# successful device-state application. The worker must quiesce with an explicit
+# failed state so the Hub cannot claim the visible dashboard is current.
+original_run = web._run_discovery
+original_projection = web._apply_saved_device_order_to_dashboard
+original_history = web.append_discovery_history
+original_debounce = web._DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS
+failure_history_rows: list[dict] = []
+try:
+    web._DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS = 0.01
+    web._DEVICE_STATE_RECONCILE_REQUESTED = 0
+    web._DEVICE_STATE_RECONCILE_RUNNING = False
+    web._release_operation("Device state application")
+
+    def successful_state_apply(_script: Path, mode: str = "discovery") -> None:
+        assert mode == "apply_device_state", mode
+        web._set_discovery_state(
+            success=True,
+            message="Device state applied",
+            stage="Complete",
+            activity="Device state applied",
+            phase="complete",
+        )
+        web._release_operation("Device state application")
+
+    def failed_projection() -> dict[str, bool]:
+        raise RuntimeError("injected dashboard projection failure")
+
+    web._run_discovery = successful_state_apply
+    web._apply_saved_device_order_to_dashboard = failed_projection
+    web.append_discovery_history = lambda snapshot: failure_history_rows.append(copy.deepcopy(snapshot)) or {}
+    started = web._start_device_state_application(Path("/tmp/fake-discovery-job.sh"))
+    assert started["started"] is True and started["coalesced"] is False, started
+    deadline = time.monotonic() + 3.0
+    while web._DEVICE_STATE_RECONCILE_RUNNING and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert web._DEVICE_STATE_RECONCILE_RUNNING is False, "failed projection worker did not quiesce"
+    failed_state = web._discovery_state_snapshot()
+    assert failed_state["success"] is False, failed_state
+    assert failed_state["phase"] == "failed", failed_state
+    assert failed_state["stage"] == "Dashboard refresh failed", failed_state
+    assert "dashboard refresh failed" in str(failed_state["message"]).casefold(), failed_state
+    assert "injected dashboard projection failure" in str(failed_state["message"]), failed_state
+    assert len(failure_history_rows) == 1, failure_history_rows
+    assert failure_history_rows[0]["success"] is False, failure_history_rows
+    assert failure_history_rows[0]["phase"] == "failed", failure_history_rows
+finally:
+    web._run_discovery = original_run
+    web._apply_saved_device_order_to_dashboard = original_projection
+    web.append_discovery_history = original_history
+    web._DEVICE_STATE_RECONCILE_DEBOUNCE_SECONDS = original_debounce
     web._release_operation("Device state application")
     web._DEVICE_STATE_RECONCILE_RUNNING = False
 

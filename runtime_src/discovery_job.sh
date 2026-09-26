@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.0.6"
+SWITCH_VISION_DISCOVERY_VERSION="3.0.7"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -438,7 +438,6 @@ safe_label_value() {
 
 SELECTED_SWITCH_MATCHED="no"
 SELECTED_SWITCH_AVAILABLE=""
-SELECTED_SWITCH_ROW_KEY="none"
 SELECTED_SWITCH_RESOLVED_HOST=""
 SELECTED_SWITCH_RESOLVED_LABEL=""
 SELECTED_SWITCH_RESOLVED_PREFIX=""
@@ -448,7 +447,6 @@ SELECTED_SWITCH_RESOLVED_OUTPUT_DIR=""
 reset_selected_switch_resolution() {
   SELECTED_SWITCH_MATCHED="no"
   SELECTED_SWITCH_AVAILABLE=""
-  SELECTED_SWITCH_ROW_KEY="none"
   SELECTED_SWITCH_RESOLVED_HOST=""
   SELECTED_SWITCH_RESOLVED_LABEL=""
   SELECTED_SWITCH_RESOLVED_PREFIX=""
@@ -494,7 +492,6 @@ resolve_selected_switch() {
 
     if [ "$sw_lc" = "$selected_lc" ]; then
       SELECTED_SWITCH_MATCHED="yes"
-      SELECTED_SWITCH_ROW_KEY="$sw"
       SELECTED_SWITCH_RESOLVED_HOST="$host"
       SELECTED_SWITCH_RESOLVED_LABEL=$(safe_label_value "$sw")
       SELECTED_SWITCH_RESOLVED_PREFIX="${prefix:-$SELECTED_SWITCH_RESOLVED_LABEL}"
@@ -2559,7 +2556,6 @@ build_runtime_multi_switch_targets_csv() {
   # Row values are written first, so they override matching rows in discovery-targets.csv.
   runtime_csv="/tmp/switch_vision_multi_switch_targets_$$.csv"
   stack_map_csv="/tmp/switch_vision_stack_member_map_$$.csv"
-  wrote_rows=0
   : > "$stack_map_csv"
   echo "output_dir,folder label,switch name,member,member name,sensor prefix" > "$stack_map_csv"
   {
@@ -4278,7 +4274,7 @@ write_generated_dashboard_card() {
 
     if truthy "${GENERATED_CARD_SNMP_ENABLED:-false}" && command -v jq >/dev/null 2>&1 && [ -f "$CONFIG_FILE" ] && json_has_configured_switch_rows; then
       tmp_cards="/tmp/switch_vision_generated_card_rows_$$.tsv"
-      jq -r '
+      if jq -r '
         # SWITCH_VISION_GENERATED_CARD_ROWS_JQ_BEGIN
         def enabled($sw):
           (($sw.enabled // "enabled") as $value |
@@ -4342,10 +4338,15 @@ write_generated_dashboard_card() {
             [[ $key, $name, swprefix($sw), $host, "", $title, parent_header_title($sw) ]]
           end)[] | map(row_safe(.)) | join("\u001c")
         # SWITCH_VISION_GENERATED_CARD_ROWS_JQ_END
-      ' "$CONFIG_FILE" > "$tmp_cards" 2>/dev/null || true
+      ' "$CONFIG_FILE" > "$tmp_cards" 2>/dev/null; then
+        :
+      else
+        rm -f "$tmp_cards"
+        echo "Generated dashboard card row extraction failed; preserving the previous dashboard." >> "$LIVE_LOG_PATH" 2>/dev/null || true
+        return 1
+      fi
 
       card_row_separator="$(printf '\034')"
-      first_prefix_by_switch=""
       while IFS="$card_row_separator" read -r member_name selected prefix host member_num card_title card_header_title || [ -n "$member_name" ]; do
         [ -n "$member_name" ] || continue
         safe_prefix=$(printf '%s' "$prefix" | tr '[:upper:]' '[:lower:]')

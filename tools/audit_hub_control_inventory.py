@@ -90,9 +90,26 @@ def main() -> int:
             flags=re.S,
         )
         indirectly_bound = bool(indirect_pattern.search(javascript))
+        shared_data_bound = False
+        for attribute in properties:
+            if not attribute.startswith("data-"):
+                continue
+            shared_pattern = re.compile(
+                rf'''querySelectorAll\(\s*["']\[{re.escape(attribute)}\]["']\s*\)\s*\.forEach\([\s\S]{{0,1200}}?addEventListener\s*\(''',
+                flags=re.S,
+            )
+            if shared_pattern.search(javascript):
+                shared_data_bound = True
+                break
         has_action_attr = any(key.startswith("data-") and "action" in key for key in properties)
 
-        if button_type == "button" and not directly_bound and not indirectly_bound and not has_action_attr:
+        if (
+            button_type == "button"
+            and not directly_bound
+            and not indirectly_bound
+            and not shared_data_bound
+            and not has_action_attr
+        ):
             if references > 0:
                 warnings.append(f"{button_id}: referenced by JavaScript but listener pattern needs manual review")
             else:
