@@ -27,46 +27,11 @@ DEFAULT_SNMP_ADDON_CONFIG_URL = (
     "switch-vision-snmp2mqtt-addon/main/switch-vision-snmp2mqtt/config.yaml"
 )
 
-# Shared exact-model visual defaults are a hard Core/Discovery contract.
-# Any intentional divergence must be listed here with a non-empty reason.
-VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {
-    "USW Pro Aggregation": (
-        "Discovery consumes the exact Core 2.6.32 32-position optical canvas; "
-        "the shared physical 28 SFP+ + 4 SFP28 topology remains identical to Core."
-    ),
-}
-
-# Discovery's exact-model registry owns support confidence. Core's embedded
-# registry is a derivative consumer and may lag a newly reviewed field check.
-# Keep these exceptions narrow: status/evidence drift is still an error, and
-# only the listed support fields may differ from the current public Core baseline.
-SUPPORT_CONTRACT_EXCEPTIONS: dict[str, dict[str, object]] = {
-    "WS-C2960X-24PS-L": {
-        "fields": ("status", "validation"),
-        "reason": (
-            "Discovery is the support-confidence authority and promotes the exact 24PS-L "
-            "contract to Community Validated after the established real-hardware evidence "
-            "plus current owner field/render validation; Core's derivative registry may lag "
-            "the status and older uplink-validation marker."
-        ),
-    },
-    "USW Flex Mini": {
-        "fields": ("status",),
-        "reason": (
-            "Discovery is the support-confidence authority and promotes Flex Mini to "
-            "Community Validated after independent API corroboration plus current owner "
-            "dashboard/faceplate field validation; Core's derivative registry may lag status."
-        ),
-    },
-    "USW Pro Aggregation": {
-        "fields": ("status",),
-        "reason": (
-            "Discovery is the support-confidence authority and promotes this complete "
-            "32-port API/card contract to Experimental under the dashboard-first policy; "
-            "Core's derivative registry may lag this support-status-only change."
-        ),
-    },
-}
+# Exact-model hardware, support-confidence and visual contracts must remain
+# aligned between Discovery authority and Core's derivative registry. Intentional
+# component-only metadata may differ, but shared contract fields may not.
+VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {}
+SUPPORT_CONTRACT_EXCEPTIONS: dict[str, dict[str, object]] = {}
 
 FACEPLATE_CATALOG_SCHEMA = "switch-vision-faceplate-catalog-v1"
 FACEPLATE_PIN_SCHEMA = "switch-vision-core-faceplate-catalog-pin-v1"
@@ -448,6 +413,11 @@ def main() -> int:
         errors.append(
             "Core exact models missing from Discovery: " + ", ".join(missing_in_discovery)
         )
+    missing_in_core = sorted(discovery_models.keys() - core_models.keys())
+    if missing_in_core:
+        errors.append(
+            "Discovery exact models missing from Core: " + ", ".join(missing_in_core)
+        )
 
     shared_models = core_models.keys() & discovery_models.keys()
     for model, raw_reason in sorted(VISUAL_CONTRACT_EXCEPTIONS.items()):
@@ -614,13 +584,6 @@ def main() -> int:
         f"Core exact models: {len(core_models)}; "
         f"Discovery exact models: {len(discovery_models)}"
     )
-    extra = sorted(discovery_models.keys() - core_models.keys())
-    if extra:
-        print(
-            "INFO: Discovery intentionally carries additional exact models: "
-            + ", ".join(extra)
-        )
-
     for warning in warnings:
         print(f"WARN: {warning}")
 
@@ -632,8 +595,8 @@ def main() -> int:
 
     print(
         "Discovery cross-component contracts: PASS "
-        f"(version={app_version}; Core subset present; hardware mappings aligned; "
-        "all shared exact-model visuals aligned or explicitly excepted; "
+        f"(version={app_version}; exact-model sets aligned; hardware mappings aligned; "
+        "support-confidence contracts aligned; shared exact-model visuals aligned; "
         "Core Hub settings schema aligned; SNMP2MQTT YAML path aligned)"
     )
     return 0
