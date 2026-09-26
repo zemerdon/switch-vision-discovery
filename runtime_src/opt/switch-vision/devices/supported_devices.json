@@ -1446,6 +1446,84 @@
       }
     },
     {
+      "vendor": "Dell",
+      "family": "Dell Networking N4000",
+      "model": "N4032F",
+      "status": "experimental",
+      "confirmed_since": "3.0.8",
+      "last_validated_version": "3.0.8",
+      "evidence": "support_my_switch_real_hardware_contribution",
+      "ports": {
+        "rj45": 0,
+        "poe": false,
+        "uplinks": 24,
+        "uplink_type": "24x 10G SFP+ front-panel ports; observed optional rear 2x 40G QSFP+ expansion binds dynamically when present",
+        "gigabit_sfp": 0,
+        "ten_gigabit_sfp_plus": 24,
+        "forty_gigabit_qsfp_plus": 0
+      },
+      "discovery_optional_interfaces": [
+        {
+          "id": "rear_qsfp_expansion",
+          "location": "rear",
+          "media": "uplink",
+          "speed_mbps": 40000,
+          "interface_names": [
+            "Fo1/1/1",
+            "Fo1/1/2"
+          ],
+          "telemetry_only": false,
+          "observed_when_present": true,
+          "faceplate_positions": [
+            25,
+            26
+          ]
+        }
+      ],
+      "stack_support": false,
+      "discovery_support": true,
+      "dashboard_support": true,
+      "mapping_profile": "dell-n4032f-24sfp2qsfp",
+      "calibration_profile": "unifi_32sfp",
+      "default_faceplate": "faceplates/unifi-32sfp.png",
+      "optional_faceplates": [],
+      "tested_firmware": [
+        "6.5.4.23",
+        "6.3.3.8"
+      ],
+      "contributor": {
+        "display_name": "community contributor",
+        "public_credit": false
+      },
+      "notes": [
+        "Current real-hardware evidence confirms sysObjectID 1.3.6.1.4.1.674.10895.3044 and exact model N4032F.",
+        "Te1/0/1-24 are the 24 front 10G SFP+ interfaces and form the base physical contract.",
+        "The installed Dell 2 Port QSFP Expansion Card exposes two rear physical 40G connectors as Fo1/1/1-2. When observed, Switch Vision binds them to optical faceplate positions 25-26.",
+        "Te1/1/1-8 are breakout-lane interface views of the two rear QSFP connectors and are not eight additional physical sockets.",
+        "The current capture reports all eight breakout lanes notPresent while both QSFP parent interfaces remain present.",
+        "Until dedicated N4032F artwork exists, the closest reviewed optical faceplate is faceplates/unifi-32sfp.png; positions 1-24 represent the front SFP+ ports, observed rear QSFP parents use 25-26, and unused positions remain hidden by the generated card count.",
+        "The fallback faceplate is presentation-only; the real Dell interface identity, speed and physical/logical contract remain authoritative."
+      ],
+      "validation": {
+        "exact_model_detection": "real_hardware_sysobjectid_model_and_two_firmware_versions_confirmed",
+        "rj45_mapping": "not_applicable",
+        "poe": "not_applicable",
+        "system_sensors": "pending",
+        "uplinks": "real_hardware_24_front_10g_sfp_plus_confirmed_optional_rear_2x40g_qsfp_bound_when_observed",
+        "stack": "not_observed_not_required"
+      },
+      "visuals": {
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/unifi-32sfp.png",
+        "optional_faceplates": [],
+        "calibration_profile": "unifi_32sfp",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
+    },
+    {
       "vendor": "Ubiquiti",
       "family": "UniFi Switch",
       "model": "US 48 PoE 500W",

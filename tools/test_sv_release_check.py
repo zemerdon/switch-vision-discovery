@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ENTRY = ROOT / "tools" / "sv_release_check.py"
+PIN_HELPER = ROOT / "tools" / "prepare_core_faceplate_pin.py"
 REQUIREMENTS = ROOT / "tools" / "sv_release_check.requirements.txt"
 PIN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9][A-Za-z0-9._+!-]*$")
 
@@ -53,6 +54,14 @@ def main() -> int:
     assert "Path(sys.executable).resolve().parent" not in source
     assert "tracked_archive = archive_path.read_bytes()" in source
     assert "Discovery tracked runtime archive restore: PASS" in source
+
+    pin_source = PIN_HELPER.read_text(encoding="utf-8")
+    compile(pin_source, str(PIN_HELPER), "exec")
+    assert "sys.dont_write_bytecode = True" in pin_source
+    assert pin_source.index("sys.dont_write_bytecode = True") < pin_source.index(
+        "import check_component_contracts as contracts"
+    )
+
     materializer = (ROOT / "tools" / "materialize_runtime.sh").read_text(encoding="utf-8")
     for marker in ("--exclude='__pycache__'", "--exclude='*/__pycache__'", "--exclude='*.pyc'", "--exclude='*.pyo'", "--exclude='*.bak.*'"):
         assert marker in materializer, marker

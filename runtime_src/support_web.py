@@ -588,7 +588,7 @@ def _manual_snmp_override_models() -> set[str]:
         "WS-C3560CG-8PC-S", "WS-C3750-48P", "WS-C3750X-48P", "WS-C3750X-48P-S",
         "WS-C3850-12XS-E", "EX3300-48P", "SG500X-24", "SG350-20",
         "S5720-12TP-LI-AC", "S5735-L8P4X-A1", "CRS328-24P-4S+RM", "XS1930-10",
-        "N2128PX-ON", "PowerConnect 5548P", "HP J8693A Switch 3500yl-48G",
+        "N4032F", "N2128PX-ON", "PowerConnect 5548P", "HP J8693A Switch 3500yl-48G",
         "HP 1810-24G", "HP ProCurve 1810G-24", "GS1900-24E", "GS1900-8",
         "GS1915-24EP", "3524GT-PWR+", "SR-S25G3420F",
     }

@@ -4,7 +4,7 @@ cv_cap_extract_model_text() {
   walk_file="$1"
   # ENTITY-MIB model names are more precise than sysDescr for 24/48-port
   # variants. Fall back to sysDescr/family when no explicit model is present.
-  model=$(grep -Eio 'WS-C[0-9A-Za-z][0-9A-Za-z._-]*|SG500X-24|S5735-L8P4X-A1|S5720-12TP-LI-AC|XS1930-10|N2128PX-ON|3524GT-PWR\+|ex3300-48p' "$walk_file" 2>/dev/null | head -n 1 || true)
+  model=$(grep -Eio 'WS-C[0-9A-Za-z][0-9A-Za-z._-]*|SG500X-24|S5735-L8P4X-A1|S5720-12TP-LI-AC|XS1930-10|N4032F|N2128PX-ON|3524GT-PWR\+|ex3300-48p' "$walk_file" 2>/dev/null | head -n 1 || true)
   if [ -n "$model" ]; then
     case "$model" in
       [Ee][Xx]3300-48[Pp]) printf 'Juniper EX3300-48P' ;;
@@ -98,6 +98,11 @@ cv_cap_set_front_panel_profile() {
       CV_CAP_FRONT_PANEL_AWARE="true"
       CV_CAP_PLATFORM="huawei_s5720_12tp_li_ac"
       CV_CAP_RJ45_LIMIT="8"
+      ;;
+    *N4032F*)
+      CV_CAP_FRONT_PANEL_AWARE="true"
+      CV_CAP_PLATFORM="dell_n4032f"
+      CV_CAP_RJ45_LIMIT="0"
       ;;
     *N2128PX-ON*)
       CV_CAP_FRONT_PANEL_AWARE="true"

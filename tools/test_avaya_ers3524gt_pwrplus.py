@@ -15,6 +15,8 @@ REGISTRY = RUNTIME / "opt/switch-vision/devices/supported_devices.json"
 LOOKUP = RUNTIME / "registry_lookup.py"
 PROFILE = RUNTIME / "profiles/switch-vision-profiles.yaml"
 STANDARD_SENSOR_SCAN = RUNTIME / "standard_sensor_scan.py"
+ENTRYPOINT = RUNTIME / "discovery_contract_entrypoint.py"
+LEGACY = RUNTIME / "discovery_job.sh"
 
 
 def run(args, *, env=None):
@@ -49,11 +51,11 @@ with tempfile.TemporaryDirectory(prefix="sv-avaya-3524-") as td:
     ]
     for idx in range(1, 25):
         lines.append(f".1.3.6.1.2.1.2.2.1.2.{idx} = STRING: Slot 1 / Port {idx}")
-        lines.append(f".1.3.6.1.2.1.31.1.1.1.1.{idx} = STRING: {idx}")
+        lines.append(f".1.3.6.1.2.1.31.1.1.1.1.{idx} = STRING: ifc{idx} (Slot: 1 Port: {idx})")
     lines.extend(
         [
-            ".1.3.6.1.2.1.2.2.1.2.25 = STRING: VLAN 1",
-            ".1.3.6.1.2.1.31.1.1.1.1.25 = STRING: Vlan 1",
+            ".1.3.6.1.2.1.2.2.1.2.10001 = STRING: VLAN 1",
+            ".1.3.6.1.2.1.31.1.1.1.1.10001 = STRING: ifc10001 VLAN #1",
             ".1.3.6.1.2.1.105.1.3.1.1.2.1 = Gauge32: 370",
             ".1.3.6.1.2.1.105.1.3.1.1.4.1 = Gauge32: 7",
         ]
@@ -97,6 +99,14 @@ with tempfile.TemporaryDirectory(prefix="sv-avaya-3524-") as td:
     assert con["observed"]["rj45"] == 20
     assert con["observed"]["uplinks"] == 4
     assert [p["source"]["if_index"] for p in con["ports"] if p["media"] == "uplink"] == [21, 22, 23, 24]
+    assert con["ports"][0]["source"]["if_name"] == "ifc1 (Slot: 1 Port: 1)"
+
+    normalized_text = normalized.read_text(encoding="utf-8")
+    assert 'STRING: "Gi1/0/1"' in normalized_text
+    assert 'STRING: "Gi1/0/20"' in normalized_text
+    assert 'STRING: "Gi1/1/1"' in normalized_text
+    assert 'STRING: "Gi1/1/4"' in normalized_text
+    assert "ifc10001 VLAN #1" in normalized_text
 
     run(
         [
@@ -138,6 +148,63 @@ with tempfile.TemporaryDirectory(prefix="sv-avaya-3524-") as td:
     poe = [item for item in standard["candidates"] if item["category"] == "poe"]
     assert standard["counts_by_category"]["poe"] == 2
     assert any(item["sensor_type"] == "watts" and item["raw_value"] == "370" for item in poe)
+
+    # Production-boundary regression: the exact field naming must survive the
+    # physical-contract entrypoint and generate usable status/traffic entities,
+    # not merely a diagnosable card with zero bound ports.
+    entry = work / "entrypoint"
+    (entry / "walks").mkdir(parents=True)
+    (entry / "live").mkdir()
+    (entry / "share").mkdir()
+    targets = entry / "targets.csv"
+    targets.write_text(f"{walk.name},192.0.2.53,AVAYA,readonly,,Avaya53\n", encoding="utf-8")
+    options = entry / "options.json"
+    options.write_text(
+        json.dumps(
+            {
+                "input_path": str(walk),
+                "snmpwalks_dir": str(entry / "walks"),
+                "report_path": str(entry / "report.txt"),
+                "run_snmp_walks": "false",
+                "enable_switch_list": "false",
+                "parse_all_walks": "true",
+                "generate_snmp2mqtt": "true",
+                "targets_csv": str(targets),
+                "last_run_summary_path": str(entry / "summary.txt"),
+                "generated_yaml_path": str(entry / "generated.yaml"),
+                "generated_card_path": str(entry / "card.yaml"),
+                "snmp_log_path": str(entry / "discovery.log"),
+                "live_output_dir": str(entry / "live"),
+                "live_output_path": str(entry / "live/live-targeted-snmpwalk.txt"),
+                "generate_support_my_switch_bundle": "false",
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    entry_env = env.copy()
+    entry_env.update(
+        {
+            "SWITCH_VISION_OPTIONS_FILE": str(options),
+            "SWITCH_VISION_LEGACY_DISCOVERY_SCRIPT": str(LEGACY),
+            "SWITCH_VISION_PHYSICAL_PREPARE": str(PREPARE),
+            "SWITCH_VISION_DEVICE_REGISTRY": str(REGISTRY),
+            "SWITCH_VISION_CAPABILITIES_DIR": str(entry / "published-capabilities"),
+            "SWITCH_VISION_SHARE_DIR": str(entry / "share"),
+            "SWITCH_VISION_RUNTIME_DIR": str(RUNTIME),
+        }
+    )
+    run([str(ENTRYPOINT)], env=entry_env)
+    generated = (entry / "generated.yaml").read_text(encoding="utf-8")
+    card = (entry / "card.yaml").read_text(encoding="utf-8")
+    assert generated.count("1.3.6.1.2.1.2.2.1.8.") == 24
+    assert "# Detected model: 3524GT-PWR+" in generated
+    assert "AVAYA Port 2 Status" in generated
+    assert "AVAYA SFP 1G 1 Status" in generated
+    generator_source = LEGACY.read_text(encoding="utf-8")
+    assert '*3524GT-PWR+*|*SG350-20*' in generator_source
+    assert 'sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status' in generator_source
 
 profiles = PROFILE.read_text(encoding="utf-8")
 assert "avaya-ers3524gt-pwrplus-20p-4dual:" in profiles

@@ -5,7 +5,14 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
+
+# This helper is routinely invoked directly during local candidate coordination.
+# Keep it source-tree-clean even outside sv_release_check's -B/PYTHONDONTWRITEBYTECODE
+# environment, because importing sibling contract helpers must never create
+# __pycache__ that later trips the release hygiene gate.
+sys.dont_write_bytecode = True
 
 import check_component_contracts as contracts
 

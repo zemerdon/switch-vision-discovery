@@ -9,14 +9,20 @@
 cv_interface_class_for_name() {
   name="$1"
 
-  # Avaya ERS 3524GT-PWR+ contribution: numeric IF-MIB indexes 1-20
-  # are fixed copper and 21-24 are dual-personality front copper/SFP
-  # positions. Preserve one logical identity for each shared connector pair.
+  # Avaya ERS 3524GT-PWR+ contribution: IF-MIB indexes 1-20 are fixed
+  # copper and 21-24 are the four dual-personality front copper/SFP
+  # positions. Real firmware exposes names such as
+  # "ifc2 (Slot: 1 Port: 2)" rather than bare numeric ifName values, so the
+  # exact-model physical contract is keyed by the stable contributed ifIndex
+  # range instead of formatting the interface name.
   if [ "${CV_CAP_MODEL_TEXT:-}" = "3524GT-PWR+" ]; then
-    case "${CV_CAP_IF_INDEX:-}:$name" in
-      1:1|2:2|3:3|4:4|5:5|6:6|7:7|8:8|9:9|10:10|11:11|12:12|13:13|14:14|15:15|16:16|17:17|18:18|19:19|20:20) printf 'rj45' ;;
-      21:21|22:22|23:23|24:24) printf 'uplink' ;;
-      *) printf 'other' ;;
+    case "${CV_CAP_IF_INDEX:-}" in
+      ''|*[!0-9]*) printf 'other' ;;
+      *)
+        if [ "$CV_CAP_IF_INDEX" -ge 1 ] && [ "$CV_CAP_IF_INDEX" -le 20 ]; then printf 'rj45';
+        elif [ "$CV_CAP_IF_INDEX" -ge 21 ] && [ "$CV_CAP_IF_INDEX" -le 24 ]; then printf 'uplink';
+        else printf 'other'; fi
+        ;;
     esac
     return 0
   fi
@@ -344,6 +350,36 @@ cv_interface_class_for_name() {
       sfp-sfpplus[1-4]) printf 'sfp_plus'; return 0 ;;
       bridge|lo) printf 'virtual'; return 0 ;;
       *) printf 'other'; return 0 ;;
+    esac
+  fi
+
+  # Dell N4032F contribution: 24 front-panel 10G SFP+ cages are Te1/0/1-24.
+  # The installed Dell two-port QSFP expansion card exposes its two physical
+  # 40G connectors as Fo1/1/1-2. Te1/1/1-8 are the 4x10G breakout lane view
+  # of those two QSFP connectors and must never be counted as eight additional
+  # physical sockets.
+  if [ "${CV_CAP_PLATFORM:-generic}" = "dell_n4032f" ]; then
+    case "$name" in
+      Te1/0/*|TenGigabitEthernet1/0/*)
+        port_number=${name##*/}
+        case "$port_number" in
+          ''|*[!0-9]*) printf 'other' ;;
+          *) [ "$port_number" -ge 1 ] && [ "$port_number" -le 24 ] && printf 'sfp_plus' || printf 'other' ;;
+        esac
+        return 0
+        ;;
+      Fo1/1/1|Fo1/1/2|FortyGigabitEthernet1/1/1|FortyGigabitEthernet1/1/2)
+        printf 'uplink'
+        return 0
+        ;;
+      Te1/1/*|TenGigabitEthernet1/1/*)
+        printf 'other'
+        return 0
+        ;;
+      *)
+        printf 'other'
+        return 0
+        ;;
     esac
   fi
 

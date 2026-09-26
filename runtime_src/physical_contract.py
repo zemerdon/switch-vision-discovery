@@ -217,7 +217,10 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         # RJ45 socket and SFP cage instead of inventing a second uplink entity.
         # Juniper dynamic cage and VLAN sensors consume native ge/xe names.
         # Renaming them to Gi/Te reintroduces static sensors for the same cage.
-        if (combo_ports_per_member > 0 or registry_model == "ex3300-48p") and source_name:
+        if (
+            (combo_ports_per_member > 0 and registry_model != "3524gt-pwr+")
+            or registry_model in {"ex3300-48p", "n4032f"}
+        ) and source_name:
             compatibility = source_name
 
         ports.append(Port(physical_id, member, position, media, if_index, source_name, compatibility))
@@ -326,6 +329,8 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
             "calibration_profile": str(registry_device.get("calibration_profile") or "") if registry_device else "",
             "faceplate": str(registry_device.get("default_faceplate") or "") if registry_device else "",
             "dashboard_support": bool(registry_device.get("dashboard_support")) if registry_device else False,
+            "frontend_hold": bool(registry_device.get("frontend_hold")) if registry_device else False,
+            "frontend_hold_reason": str(registry_device.get("frontend_hold_reason") or "") if registry_device else "",
         },
         "status": status,
         "errors": errors,

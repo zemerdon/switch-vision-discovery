@@ -1036,7 +1036,9 @@ parser_report() {
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model = "CRS328-24P-4S+"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model = "HP J8693A Switch 3500yl-48G"
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.104/) || (line !~ /\.1\.0\.8802\./ && tolower(line) ~ /procurve 1810g[[:space:]]*-[[:space:]]*24/)) hp_1810g_model = "HP ProCurve 1810G-24"
+      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N4032F/) dell_n4032f_model = "N4032F"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model = "N2128PX-ON"
+      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /3524GT-PWR\+/) avaya_model = "3524GT-PWR+"
       if (line ~ /N2128PX-ON, [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+,/ && match(line, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
         ios = substr(line, RSTART, RLENGTH)
       }
@@ -1176,6 +1178,14 @@ parser_report() {
       else if (hp_3500yl_model != "") {
         model = hp_3500yl_model
         manufacturer = "HP"
+      }
+      else if (avaya_model != "") {
+        model = avaya_model
+        manufacturer = "Avaya"
+      }
+      else if (dell_n4032f_model != "") {
+        model = dell_n4032f_model
+        manufacturer = "Dell"
       }
       else if (dell_model != "") model = dell_model
       else if (local_model != "") model = local_model
@@ -2462,6 +2472,31 @@ run_live_snmpwalk_current() {
     done
   fi
 
+  # Dell N2128PX-ON transceiver diagnostics live under a narrow enterprise
+  # table that is not part of the standards-based targeted walk set. Full mode
+  # already walks from root OID 1; targeted mode explicitly adds only the two
+  # reviewed DDMI/identity subtrees proven by current hardware evidence.
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ] && grep -Eqi 'N2128PX-ON' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+    DELL_N2128_OPTICAL_OIDS="
+1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18
+1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.19
+"
+    echo "Running Dell N2128PX-ON optical supplemental walks" >> "$LIVE_LOG_PATH"
+    for oid in $DELL_N2128_OPTICAL_OIDS; do
+      current_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP $oid"
+      echo "Running supplemental: $current_command" >> "$LIVE_LOG_PATH"
+      {
+        echo ""
+        echo "# --- Dell N2128PX-ON optical supplemental: $oid ---"
+      } >> "$LIVE_OUTPUT_PATH"
+      if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+        echo "OK supplemental: $oid" >> "$LIVE_LOG_PATH"
+      else
+        echo "INFO: Dell N2128PX-ON optical OID unavailable: $oid" >> "$LIVE_LOG_PATH"
+      fi
+    done
+  fi
+
   line_count=$(walk_line_count "$LIVE_OUTPUT_PATH")
   result="PASS"
   reason="SNMP walk completed"
@@ -3028,6 +3063,30 @@ write_generated_yaml_for_walk() {
         sub(/^A/, "", port)
         return prefix " Rear 10G " (port + 0)
       }
+      if (model == "3524GT-PWR+" && name ~ /^(Gi|GigabitEthernet)1\/0\/([1-9]|1[0-9]|20)$/) {
+        port = name
+        sub(/^GigabitEthernet1\/0\//, "", port)
+        sub(/^Gi1\/0\//, "", port)
+        return prefix " Port " (port + 0)
+      }
+      if (model == "3524GT-PWR+" && name ~ /^(Gi|GigabitEthernet)1\/1\/[1-4]$/) {
+        port = name
+        sub(/^GigabitEthernet1\/1\//, "", port)
+        sub(/^Gi1\/1\//, "", port)
+        return prefix " SFP 1G " (port + 0)
+      }
+      if (model == "N4032F" && name ~ /^(Te|TenGigabitEthernet)1\/0\/([1-9]|1[0-9]|2[0-4])$/) {
+        port = name
+        sub(/^TenGigabitEthernet1\/0\//, "", port)
+        sub(/^Te1\/0\//, "", port)
+        return prefix " SFP 10G " (port + 0)
+      }
+      if (model == "N4032F" && name ~ /^(Fo|FortyGigabitEthernet)1\/1\/[12]$/) {
+        port = name
+        sub(/^FortyGigabitEthernet1\/1\//, "", port)
+        sub(/^Fo1\/1\//, "", port)
+        return prefix " Rear QSFP 40G " (port + 0)
+      }
       if (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) {
         port = name
         sub(/^[Gg][Ii]/, "", port)
@@ -3261,7 +3320,9 @@ write_generated_yaml_for_walk() {
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model="CRS328-24P-4S+"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.104/) || (line !~ /\.1\.0\.8802\./ && tolower(line) ~ /procurve 1810g[[:space:]]*-[[:space:]]*24/)) hp_1810g_model="HP ProCurve 1810G-24"
+      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N4032F/) dell_n4032f_model="N4032F"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
+      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /3524GT-PWR\+/) avaya_model="3524GT-PWR+"
       if (line ~ /WS-C3850-12XS/) c3850_model="WS-C3850-12XS"
       if (line ~ /WS-C3750-48P/) c3750_model="WS-C3750-48P"
       if (match(line, /WS-C(3850|3650|3750X|3750|3560CG|2960XR|2960X|2960S)-[A-Z0-9-]+/)) {
@@ -3496,6 +3557,20 @@ write_generated_yaml_for_walk() {
           identity_serial_idx[idx]=1
         }
       }
+      # Dell N2128PX-ON optical diagnostics observed in verified field evidence.
+      # The table row suffix is the same IF-MIB index used by the two Te uplinks
+      # in both current full walks, allowing the diagnostics to bind directly
+      # to the evidenced physical SFP+ ports rather than anonymous rows.
+      if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.(18|19)\.1\.[0-9]+\.[0-9]+ = /) { idx=oid_index(line); dell_optic_row_idx[idx]=1; if (idx > dell_optic_max_row) dell_optic_max_row=idx }
+      if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.18\.1\.2\.[0-9]+ = /) { idx=oid_index(line); dell_optic_temp_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.18\.1\.3\.[0-9]+ = /) { idx=oid_index(line); dell_optic_voltage_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.18\.1\.4\.[0-9]+ = /) { idx=oid_index(line); dell_optic_current_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.18\.1\.5\.[0-9]+ = /) { idx=oid_index(line); dell_optic_tx_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.18\.1\.6\.[0-9]+ = /) { idx=oid_index(line); dell_optic_rx_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.18\.1\.9\.[0-9]+ = /) { idx=oid_index(line); dell_optic_status_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.19\.1\.2\.[0-9]+ = /) { idx=oid_index(line); dell_optic_vendor_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.19\.1\.6\.[0-9]+ = /) { idx=oid_index(line); dell_optic_part_idx[idx]=1 }
+      if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.19\.1\.9\.[0-9]+ = /) { idx=oid_index(line); dell_optic_type_idx[idx]=1 }
     }
     END {
       if (mikrotik_model != "") {
@@ -3534,6 +3609,14 @@ write_generated_yaml_for_walk() {
         model = hp_3500yl_model
         manufacturer = "HP"
       }
+      else if (avaya_model != "") {
+        model = avaya_model
+        manufacturer = "Avaya"
+      }
+      else if (dell_n4032f_model != "") {
+        model = dell_n4032f_model
+        manufacturer = "Dell"
+      }
       else if (dell_model != "") {
         model = dell_model
         manufacturer = "Dell"
@@ -3564,7 +3647,7 @@ write_generated_yaml_for_walk() {
       phys_n = 0
       for (idx=1; idx<=maxidx; idx++) if (idx in ifname) {
         name=ifname[idx]
-        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) || ((model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^A[1-4]$/)) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
+        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) || ((model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^A[1-4]$/)) || (model == "N4032F" && name ~ /^(Fo|FortyGigabitEthernet)1\/1\/[12]$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
           if (model == "Juniper EX3300-48P" && name ~ /^(xe|ge)-0\/1\/[0-3]$/) continue
           if (name ~ /^ge-0\/0\/[0-9]+$/) {
             port_no=name
@@ -3687,6 +3770,22 @@ write_generated_yaml_for_walk() {
         }
       }
       print "# Walk-aware traffic counters: " skipped_hc " missing counter OID(s) skipped; " (legacy_counter_fallbacks + 0) " legacy 32-bit counter fallback(s) used"
+
+      if (model == "N2128PX-ON" && dell_optic_max_row > 0) {
+        yaml_target_header("Switch Vision " prefix " Optical diagnostics", 30)
+        for (idx=1; idx<=dell_optic_max_row; idx++) if ((idx in dell_optic_row_idx) && (idx in ifname) && ifname[idx] ~ /^(Te|TenGigabitEthernet)[0-9]+\/0\/[12]$/) {
+          label=physical_label(ifname[idx], idx)
+          if (idx in dell_optic_temp_idx) yaml_sensor_meta("1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.2." idx, label " Temperature", "value / 10", "°C", "temperature", "measurement", "mdi:thermometer")
+          if (idx in dell_optic_voltage_idx) yaml_sensor_meta("1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.3." idx, label " Voltage", "value / 1000", "V", "voltage", "measurement", "mdi:current-dc")
+          if (idx in dell_optic_current_idx) yaml_sensor_meta("1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.4." idx, label " Current", "value / 10", "mA", "current", "measurement", "mdi:current-dc")
+          if (idx in dell_optic_tx_idx) yaml_sensor_meta("1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.5." idx, label " TX Optical Power", "value / 1000", "dBm", "", "measurement", "mdi:laser-pointer")
+          if (idx in dell_optic_rx_idx) yaml_sensor_meta("1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.6." idx, label " RX Optical Power", "value / 1000", "dBm", "", "measurement", "mdi:signal")
+          if (idx in dell_optic_status_idx) yaml_sensor("1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.9." idx, label " Optical Status")
+          if (idx in dell_optic_vendor_idx) yaml_sensor("1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.19.1.2." idx, label " Transceiver Vendor")
+          if (idx in dell_optic_part_idx) yaml_sensor("1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.19.1.6." idx, label " Transceiver Part")
+          if (idx in dell_optic_type_idx) yaml_sensor("1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.19.1.9." idx, label " Media Type")
+        }
+      }
 
       if (model == "Juniper EX3300-48P") {
         yaml_target_header("Switch Vision " prefix " SFP Traffic", traffic_interval)
@@ -4087,19 +4186,46 @@ generator_has_unknown_targets() {
 
 
 
+walk_model_for_generated_card() {
+  selected_name="$1"
+  [ -n "$selected_name" ] || return 0
+  tmp_walks="/tmp/switch_vision_card_model_walks_$$.txt"
+  collect_multi_walks "$tmp_walks"
+  while IFS= read -r walk_file; do
+    [ -f "$walk_file" ] || continue
+    walk_switch=$(target_switch_for_walk "$walk_file")
+    [ "$walk_switch" = "$selected_name" ] || continue
+    if command -v cv_cap_extract_model_text >/dev/null 2>&1; then
+      cv_cap_extract_model_text "$walk_file"
+    else
+      grep -Eio 'N4032F|N2128PX-ON|3524GT-PWR\+|HP J8693A Switch 3500yl-48G' "$walk_file" 2>/dev/null | head -n 1 || true
+    fi
+    rm -f "$tmp_walks"
+    return 0
+  done < "$tmp_walks"
+  rm -f "$tmp_walks"
+}
+
 model_metadata_for_generated_card() {
   selected_name="$1"
   field="$2"
   [ -n "$selected_name" ] || return 0
   safe_name=$(printf '%s' "$selected_name" | sed 's/[^A-Za-z0-9._-]/_/g')
   cap_file="$CAPABILITIES_DIR/${safe_name}-capabilities.json"
-  [ -f "$cap_file" ] || return 0
-  jq -r --arg field "$field" '
-    if $field == "detected" then (.device.detected_model_text // .device.model_text // empty)
-    elif $field == "override" then (.device.model_override // empty)
-    elif $field == "effective" then (.device.effective_model_text // .device.model_text // empty)
-    else empty end
-  ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "unknown" { print; exit }'
+  value=""
+  if [ -f "$cap_file" ]; then
+    value=$(jq -r --arg field "$field" '
+      if $field == "detected" then (.device.detected_model_text // .device.model_text // empty)
+      elif $field == "override" then (.device.model_override // empty)
+      elif $field == "effective" then (.device.effective_model_text // .device.model_text // empty)
+      else empty end
+    ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "unknown" { print; exit }')
+  fi
+  if [ -z "$value" ] && { [ "$field" = "detected" ] || [ "$field" = "effective" ]; }; then
+    value=$(walk_model_for_generated_card "$selected_name")
+  fi
+  [ -n "$value" ] && printf '%s\n' "$value"
+  return 0
 }
 
 exact_model_for_generated_card() {
@@ -4120,14 +4246,82 @@ calibration_profile_for_generated_card() {
   [ -n "$selected_name" ] || return 0
   safe_name=$(printf '%s' "$selected_name" | sed 's/[^A-Za-z0-9._-]/_/g')
   cap_file="$CAPABILITIES_DIR/${safe_name}-capabilities.json"
-  [ -f "$cap_file" ] || return 0
-  jq -r '
+  if [ -f "$cap_file" ]; then
+    value=$(jq -r '
+      if ((.device.model_override // "") | length) > 0 then
+        (.model_override_registry.calibration_profile // .registry.calibration_profile // empty)
+      else
+        (.registry.calibration_profile // empty)
+      end
+    ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" { print; exit }')
+    [ -n "$value" ] && { printf '%s\n' "$value"; return 0; }
+  fi
+  model=$(exact_model_for_generated_card "$selected_name")
+  [ -n "$model" ] && [ -f "$DEVICE_REGISTRY" ] || return 0
+  jq -r --arg model "$model" '
+    first(.devices[]? | select((.model // "") == $model) | .calibration_profile // empty)
+  ' "$DEVICE_REGISTRY" 2>/dev/null | awk 'NF && $0 != "null" { print; exit }'
+}
+
+frontend_hold_for_generated_card() {
+  selected_name="$1"
+  [ -n "$selected_name" ] || return 1
+  safe_name=$(printf '%s' "$selected_name" | sed 's/[^A-Za-z0-9._-]/_/g')
+  cap_file="$CAPABILITIES_DIR/${safe_name}-capabilities.json"
+  if [ -f "$cap_file" ] && jq -e '
     if ((.device.model_override // "") | length) > 0 then
-      (.model_override_registry.calibration_profile // .registry.calibration_profile // empty)
+      ((.model_override_registry.frontend_hold // .registry.frontend_hold // false) == true)
     else
-      (.registry.calibration_profile // empty)
+      ((.registry.frontend_hold // false) == true)
     end
-  ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" { print; exit }'
+  ' "$cap_file" >/dev/null 2>&1; then
+    return 0
+  fi
+  hold_model=$(model_metadata_for_generated_card "$selected_name" effective)
+  [ -n "$hold_model" ] && [ -f "$DEVICE_REGISTRY" ] || return 1
+  jq -e --arg model "$hold_model" '
+    any(.devices[]?; ((.model // "") == $model) and ((.frontend_hold // false) == true))
+  ' "$DEVICE_REGISTRY" >/dev/null 2>&1
+}
+
+frontend_hold_reason_for_generated_card() {
+  selected_name="$1"
+  [ -n "$selected_name" ] || return 0
+  safe_name=$(printf '%s' "$selected_name" | sed 's/[^A-Za-z0-9._-]/_/g')
+  cap_file="$CAPABILITIES_DIR/${safe_name}-capabilities.json"
+  if [ -f "$cap_file" ]; then
+    reason=$(jq -r '
+      if ((.device.model_override // "") | length) > 0 then
+        (.model_override_registry.frontend_hold_reason // .registry.frontend_hold_reason // empty)
+      else
+        (.registry.frontend_hold_reason // empty)
+      end
+    ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" { print; exit }')
+    [ -n "$reason" ] && { printf '%s\n' "$reason"; return 0; }
+  fi
+  hold_model=$(model_metadata_for_generated_card "$selected_name" effective)
+  [ -n "$hold_model" ] && [ -f "$DEVICE_REGISTRY" ] || return 0
+  jq -r --arg model "$hold_model" '
+    first(.devices[]? | select((.model // "") == $model) | .frontend_hold_reason // empty)
+  ' "$DEVICE_REGISTRY" 2>/dev/null | awk 'NF && $0 != "null" { print; exit }'
+}
+
+observed_n4032_rear_qsfp_count_for_generated_card() {
+  selected_name="$1"
+  [ -n "$selected_name" ] || { printf '0\n'; return 0; }
+  tmp_walks="/tmp/switch_vision_n4032_rear_walks_$$.txt"
+  collect_multi_walks "$tmp_walks"
+  tmp_names="/tmp/switch_vision_n4032_rear_names_$$.txt"
+  : > "$tmp_names"
+  while IFS= read -r walk_file; do
+    [ -f "$walk_file" ] || continue
+    walk_switch=$(target_switch_for_walk "$walk_file")
+    [ "$walk_switch" = "$selected_name" ] || continue
+    grep -Eo '(Fo|FortyGigabitEthernet)1/1/[12]' "$walk_file" 2>/dev/null >> "$tmp_names" || true
+  done < "$tmp_walks"
+  count=$(sort -u "$tmp_names" 2>/dev/null | awk 'NF { count++ } END { print count+0 }')
+  rm -f "$tmp_walks" "$tmp_names"
+  case "$count" in 0|1|2) printf '%s\n' "$count" ;; *) printf '2\n' ;; esac
 }
 
 card_port_counts_for_generated_card() {
@@ -4135,25 +4329,51 @@ card_port_counts_for_generated_card() {
   [ -n "$selected_name" ] || return 0
   safe_name=$(printf '%s' "$selected_name" | sed 's/[^A-Za-z0-9._-]/_/g')
   cap_file="$CAPABILITIES_DIR/${safe_name}-capabilities.json"
-  [ -f "$cap_file" ] || return 0
-  jq -r '
-    (if ((.device.model_override // "") | length) > 0 then
-       (.model_override_registry.ports // .registry.ports // {})
-     else
-       (.registry.ports // {})
-     end) as $ports |
-    ($ports.rj45 // empty) as $fixed_rj45 |
-    ($ports.combo_ports // 0) as $combo |
-    # A dual-personality position contributes one additional visible RJ45
-    # socket but not another logical interface. The SFP cage for that same
-    # logical port is accounted for separately by sfp_port_count.
-    (($fixed_rj45 // 0) + ($combo // 0)) as $rj45 |
-    # `uplinks` is the physical cage count. Media capability fields may overlap
-    # on dual-rate ports (for example EX3300 SFP/SFP+), so summing them can
-    # double-count the same physical uplink positions.
-    ($ports.uplinks // (($ports.gigabit_sfp // 0) + ($ports.ten_gigabit_sfp_plus // 0))) as $sfp |
-    if ($fixed_rj45 | type) == "number" and ($combo | type) == "number" and ($sfp | type) == "number" then "\($rj45)\t\($sfp)" else empty end
-  ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" { print; exit }'
+  model=$(exact_model_for_generated_card "$selected_name")
+  counts=""
+
+  if [ -f "$cap_file" ]; then
+    counts=$(jq -r '
+      (if ((.device.model_override // "") | length) > 0 then
+         (.model_override_registry.ports // .registry.ports // {})
+       else
+         (.registry.ports // {})
+       end) as $ports |
+      ($ports.rj45 // empty) as $fixed_rj45 |
+      ($ports.combo_ports // 0) as $combo |
+      (($fixed_rj45 // 0) + ($combo // 0)) as $rj45 |
+      ($ports.uplinks // (($ports.gigabit_sfp // 0) + ($ports.ten_gigabit_sfp_plus // 0))) as $sfp |
+      if ($fixed_rj45 | type) == "number" and ($combo | type) == "number" and ($sfp | type) == "number"
+      then "\($rj45)\t\($sfp)"
+      else empty end
+    ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" { print; exit }')
+  fi
+
+  if [ -z "$counts" ] && [ -n "$model" ] && [ -f "$DEVICE_REGISTRY" ]; then
+    counts=$(jq -r --arg model "$model" '
+      first(.devices[]? | select((.model // "") == $model) | .ports // empty) as $ports |
+      if ($ports | type) == "object" then
+        ($ports.rj45 // empty) as $fixed_rj45 |
+        ($ports.combo_ports // 0) as $combo |
+        (($fixed_rj45 // 0) + ($combo // 0)) as $rj45 |
+        ($ports.uplinks // (($ports.gigabit_sfp // 0) + ($ports.ten_gigabit_sfp_plus // 0))) as $sfp |
+        if ($fixed_rj45 | type) == "number" and ($combo | type) == "number" and ($sfp | type) == "number"
+        then "\($rj45)\t\($sfp)"
+        else empty end
+      else empty end
+    ' "$DEVICE_REGISTRY" 2>/dev/null | awk 'NF && $0 != "null" { print; exit }')
+  fi
+
+  [ -n "$counts" ] || return 0
+  card_rj45=$(printf '%s' "$counts" | awk -F '\t' '{print $1}')
+  card_sfp=$(printf '%s' "$counts" | awk -F '\t' '{print $2}')
+  if [ "$model" = "N4032F" ]; then
+    rear_qsfp=$(observed_n4032_rear_qsfp_count_for_generated_card "$selected_name")
+    case "$rear_qsfp" in ''|*[!0-9]*) rear_qsfp=0 ;; esac
+    [ "$rear_qsfp" -gt 2 ] && rear_qsfp=2
+    card_sfp=$((card_sfp + rear_qsfp))
+  fi
+  printf '%s\t%s\n' "$card_rj45" "$card_sfp"
 }
 
 emit_generated_card_port_counts() {
@@ -4349,6 +4569,18 @@ write_generated_dashboard_card() {
       card_row_separator="$(printf '\034')"
       while IFS="$card_row_separator" read -r member_name selected prefix host member_num card_title card_header_title || [ -n "$member_name" ]; do
         [ -n "$member_name" ] || continue
+        if frontend_hold_for_generated_card "$selected"; then
+          hold_model=$(model_metadata_for_generated_card "$selected" effective)
+          hold_reason=$(frontend_hold_reason_for_generated_card "$selected")
+          [ -n "$hold_reason" ] || hold_reason="Frontend presentation is intentionally held until dedicated faceplate geometry is designed and reviewed."
+          echo ""
+          echo "      - type: markdown"
+          echo "        content: |"
+          printf "          ### %s\n" "${card_title:-Switch Vision}"
+          printf "          **%s is discovered and telemetry-capable, but its Switch Vision card is intentionally not bound to a faceplate yet.**\n" "${hold_model:-Switch}"
+          printf "          %s\n" "$hold_reason"
+          continue
+        fi
         safe_prefix=$(printf '%s' "$prefix" | tr '[:upper:]' '[:lower:]')
         echo ""
         echo "      - type: custom:switch-vision-3650"
@@ -4457,7 +4689,7 @@ write_generated_dashboard_card() {
         echo "        status_entity_suffix: _status"
         case "${effective_model:-${detected_model:-}}" in
           *J8693A*|*3500yl-48G*|*WS-C3560CG-8PC-S*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
-          *SG350-20*|*S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
+          *3524GT-PWR+*|*SG350-20*|*S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
           *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
         esac
         emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"
@@ -4510,7 +4742,7 @@ write_generated_dashboard_card() {
       echo "        status_entity_suffix: _status"
       case "${exact_model:-}" in
         *J8693A*|*3500yl-48G*|*WS-C3560CG-8PC-S*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;
-        *SG350-20*|*S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
+        *3524GT-PWR+*|*SG350-20*|*S5720-12TP-LI-AC*|*WS-C3750-48P*|*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;
         *) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_10g_{port}_status" ;;
       esac
       emit_generated_port_metadata "$safe_prefix" "$port_mode_metadata"

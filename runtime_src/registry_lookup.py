@@ -129,6 +129,8 @@ def main() -> None:
             'calibration_profile': device.get('calibration_profile', '') if device else '',
             'default_faceplate': device.get('default_faceplate', '') if device else '',
             'dashboard_support': bool(device.get('dashboard_support')) if device else False,
+            'frontend_hold': bool(device.get('frontend_hold')) if device else False,
+            'frontend_hold_reason': device.get('frontend_hold_reason', '') if device else '',
             'ports': device.get('ports', {}) if device else {},
             'last_validated_version': device.get('last_validated_version', '') if device else '',
             'validation': device.get('validation', {}) if device else {},
