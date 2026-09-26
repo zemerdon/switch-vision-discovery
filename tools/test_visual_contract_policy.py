@@ -26,14 +26,11 @@ for model in (
     assert policy == "error", (model, policy, reason)
     assert reason is None
 
-expected_exceptions = {
-    "USW Pro Aggregation": (
-        "Discovery consumes the exact Core 2.6.32 32-position optical canvas; "
-        "the shared physical 28 SFP+ + 4 SFP28 topology remains identical to Core."
-    ),
-}
-assert module.VISUAL_CONTRACT_EXCEPTIONS == expected_exceptions, module.VISUAL_CONTRACT_EXCEPTIONS
+assert module.VISUAL_CONTRACT_EXCEPTIONS == {}, module.VISUAL_CONTRACT_EXCEPTIONS
+assert module.SUPPORT_CONTRACT_EXCEPTIONS == {}, module.SUPPORT_CONTRACT_EXCEPTIONS
 
+# The classifier still fails closed if a future reviewed exception is added:
+# a documented non-empty reason is warning-only, while an empty reason is invalid.
 module.VISUAL_CONTRACT_EXCEPTIONS["INTENTIONAL-MODEL"] = "documented test divergence"
 policy, reason = module.classify_visual_contract_drift("INTENTIONAL-MODEL")
 assert policy == "warning"
@@ -44,41 +41,9 @@ policy, reason = module.classify_visual_contract_drift("EMPTY-REASON")
 assert policy == "invalid"
 assert reason is None
 
-
-expected_support_exceptions = {
-    "WS-C2960X-24PS-L": {
-        "fields": ("status", "validation"),
-        "reason": (
-            "Discovery is the support-confidence authority and promotes the exact 24PS-L "
-            "contract to Community Validated after the established real-hardware evidence "
-            "plus current owner field/render validation; Core's derivative registry may lag "
-            "the status and older uplink-validation marker."
-        ),
-    },
-    "USW Flex Mini": {
-        "fields": ("status",),
-        "reason": (
-            "Discovery is the support-confidence authority and promotes Flex Mini to "
-            "Community Validated after independent API corroboration plus current owner "
-            "dashboard/faceplate field validation; Core's derivative registry may lag status."
-        ),
-    },
-    "USW Pro Aggregation": {
-        "fields": ("status",),
-        "reason": (
-            "Discovery is the support-confidence authority and promotes this complete "
-            "32-port API/card contract to Experimental under the dashboard-first policy; "
-            "Core's derivative registry may lag this support-status-only change."
-        ),
-    },
-}
-assert module.SUPPORT_CONTRACT_EXCEPTIONS == expected_support_exceptions, module.SUPPORT_CONTRACT_EXCEPTIONS
-assert set(module.SUPPORT_CONTRACT_EXCEPTIONS["WS-C2960X-24PS-L"]["fields"]) == {"status", "validation"}
-assert set(module.SUPPORT_CONTRACT_EXCEPTIONS["USW Flex Mini"]["fields"]) == {"status"}
-assert "evidence" not in module.SUPPORT_CONTRACT_EXCEPTIONS["WS-C2960X-24PS-L"]["fields"]
-assert "evidence" not in module.SUPPORT_CONTRACT_EXCEPTIONS["USW Flex Mini"]["fields"]
-
 source = MODULE_PATH.read_text(encoding="utf-8")
 assert "strict_visual_models" not in source
-assert "all shared exact-model visuals aligned or explicitly excepted" in source
+assert "exact-model sets aligned" in source
+assert "support-confidence contracts aligned" in source
+assert "shared exact-model visuals aligned" in source
 print("Discovery strict visual-contract policy: PASS")
