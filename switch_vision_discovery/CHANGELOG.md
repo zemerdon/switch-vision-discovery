@@ -1,3 +1,12 @@
+## 3.0.9 — HP 2530-8G-PoEP support and exact registry alignment
+
+- Add exact Experimental support for HP J9774A 2530-8G-PoEP from reviewed real-hardware SNMP evidence on sysObjectID `1.3.6.1.4.1.11.2.3.7.11.138`.
+- Classify numeric IF-MIB logical ports 1-8 as fixed 1G PoE+ copper and ports 9-10 as dual-personality 1G RJ45/SFP positions while excluding CPU/VLAN rows from physical inventory.
+- Generate a safe stock 24-RJ45/2-SFP card with only ten active RJ45 positions, two SFP cages, and shared logical SFP mapping `[9,10]` so combo media do not create duplicate entities.
+- Make generated shared-port maps fall back to the exact registry contract when the transient capability cache is unavailable, while preserving a successful no-map path for ordinary non-combo models.
+- Require Core and Discovery exact-model sets plus shared hardware, support-confidence and visual contract fields to match one-for-one; coordinated validation now covers all 63 exact models.
+- Add permanent J9774A physical/card regression coverage and keep the full production physical-contract matrix in the release gate.
+
 ## 3.0.7 — Device-state dashboard failure reporting
 
 - Fix Devices enable/disable reconciliation so a failed final dashboard projection is reported as a failed operation instead of silently leaving the Hub in `success / complete` state after polling changes were applied.
