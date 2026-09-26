@@ -4,6 +4,7 @@
 - Add a permanent fault-injection regression proving the background state reconciler quiesces cleanly while surfacing the dashboard refresh failure, and persist device-state History only after the final coalesced dashboard projection so current status and History cannot disagree.
 - Align Support My Switch latest-contribution metadata with the History/download safety boundary so symlinked ZIP, EML, or Actions HTML paths are ignored rather than followed.
 - Fail closed when pending configuration-restore state cannot be deleted, so a settings save cannot silently leave stale restore data behind.
+- Fail closed if configured-switch dashboard row extraction fails, preserving the previous generated dashboard instead of silently replacing it with an empty-card dashboard.
 
 ## 3.0.6 — Dashboard export control placement
 

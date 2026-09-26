@@ -4274,7 +4274,7 @@ write_generated_dashboard_card() {
 
     if truthy "${GENERATED_CARD_SNMP_ENABLED:-false}" && command -v jq >/dev/null 2>&1 && [ -f "$CONFIG_FILE" ] && json_has_configured_switch_rows; then
       tmp_cards="/tmp/switch_vision_generated_card_rows_$$.tsv"
-      jq -r '
+      if jq -r '
         # SWITCH_VISION_GENERATED_CARD_ROWS_JQ_BEGIN
         def enabled($sw):
           (($sw.enabled // "enabled") as $value |
@@ -4338,7 +4338,13 @@ write_generated_dashboard_card() {
             [[ $key, $name, swprefix($sw), $host, "", $title, parent_header_title($sw) ]]
           end)[] | map(row_safe(.)) | join("\u001c")
         # SWITCH_VISION_GENERATED_CARD_ROWS_JQ_END
-      ' "$CONFIG_FILE" > "$tmp_cards" 2>/dev/null || true
+      ' "$CONFIG_FILE" > "$tmp_cards" 2>/dev/null; then
+        :
+      else
+        rm -f "$tmp_cards"
+        echo "Generated dashboard card row extraction failed; preserving the previous dashboard." >> "$LIVE_LOG_PATH" 2>/dev/null || true
+        return 1
+      fi
 
       card_row_separator="$(printf '\034')"
       while IFS="$card_row_separator" read -r member_name selected prefix host member_num card_title card_header_title || [ -n "$member_name" ]; do
