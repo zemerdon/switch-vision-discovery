@@ -4729,8 +4729,10 @@ def _save_configuration_restore_pending(payload: dict[str, Any]) -> None:
     ):
         try:
             DEFAULT_CONFIGURATION_RESTORE_PENDING.unlink(missing_ok=True)
-        except OSError:
-            pass
+        except OSError as exc:
+            raise RuntimeError(
+                f"Could not clear pending configuration restore state: {exc}"
+            ) from exc
         return
     DEFAULT_CONFIGURATION_RESTORE_PENDING.parent.mkdir(parents=True, exist_ok=True)
     temporary = DEFAULT_CONFIGURATION_RESTORE_PENDING.with_name(

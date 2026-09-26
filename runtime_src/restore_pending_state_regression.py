@@ -62,6 +62,24 @@ try:
         pending = web._load_configuration_restore_pending()
         assert pending["discovery_switches"] == [], pending
 
+    class FailingPendingPath:
+        def unlink(self, *, missing_ok: bool = False) -> None:
+            assert missing_ok is True
+            raise OSError("injected pending-state delete failure")
+
+    web.DEFAULT_CONFIGURATION_RESTORE_PENDING = FailingPendingPath()
+    try:
+        web._save_configuration_restore_pending({
+            "discovery_switches": [],
+            "discovery_stack_member_prefixes": [],
+            "unifi_controllers": [],
+        })
+    except RuntimeError as exc:
+        assert "Could not clear pending configuration restore state" in str(exc), exc
+        assert "injected pending-state delete failure" in str(exc), exc
+    else:
+        raise AssertionError("pending-state delete failure must be surfaced")
+
     print("Discovery stale restore-pending reconciliation: PASS")
 finally:
     web._self_addon_options = original_options
