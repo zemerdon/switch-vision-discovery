@@ -119,7 +119,7 @@ finally:
     web.DEFAULT_DEVICE_CONTROL = original_control
     web.DEFAULT_UNIFI_SNAPSHOT = original_unifi
 
-source = Path(web.__file__).read_text(encoding="utf-8")
+source = Path(web.__file__).read_text(encoding="utf-8") + "\n" + web.HUB_PAGE_PATH.read_text(encoding="utf-8")
 for marker in (
     'id="resetDeviceOrderButton"',
     '/api/configured-devices/reset-order',

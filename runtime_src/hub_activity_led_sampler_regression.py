@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
-source = Path(__file__).with_name("support_web.py").read_text(encoding="utf-8")
+HERE = Path(__file__).resolve().parent
+source = (
+    (HERE / "support_web.py").read_text(encoding="utf-8")
+    + "\n"
+    + (HERE / "support_web.html").read_text(encoding="utf-8")
+)
 
 required = {
     "saved snapshot state": "savedCoreActivity:null",

@@ -86,7 +86,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
     assert blocked_cards["valid"] is False
     assert "exactly one view" in blocked_cards["error"]
 
-source = Path(web.__file__).read_text(encoding="utf-8")
+source = Path(web.__file__).read_text(encoding="utf-8") + "\n" + web.HUB_PAGE_PATH.read_text(encoding="utf-8")
 for marker in (
     'id="generatedDashboardExportMode"',
     'value="custom-dashboard" selected',

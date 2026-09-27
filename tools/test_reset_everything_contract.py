@@ -122,12 +122,13 @@ def test_reset_everything_is_switch_vision_scoped_and_preserves_recovery_content
 
 def test_ui_and_route_require_exact_confirmation() -> None:
     source = (ROOT / 'runtime_src' / 'support_web.py').read_text(encoding='utf-8')
+    page = (ROOT / 'runtime_src' / 'support_web.html').read_text(encoding='utf-8')
     maintenance = (ROOT / 'runtime_src' / 'maintenance.js').read_text(encoding='utf-8')
     assert 'RESET_EVERYTHING_CONFIRMATION = "RESET EVERYTHING"' in source
     assert 'path == "/api/maintenance/reset-everything"' in source
     assert 'data.get("confirmation")' in source
-    assert 'id="resetEverythingButton"' in source
-    assert 'id="resetEverythingStatus"' in source
+    assert 'id="resetEverythingButton"' in page
+    assert 'id="resetEverythingStatus"' in page
     assert 'confirmation !== "RESET EVERYTHING"' in maintenance
     assert 'api/maintenance/reset-everything' in maintenance
     assert 'custom faceplates/logos' in maintenance

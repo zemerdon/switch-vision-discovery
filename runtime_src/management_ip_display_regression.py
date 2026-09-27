@@ -84,7 +84,7 @@ assert item["effective_management_target"] == "", item
 assert item["effective_management_status"] == "invalid_saved_row", item
 assert conflict_secret not in json.dumps(conflict), conflict
 
-source = Path(web.__file__).read_text(encoding="utf-8")
+source = Path(web.__file__).read_text(encoding="utf-8") + "\n" + web.HUB_PAGE_PATH.read_text(encoding="utf-8")
 for literal in (
     "configured_management_target",
     "configured_management_source",

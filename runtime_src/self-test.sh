@@ -10,6 +10,9 @@ export SV_CURRENT_DISCOVERY_DEBUG_PATH="${SV_CURRENT_DISCOVERY_DEBUG_PATH:-/tmp/
 export SV_DEVICE_CONTROL_PATH="${SV_DEVICE_CONTROL_PATH:-/tmp/switch-vision-self-test-device-control-$$.json}"
 rm -f "$SV_DEVICE_CONTROL_PATH"
 rm -rf "$SV_SELF_TEST_TMP_DIR"
+mkdir -p "$SV_SELF_TEST_TMP_DIR"
+SV_HUB_SOURCE="$SV_SELF_TEST_TMP_DIR/support-web-contract-source.txt"
+cat "$BASE_DIR/support_web.py" "$BASE_DIR/support_web.html" > "$SV_HUB_SOURCE"
 sv_self_test_cleanup() {
     rm -f "$SV_DEVICE_CONTROL_PATH"
     rm -rf "$SV_SELF_TEST_TMP_DIR"
@@ -48,30 +51,30 @@ sv_require_literal() {
 }
 
 # v2.1.15 Copy Debug Info regression checks.
-sv_require_literal 'Copy Debug button' 'id="copyDebugButton"' "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
-sv_require_literal 'Copy Debug status' 'id="copyDebugStatus"' "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
-sv_require_literal 'Debug sanitizer' 'function sanitizeDebugText(text)' "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
-sv_require_literal 'Copy Debug function' 'async function copyDebugInfo()' "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
-sv_require_literal 'Copy Debug event binding' "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" "$SV_COPY_DEBUG_TEST_DIR/support_web.py"
+sv_require_literal 'Copy Debug button' 'id="copyDebugButton"' "$SV_HUB_SOURCE"
+sv_require_literal 'Copy Debug status' 'id="copyDebugStatus"' "$SV_HUB_SOURCE"
+sv_require_literal 'Debug sanitizer' 'function sanitizeDebugText(text)' "$SV_HUB_SOURCE"
+sv_require_literal 'Copy Debug function' 'async function copyDebugInfo()' "$SV_HUB_SOURCE"
+sv_require_literal 'Copy Debug event binding' "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" "$SV_HUB_SOURCE"
 
 # Credits presentation continuity. Public attribution is identity-neutral by
 # default; exact named credit requires explicit owner approval outside source.
-sv_require_literal 'Credits canvas' 'id="creditsMatrix"' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits roll track' 'id="creditsRollTrack"' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits build source' 'id="creditsBuildSource"' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits heading' '<h2 class="credits-title">Switch Vision Credits</h2>' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits neutral community row' '<span class="credit-name">Community contributors</span><span class="credit-components">Testing • feedback • hardware validation</span>' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits navigation card' 'id="openCreditsButton"' "$BASE_DIR/support_web.py"
-! grep -Fq 'PREVIEW PLACEHOLDER' "$BASE_DIR/support_web.py"
-! grep -Fq 'TEST ENTRIES, NOT REAL CONTRIBUTORS' "$BASE_DIR/support_web.py"
+sv_require_literal 'Credits canvas' 'id="creditsMatrix"' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits roll track' 'id="creditsRollTrack"' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits build source' 'id="creditsBuildSource"' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits heading' '<h2 class="credits-title">Switch Vision Credits</h2>' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits neutral community row' '<span class="credit-name">Community contributors</span><span class="credit-components">Testing • feedback • hardware validation</span>' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits navigation card' 'id="openCreditsButton"' "$SV_HUB_SOURCE"
+! grep -Fq 'PREVIEW PLACEHOLDER' "$SV_HUB_SOURCE"
+! grep -Fq 'TEST ENTRIES, NOT REAL CONTRIBUTORS' "$SV_HUB_SOURCE"
 echo 'Switch Vision Discovery Credits public content: PASS'
 
 # Locked Credits motion contract: four-pixel build of the exact scroll source,
 # an immediate geometry-identical handoff, brief hold, then indefinite scroll.
 test -f "$BASE_DIR/credits_v25.css" || { echo 'FAIL: credits_v25.css missing' >&2; exit 1; }
 test -f "$BASE_DIR/credits_v25.js" || { echo 'FAIL: credits_v25.js missing' >&2; exit 1; }
-sv_require_literal 'Credits stylesheet link' 'credits_v25.css' "$BASE_DIR/support_web.py"
-sv_require_literal 'Credits script link' 'credits_v25.js' "$BASE_DIR/support_web.py"
+sv_require_literal 'Credits stylesheet link' 'credits_v25.css' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits script link' 'credits_v25.js' "$SV_HUB_SOURCE"
 sv_require_literal 'Credits computed-style clone' 'copyCreditsV25ComputedStylesDeep' "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits snapshot source' "const source=\$('creditsBuildSource');" "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits fragment preparation' 'prepareCreditsV25Pieces' "$BASE_DIR/credits_v25.js"
@@ -82,7 +85,7 @@ sv_require_literal 'Credits hold before roll' '},1600);' "$BASE_DIR/credits_v25.
 sv_require_literal 'Credits indefinite roll class' "track.classList.add('credits-rolling')" "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits indefinite CSS roll' '.credits-roll-track.credits-rolling{animation:credits-v25-roll 23s linear infinite}' "$BASE_DIR/credits_v25.css"
 sv_require_literal 'Credits borderless rows' 'padding:0;border:0;border-radius:0;background:none;box-shadow:none;white-space:nowrap;' "$BASE_DIR/credits_v25.css"
-sv_require_literal 'Credits progress bar' 'creditsProgress' "$BASE_DIR/support_web.py"
+sv_require_literal 'Credits progress bar' 'creditsProgress' "$SV_HUB_SOURCE"
 if grep -Fq 'credits-fade-out' "$BASE_DIR/credits_v25.js" "$BASE_DIR/credits_v25.css"; then
     echo 'FAIL: Credits fade transition must not return' >&2
     exit 1
@@ -117,7 +120,7 @@ fi
 echo 'Switch Vision Discovery locked Credits presentation: PASS'
 
 # v2.3.21 Credits card home-navigation order regression.
-python3 - "$BASE_DIR/support_web.py" <<'PY_CREDITS_ORDER'
+python3 - "$SV_HUB_SOURCE" <<'PY_CREDITS_ORDER'
 from pathlib import Path
 import sys
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
@@ -190,23 +193,23 @@ grep -Fq 'white-space:nowrap' "$BASE_DIR/calibration_profiles.js"
 ! grep -Fq '<b>Faceplate exists:</b>' "$BASE_DIR/calibration_profiles.js"
 ! grep -Fq '<b>SHA-256:</b>' "$BASE_DIR/calibration_profiles.js"
 grep -Fq 'duplicate_faceplate_content' "$BASE_DIR/calibration_profiles.js"
-grep -Fq '.hub-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(240px,300px));column-gap:10px;justify-content:start;align-items:start}' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-settings-actions{position:sticky;bottom:6px;display:flex;gap:8px' "$BASE_DIR/support_web.py"
-grep -Fq 'border:1px solid var(--line-soft);padding:8px 10px;margin:10px 0 0' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-settings-status{margin:0 0 0 auto;line-height:1.2}' "$BASE_DIR/support_web.py"
-grep -Fq "className='device-meta-line'" "$BASE_DIR/support_web.py"
-grep -Fq "['Registry',d.registry_match?'Yes':'No']" "$BASE_DIR/support_web.py"
-grep -Fq "['Validated',d.registry_last_validated_version" "$BASE_DIR/support_web.py"
+grep -Fq '.hub-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(240px,300px));column-gap:10px;justify-content:start;align-items:start}' "$SV_HUB_SOURCE"
+grep -Fq '.hub-settings-actions{position:sticky;bottom:6px;display:flex;gap:8px' "$SV_HUB_SOURCE"
+grep -Fq 'border:1px solid var(--line-soft);padding:8px 10px;margin:10px 0 0' "$SV_HUB_SOURCE"
+grep -Fq '.hub-settings-status{margin:0 0 0 auto;line-height:1.2}' "$SV_HUB_SOURCE"
+grep -Fq "className='device-meta-line'" "$SV_HUB_SOURCE"
+grep -Fq "['Registry',d.registry_match?'Yes':'No']" "$SV_HUB_SOURCE"
+grep -Fq "['Validated',d.registry_last_validated_version" "$SV_HUB_SOURCE"
 grep -Fq 'row.className = "device-card installer-backup-row"' "$BASE_DIR/maintenance.js"
 grep -Fq 'line.className = "installer-backup-line"' "$BASE_DIR/maintenance.js"
 ! grep -Fq 'backup.contents.join' "$BASE_DIR/maintenance.js"
 grep -Fq 'restore_backup' "$BASE_DIR/maintenance.js"
 grep -Fq 'validate_backup' "$BASE_DIR/maintenance.js"
-grep -Fq '.validation-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:4px;margin-top:7px}' "$BASE_DIR/support_web.py"
-grep -Fq '.validation-item{display:flex;justify-content:space-between;align-items:center;gap:6px;border-top:1px solid var(--line);padding:4px 5px 2px}' "$BASE_DIR/support_web.py"
-! grep -Fq 'id="hubComponent-core" class="hub-component" open' "$BASE_DIR/support_web.py"
-! grep -Fq 'class="yaml-manager generated-card-manager" open' "$BASE_DIR/support_web.py"
-! grep -Fq 'class="yaml-manager" open' "$BASE_DIR/support_web.py"
+grep -Fq '.validation-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:4px;margin-top:7px}' "$SV_HUB_SOURCE"
+grep -Fq '.validation-item{display:flex;justify-content:space-between;align-items:center;gap:6px;border-top:1px solid var(--line);padding:4px 5px 2px}' "$SV_HUB_SOURCE"
+! grep -Fq 'id="hubComponent-core" class="hub-component" open' "$SV_HUB_SOURCE"
+! grep -Fq 'class="yaml-manager generated-card-manager" open' "$SV_HUB_SOURCE"
+! grep -Fq 'class="yaml-manager" open' "$SV_HUB_SOURCE"
 
 # v2.3.17 grouped Calibration Profiles manager regression
 grep -Fq 'svProfileManagerActions' "$BASE_DIR/calibration_profiles_manager.js"
@@ -230,17 +233,17 @@ grep -Fq 'showTooltip(text);' "$BASE_DIR/calibration_profiles_manager.js"
 grep -Fq 'new MutationObserver' "$BASE_DIR/calibration_profiles_manager.js"
 grep -Fq 'opacity:.42;' "$BASE_DIR/calibration_profiles_manager.js"
 grep -Fq 'filter:saturate(.15);' "$BASE_DIR/calibration_profiles_manager.js"
-grep -Fq 'calibration_profiles_manager.js' "$BASE_DIR/support_web.py"
+grep -Fq 'calibration_profiles_manager.js' "$SV_HUB_SOURCE"
 
 # v2.3.4 Hub-owned settings UX / authoritative-store / privacy regressions
-grep -Fq 'id="settingsCard"' "$BASE_DIR/support_web.py"
-grep -Fq 'id="hubSettingsSave"' "$BASE_DIR/support_web.py"
-grep -Fq '/api/settings/core' "$BASE_DIR/support_web.py"
-grep -Fq '/api/settings/snmp2mqtt' "$BASE_DIR/support_web.py"
-grep -Fq '/api/settings/discovery' "$BASE_DIR/support_web.py"
-grep -Fq "SwitchVisionHubSettings?.open('core')" "$BASE_DIR/support_web.py"
-grep -Fq 'id="hubComponent-snmp2mqtt"' "$BASE_DIR/support_web.py"
-grep -Fq 'id="hubComponent-discovery"' "$BASE_DIR/support_web.py"
+grep -Fq 'id="settingsCard"' "$SV_HUB_SOURCE"
+grep -Fq 'id="hubSettingsSave"' "$SV_HUB_SOURCE"
+grep -Fq '/api/settings/core' "$SV_HUB_SOURCE"
+grep -Fq '/api/settings/snmp2mqtt' "$SV_HUB_SOURCE"
+grep -Fq '/api/settings/discovery' "$SV_HUB_SOURCE"
+grep -Fq "SwitchVisionHubSettings?.open('core')" "$SV_HUB_SOURCE"
+grep -Fq 'id="hubComponent-snmp2mqtt"' "$SV_HUB_SOURCE"
+grep -Fq 'id="hubComponent-discovery"' "$SV_HUB_SOURCE"
 
 # Expected dependency failures on read-only Hub bridge endpoints must report
 # service unavailability instead of a generic Bad Gateway response. Fixed-route
@@ -290,23 +293,23 @@ for path, helper_name in (
 
 print("Switch Vision Discovery expected dependency HTTP classification: PASS")
 PY_HUB_EXPECTED_HTTP
-! grep -Fq 'HTTPStatus.BAD_GATEWAY' "$BASE_DIR/support_web.py"
+! grep -Fq 'HTTPStatus.BAD_GATEWAY' "$SV_HUB_SOURCE"
 
 # v2.3.7 explicit font range + shared Hub component geometry regression
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/hub_density_regression.py"
 # v2.3.6 themed visual hierarchy / elegance regression
-grep -Fq -- '--heading:#69c8ff;--heading-strong:#a6e3ff;--heading-line:#2787c7' "$BASE_DIR/support_web.py"
-grep -Fq -- '--heading:#4fc3e8;--heading-strong:#86dcf3;--heading-line:#049fd9' "$BASE_DIR/support_web.py"
-grep -Fq -- '--heading:#79d7f5;--heading-strong:#ace9fb;--heading-line:#42b4e6' "$BASE_DIR/support_web.py"
-grep -Fq -- '--heading:#005ed8;--heading-strong:#003f9e;--heading-line:#6aa7ff' "$BASE_DIR/support_web.py"
-grep -Fq 'h2{font-size:var(--sv-font-section-title);line-height:1.25;color:var(--heading)}' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-settings-section h3::before{content:"";position:absolute;left:0;top:.12em;width:3px;height:1.05em' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-settings-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-settings-tab.is-active{color:var(--heading-strong)!important' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-settings-pane[hidden]{display:none!important}' "$BASE_DIR/support_web.py"
-grep -Fq '.hub-switch-setting-body[hidden]{display:none!important}' "$BASE_DIR/support_web.py"
-grep -Fq 'box-shadow:0 0 0 3px var(--accent-soft)' "$BASE_DIR/support_web.py"
-grep -Fq '.nav-card::before{content:"";position:absolute;left:0;top:0;right:0;height:2px' "$BASE_DIR/support_web.py"
+grep -Fq -- '--heading:#69c8ff;--heading-strong:#a6e3ff;--heading-line:#2787c7' "$SV_HUB_SOURCE"
+grep -Fq -- '--heading:#4fc3e8;--heading-strong:#86dcf3;--heading-line:#049fd9' "$SV_HUB_SOURCE"
+grep -Fq -- '--heading:#79d7f5;--heading-strong:#ace9fb;--heading-line:#42b4e6' "$SV_HUB_SOURCE"
+grep -Fq -- '--heading:#005ed8;--heading-strong:#003f9e;--heading-line:#6aa7ff' "$SV_HUB_SOURCE"
+grep -Fq 'h2{font-size:var(--sv-font-section-title);line-height:1.25;color:var(--heading)}' "$SV_HUB_SOURCE"
+grep -Fq '.hub-settings-section h3::before{content:"";position:absolute;left:0;top:.12em;width:3px;height:1.05em' "$SV_HUB_SOURCE"
+grep -Fq '.hub-settings-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto' "$SV_HUB_SOURCE"
+grep -Fq '.hub-settings-tab.is-active{color:var(--heading-strong)!important' "$SV_HUB_SOURCE"
+grep -Fq '.hub-settings-pane[hidden]{display:none!important}' "$SV_HUB_SOURCE"
+grep -Fq '.hub-switch-setting-body[hidden]{display:none!important}' "$SV_HUB_SOURCE"
+grep -Fq 'box-shadow:0 0 0 3px var(--accent-soft)' "$SV_HUB_SOURCE"
+grep -Fq '.nav-card::before{content:"";position:absolute;left:0;top:0;right:0;height:2px' "$SV_HUB_SOURCE"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_HUB_SETTINGS'
 import copy
 import support_web
@@ -411,34 +414,34 @@ for name in (
     path = base / name
     ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 PY_MAINTENANCE_SYNTAX
-grep -Fq 'id="openMaintenanceButton"' "$BASE_DIR/support_web.py"
-grep -Fq '<span>Backups</span>' "$BASE_DIR/support_web.py"
-grep -Fq 'data-maintenance-tab="snmp">SNMP</button>' "$BASE_DIR/support_web.py"
-grep -Fq 'data-maintenance-tab="configuration">Configuration Import / Export</button>' "$BASE_DIR/support_web.py"
-grep -Fq 'data-maintenance-tab="calibrations">Calibration Profiles</button>' "$BASE_DIR/support_web.py"
-grep -Fq 'id="maintenanceCard"' "$BASE_DIR/support_web.py"
-grep -Fq '/api/maintenance/mqtt/scan' "$BASE_DIR/support_web.py"
-grep -Fq '/api/maintenance/mqtt/repair' "$BASE_DIR/support_web.py"
+grep -Fq 'id="openMaintenanceButton"' "$SV_HUB_SOURCE"
+grep -Fq '<span>Backups</span>' "$SV_HUB_SOURCE"
+grep -Fq 'data-maintenance-tab="snmp">SNMP</button>' "$SV_HUB_SOURCE"
+grep -Fq 'data-maintenance-tab="configuration">Configuration Import / Export</button>' "$SV_HUB_SOURCE"
+grep -Fq 'data-maintenance-tab="calibrations">Calibration Profiles</button>' "$SV_HUB_SOURCE"
+grep -Fq 'id="maintenanceCard"' "$SV_HUB_SOURCE"
+grep -Fq '/api/maintenance/mqtt/scan' "$SV_HUB_SOURCE"
+grep -Fq '/api/maintenance/mqtt/repair' "$SV_HUB_SOURCE"
 grep -Fq 'REPAIR STALE MQTT ENTITIES' "$BASE_DIR/maintenance.js"
-grep -Fq 'id="exportMqttResultsButton"' "$BASE_DIR/support_web.py"
+grep -Fq 'id="exportMqttResultsButton"' "$SV_HUB_SOURCE"
 grep -Fq 'Stale Switch Vision MQTT entities (' "$BASE_DIR/maintenance.js"
 grep -Fq 'switch-vision-mqtt-maintenance-scan-v1' "$BASE_DIR/maintenance.js"
 
 # v2.3.0 Discovery configuration backup backend/privacy regressions remain.
 # v2.3.10 removes the duplicate Discovery backup manager from Maintenance UI.
-! grep -Fq 'id="discoveryBackupSummary"' "$BASE_DIR/support_web.py"
-! grep -Fq 'id="refreshDiscoveryBackupsButton"' "$BASE_DIR/support_web.py"
-grep -Fq '/api/maintenance/discovery-backups' "$BASE_DIR/support_web.py"
-grep -Fq '/api/maintenance/discovery-backups/remove' "$BASE_DIR/support_web.py"
-grep -Fq 'reason="configuration_import"' "$BASE_DIR/support_web.py"
-grep -Fq 'reason="device_state_update"' "$BASE_DIR/support_web.py"
+! grep -Fq 'id="discoveryBackupSummary"' "$SV_HUB_SOURCE"
+! grep -Fq 'id="refreshDiscoveryBackupsButton"' "$SV_HUB_SOURCE"
+grep -Fq '/api/maintenance/discovery-backups' "$SV_HUB_SOURCE"
+grep -Fq '/api/maintenance/discovery-backups/remove' "$SV_HUB_SOURCE"
+grep -Fq 'reason="configuration_import"' "$SV_HUB_SOURCE"
+grep -Fq 'reason="device_state_update"' "$SV_HUB_SOURCE"
 ! grep -Fq 'api/maintenance/discovery-backups' "$BASE_DIR/maintenance.js"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/discovery_backups_regression.py"
 
 # v2.3.3 Installer recovery backup Maintenance bridge/UI regression
-grep -Fq 'id="installerBackupSummary"' "$BASE_DIR/support_web.py"
-grep -Fq '/api/maintenance/installer-backups' "$BASE_DIR/support_web.py"
-grep -Fq 'switch-vision-installer-maintenance-v1' "$BASE_DIR/support_web.py"
+grep -Fq 'id="installerBackupSummary"' "$SV_HUB_SOURCE"
+grep -Fq '/api/maintenance/installer-backups' "$SV_HUB_SOURCE"
+grep -Fq 'switch-vision-installer-maintenance-v1' "$SV_HUB_SOURCE"
 grep -Fq 'installerBackupAutomaticRetention' "$BASE_DIR/maintenance.js"
 grep -Fq 'retention_count: retention' "$BASE_DIR/maintenance.js"
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY_INSTALLER_BACKUPS'
@@ -1130,15 +1133,15 @@ echo "Switch Vision Discovery v2.1.47 DOT3-MAU targeted-walk regression: PASS"
 
 # Calibration Profile Manager relocation checks: the manager is embedded in
 # Maintenance -> Calibration Profiles and the old standalone navigation/card is gone.
-grep -Fq 'id="maintenancePanel-calibrations"' "$BASE_DIR/support_web.py"
-grep -Fq 'id="calibrationProfilesRoot"' "$BASE_DIR/support_web.py"
-! grep -Fq 'id="openCalibrationProfilesButton"' "$BASE_DIR/support_web.py"
-! grep -Fq 'id="calibrationProfilesCard"' "$BASE_DIR/support_web.py"
+grep -Fq 'id="maintenancePanel-calibrations"' "$SV_HUB_SOURCE"
+grep -Fq 'id="calibrationProfilesRoot"' "$SV_HUB_SOURCE"
+! grep -Fq 'id="openCalibrationProfilesButton"' "$SV_HUB_SOURCE"
+! grep -Fq 'id="calibrationProfilesCard"' "$SV_HUB_SOURCE"
 
-grep -Fq 'switch_vision/list_calibrations' "$BASE_DIR/support_web.py"
+grep -Fq 'switch_vision/list_calibrations' "$SV_HUB_SOURCE"
 
-grep -Fq 'switch_vision/get_calibration' "$BASE_DIR/support_web.py"
-grep -Fq 'switch_vision/delete_calibration' "$BASE_DIR/support_web.py"
+grep -Fq 'switch_vision/get_calibration' "$SV_HUB_SOURCE"
+grep -Fq 'switch_vision/delete_calibration' "$SV_HUB_SOURCE"
 
 grep -Fq 'SwitchVisionCalibrationProfiles' "$BASE_DIR/calibration_profiles.js"
 
@@ -2028,25 +2031,25 @@ PYTEST
 printf '%s\n' "Switch Vision vendor/interface/privacy self-test: PASS"
 
 # Hub UniFi visibility/status UX regression checks.
-grep -q 'id="openUnifi2mqttSettingsButton"' "$BASE_DIR/support_web.py"
-grep -q 'unifi-unavailable' "$BASE_DIR/support_web.py"
-grep -q 'UniFi2MQTT is not installed. Install it from Switch Vision Installer first.' "$BASE_DIR/support_web.py"
-grep -q 'UniFi2MQTT is installed but no usable Local, Remote, or multi-controller API credential is configured.' "$BASE_DIR/support_web.py"
-grep -q 'show_unifi_integration' "$BASE_DIR/support_web.py"
-grep -q "openResolvedApp('discovery')" "$BASE_DIR/support_web.py"
-! grep -q '/config/app/local_switch_vision_discovery/config' "$BASE_DIR/support_web.py"
-! grep -q 'Install/copy the bundled local app' "$BASE_DIR/support_web.py"
-grep -q '_configured_switch_count' "$BASE_DIR/support_web.py"
+grep -q 'id="openUnifi2mqttSettingsButton"' "$SV_HUB_SOURCE"
+grep -q 'unifi-unavailable' "$SV_HUB_SOURCE"
+grep -q 'UniFi2MQTT is not installed. Install it from Switch Vision Installer first.' "$SV_HUB_SOURCE"
+grep -q 'UniFi2MQTT is installed but no usable Local, Remote, or multi-controller API credential is configured.' "$SV_HUB_SOURCE"
+grep -q 'show_unifi_integration' "$SV_HUB_SOURCE"
+grep -q "openResolvedApp('discovery')" "$SV_HUB_SOURCE"
+! grep -q '/config/app/local_switch_vision_discovery/config' "$SV_HUB_SOURCE"
+! grep -q 'Install/copy the bundled local app' "$SV_HUB_SOURCE"
+grep -q '_configured_switch_count' "$SV_HUB_SOURCE"
 
 # v2.4.35 stale-open Hub frontend/runtime version synchronization.
-grep -Fq 'data-sv-discovery-version=' "$BASE_DIR/support_web.py"
-grep -Fq 'HUB_DOCUMENT_VERSION' "$BASE_DIR/support_web.py"
-grep -Fq 'HUB_VERSION_RELOAD_KEY' "$BASE_DIR/support_web.py"
-grep -Fq 'function syncHubRuntimeVersion(runtimeVersion)' "$BASE_DIR/support_web.py"
-grep -Fq 'sessionStorage.setItem(HUB_VERSION_RELOAD_KEY,token)' "$BASE_DIR/support_web.py"
-grep -Fq 'window.location.reload();return true' "$BASE_DIR/support_web.py"
-grep -Fq 'if(syncHubRuntimeVersion(d.version))return' "$BASE_DIR/support_web.py"
-grep -Fq '"version": self.app.version' "$BASE_DIR/support_web.py"
+grep -Fq 'data-sv-discovery-version=' "$SV_HUB_SOURCE"
+grep -Fq 'HUB_DOCUMENT_VERSION' "$SV_HUB_SOURCE"
+grep -Fq 'HUB_VERSION_RELOAD_KEY' "$SV_HUB_SOURCE"
+grep -Fq 'function syncHubRuntimeVersion(runtimeVersion)' "$SV_HUB_SOURCE"
+grep -Fq 'sessionStorage.setItem(HUB_VERSION_RELOAD_KEY,token)' "$SV_HUB_SOURCE"
+grep -Fq 'window.location.reload();return true' "$SV_HUB_SOURCE"
+grep -Fq 'if(syncHubRuntimeVersion(d.version))return' "$SV_HUB_SOURCE"
+grep -Fq '"version": self.app.version' "$SV_HUB_SOURCE"
 echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 
 
@@ -2059,16 +2062,16 @@ grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.9"' "$BASE_DIR/discovery_job.sh"
 grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.9"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
-! grep -Fq '_PUBLIC_RELEASE_CACHE' "$BASE_DIR/support_web.py"
-! grep -Fq '_switch_vision_component_releases' "$BASE_DIR/support_web.py"
-! grep -Fq '/api/component-releases' "$BASE_DIR/support_web.py"
-! grep -Fq 'renderComponentReleases' "$BASE_DIR/support_web.py"
-! grep -Fq 'releases:null' "$BASE_DIR/support_web.py"
-grep -Fq "['auto','Auto'],['800','800 px'],['1024','1024 px'],['custom','Custom']" "$BASE_DIR/support_web.py"
-grep -Fq "s.dashboard.faceplate_width_mode||'auto'" "$BASE_DIR/support_web.py"
-grep -Fq "(s.dashboard.faceplate_width_mode||'auto')==='custom'" "$BASE_DIR/support_web.py"
-grep -Fq 'function hubHelp(' "$BASE_DIR/support_web.py"
-grep -Fq "e.key==='Escape'" "$BASE_DIR/support_web.py"
+! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"
+! grep -Fq '_switch_vision_component_releases' "$SV_HUB_SOURCE"
+! grep -Fq '/api/component-releases' "$SV_HUB_SOURCE"
+! grep -Fq 'renderComponentReleases' "$SV_HUB_SOURCE"
+! grep -Fq 'releases:null' "$SV_HUB_SOURCE"
+grep -Fq "['auto','Auto'],['800','800 px'],['1024','1024 px'],['custom','Custom']" "$SV_HUB_SOURCE"
+grep -Fq "s.dashboard.faceplate_width_mode||'auto'" "$SV_HUB_SOURCE"
+grep -Fq "(s.dashboard.faceplate_width_mode||'auto')==='custom'" "$SV_HUB_SOURCE"
+grep -Fq 'function hubHelp(' "$SV_HUB_SOURCE"
+grep -Fq "e.key==='Escape'" "$SV_HUB_SOURCE"
 echo 'Switch Vision Discovery v2.3.46 Hub ownership / Auto width: PASS'
 
 # v2.1.24 Cisco trunk-status diagnostic contract.
@@ -2202,7 +2205,7 @@ enabled_jq='def enabled($sw): (($sw.enabled // "enabled") as $value | if ($value
 [ "$(jq -r "$enabled_jq" "$enabled_switch_cfg")" = "SW10" ]
 [ -z "$(jq -r "$enabled_jq" "$disabled_switch_cfg")" ]
 [ "$(jq -r "$enabled_jq" "$legacy_switch_cfg")" = "SW10" ]
-grep -q 'row\["enabled"\] = _switch_enabled_state(row.get("enabled", "enabled")' "$BASE_DIR/support_web.py"
+grep -q 'row\["enabled"\] = _switch_enabled_state(row.get("enabled", "enabled")' "$SV_HUB_SOURCE"
 grep -q 'select(enabled(.))' "$BASE_DIR/discovery_job.sh"
 grep -q 'json_has_configured_switch_rows()' "$BASE_DIR/discovery_job.sh"
 grep -q 'json_has_enabled_switch_rows()' "$BASE_DIR/discovery_job.sh"
@@ -2211,7 +2214,7 @@ grep -q 'scanning enabled switch folders only' "$BASE_DIR/discovery_job.sh"
 grep -q 'json_has_configured_switch_rows &&' "$BASE_DIR/discovery_job.sh"
 grep -q 'python3 /migrate_options.py' "$BASE_DIR/run.sh"
 grep -q '/addons/self/options' "$BASE_DIR/migrate_options.py"
-! grep -q 'options.before-import' "$BASE_DIR/support_web.py"
+! grep -q 'options.before-import' "$SV_HUB_SOURCE"
 
 # Configuration export v2 is intentionally not accepted by v2.1.7, preventing
 # a downgrade from silently ignoring disabled rows. v2.1.8 still imports v1.
@@ -2373,9 +2376,9 @@ else:
     raise AssertionError("stale/mismatched switch identity must be rejected")
 PY_HUB_DEVICE_TOGGLE
 
-grep -q 'Enable / Disable Devices' "$BASE_DIR/support_web.py"
-grep -q '/addons/self/options' "$BASE_DIR/support_web.py"
-grep -q '/api/configured-devices/state' "$BASE_DIR/support_web.py"
+grep -q 'Enable / Disable Devices' "$SV_HUB_SOURCE"
+grep -q '/addons/self/options' "$SV_HUB_SOURCE"
+grep -q '/api/configured-devices/state' "$SV_HUB_SOURCE"
 printf "%s\n" "Switch Vision Hub device-state controls regression: PASS"
 
 # A Discovery run must not trust a stale /data/options.json after a Hub/native
@@ -2437,9 +2440,9 @@ assert loaded["switches"][0]["snmp_community"] == "secret-disabled"
 PY_AUTHORITATIVE_RUN_OPTIONS
 
 grep -Fq 'CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"' "$BASE_DIR/discovery_job.sh"
-grep -Fq '_write_authoritative_discovery_options_snapshot(' "$BASE_DIR/support_web.py"
-grep -q 'discovery_env\["SWITCH_VISION_OPTIONS_FILE"\]' "$BASE_DIR/support_web.py"
-grep -q 'Discovery configuration: authoritative Supervisor snapshot' "$BASE_DIR/support_web.py"
+grep -Fq '_write_authoritative_discovery_options_snapshot(' "$SV_HUB_SOURCE"
+grep -q 'discovery_env\["SWITCH_VISION_OPTIONS_FILE"\]' "$SV_HUB_SOURCE"
+grep -q 'Discovery configuration: authoritative Supervisor snapshot' "$SV_HUB_SOURCE"
 printf "%s\n" "Switch Vision authoritative run-options regression: PASS"
 
 # Generated dashboard rows must obey the same enabled-state predicate as the
@@ -2563,7 +2566,7 @@ grep -q 'label " TX Bytes", "tx_bytes"' "$BASE_DIR/discovery_job.sh"
 grep -q 'label " Admin Status", "admin_status"' "$BASE_DIR/discovery_job.sh"
 grep -q 'label " Speed Mbps", "speed_mbps"' "$BASE_DIR/discovery_job.sh"
 grep -q 'label " Alias", "alias"' "$BASE_DIR/discovery_job.sh"
-grep -q 'sensor_source in {"juniper_ex_vlan", "interface"}' "$BASE_DIR/support_web.py"
+grep -q 'sensor_source in {"juniper_ex_vlan", "interface"}' "$SV_HUB_SOURCE"
 printf '%s\n' "Switch Vision EX3300 live-interface generation regression: PASS"
 
 # v2.1.18 placeholder and UniFi diagnostics regressions.
@@ -3238,7 +3241,7 @@ printf '%s\n' "Switch Vision Discovery v2.1.28 S5720 generated-target prerequisi
 # v2.1.30 Discovery progress-stage regression. Structured current stage must
 # beat stale/historical log-tail text so the blue highlight stays on the task
 # that is actually running.
-python3 - "$BASE_DIR/support_web.py" <<'PYTEST_V2130_PROGRESS'
+python3 - "$SV_HUB_SOURCE" <<'PYTEST_V2130_PROGRESS'
 from pathlib import Path
 import sys
 
@@ -4055,10 +4058,10 @@ print("Switch Vision Discovery v2.2.5 post-handoff bundle ordering regression: P
 PYTEST_V225_BUNDLE_ORDER
 
 # Discovery 2.3.39 Hub Settings Back regression.
-sv_require_literal 'Hub Settings Save action' 'id="hubSettingsSave" class="primary" type="button" disabled>Save changes</button>' "$BASE_DIR/support_web.py"
-sv_require_literal 'Hub Settings Reload action' 'id="hubSettingsReload" type="button">Reload</button>' "$BASE_DIR/support_web.py"
-sv_require_literal 'Hub Settings Back action' 'id="hubSettingsBack" type="button">Back</button>' "$BASE_DIR/support_web.py"
-sv_require_literal 'Hub Settings Back goBack binding' "q('hubSettingsBack')?.addEventListener('click',goBack);" "$BASE_DIR/support_web.py"
+sv_require_literal 'Hub Settings Save action' 'id="hubSettingsSave" class="primary" type="button" disabled>Save changes</button>' "$SV_HUB_SOURCE"
+sv_require_literal 'Hub Settings Reload action' 'id="hubSettingsReload" type="button">Reload</button>' "$SV_HUB_SOURCE"
+sv_require_literal 'Hub Settings Back action' 'id="hubSettingsBack" type="button">Back</button>' "$SV_HUB_SOURCE"
+sv_require_literal 'Hub Settings Back goBack binding' "q('hubSettingsBack')?.addEventListener('click',goBack);" "$SV_HUB_SOURCE"
 
 # Manual dashboard export regression. Native generated YAML remains unchanged;
 # full export removes the known Layout Card wrapper, cards-only preserves cards,

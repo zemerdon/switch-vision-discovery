@@ -7,7 +7,11 @@ from pathlib import Path
 import support_web
 
 ROOT = Path(__file__).resolve().parent
-SOURCE = (ROOT / "support_web.py").read_text(encoding="utf-8")
+SOURCE = (
+    (ROOT / "support_web.py").read_text(encoding="utf-8")
+    + "\n"
+    + (ROOT / "support_web.html").read_text(encoding="utf-8")
+)
 MAINTENANCE = (ROOT / "maintenance.js").read_text(encoding="utf-8")
 PROFILES = (ROOT / "calibration_profiles.js").read_text(encoding="utf-8")
 PROFILE_MANAGER = (ROOT / "calibration_profiles_manager.js").read_text(encoding="utf-8")

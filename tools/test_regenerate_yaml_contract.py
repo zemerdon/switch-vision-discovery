@@ -77,7 +77,8 @@ assert generated["switches"] == original["switches"]
 assert original["run_snmp_walks"] is True
 assert original["parse_all_walks"] is False
 
-source = (RUNTIME / "support_web.py").read_text(encoding="utf-8")
+backend_source = (RUNTIME / "support_web.py").read_text(encoding="utf-8")
+source = backend_source + "\n" + (RUNTIME / "support_web.html").read_text(encoding="utf-8")
 for marker in (
     'id="regenerateYamlButton"',
     'Regenerate SNMP2MQTT YAML and Regenerate Dashboard Card YAML reuse existing saved Discovery data and stored SNMP walks.',
@@ -88,7 +89,7 @@ for marker in (
 ):
     assert marker in source, marker
 
-snmp_snapshot_source = source.split(
+snmp_snapshot_source = backend_source.split(
     "def _write_snmp2mqtt_regeneration_options_snapshot(",
     1,
 )[1].split(

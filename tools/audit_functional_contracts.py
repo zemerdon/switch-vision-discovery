@@ -2,7 +2,6 @@
 """Read-only functional consistency audit for Switch Vision Discovery/Hub."""
 from __future__ import annotations
 
-import ast
 import json
 import re
 import sys
@@ -14,6 +13,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "runtime_src"
 SUPPORT_WEB = RUNTIME / "support_web.py"
+HUB_PAGE = RUNTIME / "support_web.html"
 CONFIG = ROOT / "switch_vision_discovery" / "config.yaml"
 REGISTRY = RUNTIME / "opt" / "switch-vision" / "devices" / "supported_devices.json"
 PROFILES = RUNTIME / "profiles" / "switch-vision-profiles.yaml"
@@ -56,15 +56,9 @@ def optical_count(mapping: dict) -> int:
 
 
 def load_page() -> str:
-    source = SUPPORT_WEB.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(SUPPORT_WEB))
-    for node in tree.body:
-        if isinstance(node, (ast.Assign, ast.AnnAssign)):
-            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            if any(isinstance(t, ast.Name) and t.id == "_PAGE" for t in targets):
-                if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
-                    return node.value.value
-    raise RuntimeError("Could not locate literal _PAGE in support_web.py")
+    if not HUB_PAGE.is_file():
+        raise RuntimeError("Hub page asset is missing")
+    return HUB_PAGE.read_text(encoding="utf-8")
 
 
 def audit_registry_and_profiles() -> None:

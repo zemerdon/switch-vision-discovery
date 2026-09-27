@@ -3,7 +3,12 @@ from pathlib import Path
 import ast
 import re
 
-SOURCE = Path(__file__).with_name('support_web.py').read_text(encoding='utf-8')
+HERE = Path(__file__).resolve().parent
+SOURCE = (
+    (HERE / "support_web.py").read_text(encoding="utf-8")
+    + "\n"
+    + (HERE / "support_web.html").read_text(encoding="utf-8")
+)
 
 match = re.search(r"const H=\{(?P<body>.*?)\};const OL=", SOURCE, re.S)
 assert match, 'Hub help map H was not found'

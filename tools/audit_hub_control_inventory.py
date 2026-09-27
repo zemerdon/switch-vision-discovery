@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import ast
 import re
 import sys
 from pathlib import Path
@@ -9,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "runtime_src"
 SUPPORT = RUNTIME / "support_web.py"
+HUB_PAGE = RUNTIME / "support_web.html"
 EXTERNAL = [
     RUNTIME / "maintenance.js",
     RUNTIME / "calibration_profiles.js",
@@ -17,14 +17,9 @@ EXTERNAL = [
 
 
 def extract_page() -> str:
-    source = SUPPORT.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            if any(isinstance(t, ast.Name) and t.id == "_PAGE" for t in node.targets):
-                if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
-                    return node.value.value
-    raise RuntimeError("_PAGE not found")
+    if not HUB_PAGE.is_file():
+        raise RuntimeError("Hub page asset is missing")
+    return HUB_PAGE.read_text(encoding="utf-8")
 
 
 def attrs(tag: str) -> dict[str, str]:

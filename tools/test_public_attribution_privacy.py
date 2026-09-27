@@ -60,7 +60,7 @@ def check_structured(value: object, path: Path) -> None:
 
 
 def check_public_credits() -> None:
-    path = ROOT / "runtime_src/support_web.py"
+    path = ROOT / "runtime_src/support_web.html"
     text = path.read_text(encoding="utf-8", errors="ignore")
     start = text.index('<section id="creditsCard"')
     next_section = re.search(r'\n<section id="', text[start + 1 :])
@@ -97,6 +97,8 @@ def main() -> None:
     runtime_public_paths = [
         ROOT / "runtime_src/profiles/switch-vision-profiles.yaml",
         ROOT / "runtime_src/self-test.sh",
+        ROOT / "runtime_src/support_web.py",
+        ROOT / "runtime_src/support_web.html",
     ]
     for path in runtime_public_paths:
         text = path.read_text(encoding="utf-8", errors="ignore")

@@ -11,7 +11,11 @@ sys.path.insert(0, str(RUNTIME))
 
 import support_web
 
-source = (RUNTIME / "support_web.py").read_text(encoding="utf-8")
+source = (
+    (RUNTIME / "support_web.py").read_text(encoding="utf-8")
+    + "\n"
+    + (RUNTIME / "support_web.html").read_text(encoding="utf-8")
+)
 assert 'id="supportTab-history"' in source
 assert 'id="contributionHistoryList"' in source
 assert '"/api/contributions/history"' in source

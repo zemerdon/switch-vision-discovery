@@ -196,7 +196,11 @@ try:
 finally:
     web._release_operation("Discovery")
 
-source = (RUNTIME / "support_web.py").read_text(encoding="utf-8")
+source = (
+    (RUNTIME / "support_web.py").read_text(encoding="utf-8")
+    + "\n"
+    + (RUNTIME / "support_web.html").read_text(encoding="utf-8")
+)
 for marker in (
     '/api/discovery/regenerate-card',
     'mode="regenerate_card"',

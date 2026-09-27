@@ -16,6 +16,7 @@ from discovery_history import (
 
 BASE_DIR = Path(__file__).resolve().parent
 SUPPORT_WEB = BASE_DIR / "support_web.py"
+HUB_PAGE = BASE_DIR / "support_web.html"
 
 with tempfile.TemporaryDirectory(prefix="sv-discovery-history-") as tmp:
     history_path = Path(tmp) / "history.json"
@@ -65,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix="sv-discovery-history-") as tmp:
     history_path.write_text("{corrupt", encoding="utf-8")
     assert discovery_history_snapshot(history_path)["items"] == []
 
-source = SUPPORT_WEB.read_text(encoding="utf-8")
+source = SUPPORT_WEB.read_text(encoding="utf-8") + "\n" + HUB_PAGE.read_text(encoding="utf-8")
 for required in (
     "append_discovery_history(_discovery_state_snapshot())",
     '"discovery_history": discovery_history_snapshot()',

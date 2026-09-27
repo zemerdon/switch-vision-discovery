@@ -4,7 +4,12 @@ import importlib.util
 import json
 import tempfile
 
-source = (Path(__file__).resolve().parent / "support_web.py").read_text(encoding="utf-8")
+_root = Path(__file__).resolve().parent
+source = (
+    (_root / "support_web.py").read_text(encoding="utf-8")
+    + "\n"
+    + (_root / "support_web.html").read_text(encoding="utf-8")
+)
 
 # Detected Device Information now lives inline on the Devices page. The old
 # duplicate navigation/page must not return.

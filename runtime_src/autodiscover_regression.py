@@ -11,7 +11,11 @@ import autodiscover
 import support_web as web
 
 HERE = Path(__file__).resolve().parent
-WEB_SOURCE = (HERE / "support_web.py").read_text(encoding="utf-8")
+WEB_SOURCE = (
+    (HERE / "support_web.py").read_text(encoding="utf-8")
+    + "\n"
+    + (HERE / "support_web.html").read_text(encoding="utf-8")
+)
 
 
 def fake_runner(command, **kwargs):

@@ -129,7 +129,7 @@ for bad in (
     else:
         raise AssertionError(f"invalid reveal request was accepted: {bad}")
 
-source = Path(web.__file__).read_text(encoding="utf-8")
+source = Path(web.__file__).read_text(encoding="utf-8") + "\n" + web.HUB_PAGE_PATH.read_text(encoding="utf-8")
 for marker in (
     'if path == "/api/secrets/reveal":',
     "async function fetchSavedSecret(ref)",

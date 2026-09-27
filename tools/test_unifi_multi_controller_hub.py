@@ -216,7 +216,11 @@ def test_connection_test_local_remote_and_redaction() -> None:
 
 
 def test_connection_test_ui_contract() -> None:
-    source = (RUNTIME / "support_web.py").read_text(encoding="utf-8")
+    source = (
+        (RUNTIME / "support_web.py").read_text(encoding="utf-8")
+        + "\n"
+        + (RUNTIME / "support_web.html").read_text(encoding="utf-8")
+    )
     for marker in (
         'id="testUnifiLocalButton"',
         'id="testUnifiRemoteButton"',

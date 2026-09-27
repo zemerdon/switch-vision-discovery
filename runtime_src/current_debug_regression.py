@@ -35,7 +35,11 @@ with tempfile.TemporaryDirectory(prefix="sv-current-debug-") as tmp:
     finally:
         web.DEFAULT_CURRENT_DISCOVERY_DEBUG = original_path
 
-source = Path(web.__file__).read_text(encoding="utf-8")
+source = (
+    Path(web.__file__).read_text(encoding="utf-8")
+    + "\n"
+    + web.HUB_PAGE_PATH.read_text(encoding="utf-8")
+)
 for marker in (
     'elif path == "/api/discovery/debug":',
     "async function fetchCurrentDiscoveryDebug()",

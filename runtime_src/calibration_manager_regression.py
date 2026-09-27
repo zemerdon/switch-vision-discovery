@@ -4,7 +4,7 @@ from pathlib import Path
 base = Path(__file__).resolve().parent
 profiles = (base / "calibration_profiles.js").read_text(encoding="utf-8")
 manager = (base / "calibration_profiles_manager.js").read_text(encoding="utf-8")
-web = (base / "support_web.py").read_text(encoding="utf-8")
+web = (base / "support_web.py").read_text(encoding="utf-8") + "\n" + (base / "support_web.html").read_text(encoding="utf-8")
 
 for marker in (
     "const inactiveCount =",
