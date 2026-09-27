@@ -45,6 +45,8 @@ MULTI_COUNT_FILE="/tmp/switch_vision_multi_count_$$"
 MULTI_PASS_FILE="/tmp/switch_vision_multi_pass_$$"
 MULTI_WARN_FILE="/tmp/switch_vision_multi_warn_$$"
 MULTI_FAIL_FILE="/tmp/switch_vision_multi_fail_$$"
+GENERATED_CARD_FALLBACK_WALKS=""
+UNIFI_BOUND_IDS=""
 CAPABILITIES_DIR="${SWITCH_VISION_CAPABILITIES_DIR:-/share/switch_vision/capabilities}"
 POST_WALK_ALREADY_DONE="false"
 GENERATED_CARD_SNMP_ENABLED="false"
@@ -70,6 +72,12 @@ cleanup_discovery_scratch() {
     "$MULTI_WARN_FILE" \
     "$MULTI_FAIL_FILE" \
     /tmp/switch_vision_generator_raw_$$.yaml 2>/dev/null || true
+  if [ -n "${GENERATED_CARD_FALLBACK_WALKS:-}" ]; then
+    rm -f "$GENERATED_CARD_FALLBACK_WALKS" 2>/dev/null || true
+  fi
+  if [ -n "${UNIFI_BOUND_IDS:-}" ]; then
+    rm -f "$UNIFI_BOUND_IDS" 2>/dev/null || true
+  fi
 }
 trap cleanup_discovery_scratch EXIT
 
@@ -4531,8 +4539,8 @@ write_generated_dashboard_card() {
   unifi_registry="${SWITCH_VISION_DEVICE_REGISTRY:-/opt/switch-vision/devices/supported_devices.json}"
   unifi_helper="${SWITCH_VISION_UNIFI_DASHBOARD_HELPER:-/unifi_dashboard_cards.py}"
   [ -f "$unifi_helper" ] || unifi_helper="$(dirname "$0")/unifi_dashboard_cards.py"
-  unifi_bound_ids="/tmp/switch_vision_unifi_bound_ids_$$.txt"
-  : > "$unifi_bound_ids"
+  UNIFI_BOUND_IDS=$(mktemp "${TMPDIR:-/tmp}/switch_vision_unifi_bound_ids.XXXXXX")
+  unifi_bound_ids="$UNIFI_BOUND_IDS"
   # This is the native Switch Vision dashboard source; manual Lovelace use remains optional.
   {
     echo "# Switch Vision generated dashboard card examples"
@@ -4760,9 +4768,12 @@ write_generated_dashboard_card() {
       profile="${SELECTED_SWITCH:-}"
       fallback_walk=""
       if [ -z "$profile" ]; then
-        fallback_walks="/tmp/switch_vision_generated_card_fallback_walks_$$.txt"
+        GENERATED_CARD_FALLBACK_WALKS=$(mktemp "${TMPDIR:-/tmp}/switch_vision_generated_card_fallback_walks.XXXXXX")
+        fallback_walks="$GENERATED_CARD_FALLBACK_WALKS"
         collect_multi_walks "$fallback_walks"
         fallback_walk=$(sed -n '1p' "$fallback_walks" 2>/dev/null || true)
+        rm -f "$fallback_walks"
+        GENERATED_CARD_FALLBACK_WALKS=""
         if [ -n "$fallback_walk" ]; then
           profile=$(target_switch_for_walk "$fallback_walk")
         fi
@@ -4852,6 +4863,7 @@ write_generated_dashboard_card() {
   fi
 
   rm -f "$port_mode_metadata" "$unifi_bound_ids" "/tmp/switch_vision_generated_dashboard_raw_$$.yaml"
+  UNIFI_BOUND_IDS=""
 }
 
 quarantine_invalid_generated_live_yaml() {

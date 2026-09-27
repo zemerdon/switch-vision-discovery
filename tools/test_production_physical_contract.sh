@@ -19,6 +19,19 @@ note_failure() {
   failures=$((failures + 1))
 }
 
+if grep -Fq 'fallback_walks="/tmp/switch_vision_generated_card_fallback_walks_$$.txt"' "$RUNTIME/discovery_job.sh"; then
+  note_failure "generated-card fallback scratch still uses collision-prone PID path"
+fi
+if ! grep -Fq 'mktemp "${TMPDIR:-/tmp}/switch_vision_generated_card_fallback_walks.XXXXXX"' "$RUNTIME/discovery_job.sh"; then
+  note_failure "generated-card fallback scratch is not allocated with mktemp"
+fi
+if grep -Fq 'unifi_bound_ids="/tmp/switch_vision_unifi_bound_ids_$$.txt"' "$RUNTIME/discovery_job.sh"; then
+  note_failure "UniFi bound-ID scratch still uses collision-prone PID path"
+fi
+if ! grep -Fq 'mktemp "${TMPDIR:-/tmp}/switch_vision_unifi_bound_ids.XXXXXX"' "$RUNTIME/discovery_job.sh"; then
+  note_failure "UniFi bound-ID scratch is not allocated with mktemp"
+fi
+
 make_walk() {
   walk=$1
   sysdescr=$2
@@ -49,7 +62,7 @@ run_case() {
   expected_physical=$5
 
   case_dir="$TMP/$case_name"
-  mkdir -p "$case_dir/capabilities" "$case_dir/snmpwalks" "$case_dir/live" "$case_dir/share"
+  mkdir -p "$case_dir/capabilities" "$case_dir/snmpwalks" "$case_dir/live" "$case_dir/share" "$case_dir/tmp"
   normalized="$case_dir/snmpwalks/$(basename "$walk")"
   capabilities="$case_dir/capabilities/resolved.json"
   contract="$case_dir/physical-contract.json"
@@ -104,10 +117,15 @@ EOF
        SWITCH_VISION_OPTIONS_FILE="$options" \
        SWITCH_VISION_CAPABILITIES_DIR="$case_dir/capabilities/runtime" \
        SWITCH_VISION_SHARE_DIR="$case_dir/share" \
+       TMPDIR="$case_dir/tmp" \
        sh "$RUNTIME/discovery_job.sh" > "$case_dir/stdout.txt" 2> "$case_dir/stderr.txt"; then
     note_failure "$case_name: discovery_job.sh exited non-zero"
     sed -n '1,120p' "$case_dir/stderr.txt" >&2 || true
     return 0
+  fi
+
+  if find "$case_dir/tmp" -maxdepth 1 -type f -name 'switch_vision_generated_card_fallback_walks.*' -print -quit | grep -q .; then
+    note_failure "$case_name: generated-card fallback scratch file leaked"
   fi
 
   python3 "$RESOLVER" \
