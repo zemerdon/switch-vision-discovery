@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import json
 import os
 import re
@@ -34,11 +35,12 @@ VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {}
 SUPPORT_CONTRACT_EXCEPTIONS: dict[str, dict[str, object]] = {}
 
 FACEPLATE_CATALOG_SCHEMA = "switch-vision-faceplate-catalog-v1"
-FACEPLATE_PIN_SCHEMA = "switch-vision-core-faceplate-catalog-pin-v1"
+FACEPLATE_PIN_SCHEMA = "switch-vision-core-faceplate-catalog-pin-v2"
 CORE_FACEPLATE_REPOSITORY = "zemerdon/switch-vision-releases"
 CORE_FACEPLATE_CATALOG_PATH = "src/faceplates/catalog.json"
 CORE_FACEPLATE_PIN_PATH = Path("contracts/core-faceplate-catalog.json")
 EXACT_GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def classify_visual_contract_drift(model: str) -> tuple[str, str | None]:
@@ -79,6 +81,14 @@ def parse_faceplate_catalog(data):
         labels[filename] = display
     return labels
 
+def faceplate_catalog_sha256_bytes(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def faceplate_catalog_sha256(path: Path) -> str:
+    return faceplate_catalog_sha256_bytes(path.read_bytes())
+
+
 def parse_faceplate_pin(data):
     if not isinstance(data, dict) or data.get("schema") != FACEPLATE_PIN_SCHEMA:
         raise RuntimeError("invalid Core faceplate catalog pin schema")
@@ -86,13 +96,28 @@ def parse_faceplate_pin(data):
         raise RuntimeError("invalid Core faceplate catalog pin identity")
     sha = data.get("commit_sha")
     if not isinstance(sha, str) or not EXACT_GIT_SHA_RE.fullmatch(sha):
-        raise RuntimeError("Core faceplate catalog pin must use exact commit SHA")
-    return {"repository": CORE_FACEPLATE_REPOSITORY, "commit_sha": sha, "path": CORE_FACEPLATE_CATALOG_PATH}
+        raise RuntimeError("Core faceplate catalog pin must use exact provenance commit SHA")
+    digest = data.get("sha256")
+    if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
+        raise RuntimeError("Core faceplate catalog pin must use exact catalog SHA-256")
+    return {
+        "repository": CORE_FACEPLATE_REPOSITORY,
+        "commit_sha": sha,
+        "path": CORE_FACEPLATE_CATALOG_PATH,
+        "sha256": digest,
+    }
+
 
 def load_pinned_faceplate_catalog():
     pin = parse_faceplate_pin(json.loads(CORE_FACEPLATE_PIN_PATH.read_text(encoding="utf-8")))
     url = f"https://raw.githubusercontent.com/{pin['repository']}/{pin['commit_sha']}/{pin['path']}"
-    return parse_faceplate_catalog(json.loads(fetch_text(url)))
+    text = fetch_text(url)
+    digest = faceplate_catalog_sha256_bytes(text.encode("utf-8"))
+    if digest != pin["sha256"]:
+        raise RuntimeError(
+            "pinned Core faceplate catalog content digest does not match its reviewed pin"
+        )
+    return parse_faceplate_catalog(json.loads(text))
 
 def resolve_core_source_root(value: str | None) -> Path | None:
     raw = str(value or "").strip()
@@ -363,10 +388,14 @@ def main() -> int:
             json.loads(CORE_FACEPLATE_PIN_PATH.read_text(encoding="utf-8"))
         )
         if core_source_root is not None:
-            if pin["commit_sha"] != core_source_sha:
+            catalog_path = core_source_root / CORE_FACEPLATE_CATALOG_PATH
+            coordinated_digest = faceplate_catalog_sha256(catalog_path)
+            if pin["sha256"] != coordinated_digest:
                 raise RuntimeError(
                     "Discovery published Core faceplate pin does not match coordinated "
-                    f"Core source: pin={pin['commit_sha']} coordinated={core_source_sha}"
+                    "Core faceplate catalog content: "
+                    f"pin_sha256={pin['sha256']} coordinated_sha256={coordinated_digest} "
+                    f"pin_source={pin['commit_sha']} coordinated_source={core_source_sha}"
                 )
             pinned_faceplate_labels = load_core_faceplate_catalog(core_source_root)
         else:

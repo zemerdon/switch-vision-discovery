@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,21 @@ def load_entrypoint():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def load_pin_helper():
+    sys.path.insert(0, str(ROOT / "tools"))
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "switch_vision_core_faceplate_pin", PIN_HELPER
+        )
+        if spec is None or spec.loader is None:
+            raise AssertionError("could not load Core faceplate pin helper")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path.pop(0)
 
 
 def main() -> int:
@@ -60,6 +76,23 @@ def main() -> int:
     assert "sys.dont_write_bytecode = True" in pin_source
     assert pin_source.index("sys.dont_write_bytecode = True") < pin_source.index(
         "import check_component_contracts as contracts"
+    )
+
+    pin_helper = load_pin_helper()
+    stable = {
+        "schema": "switch-vision-core-faceplate-catalog-pin-v2",
+        "repository": "zemerdon/switch-vision-releases",
+        "commit_sha": "a" * 40,
+        "path": "src/faceplates/catalog.json",
+        "sha256": "1" * 64,
+    }
+    same_catalog_new_source = {**stable, "commit_sha": "b" * 40}
+    changed_catalog = {**stable, "commit_sha": "b" * 40, "sha256": "2" * 64}
+    assert pin_helper.stable_pin_contract(stable) == pin_helper.stable_pin_contract(
+        same_catalog_new_source
+    )
+    assert pin_helper.stable_pin_contract(stable) != pin_helper.stable_pin_contract(
+        changed_catalog
     )
 
     materializer = (ROOT / "tools" / "materialize_runtime.sh").read_text(encoding="utf-8")

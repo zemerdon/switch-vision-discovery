@@ -16,9 +16,12 @@ labels=m.parse_faceplate_catalog({"schema":m.FACEPLATE_CATALOG_SCHEMA,"faceplate
 assert labels["unifi-24-rj45-2sfp-inline.png"].endswith("Inline")
 assert not m.validate_default_faceplates({"devices":[{"model":"ok","default_faceplate":"faceplates/unifi-24-rj45-2sfp-inline.png"}]},labels)
 assert m.validate_default_faceplates({"devices":[{"model":"bad","default_faceplate":"faceplates/missing.png"}]},labels)
-try:m.parse_faceplate_pin({"schema":m.FACEPLATE_PIN_SCHEMA,"repository":m.CORE_FACEPLATE_REPOSITORY,"commit_sha":"main","path":m.CORE_FACEPLATE_CATALOG_PATH})
+try:m.parse_faceplate_pin({"schema":m.FACEPLATE_PIN_SCHEMA,"repository":m.CORE_FACEPLATE_REPOSITORY,"commit_sha":"main","path":m.CORE_FACEPLATE_CATALOG_PATH,"sha256":"1"*64})
 except RuntimeError:pass
-else:raise SystemExit("non-SHA pin accepted")
+else:raise SystemExit("non-SHA provenance pin accepted")
+try:m.parse_faceplate_pin({"schema":m.FACEPLATE_PIN_SCHEMA,"repository":m.CORE_FACEPLATE_REPOSITORY,"commit_sha":"a"*40,"path":m.CORE_FACEPLATE_CATALOG_PATH,"sha256":"main"})
+except RuntimeError:pass
+else:raise SystemExit("non-SHA256 catalog pin accepted")
 import json,sys
 registry=json.loads((r/"runtime_src/opt/switch-vision/devices/supported_devices.json").read_text(encoding="utf-8"))
 rows={x["model"]:x for x in registry["devices"] if isinstance(x,dict) and x.get("model")}
@@ -75,8 +78,10 @@ if not core_root:
 if not re.fullmatch(r"[0-9a-f]{40}",core_sha):
     raise SystemExit("SWITCH_VISION_CORE_SOURCE_SHA is required for coordinated local faceplate validation")
 pin=m.parse_faceplate_pin(json.loads((r/"contracts/core-faceplate-catalog.json").read_text(encoding="utf-8")))
-assert pin["commit_sha"]==core_sha,(pin["commit_sha"],core_sha)
-assert not m.validate_default_faceplates(registry, m.load_core_faceplate_catalog(m.resolve_core_source_root(core_root)))
+resolved_core_root=m.resolve_core_source_root(core_root)
+coordinated_digest=m.faceplate_catalog_sha256(resolved_core_root/m.CORE_FACEPLATE_CATALOG_PATH)
+assert pin["sha256"]==coordinated_digest,(pin["sha256"],coordinated_digest,pin["commit_sha"],core_sha)
+assert not m.validate_default_faceplates(registry, m.load_core_faceplate_catalog(resolved_core_root))
 for row in visual:
     model=row["model"]; face=row.get("default_faceplate"); profile=row.get("calibration_profile")
     assert isinstance(face,str) and face.startswith("faceplates/") and face.endswith(".png"), model

@@ -61,6 +61,16 @@ def expected_pin(core_source_root: Path, core_source_sha: str) -> dict[str, str]
         "repository": contracts.CORE_FACEPLATE_REPOSITORY,
         "commit_sha": core_source_sha,
         "path": contracts.CORE_FACEPLATE_CATALOG_PATH,
+        "sha256": contracts.faceplate_catalog_sha256(catalog_path),
+    }
+
+
+def stable_pin_contract(pin: dict[str, str]) -> dict[str, str]:
+    return {
+        "schema": pin["schema"],
+        "repository": pin["repository"],
+        "path": pin["path"],
+        "sha256": pin["sha256"],
     }
 
 
@@ -81,13 +91,20 @@ def main() -> int:
         raw_current = json.loads(PIN_PATH.read_text(encoding="utf-8"))
         parsed_current = contracts.parse_faceplate_pin(raw_current)
         current = {"schema": raw_current.get("schema"), **parsed_current}
-        if current != expected:
+        stable_expected = stable_pin_contract(expected)
+        stable_current = stable_pin_contract(current)
+        if stable_current != stable_expected:
             raise SystemExit(
                 "Discovery Core faceplate pin drift: "
-                f"expected={json.dumps(expected, sort_keys=True)} "
-                f"current={json.dumps(current, sort_keys=True)}"
+                f"expected={json.dumps(stable_expected, sort_keys=True)} "
+                f"current={json.dumps(stable_current, sort_keys=True)} "
+                f"pin_source={current['commit_sha']} coordinated_source={sha}"
             )
-        print(f"Discovery Core faceplate pin: PASS ({sha})")
+        print(
+            "Discovery Core faceplate pin: PASS "
+            f"(catalog_sha256={current['sha256']} "
+            f"pin_source={current['commit_sha']} coordinated_source={sha})"
+        )
         return 0
 
     PIN_PATH.write_text(json.dumps(expected, indent=2) + "\n", encoding="utf-8")
