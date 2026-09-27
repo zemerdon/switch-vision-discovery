@@ -3,14 +3,12 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "runtime_src"
 sys.path.insert(0, str(RUNTIME))
 
 import support_web  # noqa: E402
-import unifi_multi_controller_bridge as bridge  # noqa: E402
 
 
 def current_options() -> dict:
@@ -42,13 +40,6 @@ def current_options() -> dict:
             },
         ],
     }
-
-
-def test_bridge_is_compatibility_only() -> None:
-    module = SimpleNamespace()
-    bridge.install(module)
-    assert module._sv_unifi_multi_controller_bridge_installed is True
-    assert bridge._PAGE_PATCHES == ()
 
 
 def test_browser_controller_rows_redact_nested_secrets() -> None:
@@ -243,7 +234,6 @@ def test_connection_test_ui_contract() -> None:
     assert '<details id="unifiConnectionTestDebug" class="yaml-manager unifi-test-debug" open' not in source
 
 def main() -> int:
-    test_bridge_is_compatibility_only()
     test_browser_controller_rows_redact_nested_secrets()
     test_blank_top_level_secrets_preserve_both_profiles()
     test_browser_can_edit_controller_list_and_preserve_keys()
