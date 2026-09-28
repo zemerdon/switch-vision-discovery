@@ -37,6 +37,7 @@ COPY walk_correlation.py /walk_correlation.py
 COPY make_support_email.py /make_support_email.py
 COPY support_web.py /support_web.py
 COPY support_web.html /support_web.html
+COPY complete_backup.py /complete_backup.py
 COPY autodiscover.py /autodiscover.py
 COPY core_bridge.py /core_bridge.py
 COPY support_web_entry.py /support_web_entry.py

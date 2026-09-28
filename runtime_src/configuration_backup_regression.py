@@ -249,7 +249,13 @@ finally:
     web.DEFAULT_DEVICE_CONTROL = original_control
     web.DEFAULT_CONFIGURATION_RESTORE_PENDING = original_pending
 
-source = Path(web.__file__).read_text(encoding="utf-8") + "\n" + web.HUB_PAGE_PATH.read_text(encoding="utf-8")
+source = (
+    Path(web.__file__).read_text(encoding="utf-8")
+    + "\n"
+    + web.HUB_PAGE_PATH.read_text(encoding="utf-8")
+    + "\n"
+    + Path(web.__file__).with_name("complete_backup.py").read_text(encoding="utf-8")
+)
 for marker in (
     'COMPLETE_BACKUP_FORMAT = "switch-vision-complete-backup-v1"',
     '/download/switch-vision-backup.json',
