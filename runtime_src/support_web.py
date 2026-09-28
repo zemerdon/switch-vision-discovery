@@ -4944,103 +4944,24 @@ def _restore_unifi2mqtt_nonsecret(options: dict[str, Any]) -> None:
 
 
 def _restore_complete_backup(data: Any) -> dict[str, Any]:
-    backup = _validate_complete_backup(data)
-    # Preflight the coordinated Core contract before changing any component.
-    core_assets = _home_assistant_ws({"type": "switch_vision/list_assets"})
-    if not isinstance(core_assets, dict) or int(core_assets.get("backup_api") or 0) < 2:
-        raise RuntimeError("Switch Vision Core is too old for complete configuration restore. Update Core before importing.")
-    components = backup["components"]
-    restored_components: list[str] = []
-    warnings: list[str] = []
-
-    core_settings = components["core"].get("settings")
-    if isinstance(core_settings, dict):
-        _save_core_settings({"settings": core_settings})
-        restored_components.append("core")
-    asset_count = _restore_core_assets(backup["assets"])
-    profile_count = _restore_core_calibrations(backup["calibrations"])
-
-    installer_settings = components["installer"].get("settings")
-    if components["installer"].get("installed") and isinstance(installer_settings, dict):
-        try:
-            _save_installer_settings(installer_settings)
-            restored_components.append("installer")
-        except RuntimeError as exc:
-            warnings.append(str(exc))
-
-    snmp_settings = components["snmp2mqtt"].get("settings")
-    if components["snmp2mqtt"].get("installed") and isinstance(snmp_settings, dict):
-        try:
-            safe_snmp = copy.deepcopy(snmp_settings)
-            if isinstance(safe_snmp.get("mqtt"), dict):
-                safe_snmp["mqtt"]["password"] = ""
-            safe_snmp["clear_password"] = False
-            _save_snmp2mqtt_settings({"settings": safe_snmp})
-            restored_components.append("snmp2mqtt")
-        except RuntimeError as exc:
-            warnings.append(str(exc))
-
-    pending = _load_configuration_restore_pending()
-    unifi_options = components["unifi2mqtt"].get("options")
-    if components["unifi2mqtt"].get("installed") and isinstance(unifi_options, dict):
-        controllers = unifi_options.get("controllers")
-        pending["unifi_controllers"] = [
-            {key: copy.deepcopy(value) for key, value in row.items() if key not in {"api_key", "api_key_configured"}}
-            | {"api_key_configured": False, "restore_pending": True}
-            for row in controllers if isinstance(row, dict)
-        ] if isinstance(controllers, list) else []
-        try:
-            _restore_unifi2mqtt_nonsecret(unifi_options)
-            restored_components.append("unifi2mqtt")
-        except RuntimeError as exc:
-            warnings.append(str(exc))
-
-    discovery_settings = copy.deepcopy(components["discovery"].get("settings"))
-    if not isinstance(discovery_settings, dict):
-        raise ValueError("Complete backup Discovery settings are invalid.")
-    switches = discovery_settings.pop("switches", [])
-    stack_members = discovery_settings.pop("stack_member_prefixes", [])
-    discovery_settings.pop("support_contributor_value_configured", None)
-    contributor_was_configured = bool(
-        components["discovery"].get("settings", {}).get("support_contributor_value_configured")
+    return complete_backup_restore.restore_complete_backup(
+        data,
+        backup_format=COMPLETE_BACKUP_FORMAT,
+        validate_complete_backup=_validate_complete_backup,
+        home_assistant_ws=_home_assistant_ws,
+        save_core_settings=_save_core_settings,
+        restore_core_assets=_restore_core_assets,
+        restore_core_calibrations=_restore_core_calibrations,
+        save_installer_settings=_save_installer_settings,
+        save_snmp2mqtt_settings=_save_snmp2mqtt_settings,
+        load_configuration_restore_pending=_load_configuration_restore_pending,
+        restore_unifi2mqtt_nonsecret=_restore_unifi2mqtt_nonsecret,
+        save_discovery_settings=_save_discovery_settings,
+        save_configuration_restore_pending=_save_configuration_restore_pending,
+        load_device_control_from_object=device_control_state.load_from_object,
+        save_device_control=device_control_state.save,
+        device_control_file=DEFAULT_DEVICE_CONTROL,
     )
-    discovery_settings["support_contributor_value"] = ""
-    if contributor_was_configured and str(discovery_settings.get("support_contributor_type") or "anonymous") != "anonymous":
-        # Existing write-only privacy policy does not permit a backup to recreate
-        # this private value. Preserve current live recognition until re-entered.
-        discovery_settings.pop("support_contributor_type", None)
-        discovery_settings.pop("support_contributor_value", None)
-    _save_discovery_settings({"settings": discovery_settings})
-    restored_components.append("discovery")
-    pending["discovery_switches"] = [
-        {key: copy.deepcopy(value) for key, value in row.items() if key not in {"snmp_community", "snmp_community_configured", "original_switch_name"}}
-        | {"snmp_community": "", "snmp_community_configured": False, "restore_pending": True}
-        for row in switches
-        if isinstance(row, dict) and (str(row.get("switch_name") or "").strip() or str(row.get("switch_host") or "").strip())
-    ]
-    pending["discovery_stack_member_prefixes"] = [
-        copy.deepcopy(row)
-        for row in stack_members
-        if isinstance(row, dict)
-    ]
-    _save_configuration_restore_pending(pending)
-
-    control = device_control_state.load_from_object(backup["device_control"])
-    device_control_state.save(control, DEFAULT_DEVICE_CONTROL)
-
-    return {
-        "imported": True,
-        "format": COMPLETE_BACKUP_FORMAT,
-        "restored_components": restored_components,
-        "asset_count": asset_count,
-        "calibration_profile_count": profile_count,
-        "credential_requirements": copy.deepcopy(backup.get("credential_requirements") or []),
-        "pending_discovery_switches": len(pending["discovery_switches"]),
-        "pending_discovery_stack_members": len(pending["discovery_stack_member_prefixes"]),
-        "pending_unifi_controllers": len(pending["unifi_controllers"]),
-        "warnings": warnings,
-        "restart_required": False,
-    }
 
 
 def _install_unifi2mqtt() -> dict[str, Any]:
