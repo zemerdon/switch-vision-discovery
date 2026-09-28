@@ -8,6 +8,8 @@ _root = Path(__file__).resolve().parent
 source = (
     (_root / "support_web.py").read_text(encoding="utf-8")
     + "\n"
+    + (_root / "hub_diagnostics.py").read_text(encoding="utf-8")
+    + "\n"
     + (_root / "support_web.html").read_text(encoding="utf-8")
 )
 
