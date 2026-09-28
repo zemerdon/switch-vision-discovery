@@ -12,7 +12,7 @@ rm -f "$SV_DEVICE_CONTROL_PATH"
 rm -rf "$SV_SELF_TEST_TMP_DIR"
 mkdir -p "$SV_SELF_TEST_TMP_DIR"
 SV_HUB_SOURCE="$SV_SELF_TEST_TMP_DIR/support-web-contract-source.txt"
-cat "$BASE_DIR/support_web.py" "$BASE_DIR/support_web.html" > "$SV_HUB_SOURCE"
+cat "$BASE_DIR/support_web.py" "$BASE_DIR/hub_component_settings.py" "$BASE_DIR/hub_device_control.py" "$BASE_DIR/support_web.html" > "$SV_HUB_SOURCE"
 sv_self_test_cleanup() {
     rm -f "$SV_DEVICE_CONTROL_PATH"
     rm -rf "$SV_SELF_TEST_TMP_DIR"

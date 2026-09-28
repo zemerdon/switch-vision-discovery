@@ -287,7 +287,13 @@ finally:
     web.DEFAULT_GENERATED_CARD = original_card
     web.DEFAULT_GENERATED_CARD_FULL = original_card_full
 
-source = Path(web.__file__).read_text(encoding="utf-8") + "\n" + web.HUB_PAGE_PATH.read_text(encoding="utf-8")
+source = (
+    Path(web.__file__).read_text(encoding="utf-8")
+    + "\n"
+    + Path(web.__file__).with_name("hub_device_control.py").read_text(encoding="utf-8")
+    + "\n"
+    + web.HUB_PAGE_PATH.read_text(encoding="utf-8")
+)
 for literal in (
     "/api/configured-devices/order",
     "device_order_update",
