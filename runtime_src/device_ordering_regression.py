@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 import tempfile
 import threading
@@ -27,6 +28,9 @@ def row(name: str, host: str, prefix: str) -> dict:
 
 
 assert "device_order_update" in discovery_backups._ALLOWED_REASONS
+startup_source = inspect.getsource(web.main)
+assert "_apply_saved_device_order_to_dashboard(" in startup_source
+assert "touch_if_unchanged=False" in startup_source
 
 state = {
     "enable_switch_list": True,
@@ -222,6 +226,57 @@ try:
             "discovery_selected_switch: SW-B"
         ), restored_text
         assert web.DEFAULT_GENERATED_CARD_FULL.read_text(encoding="utf-8") == full_text
+
+        # A switch rename can leave the preserved full dashboard with both the
+        # old and new SNMP keys. The saved switch list is authoritative: the old
+        # key must disappear from the visible projection without destroying the
+        # preserved source, and a startup-style projection must not touch an
+        # already-correct visible file.
+        renamed_state = copy.deepcopy(state)
+        state.clear()
+        state.update({
+            "enable_switch_list": True,
+            "switches": [row("Cisco3560C", "192.0.2.252", "cisco3560")],
+        })
+        renamed_full = root / "renamed-full.yaml"
+        renamed_visible = root / "renamed-visible.yaml"
+        renamed_full.write_text(
+            """views:
+  - title: Switch Vision
+    cards:
+      - type: custom:switch-vision-3650
+        title: Cisco 3560-C
+        member: Cisco 3560-C
+        discovery_selected_switch: Cisco 3560-C
+      - type: custom:switch-vision-3650
+        title: Cisco 3560-C
+        member: Cisco3560C
+        discovery_selected_switch: Cisco3560C
+""",
+            encoding="utf-8",
+        )
+        renamed_visible.write_text(renamed_full.read_text(encoding="utf-8"), encoding="utf-8")
+        web.DEFAULT_GENERATED_CARD = renamed_visible
+        web.DEFAULT_GENERATED_CARD_FULL = renamed_full
+        renamed = web._apply_saved_device_order_to_dashboard(touch_if_unchanged=False)
+        assert renamed["stale_snmp_cards_removed"] == 1, renamed
+        visible_renamed = renamed_visible.read_text(encoding="utf-8")
+        preserved_renamed = renamed_full.read_text(encoding="utf-8")
+        assert "discovery_selected_switch: Cisco3560C" in visible_renamed
+        assert "discovery_selected_switch: Cisco 3560-C" not in visible_renamed
+        assert "discovery_selected_switch: Cisco 3560-C" in preserved_renamed
+        second_projection = web._apply_saved_device_order_to_dashboard(touch_if_unchanged=False)
+        assert second_projection["stale_snmp_cards_removed"] == 1, second_projection
+        assert second_projection["visible_changed"] is False, second_projection
+        state.clear()
+        try:
+            web._apply_saved_device_order_to_dashboard(touch_if_unchanged=False)
+            raise AssertionError("missing authoritative switch inventory must fail closed")
+        except RuntimeError as exc:
+            assert "authoritative saved snmp switch inventory" in str(exc).casefold(), exc
+        state.update(renamed_state)
+        web.DEFAULT_GENERATED_CARD = dashboard
+        web.DEFAULT_GENERATED_CARD_FULL = root / "dashboard-full.yaml"
 
         # Fresh generation may omit a disabled SNMP row. Retain its old exact
         # card, but do not retain stale enabled SNMP or stale UniFi cards that

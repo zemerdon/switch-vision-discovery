@@ -2395,7 +2395,10 @@ def _ensure_full_dashboard_source() -> tuple[Path | None, bool]:
     return DEFAULT_GENERATED_CARD_FULL, True
 
 
-def _apply_saved_device_order_to_dashboard() -> dict[str, Any]:
+def _apply_saved_device_order_to_dashboard(
+    *,
+    touch_if_unchanged: bool = True,
+) -> dict[str, Any]:
     """Project current order/state from the preserved full-card dashboard source."""
     source, seeded = _ensure_full_dashboard_source()
     if source is None:
@@ -2404,11 +2407,17 @@ def _apply_saved_device_order_to_dashboard() -> dict[str, Any]:
         options = _self_addon_options()
     except RuntimeError:
         options = _load_options(DEFAULT_OPTIONS_FILE)
+    rows = options.get("switches")
+    if not isinstance(rows, list):
+        rows = options.get("multi_switch_walks")
+    if not isinstance(rows, list):
+        raise RuntimeError("Authoritative saved SNMP switch inventory is unavailable.")
     result = dashboard_device_order.apply_dashboard_order(
         DEFAULT_GENERATED_CARD,
         DEFAULT_DEVICE_CONTROL,
         source_path=source,
         snmp_states=dashboard_device_order.snmp_states_from_options(options),
+        touch_if_unchanged=touch_if_unchanged,
     )
     return {"updated": True, "full_source_seeded": seeded, **result}
 
@@ -7247,6 +7256,21 @@ def main() -> int:
     args = parser.parse_args()
     _ensure_runtime_paths()
     args.contributions_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        startup_projection = _apply_saved_device_order_to_dashboard(
+            touch_if_unchanged=False,
+        )
+        stale_removed = int(startup_projection.get("stale_snmp_cards_removed") or 0)
+        if stale_removed:
+            print(
+                f"[Switch Vision Hub] Removed {stale_removed} stale SNMP dashboard card(s) from the visible projection.",
+                flush=True,
+            )
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(
+            f"[Switch Vision Hub] Dashboard startup reconciliation skipped: {exc}",
+            flush=True,
+        )
     server = SupportServer(
         (args.host, args.port),
         SupportHandler,

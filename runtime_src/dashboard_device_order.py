@@ -224,21 +224,37 @@ def apply_dashboard_order(
     *,
     source_path: Path | None = None,
     snmp_states: dict[str, bool] | None = None,
+    touch_if_unchanged: bool = True,
 ) -> dict[str, int | bool]:
-    """Project full cards into ``path`` using current state/order without data loss."""
+    """Project full cards into ``path`` using current state/order without data loss.
+
+    When ``snmp_states`` is supplied it is the authoritative configured SNMP
+    inventory. Any preserved SNMP card whose key is absent from that inventory
+    is stale (for example after a switch rename) and must not remain visible.
+    """
     source = source_path or path
     text = source.read_text(encoding="utf-8")
     prefix, cards, blocks = _parse_dashboard(text)
 
     control = load_control(control_path)
+    authoritative_snmp_inventory = snmp_states is not None
     effective_snmp_states = dict(snmp_states or {})
     pinned: list[str] = []
     keyed: dict[str, list[str]] = {}
     unknown: list[str] = []
     disabled = 0
+    stale_snmp = 0
 
     for index, (card, block) in enumerate(zip(cards, blocks, strict=True)):
         key = _card_key(card)
+        if (
+            key
+            and key.startswith("snmp:")
+            and authoritative_snmp_inventory
+            and key not in effective_snmp_states
+        ):
+            stale_snmp += 1
+            continue
         if key and not _device_enabled(key, control, effective_snmp_states):
             disabled += 1
             continue
@@ -270,11 +286,16 @@ def apply_dashboard_order(
     # The visible dashboard file's mtime is the native panel's generation
     # timestamp/change detector. A successful regeneration must advance it even
     # when the YAML projection is byte-for-byte identical.
-    changed = _write_if_changed(path, updated, touch_if_unchanged=True)
+    changed = _write_if_changed(
+        path,
+        updated,
+        touch_if_unchanged=touch_if_unchanged,
+    )
     return {
         "cards": len(cards),
         "device_keys": len(keyed),
         "disabled_cards_removed": disabled,
+        "stale_snmp_cards_removed": stale_snmp,
         "visible_changed": changed,
     }
 
@@ -287,7 +308,7 @@ def main() -> int:
     parser.add_argument("--fresh", type=Path)
     parser.add_argument("--options", type=Path)
     args = parser.parse_args()
-    states = snmp_states_from_options_file(args.options)
+    states = snmp_states_from_options_file(args.options) if args.options is not None else None
     source = args.source or full_dashboard_path(args.dashboard)
     refresh: dict[str, int | bool] = {}
     if args.fresh is not None:
