@@ -66,6 +66,7 @@ import complete_backup_runtime
 import complete_backup_restore
 import hub_component_settings
 import hub_device_control
+import hub_diagnostics
 
 SUPPORT_ADDRESS = "switch-vision@zemerdon.com"
 SUPERVISOR_INGRESS_IP = "172.30.32.2"
@@ -5432,523 +5433,85 @@ def _file_info(path: Path) -> dict[str, Any]:
     }
 
 
+def _hub_diagnostics_runtime() -> hub_diagnostics.HubDiagnosticsRuntime:
+    return hub_diagnostics.HubDiagnosticsRuntime(
+        read_json=_read_json,
+        registry_lookup=registry_lookup,
+        switch_name_identity=_switch_name_identity,
+        self_addon_options=_self_addon_options,
+        load_options=_load_options,
+        unifi2mqtt_diagnostics_status=_unifi2mqtt_diagnostics_status,
+        file_info=_file_info,
+        snmp2mqtt_applicability=_snmp2mqtt_applicability,
+        discovery_state_snapshot=_discovery_state_snapshot,
+        default_share_dir=DEFAULT_SHARE_DIR,
+        default_registry_file=DEFAULT_REGISTRY_FILE,
+        default_unifi_snapshot=DEFAULT_UNIFI_SNAPSHOT,
+        default_support_script=DEFAULT_SUPPORT_SCRIPT,
+        default_contributions_dir=DEFAULT_CONTRIBUTIONS_DIR,
+    )
+
+
 def _normalized_device_mac(value: Any) -> str:
-    compact = re.sub(r"[^0-9a-f]", "", str(value or "").strip().casefold())
-    if len(compact) != 12 or not re.fullmatch(r"[0-9a-f]{12}", compact):
-        return ""
-    return ":".join(compact[index:index + 2] for index in range(0, 12, 2))
+    return hub_diagnostics.normalized_device_mac(value)
 
 
 def _normalized_device_ip(value: Any) -> str:
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    try:
-        return ipaddress.ip_address(text).compressed
-    except ValueError:
-        return ""
+    return hub_diagnostics.normalized_device_ip(value)
 
 
 def _unique_detected_snmp_identity_match(
     devices: list[dict[str, Any]], *, mac_address: Any = "", ip_address: Any = ""
 ) -> tuple[dict[str, Any] | None, str]:
-    mac = _normalized_device_mac(mac_address)
-    if mac:
-        matches = [
-            item for item in devices
-            if item.get("data_source", "SNMP") != "UniFi API"
-            and _normalized_device_mac(item.get("_identity_mac")) == mac
-        ]
-        if len(matches) == 1:
-            return matches[0], "hardware_mac"
-        if len(matches) > 1:
-            return None, ""
-
-    ip = _normalized_device_ip(ip_address)
-    if ip:
-        matches = [
-            item for item in devices
-            if item.get("data_source", "SNMP") != "UniFi API"
-            and _normalized_device_ip(item.get("_identity_ip")) == ip
-        ]
-        if len(matches) == 1:
-            return matches[0], "management_ip"
-
-    return None, ""
+    return hub_diagnostics.unique_detected_snmp_identity_match(
+        devices,
+        mac_address=mac_address,
+        ip_address=ip_address,
+    )
 
 
 def _walk_management_target(path: Path) -> str:
-    """Read the management target recorded in a Switch Vision walk header."""
-    if not path.is_file():
-        return ""
-    try:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            for _ in range(32):
-                line = handle.readline()
-                if not line:
-                    break
-                if line.startswith("# Switch IP: "):
-                    value = line.split(": ", 1)[1].strip()
-                    if value not in {"", "not set", "unknown"}:
-                        return value[:255]
-    except OSError:
-        return ""
-    return ""
+    return hub_diagnostics.walk_management_target(path)
 
 
-def _configured_snmp_diagnostics_inventory(options: dict[str, Any]) -> list[dict[str, str]]:
-    """Return the authoritative saved SNMP identities used to reconcile cache rows."""
-    rows = options.get("switches") if isinstance(options.get("switches"), list) else []
-    inventory: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for raw in rows:
-        if not isinstance(raw, dict):
-            continue
-        switch_name = str(raw.get("switch_name") or "").strip()
-        if not switch_name:
-            continue
-        identity = _switch_name_identity(switch_name)
-        if not identity or identity in seen:
-            continue
-        seen.add(identity)
-        management_target = ""
-        for key in ("switch_host", "host", "manual_switch_host"):
-            value = str(raw.get(key) or "").strip()
-            if value:
-                management_target = value.casefold()
-                break
-        inventory.append({
-            "identity": identity,
-            "switch_name": switch_name,
-            "management_target": management_target,
-        })
-    return inventory
+def _configured_snmp_diagnostics_inventory(
+    options: dict[str, Any],
+) -> list[dict[str, str]]:
+    return hub_diagnostics.configured_snmp_diagnostics_inventory(
+        options,
+        runtime=_hub_diagnostics_runtime(),
+    )
 
 
 def _reconcile_snmp_diagnostics_devices(
     devices: list[dict[str, Any]], options: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """Collapse stale capability aliases onto the current saved switch inventory.
-
-    Capability files are generated cache, but older folders can remain on disk
-    after a saved switch_name is renamed. When a current inventory exists, its
-    switch_name is authoritative. A unique management target is a fallback for
-    a renamed folder; exact current-name matches always win.
-    """
-    inventory = _configured_snmp_diagnostics_inventory(options)
-    if not inventory:
-        return devices
-
-    by_identity = {item["identity"]: item for item in inventory}
-    targets: dict[str, list[str]] = {}
-    for item in inventory:
-        target = item["management_target"]
-        if target:
-            targets.setdefault(target, []).append(item["identity"])
-
-    selected: dict[str, tuple[tuple[int, str, str], dict[str, Any]]] = {}
-    for item in devices:
-        source_identity = _switch_name_identity(
-            str(item.get("source_switch_name") or item.get("name") or "")
-        )
-        owner = ""
-        strength = 0
-        if source_identity and source_identity in by_identity:
-            owner = source_identity
-            strength = 2
-        else:
-            target = str(item.get("management_target") or "").strip().casefold()
-            matches = targets.get(target, []) if target else []
-            if len(matches) == 1:
-                owner = matches[0]
-                strength = 1
-
-        if not owner:
-            continue
-
-        score = (
-            strength,
-            str(item.get("generated_at") or ""),
-            str(item.get("name") or ""),
-        )
-        current = selected.get(owner)
-        if current is None or score > current[0]:
-            selected[owner] = (score, item)
-
-    return [
-        selected[item["identity"]][1]
-        for item in inventory
-        if item["identity"] in selected
-    ]
+    return hub_diagnostics.reconcile_snmp_diagnostics_devices(
+        devices,
+        options,
+        runtime=_hub_diagnostics_runtime(),
+    )
 
 
 def _diagnostics_options(options_file: Path | None) -> dict[str, Any]:
-    if options_file is None:
-        return {}
-    try:
-        return _self_addon_options()
-    except RuntimeError:
-        return _load_options(options_file)
+    return hub_diagnostics.diagnostics_options(
+        options_file,
+        runtime=_hub_diagnostics_runtime(),
+    )
 
 
 def _diagnostics_snapshot(
     version: str, options_file: Path | None = None
 ) -> dict[str, Any]:
-    share = DEFAULT_SHARE_DIR
-    registry_raw = _read_json(DEFAULT_REGISTRY_FILE)
-    if isinstance(registry_raw, dict):
-        registry_devices = registry_raw.get("devices") or []
-    elif isinstance(registry_raw, list):
-        registry_devices = registry_raw
-    else:
-        registry_devices = []
-
-    capability_dir = share / "capabilities"
-    capability_files = sorted(capability_dir.glob("*-capabilities.json")) if capability_dir.is_dir() else []
-    devices: list[dict[str, Any]] = []
-    warnings: list[str] = []
-    errors: list[str] = []
-    for cap_path in capability_files:
-        data = _read_json(cap_path)
-        if not isinstance(data, dict):
-            warnings.append(f"Could not read capability file: {cap_path.name}")
-            continue
-        device = data.get("device") if isinstance(data.get("device"), dict) else {}
-        interfaces = data.get("interfaces") if isinstance(data.get("interfaces"), list) else []
-        model = str(device.get("detected_model_text") or device.get("model_text") or device.get("model") or "Unknown")
-        registry = registry_lookup({"devices": registry_devices}, model) or {}
-        validation = registry.get("validation") if isinstance(registry.get("validation"), dict) else {}
-        physical = [i for i in interfaces if isinstance(i, dict) and i.get("physical")]
-        rj45 = [i for i in physical if i.get("media") == "rj45"]
-        uplinks = [i for i in physical if i.get("media") in {"sfp", "sfp_plus", "uplink"}]
-        source_walk_value = str(data.get("source_walk") or "").strip()
-        source_walk = Path(source_walk_value) if source_walk_value else Path()
-        walk_found = source_walk.is_file() if source_walk_value else False
-        source_switch_name = source_walk.parent.name if source_walk_value else ""
-        # Capability JSON is a current generated cache, not an archive. If a
-        # record explicitly names a source walk that no longer exists, do not
-        # present it as a currently detected extra device. This also prevents a
-        # pre-rename capability alias (for example 2960x-48-rj45) from appearing
-        # beside its current saved row after the walk folder moved to 2960x-48p.
-        if source_walk_value and not walk_found:
-            continue
-        management_target = str(device.get("management_target") or "").strip()[:255]
-        if not management_target:
-            management_target = _walk_management_target(source_walk)
-        status = str(registry.get("status") or device.get("support_status") or "detected")
-        devices.append({
-            "name": cap_path.name.removesuffix("-capabilities.json"),
-            "source_switch_name": source_switch_name,
-            "management_target": management_target,
-            "model": model,
-            "family": registry.get("family") or device.get("family") or "Unknown",
-            "registry_match": bool(registry),
-            "registry_status": status,
-            "last_validated_version": registry.get("last_validated_version"),
-            "mapping_profile": registry.get("mapping_profile") or registry.get("dashboard_profile"),
-            "calibration_profile": registry.get("calibration_profile"),
-            "validation": validation,
-            "physical_interfaces": len(physical),
-            "rj45_interfaces": len(rj45),
-            "uplink_interfaces": len(uplinks),
-            "walk_found": walk_found,
-            "generated_at": data.get("generated_at"),
-            # Private server-side identity hints are removed before the
-            # diagnostics payload leaves the app. They exist only to collapse a
-            # proven SNMP + UniFi observation of the same physical chassis.
-            "_identity_mac": (
-                device.get("mac_address")
-                or device.get("base_mac")
-                or device.get("chassis_mac")
-                or device.get("mac")
-                or ""
-            ),
-            "_identity_ip": management_target,
-        })
-
-    diagnostics_options = _diagnostics_options(options_file)
-    if diagnostics_options:
-        devices = _reconcile_snmp_diagnostics_devices(devices, diagnostics_options)
-
-    # Merge normalized UniFi2MQTT devices into the same Devices/Diagnostics
-    # view without requiring duplicate SNMP target rows.
-    unifi_snapshot = _read_json(DEFAULT_UNIFI_SNAPSHOT)
-    if isinstance(unifi_snapshot, dict) and isinstance(unifi_snapshot.get("devices"), list):
-        for raw in unifi_snapshot["devices"]:
-            if not isinstance(raw, dict):
-                continue
-            model = str(raw.get("model") or "Unknown")
-            registry = registry_lookup({"devices": registry_devices}, model) or {}
-            validation = registry.get("validation") if isinstance(registry.get("validation"), dict) else {}
-            ports = raw.get("ports") if isinstance(raw.get("ports"), list) else []
-            physical = [p for p in ports if isinstance(p, dict)]
-            rj45 = [p for p in physical if str(p.get("connector") or "").upper() == "RJ45"]
-            uplinks = [p for p in physical if str(p.get("connector") or "").upper() in {"SFP", "SFPPLUS", "SFP+"}]
-            matched_snmp, match_basis = _unique_detected_snmp_identity_match(
-                devices,
-                mac_address=raw.get("mac_address"),
-                ip_address=raw.get("ip_address"),
-            )
-            if matched_snmp is not None:
-                # Keep the SNMP row as the stable configured/display identity
-                # and attach the independently proven UniFi source to it. Never
-                # merge by model/name alone: hardware MAC is authoritative and a
-                # unique management IP is the only fallback.
-                matched_snmp["unifi_device_id"] = str(raw.get("id") or "").strip()
-                matched_snmp["data_source"] = "SNMP + UniFi API"
-                matched_snmp["unifi_match_basis"] = match_basis
-                matched_snmp["online"] = str(raw.get("state") or "").upper() == "ONLINE"
-                matched_snmp["firmware"] = raw.get("firmware")
-                matched_snmp["api_capabilities"] = (
-                    raw.get("api_capabilities")
-                    if isinstance(raw.get("api_capabilities"), dict)
-                    else {}
-                )
-                continue
-
-            devices.append({
-                "unifi_device_id": str(raw.get("id") or "").strip(),
-                "name": str(raw.get("name") or model),
-                "model": model,
-                "family": registry.get("family") or "UniFi",
-                "registry_match": bool(registry),
-                "registry_status": str(registry.get("status") or "detected"),
-                "last_validated_version": registry.get("last_validated_version"),
-                "mapping_profile": registry.get("mapping_profile") or registry.get("dashboard_profile"),
-                "calibration_profile": registry.get("calibration_profile"),
-                "validation": validation,
-                "physical_interfaces": len(physical),
-                "rj45_interfaces": len(rj45),
-                "uplink_interfaces": len(uplinks),
-                "walk_found": False,
-                "generated_at": unifi_snapshot.get("generated_at"),
-                "data_source": "UniFi API",
-                "online": str(raw.get("state") or "").upper() == "ONLINE",
-                "firmware": raw.get("firmware"),
-                "api_capabilities": raw.get("api_capabilities") if isinstance(raw.get("api_capabilities"), dict) else {},
-            })
-
-    unifi_diagnostics = _unifi2mqtt_diagnostics_status()
-
-    if unifi_diagnostics.get("found"):
-        if not unifi_diagnostics.get("valid"):
-            warnings.append(
-                "UniFi2MQTT diagnostics.json could not be read."
-            )
-        elif unifi_diagnostics.get("status") == "error":
-            stage = unifi_diagnostics.get("stage") or "unknown"
-            error_type = (
-                unifi_diagnostics.get("error_type")
-                or "UnknownError"
-            )
-            warnings.append(
-                "UniFi2MQTT poll failed at "
-                f"{stage}: {error_type}."
-            )
-
-    # Identity hints used for local reconciliation are never returned to the
-    # browser/diagnostics download.
-    for item in devices:
-        item.pop("_identity_mac", None)
-        item.pop("_identity_ip", None)
-
-    registry_loaded = isinstance(registry_raw, (dict, list))
-    if not registry_loaded:
-        errors.append("Supported-device registry could not be loaded.")
-    report = _file_info(share / "discovery-report.txt")
-    generated_yaml = _file_info(share / "generated-snmp2mqtt.yaml")
-    generated_card = _file_info(share / "generated-dashboard-card.yaml")
-    if not report["found"]:
-        warnings.append("No discovery report has been generated yet.")
-    snmp2mqtt_applicability = _snmp2mqtt_applicability()
-    if not generated_yaml["found"] and snmp2mqtt_applicability["applicable"]:
-        warnings.append("Generated SNMP2MQTT YAML was not found.")
-    if not generated_card["found"]:
-        warnings.append("Generated dashboard YAML was not found.")
-    if report["found"]:
-        report_path = share / "discovery-report.txt"
-        report_mtime = report_path.stat().st_mtime
-        # Files from one successful Discovery run are written sequentially and
-        # can legitimately have slightly different mtimes. Only flag a file as
-        # stale when it predates the report by more than two minutes, which
-        # indicates it came from an earlier run rather than the same pipeline.
-        stale_tolerance_seconds = 120
-        stale_candidates = [("dashboard YAML", share / "generated-dashboard-card.yaml")]
-        if snmp2mqtt_applicability["applicable"]:
-            stale_candidates.insert(0, ("SNMP2MQTT YAML", share / "generated-snmp2mqtt.yaml"))
-        for label, path in stale_candidates:
-            if not path.is_file():
-                continue
-            generated_mtime = path.stat().st_mtime
-            if generated_mtime + stale_tolerance_seconds < report_mtime:
-                generated_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(generated_mtime))
-                report_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(report_mtime))
-                warnings.append(
-                    f"Generated {label} appears stale: generated {generated_text}; latest discovery report {report_text}."
-                )
-
-    return {
-        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "version": version,
-        "service": "Running",
-        "discovery": _discovery_state_snapshot(),
-        "registry": {"loaded": registry_loaded, "entries": len(registry_devices), "path": str(DEFAULT_REGISTRY_FILE)},
-        "files": {"report": report, "generated_yaml": generated_yaml, "generated_card": generated_card},
-        "snmp2mqtt_applicability": snmp2mqtt_applicability,
-        "contribution_workflow": {"ready": DEFAULT_SUPPORT_SCRIPT.is_file(), "directory": str(DEFAULT_CONTRIBUTIONS_DIR)},
-        "devices": devices,
-        "unifi2mqtt_diagnostics": unifi_diagnostics,
-        "warnings": warnings,
-        "errors": errors,
-    }
+    return hub_diagnostics.diagnostics_snapshot(
+        version,
+        options_file,
+        runtime=_hub_diagnostics_runtime(),
+    )
 
 
 def _diagnostics_text(data: dict[str, Any]) -> str:
-    snmp_applicability = data.get("snmp2mqtt_applicability") or {}
-    if snmp_applicability.get("applicable", True):
-        snmp_yaml_status = (
-            "Found"
-            if ((data.get("files") or {}).get("generated_yaml") or {}).get("found")
-            else "Missing"
-        )
-    else:
-        snmp_yaml_status = "Not applicable"
-    lines = [
-        "Switch Vision Diagnostics",
-        "=========================",
-        f"Generated: {data.get('generated_at')}",
-        f"Switch Vision version: {data.get('version')}",
-        f"Discovery app: {data.get('service')}",
-        f"Discovery status: {(data.get('discovery') or {}).get('message', 'Unknown')}",
-        f"Device registry: {'Loaded' if (data.get('registry') or {}).get('loaded') else 'Unavailable'}",
-        f"Registry entries: {(data.get('registry') or {}).get('entries', 0)}",
-        f"Generated SNMP2MQTT YAML: {snmp_yaml_status}",
-        f"Generated dashboard YAML: {'Found' if ((data.get('files') or {}).get('generated_card') or {}).get('found') else 'Missing'}",
-        f"Contribution workflow: {'Ready' if (data.get('contribution_workflow') or {}).get('ready') else 'Unavailable'}",
-        (
-            "UniFi2MQTT diagnostics: "
-            + (
-                (
-                    f"{(data.get('unifi2mqtt_diagnostics') or {}).get('status') or 'unknown'}"
-                    f" · stage {(data.get('unifi2mqtt_diagnostics') or {}).get('stage') or 'unknown'}"
-                    f" · adopted {(data.get('unifi2mqtt_diagnostics') or {}).get('adopted_devices', 0)}"
-                    f" · switches {(data.get('unifi2mqtt_diagnostics') or {}).get('switching_devices', 0)}"
-                    f" · rejected {(data.get('unifi2mqtt_diagnostics') or {}).get('rejected_devices', 0)}"
-                )
-                if (data.get('unifi2mqtt_diagnostics') or {}).get('found')
-                else "Unavailable"
-            )
-        ),
-        "",
-    ]
-
-    unifi_diag = (
-        data.get("unifi2mqtt_diagnostics")
-        if isinstance(
-            data.get("unifi2mqtt_diagnostics"),
-            dict,
-        )
-        else {}
-    )
-
-    classifications = (
-        unifi_diag.get("device_classification")
-        if isinstance(
-            unifi_diag.get("device_classification"),
-            list,
-        )
-        else []
-    )
-
-    if classifications:
-        lines.append(
-            "UniFi2MQTT hardware classification"
-        )
-        lines.append(
-            "---------------------------------"
-        )
-
-        for item in classifications:
-            if not isinstance(item, dict):
-                continue
-
-            model = str(
-                item.get("model")
-                or "Unknown"
-            )
-
-            lines.append(
-                f"Model: {model}"
-            )
-            lines.append(
-                "Accepted as switch: "
-                + (
-                    "yes"
-                    if item.get("accepted")
-                    else "no"
-                )
-            )
-            lines.append(
-                "Classification: "
-                + str(
-                    item.get("reason")
-                    or "unknown"
-                )
-            )
-
-            features = item.get("features")
-
-            if isinstance(features, list):
-                lines.append(
-                    "Features: "
-                    + (
-                        ", ".join(
-                            str(value)
-                            for value in features
-                        )
-                        or "none"
-                    )
-                )
-
-            lines.append("")
-
-    for device in data.get("devices") or []:
-        source = str(device.get("data_source") or "SNMP")
-        source_status = (
-            f"UniFi API state: {'ONLINE' if device.get('online') else 'OFFLINE'}"
-            if source == "UniFi API"
-            else f"Last SNMP walk: {'PASS/file found' if device.get('walk_found') else 'Unavailable'}"
-        )
-        lines.extend([
-            str(device.get("model") or "Unknown model"),
-            "-" * len(str(device.get("model") or "Unknown model")),
-            f"Target: {device.get('name')}",
-            f"Data source: {source}",
-            f"Registry match: {'yes' if device.get('registry_match') else 'no'}",
-            f"Registry status: {device.get('registry_status')}",
-            source_status,
-            *( [f"Firmware: {device.get('firmware') or 'Unknown'}"] if source == "UniFi API" else [] ),
-            f"Physical interfaces: {device.get('physical_interfaces', 0)}",
-            f"RJ45 interfaces: {device.get('rj45_interfaces', 0)}",
-            f"Uplink interfaces: {device.get('uplink_interfaces', 0)}",
-            f"Mapping profile: {device.get('mapping_profile') or 'Not assigned'}",
-            f"Calibration profile: {device.get('calibration_profile') or 'Not assigned'}",
-        ])
-        validation = device.get("validation") or {}
-        for label, key in [("Exact model", "exact_model_detection"), ("RJ45 mapping", "rj45_mapping"), ("PoE", "poe"), ("System sensors", "system_sensors"), ("Uplinks", "uplinks"), ("Stack", "stack")]:
-            lines.append(f"{label}: {validation.get(key, 'unknown')}")
-        lines.append("")
-    if data.get("warnings"):
-        lines.append("Warnings")
-        lines.append("--------")
-        lines.extend(f"WARNING: {item}" for item in data["warnings"])
-        lines.append("")
-    if data.get("errors"):
-        lines.append("Errors")
-        lines.append("------")
-        lines.extend(f"ERROR: {item}" for item in data["errors"])
-        lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
+    return hub_diagnostics.diagnostics_text(data)
 
 
 def _validate_request(data: Any) -> dict[str, Any]:

@@ -12,7 +12,7 @@ rm -f "$SV_DEVICE_CONTROL_PATH"
 rm -rf "$SV_SELF_TEST_TMP_DIR"
 mkdir -p "$SV_SELF_TEST_TMP_DIR"
 SV_HUB_SOURCE="$SV_SELF_TEST_TMP_DIR/support-web-contract-source.txt"
-cat "$BASE_DIR/support_web.py" "$BASE_DIR/hub_component_settings.py" "$BASE_DIR/hub_device_control.py" "$BASE_DIR/support_web.html" > "$SV_HUB_SOURCE"
+cat "$BASE_DIR/support_web.py" "$BASE_DIR/hub_component_settings.py" "$BASE_DIR/hub_device_control.py" "$BASE_DIR/hub_diagnostics.py" "$BASE_DIR/support_web.html" > "$SV_HUB_SOURCE"
 sv_self_test_cleanup() {
     rm -f "$SV_DEVICE_CONTROL_PATH"
     rm -rf "$SV_SELF_TEST_TMP_DIR"
@@ -3578,11 +3578,16 @@ assert status["applicable"] is False
 assert status["validation"]["valid"] is None
 assert "UniFi2MQTT-only" in status["reason"]
 
-source = Path(web.__file__).read_text(encoding="utf-8")
+source = (
+    Path(web.__file__).read_text(encoding="utf-8")
+    + "\n"
+    + Path(web.__file__).with_name("hub_diagnostics.py").read_text(encoding="utf-8")
+)
 assert 'if not generated_yaml["found"] and snmp2mqtt_applicability["applicable"]:' in source
 assert '"snmp2mqtt_applicability": snmp2mqtt_applicability' in source
 assert 'if snmp2mqtt_applicability["applicable"]:' in source
-assert 'stale_candidates.insert(0, ("SNMP2MQTT YAML"' in source
+assert "stale_candidates.insert(" in source
+assert '("SNMP2MQTT YAML", share / "generated-snmp2mqtt.yaml")' in source
 assert 'id="generatedYamlDescription"' in web._PAGE
 assert 'id="generatedYamlActions"' in web._PAGE
 assert 'id="regenerateYamlHelp"' in web._PAGE
