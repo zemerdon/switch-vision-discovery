@@ -257,6 +257,8 @@ source = (
     + Path(web.__file__).with_name("complete_backup.py").read_text(encoding="utf-8")
     + "\n"
     + Path(web.__file__).with_name("complete_backup_runtime.py").read_text(encoding="utf-8")
+    + "\n"
+    + Path(web.__file__).with_name("complete_backup_restore.py").read_text(encoding="utf-8")
 )
 for marker in (
     'COMPLETE_BACKUP_FORMAT = "switch-vision-complete-backup-v1"',

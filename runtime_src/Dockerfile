@@ -39,6 +39,7 @@ COPY support_web.py /support_web.py
 COPY support_web.html /support_web.html
 COPY complete_backup.py /complete_backup.py
 COPY complete_backup_runtime.py /complete_backup_runtime.py
+COPY complete_backup_restore.py /complete_backup_restore.py
 COPY autodiscover.py /autodiscover.py
 COPY core_bridge.py /core_bridge.py
 COPY support_web_entry.py /support_web_entry.py

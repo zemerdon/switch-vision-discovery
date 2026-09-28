@@ -39,6 +39,7 @@ PERMANENT_CHECKS = (
     "tools/test_public_attribution_privacy.py",
     "tools/test_complete_backup_schema.py",
     "tools/test_complete_backup_runtime.py",
+    "tools/test_complete_backup_restore_adapters.py",
     "tools/test_dell_visual_state_2446.py",
     "tools/test_us_xg16_acceptance.py",
     "tools/test_c3850_community_validation.py",
