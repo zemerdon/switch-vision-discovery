@@ -62,6 +62,7 @@ import device_control as device_control_state
 import dashboard_device_order
 import autodiscover
 import complete_backup
+import complete_backup_runtime
 
 SUPPORT_ADDRESS = "switch-vision@zemerdon.com"
 SUPERVISOR_INGRESS_IP = "172.30.32.2"
@@ -4864,63 +4865,16 @@ def _calibration_profile_management_view(result: dict[str, Any]) -> dict[str, An
 
 
 def _core_calibration_backup() -> dict[str, Any]:
-    listing = _home_assistant_ws({"type": "switch_vision/list_calibrations"})
-    if not isinstance(listing, dict):
-        raise RuntimeError("Switch Vision Core did not return calibration metadata.")
-    items = listing.get("items")
-    if not isinstance(items, list):
-        raise RuntimeError("Switch Vision Core calibration metadata is invalid.")
-    profiles: list[dict[str, Any]] = []
-    active_profiles: dict[str, str] = {}
-    for item in items:
-        if not isinstance(item, dict) or str(item.get("scope") or "") == "factory":
-            continue
-        profile = _calibration_profile_name(item.get("profile"))
-        detail = _home_assistant_ws(
-            {"type": "switch_vision/get_calibration", "profile": profile, "exact": True}
-        )
-        if not isinstance(detail, dict) or detail.get("exists") is not True or not isinstance(detail.get("calibration"), dict):
-            raise RuntimeError(f"Switch Vision Core could not export calibration profile {profile!r}.")
-        calibration = copy.deepcopy(detail["calibration"])
-        encoded = json.dumps(calibration, ensure_ascii=False).encode("utf-8")
-        if len(encoded) > 2 * 1024 * 1024:
-            raise RuntimeError(f"Calibration profile {profile!r} exceeds the backup size limit.")
-        profiles.append({"profile": profile, "calibration": calibration})
-        base = str(item.get("base_profile") or "").strip()
-        if item.get("active") is True and base and base != profile:
-            active_profiles[base] = profile
-    return {"profiles": profiles, "active_profiles": active_profiles}
+    return complete_backup_runtime.core_calibration_backup(
+        home_assistant_ws=_home_assistant_ws,
+        calibration_profile_name=_calibration_profile_name,
+    )
 
 
 def _core_asset_backup() -> list[dict[str, Any]]:
-    listing = _home_assistant_ws({"type": "switch_vision/list_assets"})
-    if not isinstance(listing, dict):
-        raise RuntimeError("Switch Vision Core did not return asset metadata.")
-    if int(listing.get("backup_api") or 0) < 2:
-        raise RuntimeError("Switch Vision Core is too old for complete configuration backup. Update Core before exporting.")
-    result: list[dict[str, Any]] = []
-    for kind in ("logos", "faceplates"):
-        names = listing.get(f"custom_{kind}")
-        if not isinstance(names, list):
-            raise RuntimeError(f"Switch Vision Core custom asset list for {kind} is invalid.")
-        for raw_name in names:
-            name = str(raw_name or "").strip()
-            if not name:
-                continue
-            asset = _home_assistant_ws(
-                {"type": "switch_vision/get_backup_asset", "kind": kind, "filename": name},
-                max_size=32 * 1024 * 1024,
-            )
-            if not isinstance(asset, dict):
-                raise RuntimeError(f"Switch Vision Core could not export asset {kind}/{name}.")
-            result.append({
-                "kind": kind,
-                "filename": name,
-                "size": int(asset.get("size") or 0),
-                "sha256": str(asset.get("sha256") or ""),
-                "content_base64": str(asset.get("content_base64") or ""),
-            })
-    return result
+    return complete_backup_runtime.core_asset_backup(
+        home_assistant_ws=_home_assistant_ws,
+    )
 
 
 def _backup_credential_requirements(
@@ -4932,51 +4886,24 @@ def _backup_credential_requirements(
 
 
 def _switch_vision_backup_export(version: str) -> dict[str, Any]:
-    core = _core_settings_status()
-    discovery = _discovery_settings_status()
-    snmp2mqtt = _snmp2mqtt_settings_status()
-    unifi2mqtt = _unifi2mqtt_settings_status()
-    installer = _installer_settings_status()
-    # Snapshotting configured devices establishes any missing immutable added_at
-    # migration metadata before the control state is captured.
-    _configured_devices_snapshot(DEFAULT_OPTIONS_FILE)
-    control = device_control_state.load(DEFAULT_DEVICE_CONTROL)
-    payload = {
-        "format": COMPLETE_BACKUP_FORMAT,
-        "schema_version": COMPLETE_BACKUP_SCHEMA_VERSION,
-        "switch_vision_discovery_version": version,
-        "exported_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "secrets_included": False,
-        "secret_policy": {
-            "snmp_communities": "excluded",
-            "mqtt_passwords": "excluded",
-            "unifi_api_keys": "excluded",
-            "tokens_and_passwords": "excluded",
-            "support_contributor_value": "excluded_private_value",
-        },
-        "components": {
-            "core": {"settings": copy.deepcopy(core.get("settings"))},
-            "discovery": {"settings": copy.deepcopy(discovery.get("settings"))},
-            "snmp2mqtt": {
-                "installed": bool(snmp2mqtt.get("installed")),
-                "settings": copy.deepcopy(snmp2mqtt.get("settings")),
-            },
-            "unifi2mqtt": {
-                "installed": bool(unifi2mqtt.get("installed")),
-                "options": copy.deepcopy(unifi2mqtt.get("options")),
-            },
-            "installer": {
-                "installed": bool(installer.get("installed")),
-                "settings": copy.deepcopy(installer.get("settings")),
-            },
-        },
-        "device_control": copy.deepcopy(control),
-        "calibrations": _core_calibration_backup(),
-        "assets": _core_asset_backup(),
-        "credential_requirements": _backup_credential_requirements(discovery, snmp2mqtt, unifi2mqtt),
-    }
-    _validate_complete_backup(payload)
-    return payload
+    return complete_backup_runtime.export_complete_backup(
+        version,
+        backup_format=COMPLETE_BACKUP_FORMAT,
+        schema_version=COMPLETE_BACKUP_SCHEMA_VERSION,
+        core_settings_status=_core_settings_status,
+        discovery_settings_status=_discovery_settings_status,
+        snmp2mqtt_settings_status=_snmp2mqtt_settings_status,
+        unifi2mqtt_settings_status=_unifi2mqtt_settings_status,
+        installer_settings_status=_installer_settings_status,
+        configured_devices_snapshot=_configured_devices_snapshot,
+        options_file=DEFAULT_OPTIONS_FILE,
+        load_device_control=device_control_state.load,
+        device_control_file=DEFAULT_DEVICE_CONTROL,
+        core_calibration_backup=_core_calibration_backup,
+        core_asset_backup=_core_asset_backup,
+        credential_requirements=_backup_credential_requirements,
+        validate_complete_backup=_validate_complete_backup,
+    )
 
 
 def _validate_complete_backup(data: Any) -> dict[str, Any]:
