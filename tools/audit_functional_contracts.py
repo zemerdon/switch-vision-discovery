@@ -13,6 +13,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "runtime_src"
 SUPPORT_WEB = RUNTIME / "support_web.py"
+HUB_COMPONENT_SETTINGS = RUNTIME / "hub_component_settings.py"
 HUB_PAGE = RUNTIME / "support_web.html"
 CONFIG = ROOT / "switch_vision_discovery" / "config.yaml"
 REGISTRY = RUNTIME / "opt" / "switch-vision" / "devices" / "supported_devices.json"
@@ -285,6 +286,7 @@ def audit_registry_and_profiles() -> None:
 def audit_hub_ui_and_routes() -> None:
     page = load_page()
     support_source = SUPPORT_WEB.read_text(encoding="utf-8")
+    component_settings_source = HUB_COMPONENT_SETTINGS.read_text(encoding="utf-8")
     js_sources = {p.name: p.read_text(encoding="utf-8") for p in EXTERNAL_JS}
     all_js = page + "\n" + "\n".join(js_sources.values())
 
@@ -360,14 +362,21 @@ def audit_hub_ui_and_routes() -> None:
     else:
         ok("Critical settings and Discovery run/stop/regenerate/reset routes have real backend actions")
 
-    secret_needles = [
+    discovery_secret_needles = [
         'row["snmp_community"] = ""',
         'row["original_switch_name"] = original_name',
         'previous = current_by_name.get(original_name',
         'support_contributor_value_configured',
-        'merged_mqtt["password"] = "" if clear_password else (password if password else current_mqtt.get("password", ""))',
     ]
-    if all(needle in support_source for needle in secret_needles):
+    mqtt_secret_needles = [
+        'merged_mqtt["password"] = (',
+        'current_mqtt.get("password", "")',
+    ]
+    if (
+        all(needle in support_source for needle in discovery_secret_needles)
+        and all(needle in component_settings_source for needle in mqtt_secret_needles)
+        and "hub_component_settings.save_snmp2mqtt_settings(" in support_source
+    ):
         ok("Hub save paths retain write-only Discovery and MQTT secret-preservation logic")
     else:
         fail("Hub write-only secret preservation contract is incomplete")
