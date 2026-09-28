@@ -1,3 +1,13 @@
+## 3.0.10 — Hub backend modularity and backup hardening
+
+- Extract the Hub document into a byte-identical packaged `support_web.html` asset while preserving the existing Supervisor/Ingress routes and UI behavior.
+- Move complete-backup schema validation, credential policy, export assembly, restore adapters and restore coordination behind explicit runtime modules with permanent release-gate coverage.
+- Keep complete backups secret-safe: SNMP communities, MQTT passwords, UniFi API keys and private Support My Switch values remain excluded, with missing credentials reconstructed as explicit restore-pending state.
+- Fail closed on an incompatible Core backup API before any restore mutation and preserve optional-component restore failures as explicit warnings while required Discovery/device-control state remains ordered and deterministic.
+- Scope the Core faceplate dependency check to the actual catalog content so unrelated Core repository changes no longer create false Discovery drift failures while real catalog changes still fail the gate.
+- Harden Discovery scratch-file allocation against stale PID collisions and remove the obsolete no-op UniFi multi-controller compatibility bridge.
+- Expand permanent source, archive, backup and runtime regressions; the shipped runtime remains deterministic and the refactor is intended to preserve existing user-facing behavior.
+
 ## 3.0.9 — HP 2530-8G-PoEP support and exact registry alignment
 
 - Add exact Experimental support for HP J9774A 2530-8G-PoEP from reviewed real-hardware SNMP evidence on sysObjectID `1.3.6.1.4.1.11.2.3.7.11.138`.
