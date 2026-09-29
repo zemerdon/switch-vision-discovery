@@ -70,14 +70,38 @@ def snmp_states_from_options(options: Any) -> dict[str, bool]:
     return result
 
 
-def snmp_states_from_options_file(path: Path | None) -> dict[str, bool]:
+def authoritative_snmp_states_from_options(
+    options: Any,
+) -> dict[str, bool] | None:
+    """Return saved SNMP states only when the switch-list inventory is authoritative."""
+    if not isinstance(options, dict):
+        return None
+    if (
+        "enable_switch_list" in options
+        and not _enabled_value(options.get("enable_switch_list"))
+    ):
+        return None
+    rows = options.get("dashboard_switches")
+    if not isinstance(rows, list):
+        rows = options.get("switches")
+    if not isinstance(rows, list):
+        rows = options.get("multi_switch_walks")
+    if not isinstance(rows, list):
+        return None
+    return snmp_states_from_options({"switches": rows})
+
+
+def snmp_states_from_options_file(
+    path: Path | None,
+) -> dict[str, bool] | None:
+    """Return authoritative saved SNMP states, or None when no inventory exists."""
     if path is None:
-        return {}
+        return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RuntimeError("Discovery options could not be read for dashboard projection.") from exc
-    return snmp_states_from_options(payload)
+    return authoritative_snmp_states_from_options(payload)
 
 
 def _parse_dashboard(text: str) -> tuple[str, list[Any], list[str]]:

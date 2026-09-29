@@ -883,7 +883,7 @@ def _project_generated_dashboard(
 ) -> dict[str, Any]:
     """Maintain private full-card source then project current visible dashboard."""
     full_path = dashboard_device_order.full_dashboard_path(generated_card)
-    states = dashboard_device_order.snmp_states_from_options(options)
+    states = dashboard_device_order.authoritative_snmp_states_from_options(options)
     refresh: dict[str, Any] = {}
     if fresh_path is not None:
         refresh = dashboard_device_order.refresh_full_dashboard_source(

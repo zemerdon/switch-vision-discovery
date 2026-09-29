@@ -71,6 +71,22 @@ web.create_pre_mutation_backup = lambda options, *, reason: backup_reasons.appen
 try:
     with tempfile.TemporaryDirectory(prefix="sv-unified-device-order-") as tmp:
         root = Path(tmp)
+
+        # One-off/collection options without a saved switch list are not an
+        # authoritative empty inventory: fail-soft generated cards must survive.
+        collection_options = root / "collection-options.json"
+        collection_options.write_text(
+            json.dumps({"input_path": "/tmp/walk.txt", "enable_switch_list": "false", "switches": []}),
+            encoding="utf-8",
+        )
+        assert dashboard_device_order.snmp_states_from_options_file(collection_options) is None
+        explicit_empty_options = root / "explicit-empty-options.json"
+        explicit_empty_options.write_text(
+            json.dumps({"switches": []}),
+            encoding="utf-8",
+        )
+        assert dashboard_device_order.snmp_states_from_options_file(explicit_empty_options) == {}
+
         web.DEFAULT_DEVICE_CONTROL = root / "device-control.json"
         web.DEFAULT_UNIFI_SNAPSHOT = root / "unifi-devices.json"
         web.DEFAULT_UNIFI_SNAPSHOT.write_text(
