@@ -2494,11 +2494,7 @@ printf "%s\n" "Switch Vision authoritative run-options regression: PASS"
 
 . "$BASE_DIR/self_test_support_ordering.sh"
 
-# Discovery 2.3.39 Hub Settings Back regression.
-sv_require_literal 'Hub Settings Save action' 'id="hubSettingsSave" class="primary" type="button" disabled>Save changes</button>' "$SV_HUB_SOURCE"
-sv_require_literal 'Hub Settings Reload action' 'id="hubSettingsReload" type="button">Reload</button>' "$SV_HUB_SOURCE"
-sv_require_literal 'Hub Settings Back action' 'id="hubSettingsBack" type="button">Back</button>' "$SV_HUB_SOURCE"
-sv_require_literal 'Hub Settings Back goBack binding' "q('hubSettingsBack')?.addEventListener('click',goBack);" "$SV_HUB_SOURCE"
+. "$BASE_DIR/self_test_hub_settings_back.sh"
 
 # Manual dashboard export regression. Native generated YAML remains unchanged;
 # full export removes the known Layout Card wrapper, cards-only preserves cards,
