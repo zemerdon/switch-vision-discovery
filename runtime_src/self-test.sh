@@ -2496,7 +2496,4 @@ printf "%s\n" "Switch Vision authoritative run-options regression: PASS"
 
 . "$BASE_DIR/self_test_hub_settings_back.sh"
 
-# Manual dashboard export regression. Native generated YAML remains unchanged;
-# full export removes the known Layout Card wrapper, cards-only preserves cards,
-# and unknown future custom view dependencies fail closed.
-python3 "$BASE_DIR/dashboard_yaml_export_regression.py"
+. "$BASE_DIR/self_test_dashboard_export.sh"
