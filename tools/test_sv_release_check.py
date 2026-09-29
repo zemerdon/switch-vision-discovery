@@ -51,7 +51,7 @@ def main() -> int:
         "tools/check_component_contracts.py",
         "switch_vision_discovery/runtime.tar.gz",
         "self-test.sh",
-        "self_test_generated_yaml_stage.sh",
+        'glob("self_test_*.sh")',
         "docker",
         "SV_RELEASE_CHECK_PASS",
         "git_status(root)",

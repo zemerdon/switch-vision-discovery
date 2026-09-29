@@ -2464,63 +2464,7 @@ grep -q 'discovery_env\["SWITCH_VISION_OPTIONS_FILE"\]' "$SV_HUB_SOURCE"
 grep -q 'Discovery configuration: authoritative Supervisor snapshot' "$SV_HUB_SOURCE"
 printf "%s\n" "Switch Vision authoritative run-options regression: PASS"
 
-# Generated dashboard rows must obey the same enabled-state predicate as the
-# walk/parser/generator path. Exercise the exact jq program embedded in the
-# production dashboard-card writer so a disabled saved switch cannot render a
-# stale/offline card, while legacy rows without explicit state remain enabled.
-card_rows_jq="$tmp_dir/generated-card-rows.jq"
-awk '
-  /SWITCH_VISION_GENERATED_CARD_ROWS_JQ_BEGIN/ { capture=1; next }
-  /SWITCH_VISION_GENERATED_CARD_ROWS_JQ_END/ { capture=0; next }
-  capture { print }
-' "$DASHBOARD_STAGE_SOURCE" > "$card_rows_jq"
-[ -s "$card_rows_jq" ] || { echo "ERROR: generated-card jq program was not found" >&2; exit 1; }
-
-card_fixture="$tmp_dir/generated-card-enabled-filter.json"
-cat > "$card_fixture" <<'JSON_CARD_ENABLED_FILTER'
-{
-  "switches": [
-    {
-      "switch_name": "STACK_ENABLED",
-      "switch_host": "192.0.2.31",
-      "sensor_prefix": "sw1",
-      "display_name": "Enabled Stack",
-      "enabled": "enabled"
-    },
-    {
-      "switch_name": "SW_DISABLED",
-      "switch_host": "192.0.2.32",
-      "sensor_prefix": "sw_disabled",
-      "display_name": "Disabled Switch",
-      "enabled": "disabled"
-    },
-    {
-      "switch_name": "SW_LEGACY",
-      "switch_host": "192.0.2.33",
-      "sensor_prefix": "sw_legacy",
-      "display_name": "Legacy Enabled"
-    }
-  ],
-  "stack_member_prefixes": [
-    {"switch_name": "STACK_ENABLED", "member": "1", "sensor_prefix": "sw1", "display_name": "STACK 1"},
-    {"switch_name": "STACK_ENABLED", "member": "2", "sensor_prefix": "sw2", "display_name": "STACK 2"},
-    {"switch_name": "SW_DISABLED", "member": "1", "sensor_prefix": "sw_disabled", "display_name": "SHOULD NOT RENDER"}
-  ]
-}
-JSON_CARD_ENABLED_FILTER
-
-card_rows="$tmp_dir/generated-card-enabled-filter.rows"
-jq -r -f "$card_rows_jq" "$card_fixture" > "$card_rows"
-[ "$(wc -l < "$card_rows" | tr -d ' ')" = "3" ] || {
-  echo "ERROR: expected two enabled stack cards plus one legacy card" >&2
-  cat "$card_rows" >&2
-  exit 1
-}
-grep -q 'STACK_ENABLED' "$card_rows"
-grep -q 'SW_LEGACY' "$card_rows"
-! grep -q 'SW_DISABLED' "$card_rows"
-! grep -q 'SHOULD NOT RENDER' "$card_rows"
-printf "%s\n" "Switch Vision generated-card enabled-state regression: PASS"
+. "$BASE_DIR/self_test_dashboard_stage.sh"
 
 # Zyxel XS1930-10 contribution / registry / generator reconciliation regression.
 grep -q 'if (model == "XS1930-10") return "experimental"' "$REPORT_STAGE_SOURCE"

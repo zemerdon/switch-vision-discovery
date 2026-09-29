@@ -97,10 +97,10 @@ def main() -> None:
     runtime_public_paths = [
         ROOT / "runtime_src/profiles/switch-vision-profiles.yaml",
         ROOT / "runtime_src/self-test.sh",
-        ROOT / "runtime_src/self_test_generated_yaml_stage.sh",
         ROOT / "runtime_src/support_web.py",
         ROOT / "runtime_src/support_web.html",
     ]
+    runtime_public_paths += sorted((ROOT / "runtime_src").glob("self_test_*.sh"))
     for path in runtime_public_paths:
         text = path.read_text(encoding="utf-8", errors="ignore")
         if SUBMISSION_ID.search(text) or CONTRIBUTION_BREADCRUMB.search(text):

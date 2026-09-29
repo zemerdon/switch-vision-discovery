@@ -77,6 +77,7 @@ PERMANENT_CHECKS = (
     "tools/test_discovery_yaml_stage.py",
     "tools/test_discovery_dashboard_stage.py",
     "tools/test_self_test_generated_yaml_module.py",
+    "tools/test_self_test_dashboard_module.py",
     "tools/test_manual_model_physical_contract.py",
     "tools/test_cisco_telemetry.py",
     "tools/test_crs328_telemetry.py",
@@ -238,7 +239,9 @@ def validate_packaged_runtime(root: Path, archive_path: Path) -> None:
             target / "discovery_contract_entrypoint.py",
             target / "physical_contract_prepare.sh",
             target / "self-test.sh",
-            target / "self_test_generated_yaml_stage.sh",
+        ) + tuple(
+            target / path.name
+            for path in sorted((root / "runtime_src").glob("self_test_*.sh"))
         )
         missing = [str(path.relative_to(target)) for path in required if not path.exists()]
         if missing:
