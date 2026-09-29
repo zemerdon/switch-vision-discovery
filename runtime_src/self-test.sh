@@ -2476,14 +2476,7 @@ printf "%s\n" "Switch Vision authoritative run-options regression: PASS"
 
 . "$BASE_DIR/self_test_dell_n2128px_contribution.sh"
 
-# v2.1.21 Support My Switch privacy-default contract.
-# The Home Assistant app config lives outside runtime.tar.gz, so this regression
-# protects the runtime-side expectation that both controls remain supported and
-# are read as normal boolean contribution options.
-grep -q 'support_mask_vlan_names' "$BASE_DIR/discovery_job.sh"
-grep -q 'support_mask_interface_descriptions' "$BASE_DIR/discovery_job.sh"
-echo "Switch Vision Discovery v2.1.21 privacy-default contract regression: PASS"
-
+. "$BASE_DIR/self_test_support_privacy_defaults.sh"
 
 # v2.1.27 hardware-validation and speed-contract regressions.
 python3 - "$RUNTIME_REGISTRY" "$BASE_DIR/profiles/switch-vision-profiles.yaml" "$BASE_DIR/discovery_job.sh" "$YAML_STAGE_SOURCE" <<'PYTEST_V2127_HARDWARE'
