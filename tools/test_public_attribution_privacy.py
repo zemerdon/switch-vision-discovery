@@ -97,6 +97,7 @@ def main() -> None:
     runtime_public_paths = [
         ROOT / "runtime_src/profiles/switch-vision-profiles.yaml",
         ROOT / "runtime_src/self-test.sh",
+        ROOT / "runtime_src/self_test_generated_yaml_stage.sh",
         ROOT / "runtime_src/support_web.py",
         ROOT / "runtime_src/support_web.html",
     ]
