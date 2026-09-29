@@ -65,8 +65,8 @@ assert "sfp_port_count: 32" not in u.render({"devices":[{"model":"USW Aggregatio
 
 # All supported visual models must preserve a non-empty SNMP card identity even
 # when optional sensor_prefix is explicitly blank (the normal Hub form state).
-job=(r/"runtime_src/discovery_job.sh").read_text(encoding="utf-8")
-mx=re.search(r"# SWITCH_VISION_GENERATED_CARD_ROWS_JQ_BEGIN\n(?P<body>.*?)\n\s*# SWITCH_VISION_GENERATED_CARD_ROWS_JQ_END",job,re.S)
+dashboard_stage=(r/"runtime_src/discovery_dashboard_stage.sh").read_text(encoding="utf-8")
+mx=re.search(r"# SWITCH_VISION_GENERATED_CARD_ROWS_JQ_BEGIN\n(?P<body>.*?)\n\s*# SWITCH_VISION_GENERATED_CARD_ROWS_JQ_END",dashboard_stage,re.S)
 assert mx, "generated-card JQ markers missing"
 program=mx.group("body")
 visual=[x for x in registry["devices"] if isinstance(x,dict) and x.get("discovery_support") is True and x.get("dashboard_support") is True]

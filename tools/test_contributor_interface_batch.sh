@@ -6,7 +6,7 @@ BASE_DIR="$ROOT/runtime_src"
 CV_MIB_DATABASE_DIR="$BASE_DIR/opt/switch-vision/mib_database"
 CV_VENDOR_DIR="$BASE_DIR/opt/switch-vision/vendors"
 REGISTRY="$BASE_DIR/opt/switch-vision/devices/supported_devices.json"
-DISCOVERY_JOB="$BASE_DIR/discovery_job.sh"
+DASHBOARD_STAGE="$BASE_DIR/discovery_dashboard_stage.sh"
 export CV_MIB_DATABASE_DIR CV_VENDOR_DIR
 
 . "$CV_VENDOR_DIR/base.sh"
@@ -203,7 +203,7 @@ CV_CAP_FRONT_PANEL_AWARE="false"
 # dual-personality positions to the `uplink_N_status` entities actually emitted
 # by Discovery, rather than the generic sfp_10g template.
 hp_binding='*J8693A*|*3500yl-48G*|*WS-C3560CG-8PC-S*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_uplink_{port}_status" ;;'
-[ "$(grep -Fc "$hp_binding" "$DISCOVERY_JOB")" -eq 2 ]
+[ "$(grep -Fc "$hp_binding" "$DASHBOARD_STAGE")" -eq 2 ]
 
 # Registry contracts distilled from anonymous contributor evidence. Match model
 # identity canonically because older exact entries legitimately use SKU dashes

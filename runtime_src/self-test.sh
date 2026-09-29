@@ -8,6 +8,7 @@ export SV_SELF_TEST_TMP_DIR="/tmp/switch-vision-discovery-self-test-$$"
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPORT_STAGE_SOURCE="$BASE_DIR/discovery_report_stage.sh"
 YAML_STAGE_SOURCE="$BASE_DIR/discovery_yaml_stage.sh"
+DASHBOARD_STAGE_SOURCE="$BASE_DIR/discovery_dashboard_stage.sh"
 export SV_CURRENT_DISCOVERY_DEBUG_PATH="${SV_CURRENT_DISCOVERY_DEBUG_PATH:-/tmp/switch-vision-current-discovery-debug.log}"
 export SV_DEVICE_CONTROL_PATH="${SV_DEVICE_CONTROL_PATH:-/tmp/switch-vision-self-test-device-control-$$.json}"
 rm -f "$SV_DEVICE_CONTROL_PATH"
@@ -2062,16 +2063,20 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 sh -n "$BASE_DIR/discovery_job.sh"
 sh -n "$REPORT_STAGE_SOURCE"
 sh -n "$YAML_STAGE_SOURCE"
+sh -n "$DASHBOARD_STAGE_SOURCE"
 grep -Fq '. "$RUNTIME_DIR/discovery_report_stage.sh"' "$BASE_DIR/discovery_job.sh"
 grep -Fq '. "$RUNTIME_DIR/discovery_yaml_stage.sh"' "$BASE_DIR/discovery_job.sh"
+grep -Fq '. "$RUNTIME_DIR/discovery_dashboard_stage.sh"' "$BASE_DIR/discovery_job.sh"
 ! grep -Fq 'parser_report() {' "$BASE_DIR/discovery_job.sh"
 ! grep -Fq 'write_walk_section() {' "$BASE_DIR/discovery_job.sh"
 ! grep -Fq 'write_generated_yaml_for_walk() {' "$BASE_DIR/discovery_job.sh"
 ! grep -Fq 'write_generated_yaml() {' "$BASE_DIR/discovery_job.sh"
+! grep -Fq 'write_generated_dashboard_card() {' "$BASE_DIR/discovery_job.sh"
 grep -Fq 'parser_report() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
+grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
 grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.11"' "$BASE_DIR/discovery_job.sh"
 grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.11"' "$BASE_DIR/run.sh"
 
@@ -2468,7 +2473,7 @@ awk '
   /SWITCH_VISION_GENERATED_CARD_ROWS_JQ_BEGIN/ { capture=1; next }
   /SWITCH_VISION_GENERATED_CARD_ROWS_JQ_END/ { capture=0; next }
   capture { print }
-' "$BASE_DIR/discovery_job.sh" > "$card_rows_jq"
+' "$DASHBOARD_STAGE_SOURCE" > "$card_rows_jq"
 [ -s "$card_rows_jq" ] || { echo "ERROR: generated-card jq program was not found" >&2; exit 1; }
 
 card_fixture="$tmp_dir/generated-card-enabled-filter.json"

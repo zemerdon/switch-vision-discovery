@@ -19,16 +19,16 @@ note_failure() {
   failures=$((failures + 1))
 }
 
-if grep -Fq 'fallback_walks="/tmp/switch_vision_generated_card_fallback_walks_$$.txt"' "$RUNTIME/discovery_job.sh"; then
+if grep -Fq 'fallback_walks="/tmp/switch_vision_generated_card_fallback_walks_$$.txt"' "$RUNTIME/discovery_dashboard_stage.sh"; then
   note_failure "generated-card fallback scratch still uses collision-prone PID path"
 fi
-if ! grep -Fq 'mktemp "${TMPDIR:-/tmp}/switch_vision_generated_card_fallback_walks.XXXXXX"' "$RUNTIME/discovery_job.sh"; then
+if ! grep -Fq 'mktemp "${TMPDIR:-/tmp}/switch_vision_generated_card_fallback_walks.XXXXXX"' "$RUNTIME/discovery_dashboard_stage.sh"; then
   note_failure "generated-card fallback scratch is not allocated with mktemp"
 fi
-if grep -Fq 'unifi_bound_ids="/tmp/switch_vision_unifi_bound_ids_$$.txt"' "$RUNTIME/discovery_job.sh"; then
+if grep -Fq 'unifi_bound_ids="/tmp/switch_vision_unifi_bound_ids_$$.txt"' "$RUNTIME/discovery_dashboard_stage.sh"; then
   note_failure "UniFi bound-ID scratch still uses collision-prone PID path"
 fi
-if ! grep -Fq 'mktemp "${TMPDIR:-/tmp}/switch_vision_unifi_bound_ids.XXXXXX"' "$RUNTIME/discovery_job.sh"; then
+if ! grep -Fq 'mktemp "${TMPDIR:-/tmp}/switch_vision_unifi_bound_ids.XXXXXX"' "$RUNTIME/discovery_dashboard_stage.sh"; then
   note_failure "UniFi bound-ID scratch is not allocated with mktemp"
 fi
 
@@ -307,7 +307,7 @@ done
 if grep -Eq 'name: C2960 (Uplink [1-4]|SFP 1G (25|26|27|28)|SFP 10G [1-4]) Status' "$c2960x24_yaml"; then
   note_failure "cisco-2960x-24ps: source interface numbering leaked into logical SFP faceplate namespace"
 fi
-grep -Fq '*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;' "$RUNTIME/discovery_job.sh" || note_failure "cisco-2960x/xr: generated-card binding is not pinned to logical SFP 1G entities"
+grep -Fq '*WS-C2960X-24PS-L*|*WS-C2960X-24TS-L*|*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;' "$RUNTIME/discovery_dashboard_stage.sh" || note_failure "cisco-2960x/xr: generated-card binding is not pinned to logical SFP 1G entities"
 
 # The non-PoE 24TS variant uses the same Gi1/0/25-28 -> logical SFP1-4
 # front-panel mapping and must remain covered by the same contract.

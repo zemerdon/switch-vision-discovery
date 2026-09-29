@@ -14,6 +14,7 @@ PROFILES_PATH = ROOT / "runtime_src/profiles/switch-vision-profiles.yaml"
 JOB_PATH = ROOT / "runtime_src/discovery_job.sh"
 REPORT_STAGE_PATH = ROOT / "runtime_src/discovery_report_stage.sh"
 YAML_STAGE_PATH = ROOT / "runtime_src/discovery_yaml_stage.sh"
+DASHBOARD_STAGE_PATH = ROOT / "runtime_src/discovery_dashboard_stage.sh"
 
 
 def load_module(name: str, path: Path):
@@ -92,9 +93,10 @@ assert not contract["errors"]
 job = JOB_PATH.read_text(encoding="utf-8")
 report_stage = REPORT_STAGE_PATH.read_text(encoding="utf-8")
 yaml_stage = YAML_STAGE_PATH.read_text(encoding="utf-8")
+dashboard_stage = DASHBOARD_STAGE_PATH.read_text(encoding="utf-8")
 assert 'if (m ~ /^WS-C2960XR-48LPS-I$/) return "cisco-2960xr-48lps-48p-4sfp"' in report_stage
 assert 'model ~ /^WS-C2960XR-48LPS-I$/' in yaml_stage
-assert '*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;' in job
+assert '*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;' in dashboard_stage
 
 fiber = models["UCG Fiber"]
 assert fiber["status"] == "experimental"

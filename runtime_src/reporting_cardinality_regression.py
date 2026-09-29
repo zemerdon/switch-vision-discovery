@@ -7,7 +7,8 @@ ROOT = Path(__file__).resolve().parent
 ENTRY = (ROOT / "discovery_contract_entrypoint.py").read_text(encoding="utf-8")
 JOB = (ROOT / "discovery_job.sh").read_text(encoding="utf-8")
 YAML_STAGE = (ROOT / "discovery_yaml_stage.sh").read_text(encoding="utf-8")
-PIPELINE = JOB + "\n" + YAML_STAGE
+DASHBOARD_STAGE = (ROOT / "discovery_dashboard_stage.sh").read_text(encoding="utf-8")
+PIPELINE = JOB + "\n" + YAML_STAGE + "\n" + DASHBOARD_STAGE
 
 ordered = [
     {"contract": {"status": "resolved", "observed": {"members": 2}}},

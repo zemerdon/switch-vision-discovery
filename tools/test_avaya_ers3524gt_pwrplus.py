@@ -202,7 +202,7 @@ with tempfile.TemporaryDirectory(prefix="sv-avaya-3524-") as td:
     assert "# Detected model: 3524GT-PWR+" in generated
     assert "AVAYA Port 2 Status" in generated
     assert "AVAYA SFP 1G 1 Status" in generated
-    generator_source = LEGACY.read_text(encoding="utf-8")
+    generator_source = (RUNTIME / "discovery_dashboard_stage.sh").read_text(encoding="utf-8")
     assert '*3524GT-PWR+*|*SG350-20*' in generator_source
     assert 'sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status' in generator_source
 

@@ -538,11 +538,12 @@ finally:
     web._DEVICE_STATE_RECONCILE_RUNNING = False
 
 job = Path(web.__file__).with_name("discovery_job.sh").read_text(encoding="utf-8")
-assert "dashboard_device_order.py" in job
-assert "device-control.json" in job
-assert '--fresh "/tmp/switch_vision_generated_dashboard_raw_$$.yaml"' in job
-assert '--source "$GENERATED_CARD_FULL_PATH"' in job
-assert '--options "$CONFIG_FILE"' in job
+dashboard_stage = Path(web.__file__).with_name("discovery_dashboard_stage.sh").read_text(encoding="utf-8")
+assert "dashboard_device_order.py" in dashboard_stage
+assert "device-control.json" in dashboard_stage
+assert '--fresh "/tmp/switch_vision_generated_dashboard_raw_$$.yaml"' in dashboard_stage
+assert '--source "$GENERATED_CARD_FULL_PATH"' in dashboard_stage
+assert '--options "$CONFIG_FILE"' in dashboard_stage
 run_source = Path(web.__file__).with_name("run.sh").read_text(encoding="utf-8")
 assert 'SWITCH_VISION_GENERATED_CARD_FULL_PATH' in run_source
 assert '/data/generated-dashboard-card-full.yaml' in run_source
