@@ -78,6 +78,8 @@ PERMANENT_CHECKS = (
     "tools/test_discovery_dashboard_stage.py",
     "tools/test_self_test_generated_yaml_module.py",
     "tools/test_self_test_dashboard_module.py",
+    "tools/test_self_test_model_reconciliation.py",
+    "tools/test_self_test_module_topology.py",
     "tools/test_manual_model_physical_contract.py",
     "tools/test_cisco_telemetry.py",
     "tools/test_crs328_telemetry.py",

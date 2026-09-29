@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Permanent contract for the extracted generated-dashboard self-test module."""
+"""Permanent contract for the extracted model-reconciliation self-test module."""
 from __future__ import annotations
 
 import hashlib
@@ -8,23 +8,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SELF_TEST = ROOT / "runtime_src/self-test.sh"
-MODULE = ROOT / "runtime_src/self_test_dashboard_stage.sh"
+MODULE = ROOT / "runtime_src/self_test_model_reconciliation.sh"
 
-HEADER = """# Switch Vision Discovery self-test generated-dashboard regression module.
+HEADER = """# Switch Vision Discovery self-test model-reconciliation module.
 # Sourced by self-test.sh with the existing self-test environment intact.
 # Keep this as an exact behavioral extraction; production logic is not duplicated here.
 
 """
-EXTRACTED_BODY_SHA256 = "055bbf021507c22581b62ba1241c09bab65047fa046a854ca4cb4923e335154c"
-START_MARKER = "# Generated dashboard rows must obey the same enabled-state predicate as the"
-END_MARKER = "# Zyxel XS1930-10 contribution / registry / generator reconciliation regression."
+EXTRACTED_BODY_SHA256 = "072543a3631767bd5418ec92fd2223874b50281b645dcec8303d30233465b41c"
+START_MARKER = "# Zyxel XS1930-10 contribution / registry / generator reconciliation regression."
+END_MARKER = "# v2.1.18 placeholder and UniFi diagnostics regressions."
 
 
 def main() -> int:
     self_test = SELF_TEST.read_text(encoding="utf-8")
     module = MODULE.read_text(encoding="utf-8")
 
-    assert self_test.count('. "$BASE_DIR/self_test_dashboard_stage.sh"') == 1
+    assert self_test.count('. "$BASE_DIR/self_test_model_reconciliation.sh"') == 1
     assert START_MARKER not in self_test
     assert module.startswith(HEADER)
     assert module.count(START_MARKER) == 1
@@ -42,7 +42,7 @@ def main() -> int:
     )
     assert syntax.returncode == 0, syntax.stdout
 
-    print("Discovery generated-dashboard self-test module contract: PASS")
+    print("Discovery model-reconciliation self-test module contract: PASS")
     return 0
 
 

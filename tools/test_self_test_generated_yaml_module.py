@@ -26,7 +26,6 @@ def main() -> int:
 
     assert self_test.count('. "$BASE_DIR/self_test_generated_yaml_stage.sh"') == 1
     assert START_MARKER not in self_test
-    assert END_MARKER in self_test
     assert module.startswith(HEADER)
     assert module.count(START_MARKER) == 1
     assert END_MARKER not in module
