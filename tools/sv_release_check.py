@@ -43,6 +43,7 @@ PERMANENT_CHECKS = (
     "tools/test_hub_device_control.py",
     "tools/test_hub_diagnostics.py",
     "tools/test_hub_autodiscover.py",
+    "tools/test_core_registry_projection.py",
     "tools/test_complete_backup_restore_adapters.py",
     "tools/test_complete_backup_restore_coordinator.py",
     "tools/test_dell_visual_state_2446.py",
@@ -362,6 +363,16 @@ def main() -> int:
                 str(core_source_root),
                 "--core-source-sha",
                 core_source_sha,
+            ],
+            root,
+        )
+        run(
+            [
+                sys.executable,
+                "tools/project_core_registry.py",
+                "--core-source-root",
+                str(core_source_root),
+                "--check",
             ],
             root,
         )
