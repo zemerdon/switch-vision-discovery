@@ -1,3 +1,12 @@
+## 3.0.11 — Dashboard identity cleanup and Hub modularity follow-up
+
+- Remove stale SNMP dashboard cards after a configured switch is renamed so the previous 3650 card identity does not remain duplicated beside the current device.
+- Preserve fail-soft dashboard visibility for registered topology conflicts and partial live runs: one-off collection runs no longer treat a migrated empty switch list as authoritative, and temporarily unreachable saved switches remain displayable through the dedicated dashboard inventory while telemetry stays filtered to current trusted targets.
+- Extract Core/SNMP2MQTT settings orchestration, mixed-device control/order handling, and diagnostics assembly into explicit callback-driven Hub modules while preserving the existing Supervisor/Ingress routes and user-visible behavior.
+- Keep write-only credentials, management-target privacy, device-state ordering, diagnostics identity reconciliation and complete-backup behavior covered by permanent regressions across the extracted boundaries.
+- Repin Discovery's content-scoped Core faceplate dependency to exact Core 2.7.33 source without changing the catalog content contract.
+- Expand the maintained release gate to 50 Python checks plus 4 shell checks, deterministic 120-file runtime parity and the non-publishing container self-test.
+
 ## 3.0.10 — Hub backend modularity and backup hardening
 
 - Extract the Hub document into a byte-identical packaged `support_web.html` asset while preserving the existing Supervisor/Ingress routes and UI behavior.
