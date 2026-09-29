@@ -6,6 +6,7 @@ export SV_SELF_TEST_TMP_DIR="/tmp/switch-vision-discovery-self-test-$$"
 # Early Hub regression checks use a diagnostic literal helper so CI identifies
 # the exact missing contract instead of failing silently under set -e.
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REPORT_STAGE_SOURCE="$BASE_DIR/discovery_report_stage.sh"
 export SV_CURRENT_DISCOVERY_DEBUG_PATH="${SV_CURRENT_DISCOVERY_DEBUG_PATH:-/tmp/switch-vision-current-discovery-debug.log}"
 export SV_DEVICE_CONTROL_PATH="${SV_DEVICE_CONTROL_PATH:-/tmp/switch-vision-self-test-device-control-$$.json}"
 rm -f "$SV_DEVICE_CONTROL_PATH"
@@ -170,9 +171,9 @@ jq -e '
   and (any(.interfaces[]; .name == "45" and .media == "uplink" and .physical == true))
   and (any(.interfaces[]; .name == "48" and .media == "uplink" and .physical == true))
 ' "$HP_TEST_CAP" >/dev/null
-grep -Fq 'hp_3500yl_model = "HP J8693A Switch 3500yl-48G"' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'hp_3500yl_model = "HP J8693A Switch 3500yl-48G"' "$REPORT_STAGE_SOURCE"
 grep -Fq 'hp_3500yl_model="HP J8693A Switch 3500yl-48G"' "$BASE_DIR/discovery_job.sh"
-grep -Fq 'model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/' "$REPORT_STAGE_SOURCE"
 echo 'Switch Vision Discovery v2.3.11 HP 3500yl numeric interface contract: PASS'
 
 # v2.3.16 Hub header / calibration-profile single-line summary regression
@@ -2058,6 +2059,12 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # row must not count as a configured SNMP target. Empty fields must also remain
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
+sh -n "$REPORT_STAGE_SOURCE"
+grep -Fq '. "$RUNTIME_DIR/discovery_report_stage.sh"' "$BASE_DIR/discovery_job.sh"
+! grep -Fq 'parser_report() {' "$BASE_DIR/discovery_job.sh"
+! grep -Fq 'write_walk_section() {' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'parser_report() {' "$REPORT_STAGE_SOURCE"
+grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.11"' "$BASE_DIR/discovery_job.sh"
 grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.11"' "$BASE_DIR/run.sh"
 
@@ -2077,7 +2084,7 @@ echo 'Switch Vision Discovery v2.3.46 Hub ownership / Auto width: PASS'
 # v2.1.24 Cisco trunk-status diagnostic contract.
 # The early diagnostic must match the parser: only an indexed Cisco
 # vlanTrunkPortDynamicStatus row with an INTEGER value counts as present.
-grep -Fq '14\.[0-9]+ = INTEGER:' "$BASE_DIR/discovery_job.sh"
+grep -Fq '14\.[0-9]+ = INTEGER:' "$REPORT_STAGE_SOURCE"
 
 trunk_bad_unindexed="$tmp_dir/trunk-bad-unindexed.txt"
 trunk_bad_type="$tmp_dir/trunk-bad-type.txt"
@@ -2504,14 +2511,14 @@ grep -q 'SW_LEGACY' "$card_rows"
 printf "%s\n" "Switch Vision generated-card enabled-state regression: PASS"
 
 # Zyxel XS1930-10 contribution / registry / generator reconciliation regression.
-grep -q 'if (model == "XS1930-10") return "experimental"' "$BASE_DIR/discovery_job.sh"
-grep -q 'profile = "zyxel-xs1930-10"' "$BASE_DIR/discovery_job.sh"
-grep -q 'model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2' "$BASE_DIR/discovery_job.sh"
-grep -q 'RJ45 swp00-swp07 ports' "$BASE_DIR/discovery_job.sh"
-grep -q '10G SFP+ swp08-swp09 uplinks' "$BASE_DIR/discovery_job.sh"
+grep -q 'if (model == "XS1930-10") return "experimental"' "$REPORT_STAGE_SOURCE"
+grep -q 'profile = "zyxel-xs1930-10"' "$REPORT_STAGE_SOURCE"
+grep -q 'model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2' "$REPORT_STAGE_SOURCE"
+grep -q 'RJ45 swp00-swp07 ports' "$REPORT_STAGE_SOURCE"
+grep -q '10G SFP+ swp08-swp09 uplinks' "$REPORT_STAGE_SOURCE"
 grep -q '1.3.6.1.4.1.890.1.15.3.2.4.0' "$BASE_DIR/discovery_job.sh"
 grep -q '1.3.6.1.4.1.890.1.15.3.2.4.3' "$BASE_DIR/discovery_job.sh"
-grep -q 'Q-BRIDGE-MIB PVID' "$BASE_DIR/discovery_job.sh"
+grep -q 'Q-BRIDGE-MIB PVID' "$REPORT_STAGE_SOURCE"
 
 awk '
   /^  zyxel-xs1930-10:/ { in_zyxel=1; next }
@@ -2526,17 +2533,17 @@ printf '%s\n' "Switch Vision Zyxel XS1930-10 contribution regression self-test: 
 grep -q 'Running split Juniper full SNMP walk' "$BASE_DIR/discovery_job.sh"
 grep -q '1.3.6.1.4.1.2636' "$BASE_DIR/discovery_job.sh"
 grep -q '# Switch Vision SNMP walk result: warning' "$BASE_DIR/discovery_job.sh"
-grep -q 'registry_status == "confirmed"' "$BASE_DIR/discovery_job.sh"
-grep -q '.device.support_status=(.registry.status' "$BASE_DIR/discovery_job.sh"
+grep -q 'registry_status == "confirmed"' "$REPORT_STAGE_SOURCE"
+grep -q '.device.support_status=(.registry.status' "$REPORT_STAGE_SOURCE"
 printf '%s\n' "Switch Vision full-walk/status reconciliation regression: PASS"
 
 # Juniper EX3300 legacy-parser / registry reconciliation regression.
-grep -q 'if (model == "Juniper EX3300-48P") return "supported"' "$BASE_DIR/discovery_job.sh"
-grep -q 'profile = "juniper-ex3300-48p"' "$BASE_DIR/discovery_job.sh"
-grep -q 'model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48' "$BASE_DIR/discovery_job.sh"
-grep -q 'RJ45 ge-0/0/0-47 ports' "$BASE_DIR/discovery_job.sh"
-grep -q 'SFP/SFP+ uplink cage' "$BASE_DIR/discovery_job.sh"
-grep -q 'Virtual Chassis support: not validated' "$BASE_DIR/discovery_job.sh"
+grep -q 'if (model == "Juniper EX3300-48P") return "supported"' "$REPORT_STAGE_SOURCE"
+grep -q 'profile = "juniper-ex3300-48p"' "$REPORT_STAGE_SOURCE"
+grep -q 'model == "Juniper EX3300-48P" && if_total > 0 && rj45 == 48' "$REPORT_STAGE_SOURCE"
+grep -q 'RJ45 ge-0/0/0-47 ports' "$REPORT_STAGE_SOURCE"
+grep -q 'SFP/SFP+ uplink cage' "$REPORT_STAGE_SOURCE"
+grep -q 'Virtual Chassis support: not validated' "$REPORT_STAGE_SOURCE"
 
 awk '
   /^  juniper-ex3300-48p:/ { in_ex=1; next }
@@ -3053,7 +3060,7 @@ assert p["layout"]["rj45_ports"] == 28
 assert p["layout"]["sfp_10g_ports"] == 2
 assert "Gi{member}/0/{port}" in p["interface_patterns"]["rj45"]
 assert "Te{member}/0/1" in p["interface_patterns"]["sfp_10g"]
-job = (Path(sys.argv[2]).parents[1] / "discovery_job.sh").read_text(encoding="utf-8")
+job = (Path(sys.argv[2]).parents[1] / "discovery_report_stage.sh").read_text(encoding="utf-8")
 for required in ('model == "N2128PX-ON"', 'profile = "dell-n2128px-on"', '10G SFP+ uplink', 'manufacturer = "Dell"'):
     assert required in job, required
 print("Switch Vision Discovery v2.1.20 Dell N2128PX-ON regression: PASS")

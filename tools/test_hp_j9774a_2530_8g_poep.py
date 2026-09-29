@@ -15,6 +15,7 @@ REGISTRY = RUNTIME / "opt/switch-vision/devices/supported_devices.json"
 REGISTRY_LOOKUP = RUNTIME / "registry_lookup.py"
 PROFILE = RUNTIME / "profiles/switch-vision-profiles.yaml"
 LEGACY = RUNTIME / "discovery_job.sh"
+REPORT_STAGE = RUNTIME / "discovery_report_stage.sh"
 
 
 def run(args, *, env=None):
@@ -211,7 +212,8 @@ with tempfile.TemporaryDirectory(prefix="sv-hp-j9774a-") as td:
 profiles = PROFILE.read_text(encoding="utf-8")
 assert "hp-2530-8g-poep-8p-2dual:" in profiles
 legacy = LEGACY.read_text(encoding="utf-8")
-assert legacy.count('hp_2530_model = "HP J9774A 2530-8G-PoEP"') == 1
+report_stage = REPORT_STAGE.read_text(encoding="utf-8")
+assert report_stage.count('hp_2530_model = "HP J9774A 2530-8G-PoEP"') == 1
 assert legacy.count('hp_2530_model="HP J9774A 2530-8G-PoEP"') == 1
 assert 'model == "HP J9774A 2530-8G-PoEP" && name ~ /^([1-9]|10)$/' in legacy
 

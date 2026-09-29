@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "runtime_src/opt/switch-vision/devices/supported_devices.json"
 PROFILES_PATH = ROOT / "runtime_src/profiles/switch-vision-profiles.yaml"
 JOB_PATH = ROOT / "runtime_src/discovery_job.sh"
+REPORT_STAGE_PATH = ROOT / "runtime_src/discovery_report_stage.sh"
 
 
 def load_module(name: str, path: Path):
@@ -88,7 +89,8 @@ assert contract["observed"]["sfp"] == 4
 assert not contract["errors"]
 
 job = JOB_PATH.read_text(encoding="utf-8")
-assert 'if (m ~ /^WS-C2960XR-48LPS-I$/) return "cisco-2960xr-48lps-48p-4sfp"' in job
+report_stage = REPORT_STAGE_PATH.read_text(encoding="utf-8")
+assert 'if (m ~ /^WS-C2960XR-48LPS-I$/) return "cisco-2960xr-48lps-48p-4sfp"' in report_stage
 assert 'model ~ /^WS-C2960XR-48LPS-I$/' in job
 assert '*WS-C2960XR-48LPS-I*) echo "        sfp_status_entity_template: sensor.${safe_prefix}_sfp_1g_{port}_status" ;;' in job
 

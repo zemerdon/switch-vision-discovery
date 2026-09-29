@@ -73,6 +73,7 @@ PERMANENT_CHECKS = (
     "tools/test_calibration_core_bridge_contract.py",
     "tools/test_registry_roundtrip.py",
     "tools/test_registry_authority_metadata.py",
+    "tools/test_discovery_report_stage.py",
     "tools/test_manual_model_physical_contract.py",
     "tools/test_cisco_telemetry.py",
     "tools/test_crs328_telemetry.py",

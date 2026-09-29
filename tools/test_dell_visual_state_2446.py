@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "runtime_src/opt/switch-vision/devices/supported_devices.json"
 JOB = ROOT / "runtime_src/discovery_job.sh"
+REPORT_STAGE = ROOT / "runtime_src/discovery_report_stage.sh"
 
 payload = json.loads(REGISTRY.read_text(encoding="utf-8"))
 device = next(row for row in payload["devices"] if row.get("model") == "N2128PX-ON")
@@ -37,7 +38,8 @@ for stale in (
 
 source = JOB.read_text(encoding="utf-8")
 expected = '- Faceplate: dedicated Dell 28 RJ45 + 2 SFP+ visual; current-build alignment confirmed'
-assert expected in source
-assert 'generic 48 RJ45 + 4 SFP fallback visual; exact Dell faceplate pending' not in source
+report_stage = REPORT_STAGE.read_text(encoding="utf-8")
+assert expected in report_stage
+assert 'generic 48 RJ45 + 4 SFP fallback visual; exact Dell faceplate pending' not in (source + report_stage)
 
 print("Switch Vision Discovery 2.4.46 Dell visual-state regression: PASS")
