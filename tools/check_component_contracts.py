@@ -28,9 +28,10 @@ DEFAULT_SNMP_ADDON_CONFIG_URL = (
     "switch-vision-snmp2mqtt-addon/main/switch-vision-snmp2mqtt/config.yaml"
 )
 
-# Exact-model hardware, support-confidence and visual contracts must remain
-# aligned between Discovery authority and Core's derivative registry. Intentional
-# component-only metadata may differ, but shared contract fields may not.
+# Discovery owns exact-model hardware and support-confidence state. Core's
+# derivative registry contains only the explicit fields it consumes; Discovery
+# provenance such as evidence/notes is intentionally not projected. Shared
+# projected fields and Core-owned visual references must remain exact.
 VISUAL_CONTRACT_EXCEPTIONS: dict[str, str] = {}
 SUPPORT_CONTRACT_EXCEPTIONS: dict[str, dict[str, object]] = {}
 
@@ -471,7 +472,7 @@ def main() -> int:
                 f"Support contract exception {model!r} must include a non-empty reason"
             )
         if not isinstance(fields, (tuple, list)) or not fields or any(
-            field not in {"status", "evidence", "validation"} for field in fields
+            field not in {"status", "validation"} for field in fields
         ):
             errors.append(
                 f"Support contract exception {model!r} has invalid allowed fields"
@@ -484,7 +485,7 @@ def main() -> int:
         "stack_support",
         "discovery_support",
     )
-    support_fields = ("status", "evidence", "validation")
+    support_fields = ("status", "validation")
     visual_fields = ("dashboard_support", "calibration_profile", "default_faceplate")
 
     for model in sorted(core_models.keys() & discovery_models.keys()):
@@ -522,20 +523,9 @@ def main() -> int:
                 )
 
         if model == "N2128PX-ON":
-            core_notes = core.get("notes") if isinstance(core.get("notes"), list) else []
             discovery_notes = (
                 discovery.get("notes") if isinstance(discovery.get("notes"), list) else []
             )
-            core_first_note = core_notes[0] if core_notes else None
-            discovery_first_note = discovery_notes[0] if discovery_notes else None
-            if core_first_note != discovery_first_note:
-                errors.append(
-                    "N2128PX-ON: privacy-neutral public evidence note drift"
-                )
-            if core_notes != discovery_notes:
-                errors.append(
-                    "N2128PX-ON: exact registry notes drift between Core and Discovery"
-                )
             dell_notes = "\n".join(str(note) for note in discovery_notes).casefold()
             for stale in (
                 "generic 48 rj45 + 4 sfp",

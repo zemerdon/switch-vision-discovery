@@ -51,6 +51,12 @@ def main() -> int:
                     "calibration_profile": "stock_24rj45_2sfp",
                     "default_faceplate": "faceplates/24rj45-2sfp.png",
                     "optional_faceplates": [],
+                    "evidence": "discovery-only provenance",
+                    "tested_firmware": ["1.0.0"],
+                    "contributor": {"display_name": "community contributor", "public_credit": False},
+                    "contributions": [{"id": "discovery-only"}],
+                    "notes": ["discovery-only note"],
+                    "discovery_optional_interfaces": ["Loopback0"],
                     "validation": {},
                     "visuals": {
                         "recommended_faceplate": "faceplates/24rj45-2sfp.png",
@@ -74,7 +80,16 @@ def main() -> int:
         assert projected["projection"]["device_field_allowlist"] == list(
             projection.CORE_DEVICE_FIELDS
         )
-        assert "discovery_only_future_field" not in projected["devices"][0]
+        for field in (
+            "evidence",
+            "tested_firmware",
+            "contributor",
+            "contributions",
+            "notes",
+            "discovery_optional_interfaces",
+            "discovery_only_future_field",
+        ):
+            assert field not in projected["devices"][0], field
         assert projected["devices"][0]["model"] == "TEST-24"
 
         projection.validate_core_faceplates(projected, core_root)
