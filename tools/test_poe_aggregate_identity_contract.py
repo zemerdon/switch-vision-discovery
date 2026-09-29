@@ -4,10 +4,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "runtime_src" / "discovery_job.sh"
+YAML_STAGE = ROOT / "runtime_src" / "discovery_yaml_stage.sh"
 
 
 def main() -> None:
-    source = SOURCE.read_text(encoding="utf-8")
+    source = SOURCE.read_text(encoding="utf-8") + "\n" + YAML_STAGE.read_text(encoding="utf-8")
 
     required_helpers = (
         "function poe_aggregate_name(name, ordinal)",

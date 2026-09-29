@@ -27,6 +27,7 @@ RUN command -v snmpwalk \
 COPY run.sh /run.sh
 COPY discovery_job.sh /discovery_job.sh
 COPY discovery_report_stage.sh /discovery_report_stage.sh
+COPY discovery_yaml_stage.sh /discovery_yaml_stage.sh
 COPY discovery_contract_entrypoint.py /discovery_contract_entrypoint.py
 COPY physical_contract.py /physical_contract.py
 COPY physical_contract_prepare.sh /physical_contract_prepare.sh

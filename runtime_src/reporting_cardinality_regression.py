@@ -6,6 +6,8 @@ import discovery_contract_entrypoint as contract
 ROOT = Path(__file__).resolve().parent
 ENTRY = (ROOT / "discovery_contract_entrypoint.py").read_text(encoding="utf-8")
 JOB = (ROOT / "discovery_job.sh").read_text(encoding="utf-8")
+YAML_STAGE = (ROOT / "discovery_yaml_stage.sh").read_text(encoding="utf-8")
+PIPELINE = JOB + "\n" + YAML_STAGE
 
 ordered = [
     {"contract": {"status": "resolved", "observed": {"members": 2}}},
@@ -28,9 +30,9 @@ for stale in (
     "Review-only output; it has not been installed.",
     "SNMP2MQTT YAML generation is review-only. The generated file is not installed automatically.",
 ):
-    assert stale not in JOB, stale
-assert "Native panel source: automatically consumed by Switch Vision" in JOB
-assert "Native Switch Vision dashboard source. The native panel reads this file automatically" in JOB
-assert "Authoritative Discovery handoff. Switch Vision SNMP2MQTT imports this file" in JOB
-assert "Handoff source: Switch Vision SNMP2MQTT imports this generated file" in JOB
+    assert stale not in PIPELINE, stale
+assert "Native panel source: automatically consumed by Switch Vision" in PIPELINE
+assert "Native Switch Vision dashboard source. The native panel reads this file automatically" in PIPELINE
+assert "Authoritative Discovery handoff. Switch Vision SNMP2MQTT imports this file" in PIPELINE
+assert "Handoff source: Switch Vision SNMP2MQTT imports this generated file" in PIPELINE
 print("Discovery stack-aware reporting/native handoff wording contract: PASS")

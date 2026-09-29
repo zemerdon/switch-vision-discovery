@@ -13,7 +13,7 @@ JOB = ROOT / "runtime_src" / "discovery_job.sh"
 def production_card_writer() -> str:
     source = JOB.read_text(encoding="utf-8")
     start = source.index("write_generated_dashboard_card() {")
-    end = source.index("\nquarantine_invalid_generated_live_yaml() {", start)
+    end = source.index("\nwrite_report() {", start)
     return source[start:end]
 
 

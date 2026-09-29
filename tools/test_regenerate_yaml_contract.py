@@ -99,6 +99,8 @@ snmp_snapshot_source = backend_source.split(
 assert 'generated_yaml_path"] = "/tmp/' not in snmp_snapshot_source
 
 job_source = (RUNTIME / "discovery_job.sh").read_text(encoding="utf-8")
+yaml_stage_source = (RUNTIME / "discovery_yaml_stage.sh").read_text(encoding="utf-8")
+generator_source = job_source + "\n" + yaml_stage_source
 for oid in (
     "1.3.6.1.2.1.17.1.4.1.2",
     "1.3.6.1.2.1.17.7.1.4.3",
@@ -108,9 +110,9 @@ for oid in (
 assert "1.3.6.1.2.1.18.1.4.1.2" not in job_source
 assert "1.3.6.1.2.1.18.7.1.4.3" not in job_source
 assert "1.3.6.1.2.1.18.7.1.4.5.1.1" not in job_source
-assert 'model="unknown"; manufacturer="Unknown"' in job_source
-assert 'model="unknown"; manufacturer="Cisco"' not in job_source
-assert 'manufacturer = "MikroTik"' in job_source
+assert 'model="unknown"; manufacturer="Unknown"' in generator_source
+assert 'model="unknown"; manufacturer="Cisco"' not in generator_source
+assert 'manufacturer = "MikroTik"' in generator_source
 for marker in (
     'else if (c3750_model != "") { model = c3750_model; manufacturer = "Cisco" }',
     'else if (local_model != "") { model = local_model; manufacturer = "Cisco" }',
@@ -118,10 +120,10 @@ for marker in (
     'else if (candidate_model != "") { model = candidate_model; manufacturer = "Cisco" }',
     'else if (generic_model != "") { model = generic_model; manufacturer = "Cisco" }',
 ):
-    assert marker in job_source, marker
-assert "MIKROTIK_SUPPLEMENTAL_OIDS" in job_source
-assert "1.3.6.1.4.1.14988.1.1.15.1.1" in job_source
-assert "1.3.6.1.4.1.14988\n" not in job_source
+    assert marker in generator_source, marker
+assert "MIKROTIK_SUPPLEMENTAL_OIDS" in generator_source
+assert "1.3.6.1.4.1.14988.1.1.15.1.1" in generator_source
+assert "1.3.6.1.4.1.14988\n" not in generator_source
 
 # Field regression from Support My Switch evidence: a failed/insufficient stored
 # walk could retain a mapped host, report an unknown model, and produce only the

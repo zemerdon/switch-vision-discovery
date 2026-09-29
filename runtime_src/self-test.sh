@@ -7,6 +7,7 @@ export SV_SELF_TEST_TMP_DIR="/tmp/switch-vision-discovery-self-test-$$"
 # the exact missing contract instead of failing silently under set -e.
 BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPORT_STAGE_SOURCE="$BASE_DIR/discovery_report_stage.sh"
+YAML_STAGE_SOURCE="$BASE_DIR/discovery_yaml_stage.sh"
 export SV_CURRENT_DISCOVERY_DEBUG_PATH="${SV_CURRENT_DISCOVERY_DEBUG_PATH:-/tmp/switch-vision-current-discovery-debug.log}"
 export SV_DEVICE_CONTROL_PATH="${SV_DEVICE_CONTROL_PATH:-/tmp/switch-vision-self-test-device-control-$$.json}"
 rm -f "$SV_DEVICE_CONTROL_PATH"
@@ -172,7 +173,7 @@ jq -e '
   and (any(.interfaces[]; .name == "48" and .media == "uplink" and .physical == true))
 ' "$HP_TEST_CAP" >/dev/null
 grep -Fq 'hp_3500yl_model = "HP J8693A Switch 3500yl-48G"' "$REPORT_STAGE_SOURCE"
-grep -Fq 'hp_3500yl_model="HP J8693A Switch 3500yl-48G"' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'hp_3500yl_model="HP J8693A Switch 3500yl-48G"' "$YAML_STAGE_SOURCE"
 grep -Fq 'model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/' "$REPORT_STAGE_SOURCE"
 echo 'Switch Vision Discovery v2.3.11 HP 3500yl numeric interface contract: PASS'
 
@@ -2060,11 +2061,17 @@ echo 'Switch Vision Discovery v2.4.35 Hub runtime-version synchronization: PASS'
 # in their original positions when switch rows are decoded.
 sh -n "$BASE_DIR/discovery_job.sh"
 sh -n "$REPORT_STAGE_SOURCE"
+sh -n "$YAML_STAGE_SOURCE"
 grep -Fq '. "$RUNTIME_DIR/discovery_report_stage.sh"' "$BASE_DIR/discovery_job.sh"
+grep -Fq '. "$RUNTIME_DIR/discovery_yaml_stage.sh"' "$BASE_DIR/discovery_job.sh"
 ! grep -Fq 'parser_report() {' "$BASE_DIR/discovery_job.sh"
 ! grep -Fq 'write_walk_section() {' "$BASE_DIR/discovery_job.sh"
+! grep -Fq 'write_generated_yaml_for_walk() {' "$BASE_DIR/discovery_job.sh"
+! grep -Fq 'write_generated_yaml() {' "$BASE_DIR/discovery_job.sh"
 grep -Fq 'parser_report() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
+grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
+grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.11"' "$BASE_DIR/discovery_job.sh"
 grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.11"' "$BASE_DIR/run.sh"
 
@@ -2516,8 +2523,8 @@ grep -q 'profile = "zyxel-xs1930-10"' "$REPORT_STAGE_SOURCE"
 grep -q 'model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2' "$REPORT_STAGE_SOURCE"
 grep -q 'RJ45 swp00-swp07 ports' "$REPORT_STAGE_SOURCE"
 grep -q '10G SFP+ swp08-swp09 uplinks' "$REPORT_STAGE_SOURCE"
-grep -q '1.3.6.1.4.1.890.1.15.3.2.4.0' "$BASE_DIR/discovery_job.sh"
-grep -q '1.3.6.1.4.1.890.1.15.3.2.4.3' "$BASE_DIR/discovery_job.sh"
+grep -q '1.3.6.1.4.1.890.1.15.3.2.4.0' "$YAML_STAGE_SOURCE"
+grep -q '1.3.6.1.4.1.890.1.15.3.2.4.3' "$YAML_STAGE_SOURCE"
 grep -q 'Q-BRIDGE-MIB PVID' "$REPORT_STAGE_SOURCE"
 
 awk '
@@ -2562,17 +2569,17 @@ awk '
 printf '%s\n' "Switch Vision Juniper legacy-parser/registry reconciliation self-test: PASS"
 
 # EX3300 live SFP/SFP+ generation regression.
-grep -q 'function yaml_interface_sensor' "$BASE_DIR/discovery_job.sh"
-grep -q 'function yaml_juniper_vlan_candidates_sensor' "$BASE_DIR/discovery_job.sh"
-grep -q 'primary="xe-0/1/" cage' "$BASE_DIR/discovery_job.sh"
-grep -q 'secondary="ge-0/1/" cage' "$BASE_DIR/discovery_job.sh"
-grep -q 'label " Status", "oper_status"' "$BASE_DIR/discovery_job.sh"
-grep -q 'yaml_target_header("Switch Vision " prefix " SFP Status", 5)' "$BASE_DIR/discovery_job.sh"
-grep -q 'label " RX Bytes", "rx_bytes"' "$BASE_DIR/discovery_job.sh"
-grep -q 'label " TX Bytes", "tx_bytes"' "$BASE_DIR/discovery_job.sh"
-grep -q 'label " Admin Status", "admin_status"' "$BASE_DIR/discovery_job.sh"
-grep -q 'label " Speed Mbps", "speed_mbps"' "$BASE_DIR/discovery_job.sh"
-grep -q 'label " Alias", "alias"' "$BASE_DIR/discovery_job.sh"
+grep -q 'function yaml_interface_sensor' "$YAML_STAGE_SOURCE"
+grep -q 'function yaml_juniper_vlan_candidates_sensor' "$YAML_STAGE_SOURCE"
+grep -q 'primary="xe-0/1/" cage' "$YAML_STAGE_SOURCE"
+grep -q 'secondary="ge-0/1/" cage' "$YAML_STAGE_SOURCE"
+grep -q 'label " Status", "oper_status"' "$YAML_STAGE_SOURCE"
+grep -q 'yaml_target_header("Switch Vision " prefix " SFP Status", 5)' "$YAML_STAGE_SOURCE"
+grep -q 'label " RX Bytes", "rx_bytes"' "$YAML_STAGE_SOURCE"
+grep -q 'label " TX Bytes", "tx_bytes"' "$YAML_STAGE_SOURCE"
+grep -q 'label " Admin Status", "admin_status"' "$YAML_STAGE_SOURCE"
+grep -q 'label " Speed Mbps", "speed_mbps"' "$YAML_STAGE_SOURCE"
+grep -q 'label " Alias", "alias"' "$YAML_STAGE_SOURCE"
 grep -q 'sensor_source in {"juniper_ex_vlan", "interface"}' "$SV_HUB_SOURCE"
 printf '%s\n' "Switch Vision EX3300 live-interface generation regression: PASS"
 
@@ -3077,7 +3084,7 @@ echo "Switch Vision Discovery v2.1.21 privacy-default contract regression: PASS"
 
 
 # v2.1.27 hardware-validation and speed-contract regressions.
-python3 - "$RUNTIME_REGISTRY" "$BASE_DIR/profiles/switch-vision-profiles.yaml" "$BASE_DIR/discovery_job.sh" <<'PYTEST_V2127_HARDWARE'
+python3 - "$RUNTIME_REGISTRY" "$BASE_DIR/profiles/switch-vision-profiles.yaml" "$BASE_DIR/discovery_job.sh" "$YAML_STAGE_SOURCE" <<'PYTEST_V2127_HARDWARE'
 import json
 import sys
 from pathlib import Path
@@ -3087,6 +3094,7 @@ registry = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 profiles_doc = yaml.safe_load(Path(sys.argv[2]).read_text(encoding="utf-8")) or {}
 profiles = profiles_doc.get("profiles", profiles_doc)
 job = Path(sys.argv[3]).read_text(encoding="utf-8")
+yaml_stage = Path(sys.argv[4]).read_text(encoding="utf-8")
 models = {d["model"]: d for d in registry["devices"] if isinstance(d, dict)}
 community_validated = {
     "SG500X-24",
@@ -3132,10 +3140,10 @@ assert s5720["layout"]["rj45_ports"] == 8
 assert s5720["layout"]["sfp_1g_ports"] == 4
 assert s5720["layout"]["sfp_10g_ports"] == 0
 assert s5720["physical_speed_caps_mbps"]["sfp_1g"] == 1000
-assert 'physical_speed_cap_mbps(model, label)' in job
-assert 'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /' in job
+assert 'physical_speed_cap_mbps(model, label)' in yaml_stage
+assert 'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /' in yaml_stage
 # Source ordering is the contract: ifHighSpeed must win whenever available.
-helper = job[job.index('function yaml_speed_sensor'):job.index('function yaml_interface_sensor')]
+helper = yaml_stage[yaml_stage.index('function yaml_speed_sensor'):yaml_stage.index('function yaml_interface_sensor')]
 assert helper.index('if (has_highspeed)') < helper.index('else if (has_ifspeed)')
 assert '1.3.6.1.2.1.31.1.1.1.15.' in helper
 assert '1.3.6.1.2.1.2.2.1.5.' in helper
@@ -3234,15 +3242,15 @@ cp "$valid_yaml" "$tmp_dir/generated-valid-candidate.yaml"
 python3 "$yaml_guard" --publish "$tmp_dir/generated-valid-candidate.yaml" "$live_yaml"
 grep -Eq '^[[:space:]]*-[[:space:]]+host:[[:space:]]+192\.0\.2\.128$' "$live_yaml"
 [ ! -e "$tmp_dir/generated-valid-candidate.yaml" ]
-grep -Fq 'candidate_path="${GENERATED_YAML_PATH}.candidate.$$"' "$BASE_DIR/discovery_job.sh"
-grep -Fq 'python3 "$guard" --publish "$candidate_path" "$GENERATED_YAML_PATH"' "$BASE_DIR/discovery_job.sh"
-! grep -Fq '} > "$GENERATED_YAML_PATH"' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'candidate_path="${GENERATED_YAML_PATH}.candidate.$$"' "$YAML_STAGE_SOURCE"
+grep -Fq 'python3 "$guard" --publish "$candidate_path" "$GENERATED_YAML_PATH"' "$YAML_STAGE_SOURCE"
+! grep -Fq '} > "$GENERATED_YAML_PATH"' "$YAML_STAGE_SOURCE"
 printf '%s\n' "Switch Vision Discovery v2.1.28 atomic generated-YAML publication: PASS"
 
 # S5720 generator contract: its fallback ifDescr names must still create target
 # output and its four physical 1G SFP cages retain the v2.1.27 speed cap.
-grep -Fq 'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /' "$BASE_DIR/discovery_job.sh"
-grep -Fq 'if (!(idx in ifname)) { ifname[idx]=val; ifname_source[idx]="ifDescr" }' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /' "$YAML_STAGE_SOURCE"
+grep -Fq 'if (!(idx in ifname)) { ifname[idx]=val; ifname_source[idx]="ifDescr" }' "$YAML_STAGE_SOURCE"
 printf '%s\n' "Switch Vision Discovery v2.1.28 S5720 generated-target prerequisites: PASS"
 
 # v2.1.30 Discovery progress-stage regression. Structured current stage must
@@ -3272,11 +3280,15 @@ PYTEST_V2130_PROGRESS
 # collection time must be authoritative, failed walks must not enter generation,
 # parser/formatter failures must not be hidden by a shell pipeline, and an
 # already-invalid live handoff must not survive another failed generation.
-python3 - "$BASE_DIR/discovery_job.sh" <<'PYTEST_V2131_HANDOFF'
+python3 - "$BASE_DIR/discovery_job.sh" "$YAML_STAGE_SOURCE" <<'PYTEST_V2131_HANDOFF'
 from pathlib import Path
 import sys
 
-text = Path(sys.argv[1]).read_text(encoding="utf-8")
+text = (
+    Path(sys.argv[1]).read_text(encoding="utf-8")
+    + "\n"
+    + Path(sys.argv[2]).read_text(encoding="utf-8")
+)
 assert 'CURRENT_RUN_TARGETS="${SWITCH_VISION_CURRENT_RUN_TARGETS:-/tmp/switch_vision_current_run_targets_$$.txt}"' in text
 assert 'CURRENT_RUN_WALKS="${SWITCH_VISION_CURRENT_RUN_WALKS:-/tmp/switch_vision_current_run_walks_$$.txt}"' in text
 assert 'record_current_run_target' in text

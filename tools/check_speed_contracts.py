@@ -15,6 +15,8 @@ def fetch(url: str) -> str:
 
 def main() -> int:
     job = Path("runtime_src/discovery_job.sh").read_text(encoding="utf-8")
+    yaml_stage = Path("runtime_src/discovery_yaml_stage.sh").read_text(encoding="utf-8")
+    discovery_source = job + "\n" + yaml_stage
     profiles = Path("runtime_src/profiles/switch-vision-profiles.yaml").read_text(encoding="utf-8")
     snmp = fetch(SNMP_INTERFACE_URL)
 
@@ -27,17 +29,17 @@ def main() -> int:
         'model == "S5720-12TP-LI-AC" && label ~ /(^| )SFP 1G /',
         'template: \\"{{ [value | int, ',
     ]
-    missing = [token for token in required_discovery if token not in job]
+    missing = [token for token in required_discovery if token not in discovery_source]
     if missing:
         raise SystemExit("Discovery speed contract missing: " + ", ".join(missing))
 
     # The historical matcher /^SFP 1G / is invalid because generated labels
     # include the switch prefix (for example `SW1 SFP 1G 1`). Keep this as a
     # permanent negative contract so the ineffective matcher cannot return.
-    if 'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /' in job:
+    if 'model == "S5720-12TP-LI-AC" && label ~ /^SFP 1G /' in discovery_source:
         raise SystemExit("Discovery speed contract regressed to unprefixed S5720 label matching")
 
-    helper = job[job.index("function yaml_speed_sensor"):job.index("function yaml_interface_sensor")]
+    helper = discovery_source[discovery_source.index("function yaml_speed_sensor"):discovery_source.index("function yaml_interface_sensor")]
     if helper.index("if (has_highspeed)") > helper.index("else if (has_ifspeed)"):
         raise SystemExit("Discovery speed contract: legacy ifSpeed precedes ifHighSpeed")
 
