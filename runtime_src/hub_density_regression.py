@@ -89,7 +89,7 @@ for marker in (
     ".hub-setting-toggle .hub-option-label{font-weight:400;display:block;min-width:0;line-height:1.2",
     ".hub-setting-toggle>.hub-help{align-self:center;justify-self:start",
     ".hub-setting-field>input,.hub-setting-field>select{width:100%;height:var(--hub-control-height)",
-    "#settingsCard button{min-height:var(--hub-control-height)",
+    "#settingsCard button:not(.hub-settings-tab){min-height:var(--hub-control-height)",
     ".hub-order-list{width:100%;max-width:none",
     "function fontChoices()",
     "Array.from({length:11}",

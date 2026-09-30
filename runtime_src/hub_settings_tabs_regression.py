@@ -22,8 +22,27 @@ for marker in (
     "tab.addEventListener('keydown',tabKeydown)",
     "async function open(which='core'){styles();setView('settings');await load();selectTab(which)}",
     '.hub-settings-pane[hidden]{display:none!important}',
+    '#settingsCard button:not(.hub-settings-tab){min-height:var(--hub-control-height)',
 ):
     assert marker in SOURCE, marker
+
+# Settings tabs must retain the same shared tab sizing as Devices instead of
+# being compressed by settings-only control-height rules. Support My Switch
+# uses the exact same active-state class and keyboard tab semantics.
+for marker in (
+    'id="supportTab-create" class="hub-settings-tab is-active"',
+    'data-support-tab="create">Create</button>',
+    'data-support-tab="history">History</button>',
+    "function setSupportTab(tab='create',focus=false)",
+    "button.classList.toggle('is-active',active)",
+    "function supportTabKeydown(e)",
+    "document.querySelectorAll('[data-support-tab]').forEach(tab=>",
+    "tab.addEventListener('keydown',supportTabKeydown)",
+):
+    assert marker in SOURCE, marker
+
+assert 'class="hub-settings-tab active"' not in SOURCE
+assert "#settingsCard button{min-height:var(--hub-control-height)" not in SOURCE
 
 # Dashboard presentation lives inside the Native dashboard header section as a
 # balanced 2x2 responsive layout instead of a separate settings card.

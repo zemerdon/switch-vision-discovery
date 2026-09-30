@@ -1,3 +1,10 @@
+## 3.0.12 — Hub tab style consistency
+
+- Make **Switch Vision Settings** use the same shared tab sizing, spacing, border and active-state treatment as **Devices**, instead of letting settings-only compact button geometry shrink the top tabs.
+- Convert **Support My Switch → Create / History** to the same shared Devices-style tab state, including the current `is-active` visual contract.
+- Add left/right/Home/End keyboard navigation for the Support My Switch tabs while preserving Create as the default surface and preserving existing contribution/history actions.
+- Keep Discovery behavior, settings ownership, privacy handling, device management, Support My Switch bundle generation, and contribution-history data unchanged.
+
 ## 3.0.11 — Dashboard identity cleanup and Hub modularity follow-up
 
 - Remove stale SNMP dashboard cards after a configured switch is renamed so the previous 3650 card identity does not remain duplicated beside the current device.
