@@ -1,3 +1,9 @@
+## 3.0.17 — Core 2.7.40 release coordination
+
+- Preserve the 3.0.16 Discovery / Hub behavior unchanged.
+- Repin the exact Core faceplate/dependency contract to verified Core 2.7.40 source `290d2413b410c5c2a9cf547a634e5a6404e31e33`.
+- No additional Discovery UI, device-control, AutoDiscover, dashboard-generation, Credits, or theme behavior changes.
+
 ## 3.0.16 — Core 2.7.39 release coordination
 
 - Preserve the 3.0.15 Credits transition, Theme Library layout, unified Discovery device surface, and shared custom-theme behavior unchanged.
