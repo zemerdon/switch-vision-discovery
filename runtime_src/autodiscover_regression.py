@@ -212,7 +212,7 @@ for marker in (
     'path == "/api/autodiscover/status"',
     'path == "/api/autodiscover/scan"',
     'path == "/api/autodiscover/add"',
-    "const ids=['configure','autodiscover','overview']",
+    "const ids=['run','configure','autodiscover','overview']",
     "if(item.addable){const actions=document.createElement('div')",
     "filter(item=>item?.addable===true)",
     'id="autodiscoverNetworks"',
@@ -223,7 +223,7 @@ for marker in (
 ):
     assert marker in WEB_SOURCE, marker
 
-assert WEB_SOURCE.index('id="devicesTab-configure"') < WEB_SOURCE.index('id="devicesTab-autodiscover"') < WEB_SOURCE.index('id="devicesTab-overview"')
+assert WEB_SOURCE.index('id="devicesTab-run"') < WEB_SOURCE.index('id="devicesTab-configure"') < WEB_SOURCE.index('id="devicesTab-autodiscover"') < WEB_SOURCE.index('id="devicesTab-overview"')
 assert "guess" in WEB_SOURCE.lower()
 assert "brute" not in WEB_SOURCE.lower()
 assert "autodiscoverCommunity').value=''" not in WEB_SOURCE

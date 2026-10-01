@@ -76,8 +76,8 @@ for old in (
     assert old not in SOURCE, old
 
 
-# Discovery Settings now owns Discovery workflow/path/privacy settings only.
-# Saved switch rows and stack-member display mapping live under Devices ->
+# Discovery Settings owns Discovery workflow/path/privacy settings only.
+# Saved switch rows and stack-member display mapping live under Discovery ->
 # Configure Devices. Existing saved switches all start collapsed; expansion is
 # user-driven for the current page session.
 for marker in (
@@ -94,15 +94,16 @@ for marker in (
     ".hub-switch-setting-summary{display:flex",
     ".hub-switch-setting-toggle{display:flex!important",
     ".hub-switch-setting-label>strong{color:var(--accent-strong)",
-    'id="devicesTab-configure" class="hub-settings-tab is-active"',
+    'id="devicesTab-run" class="hub-settings-tab is-active"',
+    'data-devices-tab="run">Run Discovery</button>',
     'data-devices-tab="configure">Configure Devices</button>',
     'data-devices-tab="autodiscover">AutoDiscover</button>',
     'id="devicesTab-overview" class="hub-settings-tab"',
     'id="devicesPanel-autodiscover"',
     'id="hubDeviceConfiguration"',
-    "function selectDevicesTab(which='configure',focus=false)",
-    "const ids=['configure','autodiscover','overview']",
-    "selectDevicesTab('configure')",
+    "function selectDevicesTab(which='run',focus=false)",
+    "const ids=['run','configure','autodiscover','overview']",
+    "selectDevicesTab('run')",
 ):
     assert marker in SOURCE, marker
 
@@ -182,7 +183,6 @@ for marker in (
     'id="hubSharedReload"',
     'id="hubSharedBack"',
     "const HUB_SHARED_PAGE_ACTIONS={discovery:{label:'Run Discovery'",
-    "devices:{label:'Refresh Devices'",
     "support:{label:'Create Contribution'",
     "unifi2mqtt:{label:'Save UniFi2MQTT Settings'",
     "function runSharedHubPrimary()",
@@ -202,9 +202,9 @@ for removed_mapping in (
 
 # Hub navigation reflects the consolidated architecture.
 for marker in (
-    'Add / Remove Devices',
-    'Show Detected Devices &amp; Status',
-    'Reorder Switches',
+    'Configure / AutoDiscover Devices',
+    'Device Overview &amp; Status',
+    '<span>Custom Theming</span>',
     '<b>Maintenance</b>',
     '<span>Backups</span>',
     '<span>SNMP Maintenance</span>',
@@ -216,9 +216,13 @@ assert '<b>Calibration Profiles</b>' not in SOURCE
 assert '<b>Import / Export Configuration</b>' not in SOURCE
 assert '<span>Add / Remove Switches</span>' not in SOURCE
 
-# Configure Devices is the first/default Devices surface.
-assert SOURCE.index('id="devicesTab-configure"') < SOURCE.index('id="devicesTab-autodiscover"') < SOURCE.index('id="devicesTab-overview"')
-assert SOURCE.index('id="devicesPanel-configure"') < SOURCE.index('id="devicesPanel-autodiscover"') < SOURCE.index('id="devicesPanel-overview"')
-assert "window.SwitchVisionHubSettings?.selectDevicesTab?.('configure')" in SOURCE
+# Discovery is one card: Run Discovery is first/default, followed by all
+# formerly separate Devices surfaces.
+assert SOURCE.index('id="devicesTab-run"') < SOURCE.index('id="devicesTab-configure"') < SOURCE.index('id="devicesTab-autodiscover"') < SOURCE.index('id="devicesTab-overview"')
+assert SOURCE.index('id="devicesPanel-run"') < SOURCE.index('id="devicesPanel-configure"') < SOURCE.index('id="devicesPanel-autodiscover"') < SOURCE.index('id="devicesPanel-overview"')
+assert "window.SwitchVisionHubSettings?.selectDevicesTab?.('run')" in SOURCE
+assert "window.SwitchVisionHubSettings?.selectDevicesTab?.('overview')" in SOURCE
+assert 'id="openDevicesButton"' not in SOURCE
+assert 'id="devicesCard"' not in SOURCE
 
 print("Switch Vision Settings top tabs regression: PASS")

@@ -12,8 +12,16 @@ CONTRIBUTION_BREADCRUMB = re.compile(
     r"(?i)(?:unifi[-_]contrib|community[-_]validation)[/_-]\d{6}"
 )
 PACKAGE_NAME = re.compile(r"(?i)Switch[_ -]Vision[_ -]Contribution")
+# zemerdon explicitly re-authorized this previously published named Credits
+# roster on 2026-10-01. Keep this list exact and sourced from canonical local
+# Git history; this does not broaden public-credit permission for contribution
+# metadata elsewhere.
 PUBLIC_CREDITS = [
-    ("Community contributors", "Testing • feedback • hardware validation"),
+    ("Finni", "Discovery / Hub • UniFi2MQTT"),
+    ("Paul B", "Discovery / Hub • SNMP2MQTT • Support My Switch"),
+    ("Timb320", "Core • Discovery / Hub • UniFi2MQTT"),
+    ("Brendan P", "Discovery / Hub • UniFi2MQTT • Support My Switch"),
+    ("iangr", "Core • Discovery / Hub • UniFi2MQTT • Support My Switch"),
 ]
 
 

@@ -13,8 +13,8 @@ source = (
     + (_root / "support_web.html").read_text(encoding="utf-8")
 )
 
-# Detected Device Information now lives inline on the Devices page. The old
-# duplicate navigation/page must not return.
+# Detected Device Information now lives inline under Discovery -> Device
+# Overview. The old standalone Devices/Diagnostics navigation must not return.
 for forbidden in (
     'id="openDiagnosticsButton"',
     'id="diagnosticsCard"',
@@ -26,8 +26,8 @@ for forbidden in (
 ):
     assert forbidden not in source, forbidden
 
-# Devices owns the global diagnostics summary/messages and the existing report
-# actions while retaining the same authoritative diagnostics API/download.
+# Discovery -> Device Overview owns the global diagnostics summary/messages
+# and existing report actions while retaining the same authoritative API/download.
 for marker in (
     'id="devicesDiagnosticsSummary"',
     'id="devicesDiagnosticsMessages"',
@@ -61,13 +61,15 @@ for marker in (
     "if(ci<controllable.length-1){const down=document.createElement('button')",
     "function buildUnifiedDeviceRows()",
     "for(const [index,item] of detected.entries())",
-    "if(currentView==='devices')await refreshDevicesData(false)",
+    "if(currentView==='discovery'){await Promise.all([loadGeneratedCardYamlStatus(),loadGeneratedYamlStatus()]);if(activeDiscoveryTab()==='overview')await refreshDevicesData(false)}",
 ):
     assert marker in source, marker
 
 for forbidden in (
     'id="devicesSummary"',
     '<h3>Detected Devices</h3>',
+    'id="devicesCard"',
+    'id="openDevicesButton"',
 ):
     assert forbidden not in source, forbidden
 

@@ -1,3 +1,13 @@
+## 3.0.14 — Unified Discovery devices, collapsible custom theme editor, restored Credits
+
+- Merge the former standalone **Devices** card into **Discovery** as one four-tab working surface: **Run Discovery**, **Configure Devices**, **AutoDiscover**, and **Device Overview**.
+- Remove the standalone Devices home tile/page and route **View Results** directly to **Discovery → Device Overview** while preserving all saved-device, AutoDiscover, ordering, diagnostics, enable/disable, and dashboard-regeneration actions.
+- Add **Custom Theming** to the **Switch Vision Settings** home-card feature list.
+- Make the Custom Theme editor sidebar sections native collapsible sections that start closed by default, including Theme library, Theme details, and every colour-role group; the live sample preview remains visible.
+- Restore the previously published, owner-authorized named Credits roster from canonical local Git history: Finni, Paul B, Timb320, Brendan P, and iangr with their original component attributions.
+- Make Credits content visible by default so a failed or interrupted build animation cannot leave the page blank; the existing pixel-build/rolling animation remains progressive enhancement.
+- Update permanent Hub, device-diagnostics, custom-theme, Credits, and public-attribution contracts for the consolidated layout and restored roster.
+
 ## 3.0.13 — Named custom themes shared with Installer
 
 - Add **Switch Vision Settings → Custom Theme** as a fourth Devices-style Settings tab.

@@ -363,9 +363,9 @@ Installer: shared theme enabled</pre>
 
   function renderColorGroups(container) {
     for (const [groupName, rows] of ROLE_GROUPS) {
-      const group = document.createElement("section");
-      group.className = "theme-color-group";
-      const heading = document.createElement("h4");
+      const group = document.createElement("details");
+      group.className = "theme-color-group theme-sidebar-section";
+      const heading = document.createElement("summary");
       heading.textContent = groupName;
       group.append(heading);
       for (const [key, labelText] of rows) {
@@ -423,9 +423,11 @@ Installer: shared theme enabled</pre>
     const preview = document.createElement("div");
     preview.className = "custom-theme-preview-wrap";
 
-    const library = document.createElement("section");
-    library.className = "theme-library";
-    library.innerHTML = "<h4>Theme library</h4>";
+    const library = document.createElement("details");
+    library.className = "theme-library theme-sidebar-section";
+    const librarySummary = document.createElement("summary");
+    librarySummary.textContent = "Theme library";
+    library.append(librarySummary);
     const select = document.createElement("select");
     select.id = "customThemeLibrary";
     const none = document.createElement("option");
@@ -458,8 +460,11 @@ Installer: shared theme enabled</pre>
     editor.append(library);
 
     if (draft) {
-      const nameSection = document.createElement("section");
-      nameSection.className = "theme-name-section";
+      const nameSection = document.createElement("details");
+      nameSection.className = "theme-name-section theme-sidebar-section";
+      const nameSummary = document.createElement("summary");
+      nameSummary.textContent = "Theme details";
+      nameSection.append(nameSummary);
       const nameLabel = document.createElement("label");
       nameLabel.className = "field";
       nameLabel.innerHTML = "<span><b>Theme name</b></span>";
@@ -520,8 +525,16 @@ Installer: shared theme enabled</pre>
       .custom-theme-layout{display:grid;grid-template-columns:minmax(300px,430px) minmax(420px,1fr);gap:14px;align-items:start}
       .custom-theme-editor,.custom-theme-preview-wrap{min-width:0}
       .theme-library,.theme-name-section,.theme-color-group,.theme-empty{border:1px solid var(--line-soft);border-radius:10px;padding:10px;margin-bottom:10px;background:var(--surface-inset)}
-      .theme-library h4,.theme-color-group h4,.custom-theme-preview-head h4{margin:0 0 8px;color:var(--heading)}
-      .theme-library>select{width:100%}.theme-name-section{padding-top:6px}
+      .theme-sidebar-section{padding:0;overflow:hidden}
+      .theme-sidebar-section>summary{cursor:pointer;list-style:none;padding:10px;color:var(--heading);font-weight:750;display:flex;align-items:center;justify-content:space-between;gap:8px}
+      .theme-sidebar-section>summary::-webkit-details-marker{display:none}
+      .theme-sidebar-section>summary::after{content:"›";color:var(--muted);font-size:1.1rem;transition:transform .12s ease}
+      .theme-sidebar-section[open]>summary::after{transform:rotate(90deg)}
+      .theme-sidebar-section>summary:hover{background:var(--surface-hover)}
+      .theme-sidebar-section>summary~*{margin-left:10px;margin-right:10px}
+      .theme-sidebar-section>summary~*:last-child{margin-bottom:10px}
+      .custom-theme-preview-head h4{margin:0 0 8px;color:var(--heading)}
+      .theme-library>select{width:calc(100% - 20px)}.theme-name-section .field{margin-top:0}
       .theme-color-groups{display:grid;gap:8px}.theme-color-row{display:grid;grid-template-columns:minmax(0,1fr) 42px 88px;gap:7px;align-items:center;min-height:36px}
       .theme-color-row>span{color:var(--field-label);font-size:var(--sv-font-small)}
       .theme-color-row input[type=color]{width:42px;height:30px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--surface-input)}

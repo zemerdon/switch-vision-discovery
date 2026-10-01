@@ -282,7 +282,7 @@ for marker in (
     'Configuration Import / Export',
     'id="calibrationProfilesRoot"',
     'id="hubDeviceConfiguration"',
-    'Add / Remove Devices',
+    'Configure / AutoDiscover Devices',
 ):
     assert marker in source, marker
 

@@ -60,17 +60,23 @@ sv_require_literal 'Debug sanitizer' 'function sanitizeDebugText(text)' "$SV_HUB
 sv_require_literal 'Copy Debug function' 'async function copyDebugInfo()' "$SV_HUB_SOURCE"
 sv_require_literal 'Copy Debug event binding' "\$('copyDebugButton').addEventListener('click',copyDebugInfo)" "$SV_HUB_SOURCE"
 
-# Credits presentation continuity. Public attribution is identity-neutral by
-# default; exact named credit requires explicit owner approval outside source.
+# Credits presentation continuity. zemerdon explicitly re-authorized the
+# previously published named roster on 2026-10-01. These exact names/scopes are
+# recovered from canonical local Git history; do not invent additional names.
 sv_require_literal 'Credits canvas' 'id="creditsMatrix"' "$SV_HUB_SOURCE"
 sv_require_literal 'Credits roll track' 'id="creditsRollTrack"' "$SV_HUB_SOURCE"
 sv_require_literal 'Credits build source' 'id="creditsBuildSource"' "$SV_HUB_SOURCE"
 sv_require_literal 'Credits heading' '<h2 class="credits-title">Switch Vision Credits</h2>' "$SV_HUB_SOURCE"
-sv_require_literal 'Credits neutral community row' '<span class="credit-name">Community contributors</span><span class="credit-components">Testing • feedback • hardware validation</span>' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits Finni' '<span class="credit-name">Finni</span><span class="credit-components">Discovery / Hub • UniFi2MQTT</span>' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits Paul B' '<span class="credit-name">Paul B</span><span class="credit-components">Discovery / Hub • SNMP2MQTT • Support My Switch</span>' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits Timb320' '<span class="credit-name">Timb320</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT</span>' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits Brendan P' '<span class="credit-name">Brendan P</span><span class="credit-components">Discovery / Hub • UniFi2MQTT • Support My Switch</span>' "$SV_HUB_SOURCE"
+sv_require_literal 'Credits iangr' '<span class="credit-name">iangr</span><span class="credit-components">Core • Discovery / Hub • UniFi2MQTT • Support My Switch</span>' "$SV_HUB_SOURCE"
 sv_require_literal 'Credits navigation card' 'id="openCreditsButton"' "$SV_HUB_SOURCE"
+! grep -Fq '<span class="credit-name">Community contributors</span>' "$SV_HUB_SOURCE"
 ! grep -Fq 'PREVIEW PLACEHOLDER' "$SV_HUB_SOURCE"
 ! grep -Fq 'TEST ENTRIES, NOT REAL CONTRIBUTORS' "$SV_HUB_SOURCE"
-echo 'Switch Vision Discovery Credits public content: PASS'
+echo 'Switch Vision Discovery Credits named public content: PASS'
 
 # Locked Credits motion contract: four-pixel build of the exact scroll source,
 # an immediate geometry-identical handoff, brief hold, then indefinite scroll.
@@ -82,6 +88,8 @@ sv_require_literal 'Credits computed-style clone' 'copyCreditsV25ComputedStylesD
 sv_require_literal 'Credits snapshot source' "const source=\$('creditsBuildSource');" "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits fragment preparation' 'prepareCreditsV25Pieces' "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits four-pixel fragments' 'const tile=4,' "$BASE_DIR/credits_v25.js"
+sv_require_literal 'Credits visible-by-default CSS' 'transform:translateY(0);will-change:transform;opacity:1' "$BASE_DIR/credits_v25.css"
+sv_require_literal 'Credits visible reset fallback' "track.style.opacity='1'" "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits no-fade handoff' "track.style.opacity='1';" "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits canvas handoff' "canvas.style.display='none';" "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits hold before roll' '},1600);' "$BASE_DIR/credits_v25.js"
@@ -2077,8 +2085,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.13"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.13"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.14"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.14"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"
@@ -2395,7 +2403,7 @@ else:
     raise AssertionError("stale/mismatched switch identity must be rejected")
 PY_HUB_DEVICE_TOGGLE
 
-grep -q 'Enable / Disable Devices' "$SV_HUB_SOURCE"
+grep -q 'device-state-toggle' "$SV_HUB_SOURCE"
 grep -q '/addons/self/options' "$SV_HUB_SOURCE"
 grep -q '/api/configured-devices/state' "$SV_HUB_SOURCE"
 printf "%s\n" "Switch Vision Hub device-state controls regression: PASS"

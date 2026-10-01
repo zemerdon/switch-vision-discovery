@@ -140,7 +140,7 @@ function resetCreditsV25(){
   creditsV25RunToken+=1;clearCreditsV25Timers();
   const card=$('creditsCard'),track=$('creditsRollTrack'),canvas=$('creditsMatrix'),progress=$('creditsProgress'),sweep=$('creditsSweepLight');
   if(card){card.classList.remove('credits-settled');card.classList.add('credits-matrix-active')}
-  if(track){track.classList.remove('credits-rolling');track.style.opacity='0'}
+  if(track){track.classList.remove('credits-rolling');track.style.opacity='1'}
   if(progress)progress.style.width='0';
   if(canvas){canvas.style.display='block';if(creditsV25Ctx){const rect=card?.getBoundingClientRect();creditsV25Ctx.clearRect(0,0,rect?.width||canvas.width,rect?.height||canvas.height)}}
   if(sweep)sweep.classList.remove('sweep-run');

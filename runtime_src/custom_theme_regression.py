@@ -57,6 +57,29 @@ for behavior in (
 ):
     assert behavior in JS, behavior
 
+# The editor sidebar uses native collapsible sections and leaves them closed by
+# default. The live sample remains visible beside the collapsed editor groups.
+for marker in (
+    'group = document.createElement("details")',
+    'group.className = "theme-color-group theme-sidebar-section"',
+    'const heading = document.createElement("summary")',
+    'const library = document.createElement("details")',
+    'library.className = "theme-library theme-sidebar-section"',
+    'librarySummary.textContent = "Theme library"',
+    'const nameSection = document.createElement("details")',
+    'nameSection.className = "theme-name-section theme-sidebar-section"',
+    'nameSummary.textContent = "Theme details"',
+    '.theme-sidebar-section[open]>summary::after',
+):
+    assert marker in JS, marker
+for forbidden in (
+    'library.open = true',
+    'nameSection.open = true',
+    'group.open = true',
+    '.open=true',
+):
+    assert forbidden not in JS, forbidden
+
 # Built-ins remain selectable and custom names are appended to the same top-right selector.
 for value in ("switch-vision", "cisco-classic", "cisco-nexus", "unifi"):
     assert value in JS and value in HTML
