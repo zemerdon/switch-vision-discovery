@@ -1,3 +1,9 @@
+## 3.0.16 — Core 2.7.39 release coordination
+
+- Preserve the 3.0.15 Credits transition, Theme Library layout, unified Discovery device surface, and shared custom-theme behavior unchanged.
+- Repin the exact Core faceplate/dependency contract to canonical Core 2.7.39 source `701a1c84e1e7845b31dbac3708c91aeb29c6ba63`.
+- No additional Discovery UI, device-control, AutoDiscover, dashboard-generation, or Credits behavior changes.
+
 ## 3.0.15 — Credits transition correction and Custom Theme library refinement
 
 - Correct the Credits transition so the completed HTML no longer appears beneath the pixel-build animation.
