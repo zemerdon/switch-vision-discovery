@@ -1,3 +1,12 @@
+## 3.0.15 — Credits transition correction and Custom Theme library refinement
+
+- Correct the Credits transition so the completed HTML no longer appears beneath the pixel-build animation.
+- Keep normal Credits HTML visible by default for fail-safe/no-JavaScript rendering, hide it only after a successful pixel snapshot, hold the fully assembled canvas briefly, hand off to identical live HTML, hold again, then begin the indefinite roll.
+- If snapshot preparation fails or reduced-motion is active, stay on the visible live Credits HTML instead of entering a partial animation state.
+- Merge **Theme details** into **Theme library** so theme selection, theme name, New / Duplicate / Delete, Save Theme, and Save & Apply all live in one management section.
+- Keep **Theme library** expanded by default while every colour-role group remains collapsed by default.
+- Preserve the 3.0.14 unified Discovery device tabs, named Credits roster, shared custom-theme storage, and generated-dashboard boundaries.
+
 ## 3.0.14 — Unified Discovery devices, collapsible custom theme editor, restored Credits
 
 - Merge the former standalone **Devices** card into **Discovery** as one four-tab working surface: **Run Discovery**, **Configure Devices**, **AutoDiscover**, and **Device Overview**.

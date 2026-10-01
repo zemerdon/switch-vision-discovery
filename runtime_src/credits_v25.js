@@ -126,15 +126,27 @@ function moveCreditsV25SweepLight(){
   const t=setTimeout(moveCreditsV25SweepLight,2000+Math.random()*3500);creditsV25Timers.push(t);
 }
 function startCreditsV25Lights(){moveCreditsV25SoftSpotlight();moveCreditsV25NarrowSpotlight();moveCreditsV25SweepLight()}
+function showCreditsV25Fallback(token=creditsV25RunToken){
+  if(token!==creditsV25RunToken||currentView!=='credits')return;
+  const card=$('creditsCard'),track=$('creditsRollTrack'),canvas=$('creditsMatrix'),progress=$('creditsProgress');
+  if(card){card.classList.remove('credits-matrix-active');card.classList.add('credits-settled')}
+  if(track){track.classList.remove('credits-rolling');track.style.opacity='1'}
+  if(canvas)canvas.style.display='none';
+  if(progress)progress.style.width='100%';
+}
 function finishCreditsV25Build(token=creditsV25RunToken){
   if(token!==creditsV25RunToken)return;
   const card=$('creditsCard'),track=$('creditsRollTrack'),canvas=$('creditsMatrix');if(!card||!track||!canvas)return;
   card.classList.add('credits-settled');
-  track.style.opacity='1';
-  canvas.style.display='none';
-  card.classList.remove('credits-matrix-active');
-  const t=setTimeout(()=>{if(token===creditsV25RunToken&&currentView==='credits')track.classList.add('credits-rolling')},1600);
-  creditsV25Timers.push(t);
+  const handoff=setTimeout(()=>{
+    if(token!==creditsV25RunToken||currentView!=='credits')return;
+    track.style.opacity='1';
+    canvas.style.display='none';
+    card.classList.remove('credits-matrix-active');
+    const roll=setTimeout(()=>{if(token===creditsV25RunToken&&currentView==='credits')track.classList.add('credits-rolling')},1600);
+    creditsV25Timers.push(roll);
+  },800);
+  creditsV25Timers.push(handoff);
 }
 function resetCreditsV25(){
   creditsV25RunToken+=1;clearCreditsV25Timers();
@@ -148,9 +160,15 @@ function resetCreditsV25(){
 async function startCreditsV25Animation(){
   resetCreditsV25();const token=creditsV25RunToken;startCreditsV25Lights();
   const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-  if(reduced){const card=$('creditsCard'),track=$('creditsRollTrack'),canvas=$('creditsMatrix'),progress=$('creditsProgress');if(card){card.classList.remove('credits-matrix-active');card.classList.add('credits-settled')}if(track)track.style.opacity='1';if(canvas)canvas.style.display='none';if(progress)progress.style.width='100%';return}
-  try{const {buffer}=await prepareCreditsV25Pieces();if(token!==creditsV25RunToken||currentView!=='credits')return;animateCreditsV25Pieces(buffer,token)}
-  catch(err){console.error(err);if(token===creditsV25RunToken&&currentView==='credits')finishCreditsV25Build(token)}
+  if(reduced){showCreditsV25Fallback(token);return}
+  try{
+    const {buffer}=await prepareCreditsV25Pieces();
+    if(token!==creditsV25RunToken||currentView!=='credits')return;
+    const track=$('creditsRollTrack');
+    if(track)track.style.opacity='0';
+    animateCreditsV25Pieces(buffer,token);
+  }
+  catch(err){console.error(err);showCreditsV25Fallback(token)}
 }
 window.addEventListener('resize',()=>{
   if(currentView!=='credits')return;if(creditsV25ResizeTimer)clearTimeout(creditsV25ResizeTimer);

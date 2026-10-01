@@ -425,6 +425,7 @@ Installer: shared theme enabled</pre>
 
     const library = document.createElement("details");
     library.className = "theme-library theme-sidebar-section";
+    library.open = true;
     const librarySummary = document.createElement("summary");
     librarySummary.textContent = "Theme library";
     library.append(librarySummary);
@@ -444,8 +445,21 @@ Installer: shared theme enabled</pre>
       draft = editingId ? clone(currentTheme()) : null;
       renderBuilder();
     });
+    library.append(select);
+
+    if (draft) {
+      const nameLabel = document.createElement("label");
+      nameLabel.className = "field theme-library-name";
+      nameLabel.innerHTML = "<span><b>Theme name</b></span>";
+      const nameInput = document.createElement("input");
+      nameInput.type = "text"; nameInput.maxLength = 64; nameInput.value = draft.name;
+      nameInput.addEventListener("input", () => { draft.name = nameInput.value; setStatus("Unsaved theme changes."); });
+      nameLabel.append(nameInput);
+      library.append(nameLabel);
+    }
+
     const libraryActions = document.createElement("div");
-    libraryActions.className = "actions";
+    libraryActions.className = "actions theme-library-actions";
     const newButton = document.createElement("button");
     newButton.type = "button"; newButton.textContent = "＋ New";
     newButton.addEventListener("click", createThemeFromCurrent);
@@ -456,30 +470,9 @@ Installer: shared theme enabled</pre>
     deleteButton.type = "button"; deleteButton.className = "danger"; deleteButton.textContent = "Delete"; deleteButton.disabled = !draft;
     deleteButton.addEventListener("click", deleteTheme);
     libraryActions.append(newButton, duplicateButton, deleteButton);
-    library.append(select, libraryActions);
-    editor.append(library);
+    library.append(libraryActions);
 
     if (draft) {
-      const nameSection = document.createElement("details");
-      nameSection.className = "theme-name-section theme-sidebar-section";
-      const nameSummary = document.createElement("summary");
-      nameSummary.textContent = "Theme details";
-      nameSection.append(nameSummary);
-      const nameLabel = document.createElement("label");
-      nameLabel.className = "field";
-      nameLabel.innerHTML = "<span><b>Theme name</b></span>";
-      const nameInput = document.createElement("input");
-      nameInput.type = "text"; nameInput.maxLength = 64; nameInput.value = draft.name;
-      nameInput.addEventListener("input", () => { draft.name = nameInput.value; setStatus("Unsaved theme changes."); });
-      nameLabel.append(nameInput);
-      nameSection.append(nameLabel);
-      editor.append(nameSection);
-
-      const colors = document.createElement("div");
-      colors.className = "theme-color-groups";
-      renderColorGroups(colors);
-      editor.append(colors);
-
       const actions = document.createElement("div");
       actions.className = "actions custom-theme-actions";
       const save = document.createElement("button");
@@ -489,12 +482,20 @@ Installer: shared theme enabled</pre>
       saveApply.type = "button"; saveApply.className = "primary"; saveApply.textContent = "Save & Apply";
       saveApply.addEventListener("click", () => saveTheme(true));
       actions.append(save, saveApply);
-      editor.append(actions);
+      library.append(actions);
     } else {
       const empty = document.createElement("div");
       empty.className = "theme-empty";
       empty.innerHTML = "<h4>Create your first theme</h4><p class=\"muted\">New themes start from the colours currently shown in the Hub.</p>";
-      editor.append(empty);
+      library.append(empty);
+    }
+    editor.append(library);
+
+    if (draft) {
+      const colors = document.createElement("div");
+      colors.className = "theme-color-groups";
+      renderColorGroups(colors);
+      editor.append(colors);
     }
 
     const previewHead = document.createElement("div");
@@ -524,7 +525,7 @@ Installer: shared theme enabled</pre>
       .custom-theme-intro{margin-bottom:12px}.custom-theme-intro h3{margin-bottom:4px}
       .custom-theme-layout{display:grid;grid-template-columns:minmax(300px,430px) minmax(420px,1fr);gap:14px;align-items:start}
       .custom-theme-editor,.custom-theme-preview-wrap{min-width:0}
-      .theme-library,.theme-name-section,.theme-color-group,.theme-empty{border:1px solid var(--line-soft);border-radius:10px;padding:10px;margin-bottom:10px;background:var(--surface-inset)}
+      .theme-library,.theme-color-group,.theme-empty{border:1px solid var(--line-soft);border-radius:10px;padding:10px;margin-bottom:10px;background:var(--surface-inset)}
       .theme-sidebar-section{padding:0;overflow:hidden}
       .theme-sidebar-section>summary{cursor:pointer;list-style:none;padding:10px;color:var(--heading);font-weight:750;display:flex;align-items:center;justify-content:space-between;gap:8px}
       .theme-sidebar-section>summary::-webkit-details-marker{display:none}
@@ -534,12 +535,14 @@ Installer: shared theme enabled</pre>
       .theme-sidebar-section>summary~*{margin-left:10px;margin-right:10px}
       .theme-sidebar-section>summary~*:last-child{margin-bottom:10px}
       .custom-theme-preview-head h4{margin:0 0 8px;color:var(--heading)}
-      .theme-library>select{width:calc(100% - 20px)}.theme-name-section .field{margin-top:0}
+      .theme-library>select{width:calc(100% - 20px)}
+      .theme-library-name{display:grid!important;gap:4px!important;margin-top:8px}
+      .theme-library-actions,.theme-library .custom-theme-actions{margin-top:8px}
+      .theme-library .custom-theme-actions{position:static;padding:0;border:0;background:transparent}
       .theme-color-groups{display:grid;gap:8px}.theme-color-row{display:grid;grid-template-columns:minmax(0,1fr) 42px 88px;gap:7px;align-items:center;min-height:36px}
       .theme-color-row>span{color:var(--field-label);font-size:var(--sv-font-small)}
       .theme-color-row input[type=color]{width:42px;height:30px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--surface-input)}
       .theme-color-row input[type=text]{width:88px;height:30px;min-height:30px;padding:4px 6px;font-family:ui-monospace,monospace;font-size:12px}
-      .custom-theme-actions{position:sticky;bottom:60px;padding:8px;border:1px solid var(--line-soft);border-radius:9px;background:var(--card)}
       .custom-theme-preview-head{margin-bottom:8px}.custom-theme-preview-head p{margin:0 0 8px}
       .custom-theme-preview{background:var(--page);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:10px;box-shadow:0 12px 28px var(--shadow)}
       .theme-role-tag{display:block;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}

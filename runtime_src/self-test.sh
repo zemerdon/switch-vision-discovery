@@ -78,8 +78,10 @@ sv_require_literal 'Credits navigation card' 'id="openCreditsButton"' "$SV_HUB_S
 ! grep -Fq 'TEST ENTRIES, NOT REAL CONTRIBUTORS' "$SV_HUB_SOURCE"
 echo 'Switch Vision Discovery Credits named public content: PASS'
 
-# Locked Credits motion contract: four-pixel build of the exact scroll source,
-# an immediate geometry-identical handoff, brief hold, then indefinite scroll.
+# Locked Credits motion contract: normal HTML is visible by default, a
+# successful snapshot hides it for the four-pixel build, the completed canvas
+# holds briefly, then hands off to identical HTML for a second hold before the
+# indefinite roll. Snapshot failure stays on the visible HTML fallback.
 test -f "$BASE_DIR/credits_v25.css" || { echo 'FAIL: credits_v25.css missing' >&2; exit 1; }
 test -f "$BASE_DIR/credits_v25.js" || { echo 'FAIL: credits_v25.js missing' >&2; exit 1; }
 sv_require_literal 'Credits stylesheet link' 'credits_v25.css' "$SV_HUB_SOURCE"
@@ -90,9 +92,13 @@ sv_require_literal 'Credits fragment preparation' 'prepareCreditsV25Pieces' "$BA
 sv_require_literal 'Credits four-pixel fragments' 'const tile=4,' "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits visible-by-default CSS' 'transform:translateY(0);will-change:transform;opacity:1' "$BASE_DIR/credits_v25.css"
 sv_require_literal 'Credits visible reset fallback' "track.style.opacity='1'" "$BASE_DIR/credits_v25.js"
-sv_require_literal 'Credits no-fade handoff' "track.style.opacity='1';" "$BASE_DIR/credits_v25.js"
+sv_require_literal 'Credits fail-soft helper' 'function showCreditsV25Fallback' "$BASE_DIR/credits_v25.js"
+sv_require_literal 'Credits hide live track only after snapshot' "if(track)track.style.opacity='0';" "$BASE_DIR/credits_v25.js"
+sv_require_literal 'Credits completed-canvas hold' '},800);' "$BASE_DIR/credits_v25.js"
+sv_require_literal 'Credits HTML handoff' "track.style.opacity='1';" "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits canvas handoff' "canvas.style.display='none';" "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits hold before roll' '},1600);' "$BASE_DIR/credits_v25.js"
+sv_require_literal 'Credits snapshot failure fallback' 'catch(err){console.error(err);showCreditsV25Fallback(token)}' "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits indefinite roll class' "track.classList.add('credits-rolling')" "$BASE_DIR/credits_v25.js"
 sv_require_literal 'Credits indefinite CSS roll' '.credits-roll-track.credits-rolling{animation:credits-v25-roll 23s linear infinite}' "$BASE_DIR/credits_v25.css"
 sv_require_literal 'Credits borderless rows' 'padding:0;border:0;border-radius:0;background:none;box-shadow:none;white-space:nowrap;' "$BASE_DIR/credits_v25.css"
@@ -2085,8 +2091,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.14"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.14"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.15"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.15"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"

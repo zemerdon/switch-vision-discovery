@@ -57,24 +57,27 @@ for behavior in (
 ):
     assert behavior in JS, behavior
 
-# The editor sidebar uses native collapsible sections and leaves them closed by
-# default. The live sample remains visible beside the collapsed editor groups.
+# Theme Library is the one sidebar section expanded by default. Theme name
+# and save/apply controls live inside it; all colour-role groups remain native
+# collapsed details sections.
 for marker in (
     'group = document.createElement("details")',
     'group.className = "theme-color-group theme-sidebar-section"',
     'const heading = document.createElement("summary")',
     'const library = document.createElement("details")',
     'library.className = "theme-library theme-sidebar-section"',
+    'library.open = true',
     'librarySummary.textContent = "Theme library"',
-    'const nameSection = document.createElement("details")',
-    'nameSection.className = "theme-name-section theme-sidebar-section"',
-    'nameSummary.textContent = "Theme details"',
+    'nameLabel.className = "field theme-library-name"',
+    'library.append(nameLabel)',
+    'library.append(actions)',
     '.theme-sidebar-section[open]>summary::after',
 ):
     assert marker in JS, marker
 for forbidden in (
-    'library.open = true',
-    'nameSection.open = true',
+    'const nameSection = document.createElement("details")',
+    'nameSummary.textContent = "Theme details"',
+    'theme-name-section',
     'group.open = true',
     '.open=true',
 ):
