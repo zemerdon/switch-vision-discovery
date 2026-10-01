@@ -1,7 +1,7 @@
 {
   "schema": "switch-vision-core-faceplate-catalog-pin-v2",
   "repository": "zemerdon/switch-vision-releases",
-  "commit_sha": "3c32ea9801b623c5cef59a2122c851961e9e9e1b",
+  "commit_sha": "1111d788b38042c976412055315318b1cf796533",
   "path": "src/faceplates/catalog.json",
   "sha256": "51bd96feb09ccc0cc9e14033ad29871491288720586350e9c609b9ac52a5aee7"
 }

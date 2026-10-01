@@ -13,11 +13,13 @@ for marker in (
     'data-hub-settings-tab="core">UI Settings</button>',
     'data-hub-settings-tab="discovery">Discovery Settings</button>',
     'data-hub-settings-tab="snmp2mqtt">SNMP2MQTT Settings</button>',
+    'data-hub-settings-tab="custom-theme">Custom Theme</button>',
     'role="tabpanel" aria-labelledby="hubTab-core"',
     'role="tabpanel" aria-labelledby="hubTab-discovery" hidden',
     'role="tabpanel" aria-labelledby="hubTab-snmp2mqtt" hidden',
+    'role="tabpanel" aria-labelledby="hubTab-custom-theme" hidden',
     "function selectTab(which='core',focus=false)",
-    "const ids=['core','discovery','snmp2mqtt']",
+    "const ids=['core','discovery','snmp2mqtt','custom-theme']",
     "tab.addEventListener('click',()=>selectTab(tab.dataset.hubSettingsTab))",
     "tab.addEventListener('keydown',tabKeydown)",
     "async function open(which='core'){styles();setView('settings');await load();selectTab(which)}",
@@ -68,6 +70,7 @@ for old in (
     '<details id="hubComponent-core"',
     '<details id="hubComponent-discovery"',
     '<details id="hubComponent-snmp2mqtt"',
+    '<details id="hubComponent-custom-theme"',
     'x.open=true',
 ):
     assert old not in SOURCE, old

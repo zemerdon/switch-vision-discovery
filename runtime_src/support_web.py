@@ -5842,7 +5842,7 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json(scan_mqtt_entities())
             except (ValueError, RuntimeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-        elif path in {"/calibration_profiles.js", "/calibration_profiles_manager.js", "/maintenance.js", "/credits_v25.js", "/credits_v25.css"}:
+        elif path in {"/calibration_profiles.js", "/calibration_profiles_manager.js", "/maintenance.js", "/custom_theme_manager.js", "/credits_v25.js", "/credits_v25.css"}:
             script_path = Path("/" + Path(path).name)
 
             if not script_path.is_file():

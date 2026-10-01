@@ -222,6 +222,10 @@ CORE_HUB_SETTINGS_GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
         ("CONF_INSTALLER_TEXT_SIZE", "installer_text_size"),
         ("CONF_INSTALLER_CONTENT_WIDTH", "installer_content_width"),
     ),
+    "management_theme": (
+        ("CONF_MANAGEMENT_THEME_SELECTED", "management_theme_selected"),
+        ("CONF_CUSTOM_THEMES", "custom_themes"),
+    ),
 }
 
 

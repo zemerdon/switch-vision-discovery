@@ -1,3 +1,15 @@
+## 3.0.13 — Named custom themes shared with Installer
+
+- Add **Switch Vision Settings → Custom Theme** as a fourth Devices-style Settings tab.
+- Add a named custom-theme library with New, Duplicate, Delete, Save Theme, and Save & Apply actions.
+- Expose 45 labelled management-UI colour roles with a native colour picker and editable hex value for each role.
+- Add a full labelled live sample page covering top bar, tabs/navigation, headings, cards, field labels, inputs, links, primary/secondary/danger buttons, status colours, nested/hover surfaces, code/status output, chips, and an Installer sample.
+- Append saved custom theme names to the existing top-right Theme selector alongside Switch Vision, Cisco Classic, Cisco Nexus, and UniFi.
+- Persist built-in or custom theme selection through the Core-owned management-theme contract so Discovery and Installer share one selected palette.
+- Cache only the sanitized custom-theme projection in browser storage for first-paint continuity; Core remains authoritative.
+- Keep management themes isolated from generated dashboards, switch cards, faceplates, LEDs, ports, and Calibration visuals.
+- Add packaged regressions for the Custom Theme tab, 45-role palette, named-theme workflows, dropdown integration, and static asset serving.
+
 ## 3.0.12 — Hub tab style consistency
 
 - Make **Switch Vision Settings** use the same shared tab sizing, spacing, border and active-state treatment as **Devices**, instead of letting settings-only compact button geometry shrink the top tabs.
