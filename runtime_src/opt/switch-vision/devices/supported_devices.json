@@ -2058,7 +2058,7 @@
       "model": "US 8 60W",
       "status": "experimental",
       "confirmed_since": "2.1.19",
-      "last_validated_version": "2.4.11",
+      "last_validated_version": "3.0.18",
       "evidence": "support_my_switch_community validation_unifi_api",
       "ports": {
         "rj45": 8,
@@ -2075,7 +2075,9 @@
       "calibration_profile": "default_unifi_8_rj45",
       "default_faceplate": "faceplates/unifi-8rj45.png",
       "optional_faceplates": [],
-      "tested_firmware": [],
+      "tested_firmware": [
+        "7.5.15"
+      ],
       "contributor": {
         "display_name": "community contributor",
         "public_credit": false
@@ -2102,7 +2104,7 @@
         "Live UniFi API evidence exposes eight 1G RJ45 ports.",
         "PoE output capability is exposed only on ports 5 through 8, using 802.3af metadata.",
         "The contribution proves link state and PoE-active state are independent.",
-        "Per-port RX/TX traffic is not exposed by the current UniFi API path.",
+        "Current UniFi2MQTT 4.0.4 real-hardware evidence exposes per-port RX/TX traffic on all eight physical/API ports, enabling native Activity telemetry without SNMP.",
         "Rendered dashboard validation remains pending before promotion beyond Experimental.",
         "UniFi visual selection is explicit for this exact model and follows its validated API port geometry; no Cisco-specific profile fallback is used.",
         "community validation from community contributor independently reconfirms one 8x 1G RJ45 unit with PoE capability limited to physical/API ports 5-8 using 802.3af.",
@@ -2254,7 +2256,7 @@
       "model": "USW Flex Mini",
       "status": "community_validated",
       "confirmed_since": "2.1.19",
-      "last_validated_version": "3.0.0",
+      "last_validated_version": "3.0.18",
       "evidence": "support_my_switch_community validation_unifi_api",
       "ports": {
         "rj45": 5,
@@ -2324,9 +2326,9 @@
       ],
       "notes": [
         "Experimental profile created from Support My Switch contribution community validation.",
-        "Three independent live UniFi API devices expose the same five 1G RJ45-port topology.",
+        "At least five independently identified live UniFi API devices across reviewed evidence expose the same five 1G RJ45-port topology.",
         "No per-port PoE output capability is exposed by the contributed normalized API data.",
-        "Per-port RX/TX traffic is not exposed by the current UniFi API path.",
+        "Current UniFi2MQTT 4.0.4 real-hardware evidence exposes per-port RX/TX traffic on all five physical/API ports, enabling native Activity telemetry.",
         "The exact five-port UniFi faceplate is assigned while preserving the authoritative five-port 1G RJ45 topology.",
         "Owner field validation on 2026-09-23 confirmed the live Switch Vision dashboard, five-port mapping, port behavior, and approved dedicated Flex Mini faceplate alignment.",
         "UniFi visual selection is explicit for this exact model and follows its validated API port geometry; no Cisco-specific profile fallback is used.",
@@ -2335,7 +2337,7 @@
         "Promoted to Community Validated in Discovery 3.0.0 after independent API corroboration plus current live dashboard/faceplate field confirmation."
       ],
       "validation": {
-        "exact_model_detection": "live_api_confirmed_three_devices",
+        "exact_model_detection": "live_api_confirmed_multiple_devices",
         "rj45_mapping": "live_api_confirmed_repeated_port_indices",
         "poe": "live_api_confirmed_no_poe_output_metadata",
         "system_sensors": "live_api_confirmed_cpu_memory_uptime",
@@ -2416,7 +2418,7 @@
       "model": "USW-16-PoE",
       "status": "experimental",
       "confirmed_since": "2.1.18",
-      "last_validated_version": "2.1.16",
+      "last_validated_version": "3.0.18",
       "evidence": "support_my_switch_community validation_unifi_api",
       "ports": {
         "rj45": 16,
@@ -2434,7 +2436,8 @@
       "default_faceplate": "faceplates/unifi-16rj45-2sfp.png",
       "optional_faceplates": [],
       "tested_firmware": [
-        "7.4.1"
+        "7.4.1",
+        "7.5.15"
       ],
       "contributor": {
         "display_name": "community contributor",
@@ -2445,8 +2448,7 @@
         "Live UniFi API evidence exposes 16 1G RJ45 ports and two 1G SFP uplinks.",
         "PoE metadata is exposed on copper ports 1 through 8; ports 9 through 16 are non-PoE.",
         "Live evidence includes link state, connector type, negotiated speed, CPU, memory and uptime.",
-        "Per-port RX/TX traffic is not exposed by the current UniFi API path.",
-        "SNMP is therefore required for Switch Vision per-port Activity LED animation.",
+        "Current UniFi2MQTT 4.0.4 real-hardware evidence exposes per-port RX/TX traffic on all 18 physical/API ports, enabling native Activity telemetry without SNMP.",
         "Rendered dashboard validation remains pending before promotion beyond Experimental.",
         "UniFi visual selection is explicit for this exact model and follows its validated API port geometry; no Cisco-specific profile fallback is used.",
         "The bundled owner-calibrated 16-RJ45 + 2-SFP UniFi faceplate now matches the proven physical connector layout while preserving the exact API port contract."
@@ -2519,6 +2521,62 @@
         "poe": "live_api_confirmed_metadata",
         "system_sensors": "live_api_confirmed_cpu_memory_uptime",
         "uplinks": "live_api_confirmed_connector_and_speed",
+        "stack": "not_applicable"
+      },
+      "visuals": {
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
+        "optional_faceplates": [],
+        "calibration_profile": "unifi_24_rj45_2sfp_inline",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
+    },
+    {
+      "vendor": "Ubiquiti",
+      "family": "UniFi Standard 24",
+      "model": "USW-24-G2",
+      "status": "experimental",
+      "confirmed_since": "3.0.18",
+      "last_validated_version": "3.0.18",
+      "evidence": "support_my_switch_real_hardware_unifi_api",
+      "ports": {
+        "rj45": 24,
+        "poe": false,
+        "uplinks": 2,
+        "uplink_type": "2x 1G SFP",
+        "gigabit_sfp": 2,
+        "ten_gigabit_sfp_plus": 0
+      },
+      "stack_support": false,
+      "discovery_support": true,
+      "dashboard_support": true,
+      "mapping_profile": "ubiquiti-usw-24-g2-api",
+      "calibration_profile": "unifi_24_rj45_2sfp_inline",
+      "default_faceplate": "faceplates/unifi-24-rj45-2sfp-inline.png",
+      "optional_faceplates": [],
+      "tested_firmware": [
+        "7.5.15"
+      ],
+      "contributor": {
+        "display_name": "community contributor",
+        "public_credit": false
+      },
+      "notes": [
+        "Current real-hardware UniFi API evidence exposes 24 1G RJ45 ports and two 1G SFP uplinks.",
+        "The exact model exposes no PoE output capability.",
+        "UniFi2MQTT 4.0.4 exposes current per-port RX/TX counters on all 26 physical/API ports, enabling native Activity telemetry without SNMP.",
+        "The existing calibrated UniFi 24 RJ45 + 2 SFP inline faceplate matches the proven connector topology and is used as the exact current Switch Vision visual.",
+        "Rendered user validation remains pending before promotion beyond Experimental."
+      ],
+      "validation": {
+        "exact_model_detection": "live_api_confirmed",
+        "rj45_mapping": "live_api_confirmed_ports_1_24",
+        "poe": "live_api_confirmed_no_poe_output_metadata",
+        "system_sensors": "live_api_confirmed_cpu_memory_uptime",
+        "uplinks": "live_api_confirmed_ports_25_26_1g_sfp",
         "stack": "not_applicable"
       },
       "visuals": {
@@ -3706,6 +3764,65 @@
           }
         }
       ]
+    },
+    {
+      "vendor": "Cisco",
+      "family": "Cisco Small Business SG200",
+      "model": "SG200-26",
+      "status": "experimental",
+      "confirmed_since": "3.0.18",
+      "last_validated_version": "3.0.18",
+      "evidence": "support_my_switch_real_hardware_contribution",
+      "ports": {
+        "rj45": 24,
+        "poe": false,
+        "uplinks": 2,
+        "uplink_type": "2 dual-personality 1G RJ45/SFP",
+        "gigabit_sfp": 2,
+        "ten_gigabit_sfp_plus": 0,
+        "combo_ports": 2,
+        "combo_logical_ports": [
+          25,
+          26
+        ]
+      },
+      "stack_support": false,
+      "discovery_support": true,
+      "dashboard_support": true,
+      "mapping_profile": "cisco-sg200-26-24p-2dual",
+      "calibration_profile": "stock_48rj45_2sfp",
+      "default_faceplate": "faceplates/48rj45-2sfp.png",
+      "optional_faceplates": [],
+      "tested_firmware": [],
+      "contributor": {
+        "display_name": "community contributor",
+        "public_credit": false
+      },
+      "notes": [
+        "Exact sysObjectID 1.3.6.1.4.1.9.6.1.88.26.1 and real-hardware IF-MIB evidence identify the Cisco SG200-26.",
+        "The real-hardware interface set is gi1 through gi26: gi1-gi24 are fixed 1G copper and gi25-gi26 are the two dual-personality 1G copper/SFP logical positions.",
+        "The combo positions remain neutral because IF-MIB cannot prove whether the copper or SFP side is populated at a given moment.",
+        "Current hardware evidence exposes working link, negotiated-speed and 64-bit traffic counters, including live traffic on gi26.",
+        "The stock 48 RJ45 + 2 SFP faceplate is intentionally oversized so all 26 logical copper positions and both SFP-capable combo cages remain representable until exact SG200-26 artwork exists."
+      ],
+      "validation": {
+        "exact_model_detection": "real_hardware_sysobjectid_confirmed",
+        "rj45_mapping": "real_hardware_fixed_ports_1_24_confirmed",
+        "poe": "not_applicable",
+        "system_sensors": "not_observed",
+        "uplinks": "real_hardware_combo_logical_ports_25_26_confirmed",
+        "stack": "not_applicable"
+      },
+      "visuals": {
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/48rj45-2sfp.png",
+        "optional_faceplates": [],
+        "calibration_profile": "stock_48rj45_2sfp",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
     },
     {
       "vendor": "HP",

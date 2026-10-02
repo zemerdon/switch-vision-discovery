@@ -251,6 +251,20 @@ grep -Fq '        sfp_port_count: 4' "$sg_card" || note_failure "cisco-sg350-20:
 grep -Fq '        sfp_logical_port_map: [17,18]' "$sg_card" || note_failure "cisco-sg350-20: shared SFP logical-port map missing"
 grep -Fq '        sfp_status_entity_template: sensor.sg350_sfp_1g_{port}_status' "$sg_card" || note_failure "cisco-sg350-20: fixed SFP cages lost 1G entity template"
 
+# Cisco SG200-26: 24 fixed copper + shared logical ports 25-26.
+# The oversized stock visual is deliberate, but the logical contract must expose
+# all 26 copper-side positions plus exactly two shared SFP-capable cages.
+sg200="$TMP/cisco-sg200-26.txt"
+make_walk "$sg200" 'Cisco SG200-26 26-Port Gigabit Smart Switch' '1.3.6.1.4.1.9.6.1.88.26.1'
+i=1
+while [ "$i" -le 26 ]; do append_iface "$sg200" "$i" "gi$i"; i=$((i + 1)); done
+run_case cisco-sg200-26 "$sg200" SG200 'SG200-26' 26
+sg200_card="$TMP/cisco-sg200-26/card.yaml"
+grep -Fq '        port_count: 26' "$sg200_card" || note_failure "cisco-sg200-26: visible RJ45 count must include combo positions 25-26"
+grep -Fq '        sfp_port_count: 2' "$sg200_card" || note_failure "cisco-sg200-26: SFP-capable cage count must remain 2"
+grep -Fq '        sfp_logical_port_map: [25,26]' "$sg200_card" || note_failure "cisco-sg200-26: shared SFP logical-port map missing"
+grep -Fq '        calibration_profile: stock_48rj45_2sfp' "$sg200_card" || note_failure "cisco-sg200-26: safe oversized stock profile missing"
+
 # Catalyst 3560-C: Gi0/1-8 are fixed copper while Gi0/9-10 are the two
 # dual-purpose copper/SFP positions already represented by the existing
 # 8-access + 2-uplink product contract.

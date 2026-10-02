@@ -18,6 +18,7 @@ WALK_BACKED_MODELS = {
     "GS1900-24E",
     "WS-C3750X-48P",
     "SG350-20",
+    "SG200-26",
     "HP J8693A Switch 3500yl-48G",
     "3524GT-PWR+",
     "N4032F",
@@ -114,6 +115,32 @@ def main() -> int:
     assert '"public_credit": true' not in serialized_c3750
 
     assert "15.2(4)E10" in (models["WS-C3750X-48P-S"].get("tested_firmware") or [])
+
+    sg200 = models["SG200-26"]
+    assert sg200["status"] == "experimental"
+    assert sg200["ports"]["rj45"] == 24
+    assert sg200["ports"]["uplinks"] == 2
+    assert sg200["ports"]["combo_ports"] == 2
+    assert sg200["ports"]["combo_logical_ports"] == [25, 26]
+    assert sg200["mapping_profile"] == "cisco-sg200-26-24p-2dual"
+    assert sg200["default_faceplate"] == "faceplates/48rj45-2sfp.png"
+    assert "1.3.6.1.4.1.9.6.1.88.26.1" in notes_text(sg200)
+
+    usw24g2 = models["USW-24-G2"]
+    assert usw24g2["status"] == "experimental"
+    assert usw24g2["ports"]["rj45"] == 24
+    assert usw24g2["ports"]["gigabit_sfp"] == 2
+    assert usw24g2["ports"]["poe"] is False
+    assert usw24g2["mapping_profile"] == "ubiquiti-usw-24-g2-api"
+    assert usw24g2["default_faceplate"] == "faceplates/unifi-24-rj45-2sfp-inline.png"
+    assert "7.5.15" in usw24g2["tested_firmware"]
+    assert "per-port RX/TX counters" in notes_text(usw24g2)
+
+    for model in ("USW-16-PoE", "US 8 60W", "USW Flex Mini"):
+        device = models[model]
+        assert device["last_validated_version"] == "3.0.18", model
+        assert "per-port RX/TX traffic" in notes_text(device), model
+    assert models["USW Flex Mini"]["status"] == "community_validated"
 
     for model in ("SG500X-24", "S5720-12TP-LI-AC", "S5735-L8P4X-A1"):
         device = models[model]

@@ -38,6 +38,9 @@ usw24 = [
     port(i, poe=(i <= 16), standard="802.3at" if i <= 16 else None)
     for i in range(1, 25)
 ] + [port(25, "SFP", 1000), port(26, "SFP", 1000)]
+usw24g2 = [port(i) for i in range(1, 25)] + [
+    port(25, "SFP", 1000), port(26, "SFP", 1000)
+]
 
 devices = []
 for n in range(1, 4):
@@ -57,6 +60,8 @@ devices += [
      "api_capabilities":{"port_detail":True,"per_port_traffic":False}},
     {"id":"sv57-usw24","name":"USW24","model":"USW-24-PoE","ports":usw24,
      "api_capabilities":{"port_detail":True,"per_port_traffic":False}},
+    {"id":"sv57-usw24g2","name":"USW24G2","model":"USW-24-G2","ports":usw24g2,
+     "api_capabilities":{"port_detail":True,"per_port_traffic":True}},
 ]
 json.dump({"schema_version":1,"devices":devices}, open(path,"w"))
 PYTEST_V219_COMMUNITY
@@ -67,7 +72,7 @@ python3 "$BASE_DIR/unifi_dashboard_cards.py" \
   --indent 0 \
   > "$tmp_dir/unifi-community-fixture-b-cards.yaml"
 
-for model in "USW Flex Mini" "USW Pro 24" "US 8 60W" "UniFi Dream Machine PRO SE" "USW-24-PoE"; do
+for model in "USW Flex Mini" "USW Pro 24" "US 8 60W" "UniFi Dream Machine PRO SE" "USW-24-PoE" "USW-24-G2"; do
   grep -q "switch_model: $model" "$tmp_dir/unifi-community-fixture-b-cards.yaml"
 done
 
@@ -84,15 +89,21 @@ devices={d["model"]:d for d in reg["devices"]}
 
 assert devices["USW-24-PoE"]["ports"]["gigabit_sfp"] == 2
 assert devices["USW-24-PoE"]["ports"]["ten_gigabit_sfp_plus"] == 0
+assert devices["USW-24-G2"]["status"] == "experimental"
+assert devices["USW-24-G2"]["ports"]["rj45"] == 24
+assert devices["USW-24-G2"]["ports"]["gigabit_sfp"] == 2
+assert devices["USW-24-G2"]["ports"]["poe"] is False
+assert devices["USW-24-G2"]["mapping_profile"] == "ubiquiti-usw-24-g2-api"
 assert devices["USW Pro 24"]["ports"]["gigabit_sfp"] == 0
 assert devices["USW Pro 24"]["ports"]["ten_gigabit_sfp_plus"] == 2
 assert devices["US 8 60W"]["validation"]["poe"] == "live_api_confirmed_ports_5_8_802_3af"
 assert devices["UniFi Dream Machine PRO SE"]["validation"]["poe"] == "live_api_confirmed_ports_1_8"
-assert devices["USW Flex Mini"]["validation"]["exact_model_detection"] == "live_api_confirmed_three_devices"
+assert devices["USW Flex Mini"]["validation"]["exact_model_detection"] == "live_api_confirmed_multiple_devices"
 assert devices["USW Flex Mini"]["status"] == "community_validated"
-assert devices["USW Flex Mini"]["last_validated_version"] == "3.0.0"
+assert devices["USW Flex Mini"]["last_validated_version"] == "3.0.18"
 assert devices["USW Flex Mini"]["visuals"]["status"] == "community_validated"
 assert profiles["ubiquiti-usw-pro-24-api"]["layout"]["sfp_10g_ports"] == 2
 assert profiles["ubiquiti-usw-24-poe-api"]["layout"]["sfp_1g_ports"] == 2
+assert profiles["ubiquiti-usw-24-g2-api"]["layout"]["sfp_1g_ports"] == 2
 print("Switch Vision Discovery v2.1.19 community-validation profile regression: PASS")
 PYTEST_V219_REGISTRY

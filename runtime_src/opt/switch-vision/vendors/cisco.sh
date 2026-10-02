@@ -53,5 +53,11 @@ cv_cisco_identity() {
       CV_ID_SUPPORT_STATUS="experimental"
       CV_ID_PRODUCT_MATCH="model-description"
       ;;
+    *SG200-26*)
+      CV_ID_FAMILY="Cisco Small Business SG200"
+      CV_ID_MODEL_HINT="SG200-26"
+      CV_ID_SUPPORT_STATUS="experimental"
+      CV_ID_PRODUCT_MATCH="model-description"
+      ;;
   esac
 }

@@ -81,6 +81,17 @@ cv_detect_vendor_identity "$TMP/sg350.txt"
 cv_write_capabilities_json "$TMP/sg350.txt" "$TMP/sg350.json" ""
 jq -e '(.device.model_text == "SG350-20") and (.summary.physical_count == 20) and (.summary.rj45_count == 16) and (.summary.sfp_count == 2) and (.summary.uplink_count == 4) and ([.interfaces[] | select(.media == "uplink")] | length == 2)' "$TMP/sg350.json" >/dev/null
 
+# Cisco SG200-26: 24 fixed copper + two dual-personality copper/SFP positions.
+set --
+i=1
+while [ "$i" -le 26 ]; do set -- "$@" "gi$i"; i=$((i + 1)); done
+make_ifname_walk "$TMP/sg200.txt" "Cisco SG200-26 26-Port Gigabit Smart Switch" "1.3.6.1.4.1.9.6.1.88.26.1" "$@"
+cv_detect_vendor_identity "$TMP/sg200.txt"
+[ "$CV_ID_VENDOR" = "cisco" ]
+[ "$CV_ID_MODEL_HINT" = "SG200-26" ]
+cv_write_capabilities_json "$TMP/sg200.txt" "$TMP/sg200.json" ""
+jq -e '(.device.model_text == "SG200-26") and (.summary.physical_count == 26) and (.summary.rj45_count == 24) and (.summary.sfp_count == 0) and (.summary.uplink_count == 2) and ([.interfaces[] | select(.media == "uplink")] | length == 2)' "$TMP/sg200.json" >/dev/null
+
 # Zyxel GS1900-24E identity is now exact; its existing generic interface parser
 # remains authoritative because the contributed walk already classified 24 RJ45.
 make_ifname_walk "$TMP/gs1900.txt" "Zyxel GS1900-24E" "1.3.6.1.4.1.890.1.5.8.16" "GigabitEthernet1" "GigabitEthernet24"

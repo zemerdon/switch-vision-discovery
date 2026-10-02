@@ -245,6 +245,32 @@ cv_interface_class_for_name() {
     esac
   fi
 
+  # Cisco SG200-26 contribution: gi1..gi24 are fixed copper while gi25..gi26
+  # are the two dual-personality copper/SFP positions. Keep those shared
+  # positions neutral as uplinks because IF-MIB alone cannot prove which side
+  # of each combo cage is populated.
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "SG200-26" ]; then
+    case "$name" in
+      gi*|Gi*)
+        port_number=$(printf '%s' "$name" | sed -E 's/^[Gg][Ii]//')
+        case "$port_number" in
+          ''|*[!0-9]*) printf 'other' ;;
+          *)
+            if [ "$port_number" -ge 1 ] && [ "$port_number" -le 24 ]; then
+              printf 'rj45'
+            elif [ "$port_number" -ge 25 ] && [ "$port_number" -le 26 ]; then
+              printf 'uplink'
+            else
+              printf 'other'
+            fi
+            ;;
+        esac
+        return 0
+        ;;
+      *) printf 'other'; return 0 ;;
+    esac
+  fi
+
   # UniFi Pro HD 24 PoE contribution: 0/1-0/24 are copper and 0/25-0/28
   # are SFP+. The compact model string is normalized by model_identity.sh.
   if [ "${CV_CAP_MODEL_TEXT:-}" = "USW Pro HD 24 PoE" ]; then

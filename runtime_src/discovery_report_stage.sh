@@ -159,6 +159,7 @@ parser_report() {
       if ((line ~ /\.3\.6\.1\.2\.1\.1\.1\.0 = STRING:/) && sysdescr == "") sysdescr = val
       if (line ~ /SG500X-24/) sg500_model = "SG500X-24"
       if (line ~ /SG350-20/ || line ~ /1\.3\.6\.1\.4\.1\.9\.6\.1\.95\.20\.1/) sg350_model = "SG350-20"
+      if (line ~ /SG200-26/ || line ~ /1\.3\.6\.1\.4\.1\.9\.6\.1\.88\.26\.1/) sg200_model = "SG200-26"
       if (line ~ /S5735-L8P4X-A1/) huawei_s5735_model = "S5735-L8P4X-A1"
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model = "S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model = "XS1930-10"
@@ -292,6 +293,10 @@ parser_report() {
       }
       else if (sg350_model != "") {
         model = sg350_model
+        manufacturer = "Cisco"
+      }
+      else if (sg200_model != "") {
+        model = sg200_model
         manufacturer = "Cisco"
       }
       else if (sg500_model != "") {

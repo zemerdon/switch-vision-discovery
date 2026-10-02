@@ -362,6 +362,37 @@ profiles:
     notes:
     - Real-hardware evidence confirms 16 fixed copper positions, two dual-personality copper/SFP positions and two SFP-only positions.
     - combo_ports is a subset of the four SFP-capable positions.
+  cisco-sg200-26-24p-2dual:
+    status: experimental
+    vendor: Cisco
+    family: Cisco Small Business SG200
+    model_patterns:
+    - SG200-26
+    sys_object_ids:
+    - 1.3.6.1.4.1.9.6.1.88.26.1
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+      combo_ports: 2
+      combo_logical_ports:
+      - 25
+      - 26
+    interface_patterns:
+      rj45:
+      - gi{port}
+      sfp_1g:
+      - gi25
+      - gi26
+      combo:
+      - gi25
+      - gi26
+      sfp_10g: []
+    notes:
+    - Real-hardware evidence confirms gi1-gi24 as fixed 1G copper and gi25-gi26 as the two dual-personality 1G copper/SFP positions.
+    - combo_ports is a subset of the two SFP-capable positions, not an additional logical port count.
+    - The oversized stock 48-RJ45 + 2-SFP canvas is intentional until exact SG200-26 artwork exists, so every proven logical port remains representable.
   hp-3500yl-48g-44p-4dual:
     status: experimental
     vendor: HP
@@ -675,12 +706,35 @@ profiles:
       - api-port-25
       - api-port-26
       sfp_10g: []
+  ubiquiti-usw-24-g2-api:
+    status: experimental
+    vendor: Ubiquiti
+    family: UniFi Standard 24
+    model_patterns:
+    - USW-24-G2
+    - USW 24
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 2
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - api-port-{port}
+      sfp_1g:
+      - api-port-25
+      - api-port-26
+      sfp_10g: []
+    notes:
+    - Current UniFi2MQTT 4.0.4 real-hardware evidence confirms 24 1G RJ45 ports plus two 1G SFP uplinks.
+    - The exact model exposes no PoE output capability and does expose per-port traffic counters.
   ubiquiti-usw-16-poe-api:
     status: experimental
     vendor: Ubiquiti
     family: UniFi Switch 16 PoE
     model_patterns:
     - USW-16-PoE
+    - USW 16 PoE
     layout:
       members: 1
       rj45_ports: 16
@@ -828,8 +882,8 @@ profiles:
       sfp_1g: []
       sfp_10g: []
     notes:
-    - Community hardware evidence contains three independent live devices with the same five-port
-      layout.
+    - Reviewed hardware evidence contains multiple independently identified live devices with the same five-port layout.
+    - Current UniFi2MQTT 4.0.4 evidence exposes per-port traffic counters on all five physical/API ports.
     - No PoE-output port mask is exposed for this exact model.
   ubiquiti-usw-pro-24-api:
     status: experimental

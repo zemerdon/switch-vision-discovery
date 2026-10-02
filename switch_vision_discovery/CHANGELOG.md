@@ -1,3 +1,12 @@
+## 3.0.18 — SG200-26 and UniFi Standard 24 hardware admission
+
+- Add Cisco SG200-26 as Experimental from reviewed real-hardware evidence: exact sysObjectID `1.3.6.1.4.1.9.6.1.88.26.1`, 24 fixed 1G copper ports, and two dual-personality 1G copper/SFP logical ports 25-26.
+- Keep SG200-26 combo ports conservative when IF-MIB cannot prove whether the copper or SFP side is populated, while preserving working link, speed and traffic telemetry and using the safe oversized stock 48-RJ45 + 2-SFP canvas until exact artwork exists.
+- Add UniFi Standard 24 / `USW-24-G2` as Experimental with 24 1G RJ45 ports, two 1G SFP uplinks, no PoE output, current per-port traffic, and the existing calibrated UniFi 24-RJ45 + 2-SFP inline faceplate.
+- Refresh USW-16-PoE, US 8 60W and USW Flex Mini metadata from current UniFi2MQTT 4.0.4 real-hardware evidence so native per-port Activity telemetry is no longer described as SNMP-only.
+- Preserve USW Flex Mini at Community Validated and the refreshed USW-16-PoE / US 8 60W at Experimental; this evidence update does not claim additional field/render validation.
+- Add permanent synthetic regressions for SG200 exact identity/classification/card mapping and USW-24-G2 registry/profile/visual selection without copying protected contribution originals into source.
+
 ## 3.0.17 — Core 2.7.40 release coordination
 
 - Preserve the 3.0.16 Discovery / Hub behavior unchanged.
