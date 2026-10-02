@@ -15,7 +15,7 @@ HEADER = """# Switch Vision Discovery self-test UniFi community-validation modul
 # Keep this as an exact behavioral extraction; production logic is not duplicated here.
 
 """
-EXTRACTED_BODY_SHA256 = "1039caff0386851ec0e79a8d43d11b433c3ab5ad1c6ee760c2d7e667ac6c42f9"
+EXTRACTED_BODY_SHA256 = "44738bc4b2bb62ff02640dc915f9bb25c66e27a8f5373a35e14d8ea6510000a3"
 START_MARKER = "# v2.1.19 community-validation UniFi profile regression."
 NEXT_MARKER = "# v2.1.20 Dell EMC Networking N2128PX-ON contribution regression."
 
