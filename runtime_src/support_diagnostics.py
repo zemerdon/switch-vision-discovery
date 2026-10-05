@@ -876,10 +876,50 @@ def build_file_provenance(root: Path) -> dict[str, Any]:
             "sha256": hashlib.sha256(raw).hexdigest(),
             "mtime_ns": stat.st_mtime_ns,
         })
+    by_path = {item["path"]: item for item in selected}
+    stale_targeted: list[str] = []
+    paired_targeted = 0
+    freshness_threshold_seconds = 3600
+    for item in selected:
+        relative = str(item.get("path") or "")
+        if not relative.endswith("/live-targeted-snmpwalk.txt"):
+            continue
+        full_relative = relative.removesuffix("live-targeted-snmpwalk.txt") + "live-full-snmpwalk.txt"
+        full = by_path.get(full_relative)
+        if not full:
+            item["freshness"] = {
+                "status": "unpaired",
+                "compared_to": None,
+                "age_delta_seconds": None,
+            }
+            continue
+        paired_targeted += 1
+        delta_ns = int(full.get("mtime_ns") or 0) - int(item.get("mtime_ns") or 0)
+        delta_seconds = max(0, delta_ns // 1_000_000_000)
+        status = (
+            "stale_against_full"
+            if delta_seconds > freshness_threshold_seconds
+            else "current"
+        )
+        item["freshness"] = {
+            "status": status,
+            "compared_to": full_relative,
+            "age_delta_seconds": delta_seconds,
+        }
+        if status == "stale_against_full":
+            stale_targeted.append(relative)
+
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at": _now(),
-        "scope": "file names, sizes, hashes and mtimes only; no file contents",
+        "scope": "file names, sizes, hashes, mtimes and walk freshness only; no file contents",
+        "walk_freshness": {
+            "status": "stale_targeted_walks" if stale_targeted else "ok",
+            "threshold_seconds": freshness_threshold_seconds,
+            "paired_targeted_count": paired_targeted,
+            "stale_targeted_count": len(stale_targeted),
+            "stale_targeted_paths": stale_targeted,
+        },
         "files": selected,
     }
 
@@ -1724,6 +1764,7 @@ def build_summary(
     card_bindings: dict[str, Any],
     mqtt_scan: dict[str, Any],
     calibration_storage: dict[str, Any],
+    file_provenance: dict[str, Any],
 ) -> dict[str, Any]:
     entity_summary = entity_snapshot.get("summary", {}) if isinstance(entity_snapshot, dict) else {}
     return {
@@ -1753,6 +1794,8 @@ def build_summary(
             "calibration_storage_status": calibration_storage.get("status"),
             "calibration_storage_profile_count": calibration_storage.get("profile_count"),
             "calibration_storage_active_profile_count": calibration_storage.get("active_profile_count"),
+            "targeted_walk_freshness_status": file_provenance.get("walk_freshness", {}).get("status"),
+            "stale_targeted_walk_count": file_provenance.get("walk_freshness", {}).get("stale_targeted_count"),
         },
         "privacy": {
             "home_assistant_attributes_included": False,
@@ -1832,7 +1875,13 @@ def capture_support_diagnostics(root: Path) -> None:
         root,
         DIAG_DIR / "diagnostic-summary.json",
         build_summary(
-            entity_snapshot, port_pipeline, model_provenance, card_bindings, mqtt_scan, calibration_storage
+            entity_snapshot,
+            port_pipeline,
+            model_provenance,
+            card_bindings,
+            mqtt_scan,
+            calibration_storage,
+            file_provenance,
         ),
     )
 

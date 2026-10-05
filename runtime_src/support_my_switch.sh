@@ -210,6 +210,19 @@ if [ ! -f "$SUPPORT_DIAGNOSTICS_SCRIPT" ]; then
 fi
 python3 "$SUPPORT_DIAGNOSTICS_SCRIPT" --refresh-model-provenance "$DATA_COPY"
 
+FILE_PROVENANCE_JSON="$DATA_COPY/diagnostics/generated-file-provenance.json"
+STALE_TARGETED_WALK_COUNT=0
+if [ -f "$FILE_PROVENANCE_JSON" ]; then
+  STALE_TARGETED_WALK_COUNT=$(jq -r '.walk_freshness.stale_targeted_count // 0' "$FILE_PROVENANCE_JSON" 2>/dev/null || printf '0')
+fi
+case "$STALE_TARGETED_WALK_COUNT" in
+  ''|*[!0-9]*) STALE_TARGETED_WALK_COUNT=0 ;;
+esac
+if [ "$STALE_TARGETED_WALK_COUNT" -gt 0 ]; then
+  EVIDENCE_QUALITY="degraded"
+fi
+EVIDENCE_QUALITY_JSON=$(printf '%s' "$EVIDENCE_QUALITY" | jq -Rs '.')
+
 # Add normalized UniFi2MQTT devices from the already-sanitized snapshot so a
 # UniFi-only contribution still has complete device summary/fingerprint data.
 UNIFI_SUMMARY_SNAPSHOT="$DATA_COPY/unifi/devices.json"
@@ -476,6 +489,10 @@ Privacy processing:
 - Symbolic links excluded: $SYMLINKS_SKIPPED
 - Special files excluded: $SPECIAL_FILES_SKIPPED
 - Total files excluded from the archive: $FILES_EXCLUDED
+
+Evidence freshness:
+- Stale targeted walks detected: $STALE_TARGETED_WALK_COUNT
+- Evidence quality: $EVIDENCE_QUALITY
 
 Residual audit:
 - $CREDENTIAL_AUDIT

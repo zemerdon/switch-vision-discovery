@@ -1,3 +1,11 @@
+## 3.0.19 — Sirivision telemetry hardening and contribution freshness
+
+- Correct SR-S25G3420F generated telemetry so exact-model targets identify as Sirivision, retain the reviewed 16x 2.5G copper + 4x 10G optical contract, and use the new SNMP2MQTT `sirivision_uptime` source instead of the device's reset-prone standard `sysUpTime.0`.
+- Suppress the SR-S25G3420F IF-MIB speed artifacts observed in fresh field evidence: wrapped `1410 Mbps` / `1410065408 bps` values and invalid zero readings now render as unknown instead of false negotiated speed.
+- Add exact-model GS1915-24EP per-port POWER-ETHERNET-MIB telemetry for the evidenced PSE group 1 ports 1-12 only, mapped fail-closed to IF-MIB `swp00` through `swp11`, while retaining the confirmed 130 W aggregate PoE budget.
+- Add Support My Switch targeted/full-walk freshness comparison; targeted walks more than one hour older than their paired full walks are flagged in packaged diagnostics and downgrade contribution evidence quality.
+- Add permanent synthetic regressions for the Sirivision uptime/speed path, GS1915 PoE mapping, and stale-walk detection. Both hardware models remain Experimental; no support-status promotion is claimed.
+
 ## 3.0.18 — SG200-26 and UniFi Standard 24 hardware admission
 
 - Add Cisco SG200-26 as Experimental from reviewed real-hardware evidence: exact sysObjectID `1.3.6.1.4.1.9.6.1.88.26.1`, 24 fixed 1G copper ports, and two dual-personality 1G copper/SFP logical ports 25-26.

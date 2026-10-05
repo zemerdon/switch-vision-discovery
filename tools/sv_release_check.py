@@ -35,6 +35,7 @@ PERMANENT_CHECKS = (
     "tools/test_switch_name_space_compatibility.py",
     "tools/test_registered_report_contract.py",
     "tools/test_gs1915_evidence_preservation.py",
+    "tools/test_carry_field_hardening.py",
     "tools/test_ha_entity_snapshot.py",
     "tools/test_public_attribution_privacy.py",
     "tools/test_complete_backup_schema.py",

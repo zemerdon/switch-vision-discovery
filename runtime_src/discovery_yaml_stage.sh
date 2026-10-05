@@ -69,6 +69,16 @@ write_generated_yaml_for_walk() {
       return 48
     }
     function physical_label(name, idx, key, parts, member, port, label) {
+      if (model == "SR-S25G3420F" && name ~ /^HisgmiiEthernet([1-9]|1[0-6])$/) {
+        port=name
+        sub(/^HisgmiiEthernet/, "", port)
+        return prefix " Port " (port + 0)
+      }
+      if (model == "SR-S25G3420F" && name ~ /^TenGigabitEthernet[1-4]$/) {
+        port=name
+        sub(/^TenGigabitEthernet/, "", port)
+        return prefix " SFP 10G " (port + 0)
+      }
       if (model == "WS-C3850-12XS-E" && name ~ /^(Te|TenGigabitEthernet)[0-9]+\/0\/([1-9]|1[0-2])$/) {
         key = name
         sub(/^TenGigabitEthernet/, "", key)
@@ -284,6 +294,8 @@ write_generated_yaml_for_walk() {
       yaml_sensor_meta(oid, poe_aggregate_name(name), transform, unit, device_class, state_class, icon)
     }
     function physical_speed_cap_mbps(model, label) {
+      if (model == "SR-S25G3420F" && label ~ / Port /) return 2500
+      if (model == "SR-S25G3420F" && label ~ / SFP 10G /) return 10000
       if (model == "HP J9774A 2530-8G-PoEP") return 1000
       if (model == "HP ProCurve 1810G-24") return 1000
       if (model == "HP J8693A Switch 3500yl-48G" && label ~ / Rear 10G /) return 10000
@@ -297,10 +309,14 @@ write_generated_yaml_for_walk() {
       cap_mbps = physical_speed_cap_mbps(model, label)
       if (has_highspeed) {
         yaml_sensor("1.3.6.1.2.1.31.1.1.1.15." idx, label " Speed Mbps")
-        if (cap_mbps > 0) print "    template: \"{{ [value | int, " cap_mbps "] | min }}\""
+        if (model == "SR-S25G3420F" && label ~ / Port /) print "    template: \"{{ \047unknown\047 if (value | int) in [0, 1410] else ([value | int, 2500] | min) }}\""
+        else if (model == "SR-S25G3420F" && label ~ / SFP 10G /) print "    template: \"{{ \047unknown\047 if (value | int) == 0 else ([value | int, 10000] | min) }}\""
+        else if (cap_mbps > 0) print "    template: \"{{ [value | int, " cap_mbps "] | min }}\""
       } else if (has_ifspeed) {
         yaml_sensor("1.3.6.1.2.1.2.2.1.5." idx, label " Speed Bps")
-        if (cap_mbps > 4294) print "    template: \"{{ " (cap_mbps * 1000000) " if (value | int) >= 4294967295 else ([value | int, " (cap_mbps * 1000000) "] | min) }}\""
+        if (model == "SR-S25G3420F" && label ~ / Port /) print "    template: \"{{ \047unknown\047 if (value | int) in [0, 1410065408] else ([value | int, 2500000000] | min) }}\""
+        else if (model == "SR-S25G3420F" && label ~ / SFP 10G /) print "    template: \"{{ \047unknown\047 if (value | int) in [0, 1410065408] else value | int }}\""
+        else if (cap_mbps > 4294) print "    template: \"{{ " (cap_mbps * 1000000) " if (value | int) >= 4294967295 else ([value | int, " (cap_mbps * 1000000) "] | min) }}\""
         else if (cap_mbps > 0) print "    template: \"{{ [value | int, " (cap_mbps * 1000000) "] | min }}\""
       }
     }
@@ -382,6 +398,7 @@ write_generated_yaml_for_walk() {
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model="S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model="XS1930-10"
       else if (line ~ /GS1915-24EP/) zyxel_model="GS1915-24EP"
+      if (line !~ /\.1\.0\.8802\./ && line ~ /SR-S25G3420F/) sirivision_model="SR-S25G3420F"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model="CRS328-24P-4S+"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.138/) || (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && (tolower(line) ~ /j9774a/ || tolower(line) ~ /2530-8g-poep/))) hp_2530_model="HP J9774A 2530-8G-PoEP"
@@ -455,6 +472,9 @@ write_generated_yaml_for_walk() {
           physical_count++
           physical_member[1] = 1
         } else if (huawei_s5720_model != "" && val ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) {
+          physical_count++
+          physical_member[1] = 1
+        } else if (sirivision_model != "" && val ~ /^(HisgmiiEthernet([1-9]|1[0-6])|TenGigabitEthernet[1-4])$/) {
           physical_count++
           physical_member[1] = 1
         } else if (zyxel_model == "XS1930-10" && val ~ /^swp0[0-9]$/) {
@@ -701,6 +721,10 @@ write_generated_yaml_for_walk() {
         model = dell_model
         manufacturer = "Dell"
       }
+      else if (sirivision_model != "") {
+        model = sirivision_model
+        manufacturer = "Sirivision"
+      }
       else if (c3750_model != "") { model = c3750_model; manufacturer = "Cisco" }
       else if (local_model != "") { model = local_model; manufacturer = "Cisco" }
       else if (sys_model != "") { model = sys_model; manufacturer = "Cisco" }
@@ -727,7 +751,7 @@ write_generated_yaml_for_walk() {
       phys_n = 0
       for (idx=1; idx<=maxidx; idx++) if (idx in ifname) {
         name=ifname[idx]
-        if ((model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) || (model == "SG200-26" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|2[0-6])$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "HP J9774A 2530-8G-PoEP" && name ~ /^([1-9]|10)$/) || (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) || ((model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^A[1-4]$/)) || (model == "N4032F" && name ~ /^(Fo|FortyGigabitEthernet)1\/1\/[12]$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
+        if ((model == "SR-S25G3420F" && name ~ /^(HisgmiiEthernet([1-9]|1[0-6])|TenGigabitEthernet[1-4])$/) || (model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) || (model == "SG200-26" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|2[0-6])$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "HP J9774A 2530-8G-PoEP" && name ~ /^([1-9]|10)$/) || (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) || ((model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^A[1-4]$/)) || (model == "N4032F" && name ~ /^(Fo|FortyGigabitEthernet)1\/1\/[12]$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
           if (model == "Juniper EX3300-48P" && name ~ /^(xe|ge)-0\/1\/[0-3]$/) continue
           if (name ~ /^ge-0\/0\/[0-9]+$/) {
             port_no=name
@@ -754,6 +778,23 @@ write_generated_yaml_for_walk() {
               if (poe_key_for_phys[i] == "") poe_key_for_phys[i]=key
               else if (poe_key_for_phys[i] != key) poe_key_for_phys[i]="AMBIGUOUS"
             }
+          }
+        }
+      }
+
+      # Reviewed GS1915-24EP field evidence exposes one RFC 3621 PSE group
+      # whose port indexes 1-12 align exactly with IF-MIB swp00-swp11 /
+      # physical ports 1-12. Keep this mapping exact-model and fail closed if
+      # either the IF-MIB identity or the standard PSE row is absent.
+      if (model == "GS1915-24EP") {
+        for (i=1; i<=phys_n; i++) {
+          idx=phys_idx[i] + 0
+          if (idx < 1 || idx > 12) continue
+          expected_name=sprintf("swp%02d", idx - 1)
+          if (ifname[idx] != expected_name) continue
+          key="1." idx
+          if ((key in std_poe_port_admin) || (key in std_poe_port_detect) || (key in std_poe_port_class)) {
+            poe_key_for_phys[i]=key
           }
         }
       }
@@ -802,6 +843,7 @@ write_generated_yaml_for_walk() {
             key=poe_key_for_phys[i]
             if (key == "" || key == "AMBIGUOUS") continue
             label=phys_label[i]
+            if (model == "GS1915-24EP" && (key in std_poe_port_admin)) yaml_sensor("1.3.6.1.2.1.105.1.1.1.3." key, label " PoE Admin Code")
             if (key in std_poe_port_detect) yaml_sensor("1.3.6.1.2.1.105.1.1.1.6." key, label " PoE Status Code")
             if (key in std_poe_port_class) yaml_sensor("1.3.6.1.2.1.105.1.1.1.10." key, label " PoE Class Code")
             if (key in cisco_poe_power) yaml_sensor_meta("1.3.6.1.4.1.9.9.402.1.2.1.9." key, label " PoE Power", "value / 1000", "W", "power", "measurement", "mdi:flash")
@@ -978,7 +1020,12 @@ write_generated_yaml_for_walk() {
       }
 
       yaml_target_header("Switch Vision " prefix " Slow System", 300)
-      yaml_sensor("1.3.6.1.2.1.1.3.0", prefix " Uptime")
+      if (model == "SR-S25G3420F") {
+        print "  - name: " prefix " Uptime"
+        print "    source: sirivision_uptime"
+      } else {
+        yaml_sensor("1.3.6.1.2.1.1.3.0", prefix " Uptime")
+      }
 
       # Identity sensors share the existing Slow System poll group. This keeps
       # static device details lightweight while ensuring they are created on
