@@ -1992,6 +1992,30 @@ for attribute in ("mode", "native_vlan", "vlans", "tagged_vlans", "untagged_vlan
 """)
     assert result["valid"] is True, (attribute, result)
 
+for attribute in ("mode", "native_vlan", "vlans", "tagged_vlans", "untagged_vlans", "summary"):
+    result = validate(f"""targets:
+- host: 192.0.2.11
+  device_model: GS1900-8
+  sensors:
+  - name: SW11 Q-BRIDGE VLAN helper
+    source: qbridge_vlan
+    interface: GigabitEthernet2
+    attribute: {attribute}
+""")
+    assert result["valid"] is True, (attribute, result)
+
+wrong_qbridge_model = """targets:
+- host: 192.0.2.11
+  device_model: OTHER-MODEL
+  sensors:
+  - name: Broken Q-BRIDGE VLAN helper
+    source: qbridge_vlan
+    interface: GigabitEthernet2
+    attribute: vlans
+"""
+result = validate(wrong_qbridge_model)
+assert result["valid"] is False and "restricted to device_model GS1900-8" in result["error"], result
+
 valid_sirivision_uptime = """targets:
 - host: 192.0.2.10
   device_model: SR-S25G3420F
@@ -2135,8 +2159,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.20"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.20"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.21"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.21"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"

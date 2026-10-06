@@ -193,6 +193,10 @@ write_generated_yaml_for_walk() {
         port = name; sub(/^swp/, "", port)
         return prefix " Port " ((port + 0) + 1)
       }
+      if (model == "GS1900-8" && name ~ /^GigabitEthernet[1-8]$/) {
+        port = name; sub(/^GigabitEthernet/, "", port)
+        return prefix " Port " (port + 0)
+      }
       if (model == "CRS328-24P-4S+" && name ~ /^ether([1-9]|1[0-9]|2[0-4])$/) {
         port = name; sub(/^ether/, "", port)
         return prefix " Port " (port + 0)
@@ -345,6 +349,13 @@ write_generated_yaml_for_walk() {
       print "    attribute: " attribute
       if (icon != "") print "    icon: " icon
     }
+    function yaml_qbridge_vlan_sensor(interface_name, name, attribute, icon) {
+      print "  - name: " name
+      print "    source: qbridge_vlan"
+      print "    interface: " interface_name
+      print "    attribute: " attribute
+      if (icon != "") print "    icon: " icon
+    }
     function yaml_target_header(name, interval) {
       print ""
       print "- host: " host
@@ -398,6 +409,7 @@ write_generated_yaml_for_walk() {
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model="S5720-12TP-LI-AC"
       if (line ~ /XS1930-10/) zyxel_model="XS1930-10"
       else if (line ~ /GS1915-24EP/) zyxel_model="GS1915-24EP"
+      else if ((line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = / || line ~ /\.1\.3\.6\.1\.4\.1\.890\.1\.15\.3\.1\.11\.0 = /) && line ~ /GS1900-8/) zyxel_model="GS1900-8"
       if (line !~ /\.1\.0\.8802\./ && line ~ /SR-S25G3420F/) sirivision_model="SR-S25G3420F"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model="CRS328-24P-4S+"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
@@ -483,6 +495,9 @@ write_generated_yaml_for_walk() {
         } else if (zyxel_model == "GS1915-24EP" && val ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) {
           physical_count++
           physical_member[1] = 1
+        } else if (zyxel_model == "GS1900-8" && val ~ /^GigabitEthernet[1-8]$/) {
+          physical_count++
+          physical_member[1] = 1
         } else if (mikrotik_model != "" && val ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/) {
           physical_count++
           physical_member[1] = 1
@@ -535,6 +550,9 @@ write_generated_yaml_for_walk() {
         bridge_port=oid_index(line)
         qbridge_pvid_idx[bridge_port]=1
       }
+      if (line ~ /\.3\.6\.1\.2\.1\.17\.7\.1\.4\.2\.1\.4\.[0-9]+\.[0-9]+ = /) qbridge_current_egress_rows++
+      if (line ~ /\.3\.6\.1\.2\.1\.17\.7\.1\.4\.3\.1\.2\.[0-9]+ = /) qbridge_static_egress_rows++
+      if (line ~ /\.3\.6\.1\.2\.1\.17\.7\.1\.4\.3\.1\.4\.[0-9]+ = /) qbridge_static_untagged_rows++
       if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.46\.1\.6\.1\.1\.14\.[0-9]+ = /) { idx=oid_index(line); trunk_status_idx[idx]=1 }
       if (line ~ /\.3\.6\.1\.2\.1\.31\.1\.1\.1\.18\.[0-9]+ = /) { idx=oid_index(line); alias_idx[idx]=1 }
       if (line ~ /\.3\.6\.1\.2\.1\.31\.1\.1\.1\.6\.[0-9]+ = /) { idx=oid_index(line); hc_in_idx[idx]=1 }
@@ -751,7 +769,7 @@ write_generated_yaml_for_walk() {
       phys_n = 0
       for (idx=1; idx<=maxidx; idx++) if (idx in ifname) {
         name=ifname[idx]
-        if ((model == "SR-S25G3420F" && name ~ /^(HisgmiiEthernet([1-9]|1[0-6])|TenGigabitEthernet[1-4])$/) || (model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) || (model == "SG200-26" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|2[0-6])$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "HP J9774A 2530-8G-PoEP" && name ~ /^([1-9]|10)$/) || (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) || ((model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^A[1-4]$/)) || (model == "N4032F" && name ~ /^(Fo|FortyGigabitEthernet)1\/1\/[12]$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
+        if ((model == "SR-S25G3420F" && name ~ /^(HisgmiiEthernet([1-9]|1[0-6])|TenGigabitEthernet[1-4])$/) || (model == "WS-C3750-48P" && name ~ /^(Fa|FastEthernet)[0-9]+\/0\/([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "WS-C3750-48P" && name ~ /^(Gi|GigabitEthernet)[0-9]+\/0\/[1-4]$/) || (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) || (model == "SG200-26" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|2[0-6])$/) || (model == "SG500X-24" && name ~ /^(gi|te)1\/[0-9]+$/) || (model == "S5735-L8P4X-A1" && name ~ /^(GigabitEthernet|XGigabitEthernet)0\/0\/[0-9]+$/) || (model == "S5720-12TP-LI-AC" && name ~ /^GigabitEthernet0\/0\/([1-9]|1[0-2])$/) || (model == "XS1930-10" && name ~ /^swp0[0-9]$/) || (model == "GS1915-24EP" && name ~ /^swp(0[0-9]|1[0-9]|2[0-3])$/) || (model == "GS1900-8" && name ~ /^GigabitEthernet[1-8]$/) || (model == "HP J9774A 2530-8G-PoEP" && name ~ /^([1-9]|10)$/) || (model == "HP ProCurve 1810G-24" && name ~ /^([1-9]|1[0-9]|2[0-4])$/) || ((model == "HP J8693A Switch 3500yl-48G" && name ~ /^([1-9]|[1-3][0-9]|4[0-8])$/) || (model == "HP J8693A Switch 3500yl-48G" && name ~ /^A[1-4]$/)) || (model == "N4032F" && name ~ /^(Fo|FortyGigabitEthernet)1\/1\/[12]$/) || name ~ /^(Gi|GigabitEthernet|Te|TenGigabitEthernet)[0-9]+\/[0-9]+\/[0-9]+$/ || (model ~ /^WS-C3560CG-8PC/ && name ~ /^(Gi|GigabitEthernet)0\/([1-9]|10)$/) || name ~ /^ge-0\/0\/[0-9]+$/ || name ~ /^(xe|ge)-0\/1\/[0-3]$/ || (model == "CRS328-24P-4S+" && name ~ /^(ether([1-9]|1[0-9]|2[0-4])|sfp-sfpplus[1-4])$/)) {
           if (model == "Juniper EX3300-48P" && name ~ /^(xe|ge)-0\/1\/[0-3]$/) continue
           if (name ~ /^ge-0\/0\/[0-9]+$/) {
             port_no=name
@@ -808,7 +826,8 @@ write_generated_yaml_for_walk() {
       for (v in vlan_id_idx) vlan_oid_count++
       qbridge_pvid_rows=0
       for (v in qbridge_pvid_idx) qbridge_pvid_rows++
-      if (model == "XS1930-10") print "# Walk-aware VLAN source: Q-BRIDGE PVID rows=" qbridge_pvid_rows "; trunk/access mode is not inferred"
+      if (model == "GS1900-8") print "# Walk-aware VLAN source: Q-BRIDGE PVID rows=" qbridge_pvid_rows ", current egress rows=" (qbridge_current_egress_rows + 0) ", static egress rows=" (qbridge_static_egress_rows + 0) ", static untagged rows=" (qbridge_static_untagged_rows + 0)
+      else if (model == "XS1930-10") print "# Walk-aware VLAN source: Q-BRIDGE PVID rows=" qbridge_pvid_rows "; trunk/access mode is not inferred"
       else print "# Walk-aware VLAN ID sensors: " vlan_oid_count " exact VLAN OID(s) found; missing VLAN OIDs are skipped"
 
       chunk=0
@@ -965,6 +984,34 @@ write_generated_yaml_for_walk() {
           else skipped_trunk_status++
           if (idx in alias_idx) yaml_sensor("1.3.6.1.2.1.31.1.1.1.18." idx, label " Alias")
           else skipped_alias++
+        }
+      }
+
+      if (model == "GS1900-8") {
+        qbridge_join_count=0
+        for (i=1; i<=phys_n; i++) {
+          idx=phys_idx[i]
+          bridge_idx=bridge_for_ifindex[idx]
+          if (bridge_idx > 0 && (bridge_idx in qbridge_pvid_idx)) qbridge_join_count++
+        }
+        qbridge_membership_ready=((qbridge_current_egress_rows + qbridge_static_egress_rows) > 0 && qbridge_static_untagged_rows > 0)
+        if (phys_n > 0 && qbridge_join_count == phys_n && qbridge_membership_ready) {
+          yaml_target_header("Switch Vision " prefix " Q-BRIDGE VLAN State", 30)
+          qbridge_derived_count=0
+          for (i=1; i<=phys_n; i++) {
+            idx=phys_idx[i]
+            interface_name=ifname[idx]
+            label=phys_label[i]
+            yaml_qbridge_vlan_sensor(interface_name, label " VLAN Mode", "mode", "mdi:lan-connect")
+            yaml_qbridge_vlan_sensor(interface_name, label " Native VLAN", "native_vlan", "mdi:tag-outline")
+            yaml_qbridge_vlan_sensor(interface_name, label " VLANs", "vlans", "mdi:tag-multiple-outline")
+            yaml_qbridge_vlan_sensor(interface_name, label " Tagged VLANs", "tagged_vlans", "mdi:tag-multiple")
+            yaml_qbridge_vlan_sensor(interface_name, label " Untagged VLANs", "untagged_vlans", "mdi:tag-off-outline")
+            qbridge_derived_count += 5
+          }
+          print "# Q-BRIDGE derived VLAN sensors emitted: " qbridge_derived_count
+        } else {
+          print "# Q-BRIDGE derived VLAN sensors skipped: physical=" phys_n ", joins=" qbridge_join_count ", current egress rows=" (qbridge_current_egress_rows + 0) ", static egress rows=" (qbridge_static_egress_rows + 0) ", static untagged rows=" (qbridge_static_untagged_rows + 0)
         }
       }
 

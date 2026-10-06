@@ -5120,7 +5120,7 @@ def _validate_snmp2mqtt_yaml(path: Path) -> dict[str, Any]:
                     }
                 continue
 
-            if sensor_source in {"juniper_ex_vlan", "interface"}:
+            if sensor_source in {"juniper_ex_vlan", "qbridge_vlan", "interface"}:
                 if oid:
                     return {
                         "valid": False,
@@ -5129,6 +5129,17 @@ def _validate_snmp2mqtt_yaml(path: Path) -> dict[str, Any]:
                             f"named-interface source {sensor_source} must not define an OID."
                         ),
                     }
+
+                if sensor_source == "qbridge_vlan":
+                    device_model = str(target.get("device_model") or "").strip()
+                    if device_model != "GS1900-8":
+                        return {
+                            "valid": False,
+                            "error": (
+                                f"Generated YAML target {index} sensor {sensor_index} "
+                                "qbridge_vlan is currently restricted to device_model GS1900-8."
+                            ),
+                        }
 
                 interface_name = str(sensor.get("interface") or "").strip()
                 interfaces_value = sensor.get("interfaces")
@@ -5165,8 +5176,12 @@ def _validate_snmp2mqtt_yaml(path: Path) -> dict[str, Any]:
 
                 attribute = str(sensor.get("attribute") or "").strip()
 
-                if sensor_source == "juniper_ex_vlan":
-                    source_label = "Juniper VLAN"
+                if sensor_source in {"juniper_ex_vlan", "qbridge_vlan"}:
+                    source_label = (
+                        "Juniper VLAN"
+                        if sensor_source == "juniper_ex_vlan"
+                        else "Q-BRIDGE VLAN"
+                    )
                     allowed_attributes = {
                         "mode",
                         "native_vlan",

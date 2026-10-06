@@ -90,6 +90,7 @@ PERMANENT_CHECKS = (
 SHELL_CHECKS = (
     "tools/test_production_physical_contract.sh",
     "tools/test_contributor_interface_batch.sh",
+    "tools/test_gs1900_qbridge_vlan.sh",
     "tools/test_discovery_contract_entrypoint.sh",
     "tools/test_unifi_entrypoint_source_matrix.sh",
 )
@@ -123,7 +124,14 @@ def run(args: list[str], cwd: Path, *, env: dict[str, str] | None = None) -> str
 
 def git_status(root: Path) -> str:
     return subprocess.check_output(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+        [
+            "git",
+            "-c",
+            f"safe.directory={root}",
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ],
         cwd=root,
         text=True,
     )

@@ -71,6 +71,11 @@ def main() -> int:
     assert "Path(sys.executable).resolve().parent" not in source
     assert "tracked_archive = archive_path.read_bytes()" in source
     assert "Discovery tracked runtime archive restore: PASS" in source
+    assert 'f"safe.directory={root}"' in source
+
+    release_check = load_entrypoint()
+    status = release_check.git_status(ROOT)
+    assert isinstance(status, str)
 
     pin_source = PIN_HELPER.read_text(encoding="utf-8")
     compile(pin_source, str(PIN_HELPER), "exec")

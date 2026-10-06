@@ -1,3 +1,11 @@
+## 3.0.21 — GS1900 Q-BRIDGE VLAN membership
+
+- Add exact GS1900-8 generated telemetry for the standard Q-BRIDGE bridge-port/PVID/membership tables proven by current field evidence, without extending support from model-name proximity alone.
+- Emit the generic SNMP2MQTT `qbridge_vlan` source only when all eight physical GS1900-8 interfaces have exact bridge-port/PVID joins and the current/static egress plus static untagged membership tables are present.
+- Expose per-port VLAN mode, native VLAN, all member VLANs, tagged VLANs and untagged VLANs so tagged memberships are not collapsed to the port PVID.
+- Add a permanent privacy-safe regression reproducing the reviewed VLAN 10/20 membership shape on ports 2, 6 and 8 and fail closed when the untagged membership table is absent.
+- Preserve existing XS1930-10, GS1915-24EP, Juniper, Cisco and other vendor VLAN behavior.
+
 ## 3.0.20 — Restore Sirivision SNMP2MQTT handoff
 
 - Fix the Discovery-to-SNMP2MQTT handoff validator so the exact-model `sirivision_uptime` source emitted for SR-S25G3420F is accepted under the same fail-closed restrictions enforced by SNMP2MQTT Core: exact model only, no direct OID, no interface candidates and no attribute.
