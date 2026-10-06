@@ -5084,6 +5084,42 @@ def _validate_snmp2mqtt_yaml(path: Path) -> dict[str, Any]:
             sensor_source = str(sensor.get("source") or "").strip()
             oid = str(sensor.get("oid") or "").strip()
 
+            if sensor_source == "sirivision_uptime":
+                device_model = str(target.get("device_model") or "").strip()
+                if device_model != "SR-S25G3420F":
+                    return {
+                        "valid": False,
+                        "error": (
+                            f"Generated YAML target {index} sensor {sensor_index} "
+                            "sirivision_uptime is restricted to device_model SR-S25G3420F."
+                        ),
+                    }
+                if oid:
+                    return {
+                        "valid": False,
+                        "error": (
+                            f"Generated YAML target {index} sensor {sensor_index} "
+                            "sirivision_uptime sensor must not define an OID."
+                        ),
+                    }
+                if "interface" in sensor or "interfaces" in sensor:
+                    return {
+                        "valid": False,
+                        "error": (
+                            f"Generated YAML target {index} sensor {sensor_index} "
+                            "sirivision_uptime sensor must not define interface candidates."
+                        ),
+                    }
+                if "attribute" in sensor:
+                    return {
+                        "valid": False,
+                        "error": (
+                            f"Generated YAML target {index} sensor {sensor_index} "
+                            "sirivision_uptime sensor must not define an attribute."
+                        ),
+                    }
+                continue
+
             if sensor_source in {"juniper_ex_vlan", "interface"}:
                 if oid:
                     return {

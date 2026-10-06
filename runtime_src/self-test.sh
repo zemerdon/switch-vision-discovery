@@ -1992,6 +1992,50 @@ for attribute in ("mode", "native_vlan", "vlans", "tagged_vlans", "untagged_vlan
 """)
     assert result["valid"] is True, (attribute, result)
 
+valid_sirivision_uptime = """targets:
+- host: 192.0.2.10
+  device_model: SR-S25G3420F
+  sensors:
+  - name: SWSR Uptime
+    source: sirivision_uptime
+"""
+assert validate(valid_sirivision_uptime)["valid"] is True
+
+wrong_sirivision_model = """targets:
+- host: 192.0.2.10
+  device_model: OTHER-MODEL
+  sensors:
+  - name: Broken Sirivision uptime
+    source: sirivision_uptime
+"""
+result = validate(wrong_sirivision_model)
+assert result["valid"] is False and "restricted to device_model SR-S25G3420F" in result["error"], result
+
+for invalid_field, invalid_value in (
+    ("oid", "1.3.6.1.2.1.1.3.0"),
+    ("interface", "HisgmiiEthernet1"),
+    ("interfaces", ["HisgmiiEthernet1"]),
+    ("attribute", "oper_status"),
+):
+    import yaml
+    payload = {
+        "targets": [
+            {
+                "host": "192.0.2.10",
+                "device_model": "SR-S25G3420F",
+                "sensors": [
+                    {
+                        "name": "Broken Sirivision uptime",
+                        "source": "sirivision_uptime",
+                        invalid_field: invalid_value,
+                    }
+                ],
+            }
+        ]
+    }
+    result = validate(yaml.safe_dump(payload, sort_keys=False))
+    assert result["valid"] is False and "sirivision_uptime sensor must not define" in result["error"], (invalid_field, result)
+
 normal_missing_oid = """targets:
 - host: 192.0.2.10
   sensors:
@@ -2091,8 +2135,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.19"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.19"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.20"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.20"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"

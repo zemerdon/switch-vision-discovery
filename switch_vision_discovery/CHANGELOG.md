@@ -1,3 +1,9 @@
+## 3.0.20 — Restore Sirivision SNMP2MQTT handoff
+
+- Fix the Discovery-to-SNMP2MQTT handoff validator so the exact-model `sirivision_uptime` source emitted for SR-S25G3420F is accepted under the same fail-closed restrictions enforced by SNMP2MQTT Core: exact model only, no direct OID, no interface candidates and no attribute.
+- Close the 3.0.19 regression where Discovery generated valid SR-S25G3420F YAML but rejected that same YAML before app activation, leaving SNMP2MQTT stopped and current Home Assistant MQTT discovery entities absent.
+- Add permanent source-aware and generator-to-handoff regressions so future derived-source additions cannot ship when Discovery's generator and activation validator disagree.
+
 ## 3.0.19 — Sirivision telemetry hardening and contribution freshness
 
 - Correct SR-S25G3420F generated telemetry so exact-model targets identify as Sirivision, retain the reviewed 16x 2.5G copper + 4x 10G optical contract, and use the new SNMP2MQTT `sirivision_uptime` source instead of the device's reset-prone standard `sysUpTime.0`.

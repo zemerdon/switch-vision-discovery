@@ -16,6 +16,7 @@ RUNTIME = ROOT / "runtime_src"
 STAGE = RUNTIME / "discovery_yaml_stage.sh"
 REGISTRY = RUNTIME / "opt/switch-vision/devices/supported_devices.json"
 SUPPORT_DIAGNOSTICS = RUNTIME / "support_diagnostics.py"
+SUPPORT_WEB = RUNTIME / "support_web.py"
 
 
 def generate(walk: Path, prefix: str) -> str:
@@ -99,19 +100,24 @@ def gs1915_walk(path: Path) -> None:
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
-def load_support_diagnostics():
+def load_runtime_module(name: str, path: Path):
     runtime_text = str(RUNTIME)
     if runtime_text not in sys.path:
         sys.path.insert(0, runtime_text)
-    spec = importlib.util.spec_from_file_location(
-        "carry_support_diagnostics",
-        SUPPORT_DIAGNOSTICS,
-    )
+    spec = importlib.util.spec_from_file_location(name, path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def load_support_diagnostics():
+    return load_runtime_module("carry_support_diagnostics", SUPPORT_DIAGNOSTICS)
+
+
+def load_support_web():
+    return load_runtime_module("carry_support_web", SUPPORT_WEB)
 
 
 def main() -> int:
@@ -146,6 +152,12 @@ def main() -> int:
         assert "name: swsr SFP 10G 4 Status" in sr_yaml
         assert "name: swsr Uptime\n    source: sirivision_uptime" in sr_yaml
         assert "1.3.6.1.2.1.1.3.0" not in sr_yaml
+
+        support_web = load_support_web()
+        handoff_yaml = temp / "generated-snmp2mqtt.yaml"
+        handoff_yaml.write_text(sr_yaml, encoding="utf-8")
+        handoff_validation = support_web._validate_snmp2mqtt_yaml(handoff_yaml)
+        assert handoff_validation["valid"] is True, handoff_validation
         assert (
             "template: \"{{ 'unknown' if (value | int) in [0, 1410] "
             "else ([value | int, 2500] | min) }}\""
