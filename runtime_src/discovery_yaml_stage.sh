@@ -152,7 +152,7 @@ write_generated_yaml_for_walk() {
         port = name
         sub(/^FortyGigabitEthernet1\/1\//, "", port)
         sub(/^Fo1\/1\//, "", port)
-        return prefix " Rear QSFP 40G " (port + 0)
+        return prefix " QSFP 40G " (port + 0)
       }
       if (model == "SG350-20" && name ~ /^[Gg][Ii]([1-9]|1[0-9]|20)$/) {
         port = name

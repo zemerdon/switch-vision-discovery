@@ -172,8 +172,8 @@ with tempfile.TemporaryDirectory(prefix="sv-dell-n4032f-") as td:
     assert generated.count("1.3.6.1.2.1.2.2.1.8.") == 26
     assert "N4032 SFP 10G 1 Status" in generated
     assert "N4032 SFP 10G 24 Status" in generated
-    assert "N4032 Rear QSFP 40G 1 Status" in generated
-    assert "N4032 Rear QSFP 40G 2 Status" in generated
+    assert "N4032 QSFP 40G 1 Status" in generated
+    assert "N4032 QSFP 40G 2 Status" in generated
     assert "Optic Row" not in generated
 
     card = (work / "card.yaml").read_text(encoding="utf-8")
@@ -181,13 +181,13 @@ with tempfile.TemporaryDirectory(prefix="sv-dell-n4032f-") as td:
     assert 'switch_model: "N4032F"' in card, card
     assert "        port_count: 0" in card, card
     assert "        sfp_port_count: 26" in card, card
-    assert 'calibration_profile: "unifi_32sfp"' in card, card
+    assert 'calibration_profile: "dell_n4032f"' in card, card
     assert "discovered and telemetry-capable" not in card, card
     assert "intentionally not bound to a faceplate yet" not in card, card
 
-    # The rear expansion is optional. A base N4032F without Fo1/1/1-2 must
+    # The QSFP expansion module is optional. A base N4032F without Fo1/1/1-2 must
     # use only the 24 front optical positions rather than inheriting phantom
-    # rear sockets from the exact-model registry.
+    # module sockets from the exact-model registry.
     base_only = "\n".join(
         line for line in normalized_text.splitlines()
         if "Fo1/1/" not in line and "FortyGigabitEthernet1/1/" not in line
@@ -203,22 +203,23 @@ with tempfile.TemporaryDirectory(prefix="sv-dell-n4032f-") as td:
     assert "        sfp_port_count: 24" in base_card, base_card
     assert "        sfp_port_count: 26" not in base_card, base_card
     base_yaml = (work / "generated.yaml").read_text(encoding="utf-8")
-    assert "Rear QSFP 40G" not in base_yaml
+    assert "QSFP 40G" not in base_yaml
 
 registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
 device = next(row for row in registry["devices"] if row.get("model") == "N4032F")
 assert device["dashboard_support"] is True
 assert device.get("frontend_hold") is not True
-assert device["default_faceplate"] == "faceplates/unifi-32sfp.png"
-assert device["calibration_profile"] == "unifi_32sfp"
+assert device["default_faceplate"] == "faceplates/dell-4032f.png"
+assert device["calibration_profile"] == "dell_n4032f"
 assert device["ports"]["uplinks"] == 24
 assert [item["interface_names"] for item in device["discovery_optional_interfaces"]] == [["Fo1/1/1", "Fo1/1/2"]]
 assert device["discovery_optional_interfaces"][0]["telemetry_only"] is False
+assert device["discovery_optional_interfaces"][0]["location"] == "front"
 assert device["discovery_optional_interfaces"][0]["faceplate_positions"] == [25, 26]
 
 profiles = PROFILE.read_text(encoding="utf-8")
 assert "dell-n4032f-24sfp2qsfp:" in profiles
 assert "qsfp_40g_ports: 2" not in profiles
-assert "bind to faceplate optical positions 25-26 when observed" in profiles
+assert "optional front-panel physical parents and bind to faceplate optical positions 25-26 when observed" in profiles
 
 print("Dell N4032F registered + 26-position faceplate binding contract: PASS")

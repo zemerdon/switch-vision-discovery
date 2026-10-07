@@ -1,3 +1,11 @@
+## 3.0.22 — Dell N4032F dedicated visual binding
+
+- Bind exact Dell N4032F dashboards to the dedicated Core `dell-4032f.png` / `dell_n4032f` faceplate contract instead of the temporary UniFi optical fallback.
+- Correct the optional 2-port QSFP+ expansion location to the front-panel module bay while preserving its observed Fo1/1/1–2 40G parent interfaces at faceplate positions 25–26.
+- Generate neutral `QSFP 40G` telemetry/entity names for the front-panel module instead of the old `Rear QSFP 40G` label; Core keeps the historical `rear_qsfp_40g` IDs as compatibility fallbacks.
+- Preserve the base 24 × 10G SFP+ contract when the optional module is absent and continue excluding Te1/1/1–8 breakout lanes as additional physical sockets.
+- Keep N4032F at Experimental; this visual/location correction does not claim a support-status promotion.
+
 ## 3.0.21 — GS1900 Q-BRIDGE VLAN membership
 
 - Add exact GS1900-8 generated telemetry for the standard Q-BRIDGE bridge-port/PVID/membership tables proven by current field evidence, without extending support from model-name proximity alone.

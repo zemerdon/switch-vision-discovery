@@ -982,8 +982,8 @@ profiles:
       - Te1/1/8
     notes:
     - Real-hardware evidence confirms Te1/0/1-24 as the 24 front 10G SFP+ cages.
-    - ENTITY-MIB identifies an installed Dell 2 Port QSFP Expansion Card; Fo1/1/1-2 are optional rear physical parents and bind to faceplate optical positions 25-26 when observed.
-    - Te1/1/1-8 are breakout lanes for those two rear QSFP connectors and are not additional physical sockets.
+    - ENTITY-MIB identifies an installed Dell 2 Port QSFP Expansion Card; Fo1/1/1-2 are optional front-panel physical parents and bind to faceplate optical positions 25-26 when observed.
+    - Te1/1/1-8 are breakout lanes for those two QSFP connectors and are not additional physical sockets.
     - Until dedicated N4032F artwork exists, Switch Vision reuses the reviewed 32-optical faceplate while preserving the real Dell topology; unused optical positions remain hidden by the generated card count.
 
   dell-n2128px-on:
