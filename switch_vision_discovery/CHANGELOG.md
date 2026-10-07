@@ -1,3 +1,9 @@
+## 3.0.24 — Core 2.7.49 faceplate renderer coordination
+
+- Carry forward the Cisco SG200-26 stock 24-RJ45 + 2-SFP correction and unchanged gi1–gi26 / sfp_logical_port_map [25,26] logical contract from the 3.0.23 candidate.
+- Repin the reviewed Core faceplate catalog to the coordinated Core 2.7.49 candidate so Discovery's all-supported-model visual validation follows the renderer-fixed local source.
+- Rebuild the packaged runtime at 3.0.24 with no change to the SG200-26 physical SNMP contract.
+
 ## 3.0.23 — Cisco SG200-26 stock 24+2 presentation
 
 - Correct the exact Cisco SG200-26 visual assignment from the oversized `stock_48rj45_2sfp` fallback to the existing `stock_24rj45_2sfp` / `24rj45-2sfp.png` stock faceplate.
