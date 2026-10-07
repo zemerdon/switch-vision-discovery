@@ -1,3 +1,9 @@
+## 3.0.25 — Core 2.7.50 native faceplate renderer coordination
+
+- Carry forward the Cisco SG200-26 stock 24-RJ45 + 2-SFP correction and unchanged gi1–gi26 / sfp_logical_port_map [25,26] logical contract.
+- Repin Discovery's reviewed Core faceplate catalog to Core 2.7.50, which restores the established native-image calibration renderer after the 2.7.49 local-only fixed-canvas regression.
+- Rebuild the packaged runtime at 3.0.25 with no change to the SG200-26 physical SNMP contract.
+
 ## 3.0.24 — Core 2.7.49 faceplate renderer coordination
 
 - Carry forward the Cisco SG200-26 stock 24-RJ45 + 2-SFP correction and unchanged gi1–gi26 / sfp_logical_port_map [25,26] logical contract from the 3.0.23 candidate.
