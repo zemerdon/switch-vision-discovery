@@ -1,3 +1,9 @@
+## 3.0.26 — Core 2.7.51 N4032F visual coordination
+
+- Carry forward the Cisco SG200-26 stock 24-RJ45 + 2-SFP correction and unchanged 26-interface logical/SNMP contract.
+- Repin Discovery's reviewed Core faceplate catalog to Core 2.7.51, where the dedicated Dell N4032F profile always draws all 26 calibrated optical positions even if `sfp_port_count` is stale or partial.
+- Keep Discovery's N4032F telemetry/physical contract unchanged; this is a coordinated Core visual-binding update only.
+
 ## 3.0.25 — Core 2.7.50 native faceplate renderer coordination
 
 - Carry forward the Cisco SG200-26 stock 24-RJ45 + 2-SFP correction and unchanged gi1–gi26 / sfp_logical_port_map [25,26] logical contract.
