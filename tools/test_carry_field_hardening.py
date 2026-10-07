@@ -194,6 +194,62 @@ def main() -> int:
         assert current["walk_freshness"]["status"] == "ok"
         assert current["walk_freshness"]["stale_targeted_count"] == 0
 
+        contract_dir = root / "capabilities"
+        contract_dir.mkdir(parents=True)
+        (contract_dir / "GS1900-8-physical-contract.json").write_text(
+            json.dumps({
+                "device": {"effective_model": "GS1900-8"},
+                "ports": [{
+                    "physical_id": "member1-rj45-1",
+                    "source": {"type": "snmp", "if_index": 1, "if_name": "GigabitEthernet1"},
+                    "compatibility_name": "Gi1/0/1",
+                }],
+            }),
+            encoding="utf-8",
+        )
+        generated = {
+            "targets": [{
+                "name": "Switch Vision swz1 Q-BRIDGE VLAN State",
+                "device_model": "GS1900-8",
+                "sensors": [
+                    {
+                        "name": "swz1 Port 1 VLAN Mode",
+                        "source": "qbridge_vlan",
+                        "interface": "GigabitEthernet1",
+                        "attribute": "mode",
+                    },
+                    {
+                        "name": "swz1 Port 1 Native VLAN",
+                        "source": "qbridge_vlan",
+                        "interface": "Gi1/0/1",
+                        "attribute": "native_vlan",
+                    },
+                ],
+            }],
+        }
+        derived = diagnostics.build_derived_sensor_resolution(root, generated, [], ha_available=False)
+        assert derived["summary"]["derived_sensor_count"] == 2
+        assert derived["summary"]["raw_if_name_match"] == 1
+        assert derived["summary"]["compatibility_name_only"] == 1
+        assert derived["sensors"][0]["raw_if_name"] == "GigabitEthernet1"
+        assert derived["sensors"][1]["raw_if_name"] == "GigabitEthernet1"
+        assert derived["sensors"][1]["compatibility_name"] == "Gi1/0/1"
+
+        module = temp / "discovery_yaml_stage.sh"
+        module.write_text("runtime identity fixture\n", encoding="utf-8")
+        identity = diagnostics.build_runtime_artifact_identity([module])
+        assert identity["modules"][0]["status"] == "ok"
+        assert identity["modules"][0]["sha256"]
+
+        digest = "sha256:" + ("a" * 64)
+        artifact = diagnostics._safe_addon_artifact_identity({
+            "image": f"ghcr.io/example/switch-vision@{digest}",
+            "version": "3.0.27",
+            "arch": "amd64",
+        })
+        assert artifact["image_digest"] == digest
+        assert artifact["exact_digest_available"] is True
+
     print("Discovery Carry field-hardening regression: PASS")
     return 0
 

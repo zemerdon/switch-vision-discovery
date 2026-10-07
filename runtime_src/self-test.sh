@@ -908,10 +908,13 @@ expected = (
     "card-entity-bindings.json",
     "generated-file-provenance.json",
     "runtime-versions.json",
+    "runtime-artifact-identity.json",
+    "derived-sensor-resolution.json",
     "configuration-snapshot.json",
     "calibration-storage.json",
     "discovery-addon-log-status.json",
     "unifi2mqtt-addon-log-status.json",
+    "snmp2mqtt-addon-log-status.json",
     "unifi-connectivity-diagnostics.json",
     "diagnostic-summary.json",
 )
@@ -925,7 +928,14 @@ with zipfile.ZipFile(path) as archive:
         assert names.count(wanted) == 1, (wanted, names.count(wanted))
     assert not any(name.startswith(f"{root}/diagnostics/") for name in names), "duplicate top-level diagnostics"
     manifest = json.loads(archive.read(f"{root}/MANIFEST.json"))
-    assert manifest["bundle_version"] == 14
+    assert manifest["bundle_version"] == 15
+    assert manifest["bundle_provenance_file"] == "BUNDLE_PROVENANCE.json"
+    assert names.count(f"{root}/BUNDLE_PROVENANCE.json") == 1
+    bundle_provenance = json.loads(archive.read(f"{root}/BUNDLE_PROVENANCE.json"))
+    assert bundle_provenance["schema_version"] == 1
+    assert "generated_snmp2mqtt" in bundle_provenance
+    assert "runtime_artifact_identity_sha256" in bundle_provenance["diagnostics"]
+    assert "derived_sensor_resolution_sha256" in bundle_provenance["diagnostics"]
     assert manifest["evidence"] == {
         "quality": "complete",
         "discovery_result": "unknown",
@@ -2159,8 +2169,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.26"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.26"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.27"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.27"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"

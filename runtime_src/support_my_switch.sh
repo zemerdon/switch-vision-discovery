@@ -4,7 +4,7 @@ set -eu
 SWITCH_VISION_ROOT="${SWITCH_VISION_ROOT:-/share/switch_vision}"
 CONTRIBUTIONS_DIR="${CONTRIBUTIONS_DIR:-$SWITCH_VISION_ROOT/contributions}"
 VERSION="${SWITCH_VISION_DISCOVERY_VERSION:-unknown}"
-BUNDLE_VERSION="14"
+BUNDLE_VERSION="15"
 MASK_MANAGEMENT_IPS="${SUPPORT_MASK_MANAGEMENT_IPS:-true}"
 MASK_MAC_ADDRESSES="${SUPPORT_MASK_MAC_ADDRESSES:-true}"
 MASK_HOSTNAMES="${SUPPORT_MASK_HOSTNAMES:-true}"
@@ -560,6 +560,41 @@ Automated masking reduces common privacy risks but cannot guarantee that all
 identifying information was removed. Review the archive before sharing it.
 EOF_SAN
 
+# Schema 15 records the relationship between live generated artifacts and
+# the privacy-processed copies actually included in the contribution.
+sha_file() {
+  path="$1"
+  if [ -f "$path" ]; then
+    sha256sum "$path" | awk '{print $1}'
+  else
+    printf ''
+  fi
+}
+LIVE_GENERATED_SHA=$(jq -r '.files[]? | select(.path == "generated-snmp2mqtt.yaml") | .sha256'   "$DATA_COPY/diagnostics/generated-file-provenance.json" 2>/dev/null | head -n 1)
+BUNDLED_GENERATED_SHA=$(sha_file "$DATA_COPY/generated-snmp2mqtt.yaml")
+RUNTIME_ARTIFACT_SHA=$(sha_file "$DATA_COPY/diagnostics/runtime-artifact-identity.json")
+DERIVED_SENSOR_SHA=$(sha_file "$DATA_COPY/diagnostics/derived-sensor-resolution.json")
+SNMP2MQTT_LOG_SHA=$(sha_file "$DATA_COPY/diagnostics/snmp2mqtt-addon-log.txt")
+jq -n   --arg generated_at "$(date -Iseconds)"   --arg live_generated_sha256 "$LIVE_GENERATED_SHA"   --arg bundled_generated_sha256 "$BUNDLED_GENERATED_SHA"   --arg runtime_artifact_identity_sha256 "$RUNTIME_ARTIFACT_SHA"   --arg derived_sensor_resolution_sha256 "$DERIVED_SENSOR_SHA"   --arg snmp2mqtt_addon_log_sha256 "$SNMP2MQTT_LOG_SHA"   '{
+    schema_version: 1,
+    generated_at: $generated_at,
+    scope: "hash linkage for fixed privacy-processed diagnostic artifacts; no file contents",
+    generated_snmp2mqtt: {
+      live_pre_sanitization_sha256: ($live_generated_sha256 | select(length > 0) // null),
+      bundled_sanitized_sha256: ($bundled_generated_sha256 | select(length > 0) // null),
+      transformed_by_bundle_privacy_processing: (
+        ($live_generated_sha256 | length) > 0
+        and ($bundled_generated_sha256 | length) > 0
+        and $live_generated_sha256 != $bundled_generated_sha256
+      )
+    },
+    diagnostics: {
+      runtime_artifact_identity_sha256: ($runtime_artifact_identity_sha256 | select(length > 0) // null),
+      derived_sensor_resolution_sha256: ($derived_sensor_resolution_sha256 | select(length > 0) // null),
+      snmp2mqtt_addon_log_sha256: ($snmp2mqtt_addon_log_sha256 | select(length > 0) // null)
+    }
+  }' > "$BUNDLE_ROOT/BUNDLE_PROVENANCE.json"
+
 # Count the complete archive payload, including generated metadata and the
 # manifest itself. The previous count only covered the copied data directory.
 FILE_COUNT=$(( $(find "$BUNDLE_ROOT" -type f | wc -l | tr -d ' ') + 1 ))
@@ -610,6 +645,7 @@ cat > "$BUNDLE_ROOT/MANIFEST.json" <<EOF_MANIFEST
   },
   "prepared_email_file": "EMAIL_TEMPLATE.txt",
   "bundle_quality_file": "BUNDLE_QUALITY.txt",
+  "bundle_provenance_file": "BUNDLE_PROVENANCE.json",
   "privacy_options": {
     "secrets_always_removed": true,
     "serial_numbers_always_masked": true,

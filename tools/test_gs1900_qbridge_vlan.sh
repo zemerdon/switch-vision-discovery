@@ -46,6 +46,8 @@ grep -F 'device_manufacturer: Zyxel' "$out" >/dev/null
 grep -F '# Stack-safe polling: 1 member(s), 8 physical interfaces' "$out" >/dev/null
 grep -F 'name: Switch Vision swz1 Q-BRIDGE VLAN State' "$out" >/dev/null
 [ "$(grep -c 'source: qbridge_vlan' "$out")" -eq 40 ]
+[ "$(grep -c 'interface: GigabitEthernet' "$out")" -eq 40 ]
+! grep -F 'interface: Gi1/0/' "$out" >/dev/null
 grep -F 'name: swz1 Port 2 Native VLAN' "$out" >/dev/null
 grep -F 'name: swz1 Port 2 VLANs' "$out" >/dev/null
 grep -F 'name: swz1 Port 2 Tagged VLANs' "$out" >/dev/null

@@ -1,3 +1,12 @@
+## 3.0.27 — Support My Switch schema 15 runtime provenance
+
+- Bump Support My Switch bundles to schema 15.
+- Capture bounded sanitized SNMP2MQTT add-on logs alongside existing Discovery and UniFi2MQTT diagnostics.
+- Add runtime artifact provenance for allowlisted Discovery generator/runtime modules using SHA-256, plus Supervisor-exposed add-on image/digest identity when available.
+- Add derived-sensor resolution diagnostics that compare configured interface bindings with physical-contract raw IF-MIB names and compatibility labels, so identity mismatches such as `GigabitEthernet1` versus `Gi1/0/1` are explicit.
+- Add post-sanitization `BUNDLE_PROVENANCE.json` linking the live generated-SNMP2MQTT hash to the privacy-processed bundled copy and the new diagnostic hashes.
+- Harden the GS1900 Q-BRIDGE regression so generated derived sensors must bind to raw IF-MIB names, never presentation compatibility names.
+
 ## 3.0.26 — Core 2.7.51 N4032F visual coordination
 
 - Carry forward the Cisco SG200-26 stock 24-RJ45 + 2-SFP correction and unchanged 26-interface logical/SNMP contract.

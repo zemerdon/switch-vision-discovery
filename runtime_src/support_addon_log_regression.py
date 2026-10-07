@@ -94,4 +94,41 @@ try:
 finally:
     diag._unifi2mqtt_supervisor_info = original_info
 
+original_addon_info = diag._addon_supervisor_info
+try:
+    diag._addon_supervisor_info = lambda _token, kind, **_kwargs: (
+        "fixture_switch_vision_snmp2mqtt",
+        {"version": "1.0.9"},
+    ) if kind == "snmp2mqtt" else original_addon_info(_token, kind, **_kwargs)
+    snmp_seen = {}
+
+    def snmp_opener(request, timeout=0):
+        snmp_seen["url"] = request.full_url
+        snmp_seen["authorization"] = request.headers.get("Authorization")
+        return Response(b"snmp2mqtt startup\nQ-BRIDGE VLAN data not currently available\n")
+
+    with tempfile.TemporaryDirectory(prefix="sv-snmp-addon-log-") as tmp:
+        root = Path(tmp)
+        status = diag.capture_snmp2mqtt_addon_log(
+            root,
+            opener=snmp_opener,
+            token_reader=lambda: "private-supervisor-token",
+        )
+        assert status["status"] == "captured", status
+        assert status["line_count"] == 2, status
+        assert (
+            "/addons/fixture_switch_vision_snmp2mqtt/logs/latest?lines=400&no_colors"
+            in snmp_seen["url"]
+        ), snmp_seen
+        assert snmp_seen["authorization"] == "Bearer private-supervisor-token"
+        log_text = (root / diag.SNMP2MQTT_ADDON_LOG).read_text(encoding="utf-8")
+        assert "Q-BRIDGE VLAN data not currently available" in log_text
+        assert "private-supervisor-token" not in log_text
+        status_doc = json.loads(
+            (root / diag.SNMP2MQTT_ADDON_LOG_STATUS).read_text(encoding="utf-8")
+        )
+        assert status_doc["sanitization_required"] is True, status_doc
+finally:
+    diag._addon_supervisor_info = original_addon_info
+
 print("Support My Switch add-on log capture: PASS")

@@ -68,6 +68,19 @@ DISCOVERY_ADDON_LOG_LINES = 400
 UNIFI2MQTT_ADDON_LOG = DIAG_DIR / "unifi2mqtt-addon-log.txt"
 UNIFI2MQTT_ADDON_LOG_STATUS = DIAG_DIR / "unifi2mqtt-addon-log-status.json"
 UNIFI2MQTT_ADDON_LOG_LINES = 400
+SNMP2MQTT_ADDON_LOG = DIAG_DIR / "snmp2mqtt-addon-log.txt"
+SNMP2MQTT_ADDON_LOG_STATUS = DIAG_DIR / "snmp2mqtt-addon-log-status.json"
+SNMP2MQTT_ADDON_LOG_LINES = 400
+RUNTIME_ARTIFACT_IDENTITY = DIAG_DIR / "runtime-artifact-identity.json"
+DERIVED_SENSOR_RESOLUTION = DIAG_DIR / "derived-sensor-resolution.json"
+RUNTIME_MODULE_PATHS = (
+    Path("/discovery_yaml_stage.sh"),
+    Path("/support_diagnostics.py"),
+    Path("/support_my_switch.sh"),
+    Path("/generated_yaml_guard.py"),
+    Path("/discovery_job.sh"),
+    Path("/run.sh"),
+)
 UNIFI_CONNECTIVITY_DIAGNOSTICS = DIAG_DIR / "unifi-connectivity-diagnostics.json"
 UNIFI_DIAGNOSTIC_TIMEOUT_SECONDS = 6.0
 
@@ -142,8 +155,9 @@ def _supervisor_json(
         return json.loads(response.read().decode("utf-8"))
 
 
-def _unifi2mqtt_supervisor_info(
+def _addon_supervisor_info(
     token: str,
+    kind: str,
     *,
     opener=urlopen,
 ) -> tuple[str, dict[str, Any]]:
@@ -157,21 +171,29 @@ def _unifi2mqtt_supervisor_info(
     for addon in addons if isinstance(addons, list) else []:
         if not isinstance(addon, dict):
             continue
-        if _addon_kind(addon.get("slug"), addon.get("name")) != "unifi2mqtt":
+        if _addon_kind(addon.get("slug"), addon.get("name")) != kind:
             continue
         slug = str(addon.get("slug") or "").strip()
         if not slug:
             continue
-        info_doc = _supervisor_json(f"/addons/{slug}/info", token, opener=opener)
+        info_doc = _supervisor_json(f"/addons/{quote(slug, safe='')}/info", token, opener=opener)
         info = (
             info_doc.get("data")
             if isinstance(info_doc, dict) and isinstance(info_doc.get("data"), dict)
             else info_doc
         )
         if not isinstance(info, dict):
-            raise ValueError("UniFi2MQTT add-on info was not an object")
+            raise ValueError(f"{kind} add-on info was not an object")
         return slug, info
-    raise RuntimeError("Switch Vision UniFi2MQTT is not installed")
+    raise RuntimeError(f"Switch Vision {kind} is not installed")
+
+
+def _unifi2mqtt_supervisor_info(
+    token: str,
+    *,
+    opener=urlopen,
+) -> tuple[str, dict[str, Any]]:
+    return _addon_supervisor_info(token, "unifi2mqtt", opener=opener)
 
 
 def capture_unifi2mqtt_addon_log(
@@ -230,6 +252,55 @@ def capture_unifi2mqtt_addon_log(
         "sanitization_required": True,
     })
     _write(root, UNIFI2MQTT_ADDON_LOG_STATUS, status)
+    return status
+
+
+def capture_snmp2mqtt_addon_log(
+    root: Path,
+    *,
+    opener=urlopen,
+    token_reader=read_supervisor_token,
+) -> dict[str, Any]:
+    """Capture bounded SNMP2MQTT runtime evidence for derived-sensor failures."""
+    status: dict[str, Any] = {
+        "schema_version": 1,
+        "generated_at": _now(),
+        "requested_lines": SNMP2MQTT_ADDON_LOG_LINES,
+        "status": "unavailable",
+    }
+    token = str(token_reader() or "").strip()
+    if not token:
+        status["reason"] = "supervisor_token_unavailable"
+        _write(root, SNMP2MQTT_ADDON_LOG_STATUS, status)
+        return status
+    try:
+        slug, _info = _addon_supervisor_info(token, "snmp2mqtt", opener=opener)
+        request = Request(
+            f"http://supervisor/addons/{quote(slug, safe='')}/logs/latest"
+            f"?lines={SNMP2MQTT_ADDON_LOG_LINES}&no_colors",
+            headers={"Authorization": f"Bearer {token}", "Accept": "text/plain"},
+        )
+        with opener(request, timeout=12.0) as response:
+            text = response.read().decode("utf-8", errors="replace")
+    except HTTPError as exc:
+        status["reason"] = f"supervisor_http_{exc.code}"
+        _write(root, SNMP2MQTT_ADDON_LOG_STATUS, status)
+        return status
+    except (URLError, TimeoutError, OSError, RuntimeError, ValueError) as exc:
+        status["reason"] = f"snmp2mqtt_log_request_failed:{type(exc).__name__}"
+        _write(root, SNMP2MQTT_ADDON_LOG_STATUS, status)
+        return status
+
+    lines = text.splitlines()[-SNMP2MQTT_ADDON_LOG_LINES:]
+    log_path = root / SNMP2MQTT_ADDON_LOG
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("\n".join(lines).rstrip() + ("\n" if lines else ""), encoding="utf-8")
+    status.update({
+        "status": "captured",
+        "line_count": len(lines),
+        "sanitization_required": True,
+    })
+    _write(root, SNMP2MQTT_ADDON_LOG_STATUS, status)
     return status
 
 
@@ -643,6 +714,8 @@ def _sensor_rows(generated: Any) -> list[dict[str, Any]]:
         target_name = str(
             target.get("name") or target.get("target") or target.get("id") or f"target-{target_index}"
         )
+        target_model = str(target.get("device_model") or "").strip()
+        target_manufacturer = str(target.get("device_manufacturer") or "").strip()
         sensors = target.get("sensors")
         if not isinstance(sensors, list):
             continue
@@ -655,11 +728,16 @@ def _sensor_rows(generated: Any) -> list[dict[str, Any]]:
             component = "binary_sensor" if sensor.get("binary_sensor") is True else "sensor"
             out.append({
                 "target": target_name,
+                "device_model": target_model,
+                "device_manufacturer": target_manufacturer,
                 "component": component,
                 "object_id": object_id,
                 "entity_id": f"{component}.{object_id}",
                 "oid": str(sensor.get("oid") or sensor.get("object_id_oid") or "").strip(),
                 "name": str(sensor.get("name") or "").strip(),
+                "source": str(sensor.get("source") or "").strip(),
+                "interface": str(sensor.get("interface") or "").strip(),
+                "attribute": str(sensor.get("attribute") or "").strip(),
             })
     return out
 
@@ -685,6 +763,148 @@ def _parse_walk_statuses(root: Path) -> dict[str, str]:
         except OSError:
             continue
     return statuses
+
+def _canonical_model_text(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
+
+
+def _physical_contract_ports(root: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path in sorted(root.rglob("*-physical-contract.json"))[:MAX_CAPABILITY_FILES]:
+        data = _json(path)
+        if not isinstance(data, dict):
+            continue
+        device = data.get("device") if isinstance(data.get("device"), dict) else {}
+        model = str(
+            device.get("effective_model")
+            or device.get("detected_model")
+            or device.get("model")
+            or ""
+        ).strip()
+        ports = data.get("ports") if isinstance(data.get("ports"), list) else []
+        for port in ports:
+            if not isinstance(port, dict):
+                continue
+            source = port.get("source") if isinstance(port.get("source"), dict) else {}
+            raw_if_name = str(source.get("if_name") or "").strip()
+            compatibility_name = str(port.get("compatibility_name") or "").strip()
+            if not raw_if_name and not compatibility_name:
+                continue
+            rows.append({
+                "model": model,
+                "model_key": _canonical_model_text(model),
+                "physical_id": str(port.get("physical_id") or "").strip(),
+                "if_index": _intish(source.get("if_index")),
+                "raw_if_name": raw_if_name,
+                "compatibility_name": compatibility_name,
+            })
+    return rows
+
+
+def build_derived_sensor_resolution(
+    root: Path,
+    generated: Any,
+    states: list[dict[str, Any]] | None = None,
+    *,
+    ha_available: bool = True,
+) -> dict[str, Any]:
+    """Correlate derived sensor interface bindings with physical IF-MIB identity."""
+    contracts = _physical_contract_ports(root)
+    state_map = _state_map(states or []) if ha_available else {}
+    rows: list[dict[str, Any]] = []
+    for sensor in _sensor_rows(generated):
+        source = str(sensor.get("source") or "").strip()
+        configured_interface = str(sensor.get("interface") or "").strip()
+        if not source or not configured_interface:
+            continue
+        model_key = _canonical_model_text(sensor.get("device_model"))
+        candidates = [
+            row for row in contracts
+            if not model_key or row.get("model_key") == model_key
+        ]
+        raw_matches = [
+            row for row in candidates
+            if row.get("raw_if_name") == configured_interface
+        ]
+        compatibility_matches = [
+            row for row in candidates
+            if row.get("compatibility_name") == configured_interface
+        ]
+        if raw_matches:
+            status = "raw_if_name_match"
+            match = raw_matches[0]
+        elif compatibility_matches:
+            status = "compatibility_name_only"
+            match = compatibility_matches[0]
+        else:
+            status = "unresolved"
+            match = {}
+        exact = state_map.get(str(sensor.get("entity_id") or "")) if ha_available else None
+        rows.append({
+            "target": sensor.get("target"),
+            "device_model": sensor.get("device_model"),
+            "source": source,
+            "object_id": sensor.get("object_id"),
+            "entity_id": sensor.get("entity_id"),
+            "attribute": sensor.get("attribute"),
+            "configured_interface": configured_interface,
+            "contract_resolution": status,
+            "raw_if_name": match.get("raw_if_name"),
+            "compatibility_name": match.get("compatibility_name"),
+            "if_index": match.get("if_index"),
+            "physical_id": match.get("physical_id"),
+            "candidate_count": len(candidates),
+            "raw_match_count": len(raw_matches),
+            "compatibility_match_count": len(compatibility_matches),
+            "ha_state": _safe_state(str(sensor.get("entity_id") or ""), exact.get("state")) if exact else None,
+        })
+    counts = {
+        key: sum(1 for row in rows if row["contract_resolution"] == key)
+        for key in ("raw_if_name_match", "compatibility_name_only", "unresolved")
+    }
+    return {
+        "schema_version": 1,
+        "generated_at": _now(),
+        "scope": "derived sensors with interface bindings correlated to physical-contract raw IF-MIB and compatibility identities; no management addresses or credentials",
+        "summary": {
+            "derived_sensor_count": len(rows),
+            **counts,
+            "ha_state_status": "available" if ha_available else "unavailable",
+        },
+        "sensors": rows[:MAX_PORT_ROWS],
+    }
+
+
+def build_runtime_artifact_identity(
+    paths: tuple[Path, ...] | list[Path] | None = None,
+) -> dict[str, Any]:
+    modules = []
+    for path in tuple(paths) if paths is not None else RUNTIME_MODULE_PATHS:
+        path = Path(path)
+        row: dict[str, Any] = {
+            "name": path.name,
+            "path": str(path),
+            "status": "unavailable",
+        }
+        try:
+            if path.is_file():
+                raw = path.read_bytes()
+                row.update({
+                    "status": "ok",
+                    "bytes": len(raw),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                })
+        except OSError as exc:
+            row["reason"] = type(exc).__name__
+        modules.append(row)
+    return {
+        "schema_version": 1,
+        "generated_at": _now(),
+        "discovery_version": os.environ.get("SWITCH_VISION_DISCOVERY_VERSION", "unknown"),
+        "scope": "allowlisted Discovery runtime module names, paths, sizes and SHA-256 identities only",
+        "modules": modules,
+    }
+
 
 def build_port_pipeline(
     generated: Any,
@@ -1711,6 +1931,30 @@ def capture_calibration_storage_snapshot() -> dict[str, Any]:
         }
 
 
+def _safe_addon_artifact_identity(info: Any) -> dict[str, Any]:
+    if not isinstance(info, dict):
+        return {"status": "unavailable"}
+    result: dict[str, Any] = {"status": "ok"}
+    for key in ("image", "repository", "arch", "version", "version_latest", "state", "build"):
+        value = info.get(key)
+        if isinstance(value, (str, int, float, bool)) and value not in ("", None):
+            result[key] = value
+    digest = ""
+    for key in ("image_digest", "digest"):
+        value = str(info.get(key) or "").strip().casefold()
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", value):
+            digest = value
+            break
+    if not digest:
+        image = str(info.get("image") or "")
+        match = re.search(r"@(?P<digest>sha256:[0-9a-fA-F]{64})(?:$|[^0-9a-fA-F])", image)
+        if match:
+            digest = match.group("digest").casefold()
+    result["image_digest"] = digest or None
+    result["exact_digest_available"] = bool(digest)
+    return result
+
+
 def build_runtime_versions() -> dict[str, Any]:
     payload = {
         "schema_version": 1,
@@ -1747,10 +1991,26 @@ def build_runtime_versions() -> dict[str, Any]:
             haystack = f"{addon.get('slug','')} {addon.get('name','')}".casefold()
             if "switch vision" not in haystack and "switch_vision" not in haystack and "snmp2mqtt" not in haystack and "unifi2mqtt" not in haystack:
                 continue
-            payload["switch_vision_addons"].append({
+            row = {
                 key: addon.get(key) for key in ("slug", "name", "version", "version_latest", "state")
                 if addon.get(key) not in (None, "")
-            })
+            }
+            slug = str(addon.get("slug") or "").strip()
+            if slug:
+                try:
+                    info_doc = get(f"/addons/{quote(slug, safe='')}/info")
+                    info = (
+                        info_doc.get("data")
+                        if isinstance(info_doc, dict) and isinstance(info_doc.get("data"), dict)
+                        else info_doc
+                    )
+                    row["artifact_identity"] = _safe_addon_artifact_identity(info)
+                except Exception as exc:
+                    row["artifact_identity"] = {
+                        "status": "unavailable",
+                        "reason": type(exc).__name__,
+                    }
+            payload["switch_vision_addons"].append(row)
         payload["status"] = "ok"
     except Exception as exc:
         payload["status"] = "partial"
@@ -1823,6 +2083,13 @@ def capture_support_diagnostics(root: Path) -> None:
     file_provenance = build_file_provenance(root)
     mqtt_scan = capture_mqtt_maintenance(root)
     runtime_versions = build_runtime_versions()
+    runtime_artifacts = build_runtime_artifact_identity()
+    derived_sensor_resolution = build_derived_sensor_resolution(
+        root,
+        generated,
+        states,
+        ha_available=ha_error is None,
+    )
     configuration_snapshot = build_configuration_snapshot(root)
     calibration_storage = capture_calibration_storage_snapshot()
     try:
@@ -1842,6 +2109,16 @@ def capture_support_diagnostics(root: Path) -> None:
             "schema_version": 1,
             "generated_at": _now(),
             "requested_lines": UNIFI2MQTT_ADDON_LOG_LINES,
+            "status": "unavailable",
+            "reason": f"unexpected_capture_failure:{type(exc).__name__}",
+        })
+    try:
+        capture_snmp2mqtt_addon_log(root)
+    except Exception as exc:  # Diagnostic capture must never block a support bundle.
+        _write(root, SNMP2MQTT_ADDON_LOG_STATUS, {
+            "schema_version": 1,
+            "generated_at": _now(),
+            "requested_lines": SNMP2MQTT_ADDON_LOG_LINES,
             "status": "unavailable",
             "reason": f"unexpected_capture_failure:{type(exc).__name__}",
         })
@@ -1869,6 +2146,8 @@ def capture_support_diagnostics(root: Path) -> None:
     _write(root, DIAG_DIR / "card-entity-bindings.json", card_bindings)
     _write(root, DIAG_DIR / "generated-file-provenance.json", file_provenance)
     _write(root, DIAG_DIR / "runtime-versions.json", runtime_versions)
+    _write(root, RUNTIME_ARTIFACT_IDENTITY, runtime_artifacts)
+    _write(root, DERIVED_SENSOR_RESOLUTION, derived_sensor_resolution)
     _write(root, DIAG_DIR / "configuration-snapshot.json", configuration_snapshot)
     _write(root, DIAG_DIR / "calibration-storage.json", calibration_storage)
     _write(
