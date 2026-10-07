@@ -392,7 +392,7 @@ profiles:
     notes:
     - Real-hardware evidence confirms gi1-gi24 as fixed 1G copper and gi25-gi26 as the two dual-personality 1G copper/SFP positions.
     - combo_ports is a subset of the two SFP-capable positions, not an additional logical port count.
-    - The oversized stock 48-RJ45 + 2-SFP canvas is intentional until exact SG200-26 artwork exists, so every proven logical port remains representable.
+    - The stock 24-RJ45 + 2-SFP canvas matches the reviewed front-panel presentation; the two SFP cages remain mapped to logical ports 25-26.
   hp-3500yl-48g-44p-4dual:
     status: experimental
     vendor: HP

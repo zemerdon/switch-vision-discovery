@@ -1,3 +1,10 @@
+## 3.0.23 — Cisco SG200-26 stock 24+2 presentation
+
+- Correct the exact Cisco SG200-26 visual assignment from the oversized `stock_48rj45_2sfp` fallback to the existing `stock_24rj45_2sfp` / `24rj45-2sfp.png` stock faceplate.
+- Preserve the proven 26-interface contract and `sfp_logical_port_map: [25,26]`: the stock faceplate renders 24 RJ45 geometry positions while its two SFP cages continue to bind to logical interfaces 25 and 26.
+- Keep the reviewed `cisco-sg200-26-24p-2dual` mapping and Experimental support state unchanged.
+- Add permanent regression coverage so the SG200-26 cannot silently fall back to the 48-port calibration again.
+
 ## 3.0.22 — Dell N4032F dedicated visual binding
 
 - Bind exact Dell N4032F dashboards to the dedicated Core `dell-4032f.png` / `dell_n4032f` faceplate contract instead of the temporary UniFi optical fallback.

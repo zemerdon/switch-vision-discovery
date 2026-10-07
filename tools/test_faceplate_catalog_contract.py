@@ -35,7 +35,7 @@ expected={
 "UDM Pro Max":("faceplates/unifi-9rj45-2sfp.png","unifi_9_rj45_2sfp",9,2),
 "GS1900-24E":("faceplates/24rj45-2sfp.png","stock_24rj45_2sfp",24,0),
 "SG350-20":("faceplates/24rj45-4sfp.png","stock_24rj45_4sfp",16,4),
-"SG200-26":("faceplates/48rj45-2sfp.png","stock_48rj45_2sfp",24,2),
+"SG200-26":("faceplates/24rj45-2sfp.png","stock_24rj45_2sfp",24,2),
 "USW-24-G2":("faceplates/unifi-24-rj45-2sfp-inline.png","unifi_24_rj45_2sfp_inline",24,2),
 "HP J8693A Switch 3500yl-48G":("faceplates/48rj45-4sfp.png","stock_48rj45_4sfp",44,4),
 "USW Flex Mini":("faceplates/usw-flex-mini.png","usw_flex_mini",5,0),
