@@ -574,8 +574,9 @@ LIVE_GENERATED_SHA=$(jq -r '.files[]? | select(.path == "generated-snmp2mqtt.yam
 BUNDLED_GENERATED_SHA=$(sha_file "$DATA_COPY/generated-snmp2mqtt.yaml")
 RUNTIME_ARTIFACT_SHA=$(sha_file "$DATA_COPY/diagnostics/runtime-artifact-identity.json")
 DERIVED_SENSOR_SHA=$(sha_file "$DATA_COPY/diagnostics/derived-sensor-resolution.json")
+QBRIDGE_CORRELATION_SHA=$(sha_file "$DATA_COPY/diagnostics/qbridge-correlation.json")
 SNMP2MQTT_LOG_SHA=$(sha_file "$DATA_COPY/diagnostics/snmp2mqtt-addon-log.txt")
-jq -n   --arg generated_at "$(date -Iseconds)"   --arg live_generated_sha256 "$LIVE_GENERATED_SHA"   --arg bundled_generated_sha256 "$BUNDLED_GENERATED_SHA"   --arg runtime_artifact_identity_sha256 "$RUNTIME_ARTIFACT_SHA"   --arg derived_sensor_resolution_sha256 "$DERIVED_SENSOR_SHA"   --arg snmp2mqtt_addon_log_sha256 "$SNMP2MQTT_LOG_SHA"   '{
+jq -n   --arg generated_at "$(date -Iseconds)"   --arg live_generated_sha256 "$LIVE_GENERATED_SHA"   --arg bundled_generated_sha256 "$BUNDLED_GENERATED_SHA"   --arg runtime_artifact_identity_sha256 "$RUNTIME_ARTIFACT_SHA"   --arg derived_sensor_resolution_sha256 "$DERIVED_SENSOR_SHA"   --arg qbridge_correlation_sha256 "$QBRIDGE_CORRELATION_SHA"   --arg snmp2mqtt_addon_log_sha256 "$SNMP2MQTT_LOG_SHA"   '{
     schema_version: 1,
     generated_at: $generated_at,
     scope: "hash linkage for fixed privacy-processed diagnostic artifacts; no file contents",
@@ -591,6 +592,7 @@ jq -n   --arg generated_at "$(date -Iseconds)"   --arg live_generated_sha256 "$L
     diagnostics: {
       runtime_artifact_identity_sha256: ($runtime_artifact_identity_sha256 | select(length > 0) // null),
       derived_sensor_resolution_sha256: ($derived_sensor_resolution_sha256 | select(length > 0) // null),
+      qbridge_correlation_sha256: ($qbridge_correlation_sha256 | select(length > 0) // null),
       snmp2mqtt_addon_log_sha256: ($snmp2mqtt_addon_log_sha256 | select(length > 0) // null)
     }
   }' > "$BUNDLE_ROOT/BUNDLE_PROVENANCE.json"

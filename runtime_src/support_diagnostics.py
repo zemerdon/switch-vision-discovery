@@ -793,6 +793,7 @@ def _physical_contract_ports(root: Path) -> list[dict[str, Any]]:
             rows.append({
                 "model": model,
                 "model_key": _canonical_model_text(model),
+                "source_parent": str(path.parent.relative_to(root)),
                 "physical_id": str(port.get("physical_id") or "").strip(),
                 "if_index": _intish(source.get("if_index")),
                 "raw_if_name": raw_if_name,
@@ -1006,6 +1007,273 @@ def _capability_model(path: Path) -> dict[str, Any] | None:
     if evidence:
         row["evidence"] = evidence
     return row
+
+QBRIDGE_REPORT = DIAG_DIR / "qbridge-correlation.json"
+QBRIDGE_OIDS = {
+    "if_name": "1.3.6.1.2.1.31.1.1.1.1.",
+    "bridge_ifindex": "1.3.6.1.2.1.17.1.4.1.2.",
+    "pvid": "1.3.6.1.2.1.17.7.1.4.5.1.1.",
+    "current_egress": "1.3.6.1.2.1.17.7.1.4.2.1.4.",
+    "current_untagged": "1.3.6.1.2.1.17.7.1.4.2.1.5.",
+    "static_egress": "1.3.6.1.2.1.17.7.1.4.3.1.2.",
+    "static_untagged": "1.3.6.1.2.1.17.7.1.4.3.1.4.",
+}
+QBRIDGE_WALK_LINE = re.compile(
+    r"^\s*\.?(?P<oid>1\.3\.6\.1\.2\.1\.[0-9.]+)\s*=\s*(?P<value>.*?)\s*$"
+)
+
+
+def _qbridge_bitmap(raw: str) -> set[int] | None:
+    """SNMP PortList is MSB-first, and bridge ports start at one."""
+    match = re.fullmatch(r"(?:Hex-STRING|Hex STRING):\s*([0-9A-Fa-f\s]+)", raw)
+    if match:
+        hex_value = re.sub(r"\s+", "", match.group(1))
+    else:
+        match = re.fullmatch(r"(?:STRING|OCTET STRING):\s*0x([0-9A-Fa-f]+)", raw)
+        if not match:
+            return None
+        hex_value = match.group(1)
+    if not hex_value or len(hex_value) % 2 or len(hex_value) > 1024:
+        return None
+    return {
+        idx * 8 + bit + 1
+        for idx, byte in enumerate(bytes.fromhex(hex_value))
+        for bit in range(8)
+        if byte & (0x80 >> bit)
+    }
+
+
+def _qbridge_safe_state(attribute: str, raw: Any) -> str | None:
+    """Allow only numeric VLAN IDs/lists and explicitly enumerated port modes."""
+    value = str(raw if raw is not None else "").strip()
+    if attribute in {"native_vlan", "member_vlans", "tagged_vlans", "untagged_vlans"}:
+        if re.fullmatch(r"\d{1,4}(?:\s*,\s*\d{1,4}){0,127}", value):
+            return ",".join(part.strip() for part in value.split(","))
+        return None
+    if attribute == "mode" and value.casefold() in {"access", "trunk", "hybrid", "general"}:
+        return value.casefold()
+    return None
+
+
+def _qbridge_walk_rows(path: Path) -> dict[str, dict[str, str]]:
+    found: dict[str, dict[str, str]] = {key: {} for key in QBRIDGE_OIDS}
+    if path.stat().st_size > 64 * 1024 * 1024:
+        raise ValueError("walk_above_safe_limit")
+    with path.open("r", encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            match = QBRIDGE_WALK_LINE.match(line)
+            if match:
+                oid, value = match.group("oid"), match.group("value")
+                for key, prefix in QBRIDGE_OIDS.items():
+                    if oid.startswith(prefix):
+                        found[key][oid[len(prefix):]] = value
+                        break
+    return found
+
+
+def build_qbridge_correlation(
+    root: Path,
+    generated: Any,
+    states: list[dict[str, Any]] | None = None,
+    *,
+    ha_available: bool = True,
+    file_provenance: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Describe *observed* Q-BRIDGE joins without inferring absent VLANs.
+
+    All output identities are bounded physical IDs, numeric indices and sanitized
+    entity states; no raw device names, addresses, VLAN names or walk contents.
+    """
+    contracts = _physical_contract_ports(root)
+    state_map = _state_map(states or []) if ha_available else {}
+    source_rows = (file_provenance or {}).get("files") or []
+    provenance = {str(x.get("path")): x for x in source_rows if isinstance(x, dict)}
+    candidates = sorted(
+        p for p in root.rglob("live-full-snmpwalk.txt") if p.is_file()
+    )[:MAX_CAPABILITY_FILES]
+    if not candidates:
+        candidates = sorted(
+            p for p in root.rglob("live-targeted-snmpwalk.txt") if p.is_file()
+        )[:MAX_CAPABILITY_FILES]
+    sensor_rows = [s for s in _sensor_rows(generated) if s["source"] == "qbridge_vlan"]
+    devices: list[dict[str, Any]] = []
+    for path in candidates:
+        rel = str(path.relative_to(root))
+        record = provenance.get(rel) or {}
+        device: dict[str, Any] = {
+            "walk_index": len(devices) + 1,
+            "walk_capture_pre_privacy_sha256": record.get("sha256"),
+            "walk_capture_mtime_ns": record.get("mtime_ns"),
+            "walk_freshness": "full_walk" if path.name == "live-full-snmpwalk.txt" else (record.get("freshness") or {}).get("status", "unavailable"),
+            "targeted_freshness": (provenance.get(str(path.parent.relative_to(root) / "live-targeted-snmpwalk.txt")) or {}).get("freshness", {}).get("status", "unavailable"),
+            "status": "unavailable",
+            "table_rows": {},
+            "ports": [],
+        }
+        devices.append(device)
+        try:
+            tables = _qbridge_walk_rows(path)
+        except (OSError, ValueError):
+            device["reason"] = "walk_unavailable_or_oversized"
+            continue
+        device["table_rows"] = {k: len(v) for k, v in tables.items()}
+        if not tables["bridge_ifindex"] or not tables["pvid"]:
+            device["reason"] = "required_bridge_mapping_or_pvid_missing"
+            continue
+        # Only accept physical contracts scoped to this device's collection
+        # subtree, or the single unambiguous contract for a one-device bundle.
+        local_contracts = [
+            c for c in contracts
+            if str(c.get("source_parent") or "") == str(path.parent.relative_to(root))
+        ]
+        if not local_contracts and len(candidates) == 1 and len({c["source_parent"] for c in contracts}) == 1:
+            local_contracts = contracts
+        if not local_contracts:
+            device["reason"] = "physical_contract_scope_unavailable"
+            continue
+        joined: dict[int, int] = {}
+        for bridge_str, raw in tables["bridge_ifindex"].items():
+            match = re.search(r"(?:INTEGER|Gauge32):\s*(\d+)", raw)
+            if match and bridge_str.isdigit():
+                joined[int(match.group(1))] = int(bridge_str)
+        for port in local_contracts[:MAX_PORT_ROWS]:
+            idx = port.get("if_index")
+            if not isinstance(idx, int) or idx <= 0:
+                continue
+            bridge = joined.get(idx)
+            pvid_raw = tables["pvid"].get(str(bridge)) if bridge else None
+            pvid_match = re.search(r"(?:INTEGER|Gauge32):\s*(\d+)", pvid_raw or "")
+            pvid = int(pvid_match.group(1)) if pvid_match else None
+            per_port = {
+                "physical_id": (
+                    port["physical_id"] if re.fullmatch(r"(?:member\d+-)?(?:rj45|sfp|sfpplus|sfp28|qsfp|port)-[0-9]{1,3}", str(port.get("physical_id") or ""), re.IGNORECASE)
+                    else None
+                ),
+                "if_index": idx,
+                "bridge_port": bridge,
+                "pvid": pvid,
+                "member_vlans": None,
+                "untagged_vlans": None,
+                "tagged_vlans": None,
+                "resolution": "unavailable",
+                "issues": [],
+                "generated_attributes": {},
+            }
+            device["ports"].append(per_port)
+            if bridge is None or pvid is None:
+                per_port["issues"].append("bridge_or_pvid_join_missing")
+                continue
+            members: set[int] = set()
+            untagged: set[int] = set()
+            complete = True
+            family = "current" if (tables["current_egress"] or tables["current_untagged"]) else "static"
+            per_port["membership_source"] = family
+            for table_name, target in ((family + "_egress", members), (family + "_untagged", untagged)):
+                rows = tables[table_name]
+                if not rows:
+                    complete = False
+                    per_port["issues"].append(table_name + "_missing")
+                    continue
+                for key, value in rows.items():
+                    parts = key.split(".")
+                    vlan = (parts[1] if family == "current" and len(parts) == 2 else
+                            parts[0] if family == "static" and len(parts) == 1 else None)
+                    if vlan is None or not vlan.isdigit():
+                        continue
+                    bitmap = _qbridge_bitmap(value)
+                    if bitmap is None:
+                        complete = False
+                        per_port["issues"].append(table_name + "_invalid_bitmap")
+                        continue
+                    if bridge in bitmap:
+                        target.add(int(vlan))
+            # A missing untagged VLAN row is unknown, not proof that all
+            # egress membership is tagged. Preserve incomplete observations.
+            untagged_vlans_in_table = {
+                int(key.split(".")[-1])
+                for key in tables[family + "_untagged"]
+                if key.split(".")[-1].isdigit()
+            }
+            if members - untagged_vlans_in_table:
+                complete = False
+                per_port["issues"].append("membership_untagged_vlan_rows_missing")
+            if not complete:
+                continue
+            per_port["member_vlans"] = sorted(members)
+            per_port["untagged_vlans"] = sorted(untagged)
+            per_port["tagged_vlans"] = sorted(members - untagged)
+            if not untagged.issubset(members):
+                per_port["issues"].append("untagged_not_in_egress")
+            if pvid not in members:
+                per_port["issues"].append("pvid_not_in_egress")
+            walk_ifname = tables["if_name"].get(str(idx))
+            per_port["walk_ifname_identity"] = (
+                "unavailable" if walk_ifname is None else
+                "raw_match" if walk_ifname.strip().removeprefix("STRING:").strip().strip("\\\"") == port.get("raw_if_name")
+                else "mismatch"
+            )
+            if per_port["walk_ifname_identity"] == "mismatch":
+                per_port["issues"].append("walk_ifname_contract_mismatch")
+            match_names = {port.get("raw_if_name"), port.get("compatibility_name")}
+            if len(candidates) > 1:
+                per_port["issues"].append("generated_sensor_target_join_unavailable")
+            for sensor in (sensor_rows if len(candidates) == 1 else []):
+                if _canonical_model_text(sensor["device_model"]) != port["model_key"]:
+                    continue
+                if sensor["interface"] not in match_names:
+                    continue
+                attribute = sensor.get("attribute")
+                if attribute not in {"native_vlan", "member_vlans", "tagged_vlans", "untagged_vlans", "mode"}:
+                    continue
+                entity = state_map.get(sensor["entity_id"])
+                per_port["generated_attributes"][attribute] = {
+                    "identity": "raw_if_name" if sensor["interface"] == port["raw_if_name"] else "compatibility_alias",
+                    "ha_state": _qbridge_safe_state(attribute, entity.get("state")) if entity else None,
+                    "ha_state_status": "available" if entity else "unavailable",
+                }
+                if attribute == "native_vlan" and entity is not None:
+                    numeric = _qbridge_safe_state(attribute, entity.get("state"))
+                    if numeric is not None and numeric.isdecimal() and int(numeric) != pvid:
+                        per_port["issues"].append("ha_native_vlan_disagrees_with_walk")
+                if attribute in {"member_vlans", "tagged_vlans", "untagged_vlans"} and entity is not None:
+                    numeric = _qbridge_safe_state(attribute, entity.get("state"))
+                    expected = {
+                        "member_vlans": per_port["member_vlans"],
+                        "tagged_vlans": per_port["tagged_vlans"],
+                        "untagged_vlans": per_port["untagged_vlans"],
+                    }[attribute]
+                    if numeric is not None and expected is not None and {
+                        int(x) for x in numeric.split(",")
+                    } != set(expected):
+                        per_port["issues"].append("ha_" + attribute + "_disagrees_with_walk")
+            per_port["resolution"] = (
+                "unavailable" if not complete else
+                "conflict" if any(x not in {"generated_sensor_target_join_unavailable"} for x in per_port["issues"])
+                else "observed"
+            )
+        device["status"] = (
+            "observed" if any(p["resolution"] == "observed" for p in device["ports"])
+            else "conflict" if any(p["resolution"] == "conflict" for p in device["ports"])
+            else "unavailable"
+        )
+        if not device["ports"]:
+            device["reason"] = "no_matching_physical_ports"
+    return {
+        "schema_version": 1,
+        "generated_at": _now(),
+        "scope": "bounded Q-BRIDGE bridge-port, PVID, current VLAN PortList and generated sensor correlation; unavailable never means empty VLAN",
+        "status": "observed" if any(d["status"] == "observed" for d in devices) else "unavailable",
+        "device_count": len(devices),
+        "devices": devices,
+        "privacy": {
+            "management_addresses_included": False,
+            "raw_switch_names_included": False,
+            "vlan_names_included": False,
+            "credentials_included": False,
+            "raw_walk_contents_included": False,
+        },
+    }
+
 
 def build_model_provenance(root: Path) -> dict[str, Any]:
     files = sorted(root.rglob("*-capabilities.json"))[:MAX_CAPABILITY_FILES]
@@ -2090,6 +2358,10 @@ def capture_support_diagnostics(root: Path) -> None:
         states,
         ha_available=ha_error is None,
     )
+    qbridge_correlation = build_qbridge_correlation(
+        root, generated, states, ha_available=ha_error is None,
+        file_provenance=file_provenance,
+    )
     configuration_snapshot = build_configuration_snapshot(root)
     calibration_storage = capture_calibration_storage_snapshot()
     try:
@@ -2148,6 +2420,7 @@ def capture_support_diagnostics(root: Path) -> None:
     _write(root, DIAG_DIR / "runtime-versions.json", runtime_versions)
     _write(root, RUNTIME_ARTIFACT_IDENTITY, runtime_artifacts)
     _write(root, DERIVED_SENSOR_RESOLUTION, derived_sensor_resolution)
+    _write(root, QBRIDGE_REPORT, qbridge_correlation)
     _write(root, DIAG_DIR / "configuration-snapshot.json", configuration_snapshot)
     _write(root, DIAG_DIR / "calibration-storage.json", calibration_storage)
     _write(

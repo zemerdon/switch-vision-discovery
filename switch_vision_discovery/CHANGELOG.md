@@ -1,3 +1,10 @@
+## 3.0.30 — Privacy-safe Q-BRIDGE contribution correlation
+
+- Add a bounded, privacy-scoped Q-BRIDGE diagnostic correlating physical IF-MIB indices, bridge-port joins, PVID/native VLAN, current or static egress/untagged PortList bitmaps and generated VLAN sensors with available Home Assistant states.
+- Preserve explicit unavailable/conflict results for missing tables, mismatched interface identity and contradictory live PVID; no extra network walks or physical-port inference.
+- Include the sanitized Q-BRIDGE report SHA-256 in Support My Switch contribution provenance; retain bundle privacy and model-acceptance gates.
+- Add synthetic regressions for nonidentity joins, bitmap ordering, missing/invalid tables and multiple-switch ambiguity. No changes to existing GS1900 VLAN polling behavior.
+
 ## 3.0.29 — Release packaging parity correction
 
 - Preserve the GS1900 raw interface identity and Q-BRIDGE VLAN sensor mapping fix introduced in 3.0.28.
