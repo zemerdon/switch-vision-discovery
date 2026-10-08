@@ -1,3 +1,8 @@
+## 3.0.28 — Preserve GS1900 raw interface identity through physical normalization
+
+- Preserve GS1900-8 raw IF-MIB `GigabitEthernet` names through physical-contract normalization so Q-BRIDGE VLAN telemetry remains bound to the real interface identity.
+- Add a production-boundary regression covering normalization through generated Q-BRIDGE VLAN sensors.
+
 ## 3.0.27 — Support My Switch schema 15 runtime provenance
 
 - Bump Support My Switch bundles to schema 15.

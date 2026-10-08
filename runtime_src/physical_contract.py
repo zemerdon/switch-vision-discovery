@@ -219,7 +219,7 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         # Renaming them to Gi/Te reintroduces static sensors for the same cage.
         if (
             (combo_ports_per_member > 0 and registry_model != "3524gt-pwr+")
-            or registry_model in {"ex3300-48p", "n4032f"}
+            or registry_model in {"ex3300-48p", "n4032f", "gs1900-8"}
         ) and source_name:
             compatibility = source_name
 

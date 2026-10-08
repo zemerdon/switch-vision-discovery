@@ -54,6 +54,23 @@ grep -F 'name: swz1 Port 2 Tagged VLANs' "$out" >/dev/null
 grep -F 'name: swz1 Port 6 VLANs' "$out" >/dev/null
 grep -F 'name: swz1 Port 8 Untagged VLANs' "$out" >/dev/null
 grep -F '# Q-BRIDGE derived VLAN sensors emitted: 40' "$out" >/dev/null
+
+# Full production boundary: physical-contract normalization must not replace
+# the GS1900 raw IF-MIB identity that Q-BRIDGE telemetry binds against.
+normalized="$TMP/GS1900-8/normalized-full-snmpwalk.txt"
+capability="$TMP/GS1900-8/capabilities.json"
+contract="$TMP/GS1900-8/physical-contract.json"
+SWITCH_VISION_RUNTIME_DIR="$ROOT/runtime_src" \
+  "$ROOT/runtime_src/physical_contract_prepare.sh" \
+  "$walk" "$normalized" "$capability" "$contract"
+[ "$(grep -c 'STRING: "GigabitEthernet[1-8]"' "$normalized")" -eq 8 ]
+! grep -F 'STRING: "Gi1/0/' "$normalized" >/dev/null
+normalized_out="$TMP/normalized-generated.yaml"
+write_generated_yaml_for_walk "$normalized" "192.0.2.85" "swz1" "public" > "$normalized_out"
+[ "$(grep -c 'source: qbridge_vlan' "$normalized_out")" -eq 40 ]
+[ "$(grep -c 'interface: GigabitEthernet' "$normalized_out")" -eq 40 ]
+! grep -F 'interface: Gi1/0/' "$normalized_out" >/dev/null
+
 PYTHONPATH="$ROOT/runtime_src" python3 - "$out" <<'PY'
 import sys
 from pathlib import Path
