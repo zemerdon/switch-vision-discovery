@@ -122,7 +122,9 @@ jobs:
           test -x "$runtime_dir/discovery_contract_entrypoint.py"
           test -x "$runtime_dir/physical_contract_prepare.sh"
           sh "$runtime_dir/self-test.sh"
-          git diff --exit-code
+          # Archive contents and executable bits were verified above; gzip metadata
+          # can vary across runners, so exclude only the rebuilt archive bytes.
+          git diff --exit-code -- . ':(exclude)switch_vision_discovery/runtime.tar.gz'
 
       - name: Get app information
         id: info
