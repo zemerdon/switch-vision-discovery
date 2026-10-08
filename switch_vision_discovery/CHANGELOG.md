@@ -1,3 +1,8 @@
+## 3.0.29 — Release packaging parity correction
+
+- Preserve the GS1900 raw interface identity and Q-BRIDGE VLAN sensor mapping fix introduced in 3.0.28.
+- Correct the public release preflight to validate exact runtime content and executable-bit parity without requiring cross-runner gzip archive byte identity. No additional runtime behavior changes.
+
 ## 3.0.28 — Preserve GS1900 raw interface identity through physical normalization
 
 - Preserve GS1900-8 raw IF-MIB `GigabitEthernet` names through physical-contract normalization so Q-BRIDGE VLAN telemetry remains bound to the real interface identity.
