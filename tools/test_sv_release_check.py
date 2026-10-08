@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,8 +76,14 @@ def main() -> int:
     assert 'f"safe.directory={root}"' in source
 
     release_check = load_entrypoint()
-    status = release_check.git_status(ROOT)
-    assert isinstance(status, str)
+    # Immutable audit snapshots are exact Git archives, not live checkouts.
+    # Exercise status semantics in a disposable real Git repository instead.
+    with tempfile.TemporaryDirectory(prefix="sv-release-check-test-") as directory:
+        snapshot = Path(directory)
+        subprocess.run(["git", "init", "-q", str(snapshot)], check=True)
+        assert release_check.git_status(snapshot) == ""
+        (snapshot / "fixture.txt").write_text("untracked\n", encoding="utf-8")
+        assert "fixture.txt" in release_check.git_status(snapshot)
 
     pin_source = PIN_HELPER.read_text(encoding="utf-8")
     compile(pin_source, str(PIN_HELPER), "exec")
