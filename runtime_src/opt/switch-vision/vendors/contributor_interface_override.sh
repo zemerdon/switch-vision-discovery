@@ -9,6 +9,36 @@
 cv_interface_class_for_name() {
   name="$1"
 
+  # TP-Link JetStream field captures: port names and ifIndex bind exactly
+  # gigabitEthernet 1/0/1..28 or 1..8. The 28-port unit has 24 fixed
+  # copper sockets and four independent SFP cages per TP-Link's published
+  # physical specification. Never classify the VLAN/management row.
+  # This rule is restricted to an independently curated product identity;
+  # a generic enterprise-prefix match must not manufacture physical ports.
+  if [ "${CV_ID_PRODUCT_MATCH:-}" = "curated-sysobjectid-and-local-sysdescr" ]; then
+    case "${CV_CAP_MODEL_TEXT:-}" in
+      TL-SG2428P|TL-SG2008P)
+        case "$name" in
+          'gigabitEthernet 1/0/'*)
+            port_number=${name##*/}
+            case "$port_number" in ''|*[!0-9]*) printf 'other'; return 0 ;; esac
+            expected_index=$((49152 + port_number))
+            if [ "${CV_CAP_IF_INDEX:-}" != "$expected_index" ]; then
+              printf 'other'
+            elif [ "$CV_CAP_MODEL_TEXT" = "TL-SG2428P" ]; then
+              if [ "$port_number" -ge 1 ] && [ "$port_number" -le 24 ]; then printf 'rj45'
+              elif [ "$port_number" -ge 25 ] && [ "$port_number" -le 28 ]; then printf 'sfp'
+              else printf 'other'; fi
+            elif [ "$port_number" -ge 1 ] && [ "$port_number" -le 8 ]; then printf 'rj45'
+            else printf 'other'; fi
+            ;;
+          *) printf 'other' ;;
+        esac
+        return 0
+        ;;
+    esac
+  fi
+
   # Avaya ERS 3524GT-PWR+ contribution: IF-MIB indexes 1-20 are fixed
   # copper and 21-24 are the four dual-personality front copper/SFP
   # positions. Real firmware exposes names such as

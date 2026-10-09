@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.0.31"
+SWITCH_VISION_DISCOVERY_VERSION="3.0.32"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1114,20 +1114,40 @@ run_live_snmpwalk_current() {
   total=0
 
   if [ "$LIVE_SNMPWALK_MODE" = "full" ]; then
-    if grep -qi "Juniper" "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+    if grep -Eqi "Juniper|TP-Link|JetStream" "$SNMP_PRECHECK_PATH" 2>/dev/null; then
       # A root walk from OID 1 on EX3300 can time out in the standard branch
       # before lexicographic traversal ever reaches Juniper enterprise OIDs.
       # Walk the standard and Juniper enterprise roots independently so one
       # problematic branch cannot hide the other.
+      full_timeout="$LIVE_SNMP_TIMEOUT"
+      full_retries="$LIVE_SNMP_RETRIES"
+      full_vendor_root="1.3.6.1.4.1.2636"
+      if grep -Eqi "TP-Link|JetStream" "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+        full_vendor_root="1.3.6.1.4.1.11863"
+        # Opt-in comprehensive collection: slower vendor agents get time to respond.
+        case "$full_timeout" in
+          ''|*[!0-9]*) full_timeout=8 ;;
+          *) [ "$full_timeout" -ge 8 ] || full_timeout=8 ;;
+        esac
+        case "$full_retries" in
+          ''|*[!0-9]*) full_retries=2 ;;
+          *) [ "$full_retries" -ge 2 ] || full_retries=2 ;;
+        esac
+      fi
       FULL_OIDS="
 1.3.6.1.2.1
-1.3.6.1.4.1.2636
+$full_vendor_root
 "
-      echo "Running split Juniper full SNMP walk" >> "$LIVE_LOG_PATH"
+      if [ "$full_vendor_root" = "1.3.6.1.4.1.2636" ]; then
+        echo "Running split Juniper full SNMP walk" >> "$LIVE_LOG_PATH"
+      else
+        echo "Running split TP-Link full SNMP walk" >> "$LIVE_LOG_PATH"
+      fi
+      echo "Full-walk timeout=$full_timeout retries=$full_retries" >> "$LIVE_LOG_PATH"
       oid_total=$(printf '%s\n' "$FULL_OIDS" | awk 'NF { count++ } END { print count+0 }')
       for oid in $FULL_OIDS; do
         total=$((total + 1))
-        full_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP $oid"
+        full_command="snmpwalk -On -v2c -c ******** -t $full_timeout -r $full_retries $LIVE_SWITCH_IP $oid"
         echo "Command: $full_command" >> "$LIVE_LOG_PATH"
         sv_status "Running SNMP walks" "${SELECTED_SWITCH:-${LIVE_SWITCH_LABEL:-Switch}}" "$LIVE_SWITCH_IP" "$full_command" "Reading full tree $total of $oid_total"
         sv_debug "COMMAND: $full_command"
@@ -1135,7 +1155,7 @@ run_live_snmpwalk_current() {
           echo ""
           echo "# --- full walk tree: $oid ---"
         } >> "$LIVE_OUTPUT_PATH"
-        if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+        if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$full_timeout" -r "$full_retries" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
           echo "OK full tree: $oid" >> "$LIVE_LOG_PATH"
         else
           failures=$((failures + 1))
@@ -1300,6 +1320,38 @@ run_live_snmpwalk_current() {
         echo "INFO: Dell N2128PX-ON optical OID unavailable: $oid" >> "$LIVE_LOG_PATH"
       fi
     done
+  fi
+
+  # TP-Link JetStream: collect only reviewed, bounded private-MIB subtrees.
+  # These supplemental rows are optional evidence, not automatic sensor claims.
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ] && grep -Eqi 'TP-Link|JetStream' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+    tplink_policy="$CV_MIB_DATABASE_DIR/vendors/tplink/sensors.json"
+    if [ -r "$tplink_policy" ] && command -v jq >/dev/null 2>&1; then
+      if ! tplink_oids=$(jq -r '.collection.targeted_walk_oids[]?' "$tplink_policy" 2>> "$LIVE_LOG_PATH"); then
+        echo "WARN: TP-Link MIB policy could not be read; retaining standard capture" >> "$LIVE_LOG_PATH"
+        tplink_oids=""
+      fi
+      tplink_count=$(printf '%s\n' "$tplink_oids" | awk 'NF {n++} END {print n+0}')
+      if [ "$tplink_count" -gt 10 ]; then
+        echo "WARN: TP-Link optional MIB walk list exceeds bounded policy" >> "$LIVE_LOG_PATH"
+      else
+        for oid in $tplink_oids; do
+          case "$oid" in
+            1.3.6.1.4.1.11863.6.*) : ;;
+            *) echo "WARN: ignored out-of-range TP-Link MIB OID" >> "$LIVE_LOG_PATH"; continue ;;
+          esac
+          echo "# --- TP-Link optional MIB tree: $oid ---" >> "$LIVE_OUTPUT_PATH"
+          echo "TP-Link supplemental MIB tree: $oid" >> "$LIVE_LOG_PATH"
+          if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+            echo "OK TP-Link optional tree: $oid" >> "$LIVE_LOG_PATH"
+          else
+            echo "INFO: TP-Link optional MIB tree unavailable: $oid" >> "$LIVE_LOG_PATH"
+          fi
+        done
+      fi
+    else
+      echo "WARN: TP-Link reviewed MIB policy unavailable; standard targeted data retained" >> "$LIVE_LOG_PATH"
+    fi
   fi
 
   line_count=$(walk_line_count "$LIVE_OUTPUT_PATH")

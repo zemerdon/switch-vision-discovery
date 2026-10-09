@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "vendor": "tplink",
+  "identity_rule": "sysObjectID + exact local sysDescr + complete IF-MIB topology must all match; sysObjectID alone is not sufficient for SKU/hardware version",
+  "products": [
+    {
+      "sys_object_id": "1.3.6.1.4.1.11863.5.98",
+      "sys_descr_exact": "JetStream 28-Port Gigabit Smart Switch with 24-Port PoE+",
+      "model_hint": "TL-SG2428P",
+      "vendor": "tplink",
+      "family": "JetStream Smart",
+      "support_status": "experimental",
+      "hardware_revision": "unknown",
+      "port_contract": {
+        "rj45": 24,
+        "sfp": 4,
+        "poe_capable_copper": 24,
+        "ifname_prefix": "gigabitEthernet 1/0/",
+        "ifindex_base": 49152,
+        "logical_port_count": 28
+      },
+      "manufacturer_spec": "https://www.tp-link.com/au/business-networking/omada-sdn-switch/tl-sg2428p/v1/",
+      "identity_confidence": "marketed_title_correlated_with_field_oid_and_interface_topology",
+      "notes": "OID observed on one real unit; revision and direct vendor-assigned OID-to-SKU mapping not independently verified. Do not match by OID alone."
+    },
+    {
+      "sys_object_id": "1.3.6.1.4.1.11863.5.94",
+      "sys_descr_exact": "JetStream 8-Port Gigabit Smart Switch with 4-Port PoE+",
+      "model_hint": "TL-SG2008P",
+      "vendor": "tplink",
+      "family": "JetStream Smart",
+      "support_status": "experimental",
+      "hardware_revision": "unknown",
+      "port_contract": {
+        "rj45": 8,
+        "sfp": 0,
+        "poe_capable_copper": 4,
+        "ifname_prefix": "gigabitEthernet 1/0/",
+        "ifindex_base": 49152,
+        "logical_port_count": 8
+      },
+      "manufacturer_spec": "https://www.tp-link.com/au/business-networking/omada-sdn-switch/tl-sg2008p/v2/",
+      "identity_confidence": "marketed_title_correlated_with_field_oid_and_interface_topology",
+      "notes": "OID observed on one real unit; revision and direct vendor-assigned OID-to-SKU mapping not independently verified. Do not match by OID alone."
+    }
+  ]
+}

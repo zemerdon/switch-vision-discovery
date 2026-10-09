@@ -128,6 +128,16 @@ cv_cap_set_front_panel_profile() {
       CV_CAP_PLATFORM="hp_3500yl_48g"
       CV_CAP_RJ45_LIMIT="44"
       ;;
+    TL-SG2428P|TL-SG2008P)
+      # Exact product identity is resolved by the curated MIB+sysDescr pair.
+      # IF-MIB gigabitEthernet 1/0/N is retained as source ifName.
+      CV_CAP_FRONT_PANEL_AWARE="true"
+      CV_CAP_PLATFORM="tplink_jetstream"
+      case "$CV_CAP_MODEL_TEXT" in
+        TL-SG2428P) CV_CAP_RJ45_LIMIT="24" ;;
+        TL-SG2008P) CV_CAP_RJ45_LIMIT="8" ;;
+      esac
+      ;;
     *CRS328-24P-4S+*)
       CV_CAP_FRONT_PANEL_AWARE="true"
       CV_CAP_PLATFORM="mikrotik_crs328_24p_4splus"

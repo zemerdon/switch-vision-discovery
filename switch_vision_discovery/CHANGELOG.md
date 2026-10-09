@@ -1,3 +1,13 @@
+## 3.0.32 — Full-walk registration review and TP-Link JetStream support
+
+- Split TP-Link full walks into standard `1.3.6.1.2.1` and private `1.3.6.1.4.1.11863` branches, with a more patient minimum 8-second/two-retry collection policy restricted to opt-in TP-Link full mode; preserve other vendors' settings.
+- Supplement routine TP-Link targeted capture with only MIB-vetted, bounded system-version, CPU, memory, PoE and SFP diagnostic subtrees from TP-Link's official MIB archive. Nonexistent objects remain optional and never invent telemetry.
+
+- Add the reviewed TP-Link enterprise MIB knowledge and tightly bounded 28-port TL-SG2428P and 8-port TL-SG2008P Experimental exact-model candidates; require matched local sysDescr, enterprise sysObjectID and complete IF-MIB interface bindings.
+- Add an offline read-only full/targeted-walk review CLI for successful standard SNMP walk files and sanitized contribution archives. Reject failed, incomplete and contradictory physical contracts; never rewrite protected evidence or register devices automatically from OID resemblance.
+- Map the 28-port unit as 24 fixed 1G copper plus four independent 1G SFP positions and the 8-port unit as eight copper positions; reserve unknown PoE power and environment telemetry for future validation.
+- Preserve unrelated vendor recognition, virtual/VLAN exclusion, existing calibration renderer and all previously released device contracts. Hardware revision and real-device visual confirmation remain pending.
+
 ## 3.0.31 — Avaya ERS 3524GT-PWR+ default faceplate
 
 - Make the reviewed owner-supplied Avaya ERS 3524GT-PWR+ faceplate and native-image calibration the model default; retain the former stock 24-RJ45/4-SFP visual as a selectable fallback.

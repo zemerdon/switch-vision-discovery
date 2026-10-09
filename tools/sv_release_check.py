@@ -27,6 +27,8 @@ PERMANENT_CHECKS = (
     "tools/test_unifi_dashboard_failure_modes.py",
     "tools/test_unifi_visual_mappings.py",
     "tools/test_avaya_ers3524gt_pwrplus.py",
+    "tools/test_tplink_full_walk_registration.py",
+    "tools/test_tplink_walk_collection_contract.py",
     "tools/test_dell_n4032f.py",
     "tools/test_dell_n2128px_optics.py",
     "tools/test_hp_j9774a_2530_8g_poep.py",

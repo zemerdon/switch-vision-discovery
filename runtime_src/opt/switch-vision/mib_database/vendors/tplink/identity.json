@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "vendor": "tplink",
+  "detection": {
+    "sys_object_id_prefixes": [
+      "1.3.6.1.4.1.11863."
+    ],
+    "sys_descr_patterns": [
+      "JetStream"
+    ]
+  },
+  "capabilities": [
+    "identity",
+    "vendor_sensor_candidates"
+  ]
+}

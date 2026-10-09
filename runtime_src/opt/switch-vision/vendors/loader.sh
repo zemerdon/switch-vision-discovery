@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 CV_VENDOR_LAYER_VERSION="7"
-CV_KNOWN_VENDOR_IDS="juniper hp_aruba dell avaya extreme ruckus_brocade mikrotik ubiquiti netgear huawei zyxel realtek_oem"
+CV_KNOWN_VENDOR_IDS="juniper hp_aruba dell avaya extreme ruckus_brocade mikrotik ubiquiti netgear tplink huawei zyxel realtek_oem"
 
 # interface.sh historically defined model extraction by scanning the complete
 # walk. Load the local-identity implementation after interface.sh so neighbour
@@ -32,6 +32,8 @@ $CV_MIB_DATABASE_DIR/vendors/$vendor_id/vendor.json
 $CV_MIB_DATABASE_DIR/vendors/$vendor_id/identity.json
 $CV_MIB_DATABASE_DIR/vendors/$vendor_id/sensors.json"
   done
+  required_files="$required_files
+$CV_MIB_DATABASE_DIR/vendors/tplink/products.json"
   for f in $required_files; do
     [ -f "$f" ] || return 1
     jq -e . "$f" >/dev/null 2>&1 || return 1

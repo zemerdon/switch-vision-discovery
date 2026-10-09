@@ -21,6 +21,19 @@ cv_known_vendor_identity() {
   CV_ID_MODEL_HINT=""
   CV_ID_PRODUCT_MATCH="enterprise-only"
 
+  # Curated TP-Link admission requires BOTH the manufacturer's complete local
+  # sysDescr title and captured product OID. Enterprise prefix is not enough.
+  if [ "$vendor_id" = "tplink" ]; then
+    products_db="$CV_MIB_DATABASE_DIR/vendors/tplink/products.json"
+    product=$(jq -c --arg oid "$CV_ID_SYS_OBJECT_ID" --arg descr "$CV_ID_SYS_DESCR" '.products[] | select(.sys_object_id == $oid and .sys_descr_exact == $descr)' "$products_db" 2>/dev/null | head -n 1)
+    if [ -n "$product" ]; then
+      CV_ID_FAMILY="JetStream Smart"
+      CV_ID_MODEL_HINT=$(printf '%s' "$product" | jq -r '.model_hint')
+      CV_ID_PRODUCT_MATCH="curated-sysobjectid-and-local-sysdescr"
+      CV_ID_SUPPORT_STATUS="experimental"
+    fi
+  fi
+
   if [ "$vendor_id" = "juniper" ]; then
     case "${CV_ID_SYS_DESCR:-}" in
       *[Ee][Xx]3300-48[Pp]*)

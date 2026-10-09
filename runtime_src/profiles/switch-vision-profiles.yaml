@@ -1582,3 +1582,50 @@ profiles:
     - Ports 1-20 are fixed copper and ports 21-24 are shared front copper/SFP positions.
     - Standard POWER-ETHERNET-MIB confirms 24 PSE rows and a 370 W PoE budget.
     - Two rear SFP positions are documented chassis capability but remain outside the current dashboard contract until a trustworthy independent telemetry binding is observed.
+  tplink-tl-sg2428p-24rj45-4sfp:
+    status: experimental
+    vendor: TP-Link
+    family: JetStream Smart
+    model_patterns:
+    - TL-SG2428P
+    sys_object_ids:
+    - 1.3.6.1.4.1.11863.5.98
+    layout:
+      members: 1
+      rj45_ports: 24
+      sfp_1g_ports: 4
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - 'Gi{member}/0/{port}'
+      - 'gigabitEthernet 1/0/{port}'
+      sfp_1g:
+      - 'Gi{member}/1/{port}'
+      sfp_10g: []
+    notes:
+    - One privately reviewed field capture establishes 28 sequential ifIndex rows and the local model/OID pair.
+    - Product specifications identify 24 1G copper connectors and four independent 1G SFP cages.
+    - PoE is a documented copper capability; power telemetry and hardware revision are unverified.
+  tplink-tl-sg2008p-8rj45-0sfp:
+    status: experimental
+    vendor: TP-Link
+    family: JetStream Smart
+    model_patterns:
+    - TL-SG2008P
+    sys_object_ids:
+    - 1.3.6.1.4.1.11863.5.94
+    layout:
+      members: 1
+      rj45_ports: 8
+      sfp_1g_ports: 0
+      sfp_10g_ports: 0
+    interface_patterns:
+      rj45:
+      - 'Gi{member}/0/{port}'
+      - 'gigabitEthernet 1/0/{port}'
+      sfp_1g: []
+      sfp_10g: []
+    notes:
+    - One privately reviewed field capture establishes eight sequential ifIndex rows and the local model/OID pair.
+    - Product specifications identify eight 1G copper connectors with four PoE+ capable ports and no optical cages.
+    - PoE power telemetry and hardware revision remain unverified.

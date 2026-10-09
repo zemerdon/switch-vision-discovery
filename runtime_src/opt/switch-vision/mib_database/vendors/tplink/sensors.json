@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "vendor": "tplink",
+  "enterprise_oids": [
+    "1.3.6.1.4.1.11863"
+  ],
+  "symbolic_name_patterns": {
+    "temperature": [
+      "temperature",
+      "thermal"
+    ],
+    "fan": [
+      "fan",
+      "rpm"
+    ],
+    "power": [
+      "power",
+      "psu",
+      "voltage"
+    ],
+    "poe": [
+      "poe",
+      "pse",
+      "powerEthernet"
+    ],
+    "cpu": [
+      "cpu",
+      "processor"
+    ],
+    "memory": [
+      "memory",
+      "memUtil"
+    ],
+    "environment": [
+      "environment",
+      "sensor"
+    ]
+  },
+  "numeric_candidate_policy": {
+    "enabled": true,
+    "accepted_types": [
+      "INTEGER",
+      "INTEGER32",
+      "GAUGE32",
+      "UNSIGNED32"
+    ],
+    "exclude_types": [
+      "COUNTER",
+      "COUNTER32",
+      "COUNTER64",
+      "TIMETICKS",
+      "STRING",
+      "OID",
+      "IPADDRESS"
+    ],
+    "maximum_candidates": 120,
+    "notes": "Candidate only: no usable vendor or standard PoE/sensor rows are proven by the 2026-10-09 field walks."
+  },
+  "collection": {
+    "official_mib_archive_url": "https://static.tp-link.com/2019/201905/20190513/T2600G-28MPS%28UN%29_V4_MIB_20181116.zip",
+    "official_mib_archive_sha256": "57853b3ce03a22a5ab5c426733aad6e1734b8d79eb0a6f98cd5c1afbb61217f5",
+    "scope": "Documented TP-Link JetStream MIB subtrees from a related older hardware MIB archive; each object is optional until observed on the exact contributed models.",
+    "full_walk_roots": ["1.3.6.1.2.1", "1.3.6.1.4.1.11863"],
+    "targeted_walk_oids": [
+      "1.3.6.1.4.1.11863.6.1.1.5",
+      "1.3.6.1.4.1.11863.6.1.1.6",
+      "1.3.6.1.4.1.11863.6.4.1.1",
+      "1.3.6.1.4.1.11863.6.4.1.2",
+      "1.3.6.1.4.1.11863.6.56.1.1.1",
+      "1.3.6.1.4.1.11863.6.56.1.1.2.1.1",
+      "1.3.6.1.4.1.11863.6.96.1.7.1"
+    ],
+    "targeted_notes": "System hardware/firmware, CPU, memory, global/port PoE and SFP optical diagnostics only. Read-only; unsupported trees are informational, never proof of capability. Do not walk the full enterprise tree in targeted mode."
+  },
+  "standards_first": [
+    "POWER-ETHERNET-MIB",
+    "ENTITY-SENSOR-MIB",
+    "HOST-RESOURCES-MIB"
+  ]
+}
