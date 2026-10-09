@@ -1,3 +1,9 @@
+## 3.0.31 — Avaya ERS 3524GT-PWR+ default faceplate
+
+- Make the reviewed owner-supplied Avaya ERS 3524GT-PWR+ faceplate and native-image calibration the model default; retain the former stock 24-RJ45/4-SFP visual as a selectable fallback.
+- Preserve the exact-model 20 fixed RJ45 + four shared copper/SFP logical-port contract, discovery routing, telemetry and Experimental evidence status unchanged.
+- Coordinate the Discovery-to-Core registry projection and pin against the exact updated Core faceplate catalog without altering the native-image renderer.
+
 ## 3.0.30 — Privacy-safe Q-BRIDGE contribution correlation
 
 - Add a bounded, privacy-scoped Q-BRIDGE diagnostic correlating physical IF-MIB indices, bridge-port joins, PVID/native VLAN, current or static egress/untagged PortList bitmaps and generated VLAN sensors with available Home Assistant states.

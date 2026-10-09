@@ -132,8 +132,10 @@ with tempfile.TemporaryDirectory(prefix="sv-avaya-3524-") as td:
     # These are the exact values consumed by Discovery card generation.
     assert ports["rj45"] + ports["combo_ports"] == 24
     assert ports["uplinks"] == 4
-    assert enriched["registry"]["calibration_profile"] == "stock_24rj45_4sfp"
-    assert enriched["registry"]["default_faceplate"] == "faceplates/24rj45-4sfp.png"
+    assert enriched["registry"]["calibration_profile"] == "avaya_3524gt"
+    assert enriched["registry"]["default_faceplate"] == "faceplates/avaya-3524gt.png"
+    original = next(row for row in json.loads(REGISTRY.read_text(encoding="utf-8"))["devices"] if row["model"] == "3524GT-PWR+")
+    assert original["optional_faceplates"] == ["faceplates/24rj45-4sfp.png"]
 
     sensor_output = work / "standard-sensors.json"
     run([
