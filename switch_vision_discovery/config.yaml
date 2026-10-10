@@ -1,5 +1,5 @@
 name: Switch Vision Discovery / Hub
-version: "3.0.33"
+version: "3.0.34"
 slug: switch_vision_discovery
 description: Read-only switch discovery and dashboards, with optional opt-in HP 3500yl optical diagnostics refresh via guarded Core SNMP SET.
 url: https://github.com/zemerdon/switch-vision-discovery

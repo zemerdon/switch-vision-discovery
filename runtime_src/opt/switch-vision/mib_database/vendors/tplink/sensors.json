@@ -60,8 +60,17 @@
     "official_mib_archive_url": "https://static.tp-link.com/2019/201905/20190513/T2600G-28MPS%28UN%29_V4_MIB_20181116.zip",
     "official_mib_archive_sha256": "57853b3ce03a22a5ab5c426733aad6e1734b8d79eb0a6f98cd5c1afbb61217f5",
     "scope": "Documented TP-Link JetStream MIB subtrees from a related older hardware MIB archive; each object is optional until observed on the exact contributed models.",
+    "mib_modules": {
+      "identity": "TPLINK-PRODUCTS-MIB (1.3.6.1.4.1.11863.5; sysObjectID only, never walked as a table)",
+      "system": "TPLINK-SYSINFO-MIB / tplink-sysInfo.mib (1.3.6.1.4.1.11863.6.1)",
+      "cpu_memory": "TPLINK-SYSMONITOR-MIB / tplink-sysMonitor.mib (1.3.6.1.4.1.11863.6.4)",
+      "poe": "TPLINK-POWER-OVER-ETHERNET-MIB / tplink-powerOverEthernet.mib (1.3.6.1.4.1.11863.6.56)"
+    },
+    "system_description_oid": "1.3.6.1.4.1.11863.6.1.1.1",
+    "system_description_policy": "Read-only tpSysInfoDescription: optional independent model/firmware clue, not automatic exact SKU proof. Exclude serial-number, hostname, contact and location OIDs.",
     "full_walk_roots": ["1.3.6.1.2.1", "1.3.6.1.4.1.11863"],
     "targeted_walk_oids": [
+      "1.3.6.1.4.1.11863.6.1.1.1",
       "1.3.6.1.4.1.11863.6.1.1.5",
       "1.3.6.1.4.1.11863.6.1.1.6",
       "1.3.6.1.4.1.11863.6.4.1.1",
@@ -70,7 +79,7 @@
       "1.3.6.1.4.1.11863.6.56.1.1.2.1.1",
       "1.3.6.1.4.1.11863.6.96.1.7.1"
     ],
-    "targeted_notes": "System hardware/firmware, CPU, memory, global/port PoE and SFP optical diagnostics only. Read-only; unsupported trees are informational, never proof of capability. Do not walk the full enterprise tree in targeted mode."
+    "targeted_notes": "System description, hardware/firmware versions, CPU, memory, global/port PoE and SFP optical diagnostics only. SNMP GET/WALK only; unsupported trees are informational, never proof of capability. Do not walk the full enterprise tree, any sysInfo parent or serial-number objects in targeted mode."
   },
   "standards_first": [
     "POWER-ETHERNET-MIB",

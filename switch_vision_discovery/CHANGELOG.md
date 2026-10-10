@@ -1,3 +1,9 @@
+## 3.0.34 — TP-Link JetStream system-identity MIB probe (Local)
+
+- Add the official TP-Link `TPLINK-SYSINFO-MIB` read-only `tpSysInfoDescription` leaf (`1.3.6.1.4.1.11863.6.1.1.1`) to the bounded JetStream targeted walk; retain hardware/firmware, CPU, memory, PoE and optical diagnostic probes without broadening to the entire vendor tree.
+- Record the related vendor MIB modules and `TPLINK-PRODUCTS-MIB` OID-symbol references alongside the two reviewed JetStream candidate contracts. Keep precise hardware revisions and on-device confirmation pending; a model-OID resemblance alone remains insufficient.
+- Exclude serial-number and other identifying configuration fields; no SNMP SET, telemetry invention, public publication or support-state promotion.
+
 ## 3.0.33 — HP 3500yl optical refresh controls (Local pilot)
 
 - Remove the generic optional faceplate assignment from the Avaya ERS 3524GT-PWR+ exact-model registry; retain only the owner-calibrated Avaya PNG and native calibration, without changing existing saved user overrides.

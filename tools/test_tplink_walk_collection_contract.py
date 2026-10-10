@@ -6,9 +6,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "runtime_src/discovery_job.sh").read_text()
 MIB = json.loads((ROOT / "runtime_src/opt/switch-vision/mib_database/vendors/tplink/sensors.json").read_text())
+PRODUCTS = json.loads((ROOT / "runtime_src/opt/switch-vision/mib_database/vendors/tplink/products.json").read_text())
 POLICY = MIB["collection"]
 ROOT_ENTERPRISE = "1.3.6.1.4.1.11863"
 EXPECTED = {
+    ROOT_ENTERPRISE + ".6.1.1.1",       # read-only textual identity, not serial number
     ROOT_ENTERPRISE + ".6.1.1.5",       # system hardware revision
     ROOT_ENTERPRISE + ".6.1.1.6",       # system software revision
     ROOT_ENTERPRISE + ".6.4.1.1",       # CPU usage table
@@ -19,6 +21,16 @@ EXPECTED = {
 }
 assert set(POLICY["targeted_walk_oids"]) == EXPECTED
 assert len(POLICY["targeted_walk_oids"]) == len(EXPECTED)
+assert MIB["collection"]["system_description_oid"] in EXPECTED
+assert all(".6.1.1.8" not in oid for oid in EXPECTED)  # protected device serial number
+assert set(MIB["collection"]["mib_modules"]) == {"identity", "system", "cpu_memory", "poe"}
+assert "TPLINK-SYSINFO-MIB" in MIB["collection"]["mib_modules"]["system"]
+assert PRODUCTS["identity_mib"] == "TPLINK-PRODUCTS-MIB"
+assert PRODUCTS["identity_oid_root"] == ROOT_ENTERPRISE + ".5"
+assert {row["sys_object_id"] for row in PRODUCTS["products"]} == {
+    ROOT_ENTERPRISE + ".5.94", ROOT_ENTERPRISE + ".5.98"
+}
+assert all("mib_symbol" not in row for row in PRODUCTS["products"])  # newer symbols not verified
 assert POLICY["full_walk_roots"] == ["1.3.6.1.2.1", ROOT_ENTERPRISE]
 assert len(POLICY["official_mib_archive_sha256"]) == 64
 assert "T2600G-28MPS" in POLICY["official_mib_archive_url"]
