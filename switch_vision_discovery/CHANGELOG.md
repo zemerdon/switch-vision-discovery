@@ -1,3 +1,12 @@
+## 3.0.33 — HP 3500yl optical refresh controls (Local pilot)
+
+- Remove the generic optional faceplate assignment from the Avaya ERS 3524GT-PWR+ exact-model registry; retain only the owner-calibrated Avaya PNG and native calibration, without changing existing saved user overrides.
+
+- Add a prominent red link-disruption warning and dedicated SNMP SET enable/disable checkbox under Hub SNMP2MQTT Settings. Default is disabled; credentials are write-only to the authenticated Home Assistant Core integration and excluded from all normal Hub exports and generated YAML.
+- Use the existing authenticated Home Assistant WebSocket bridge rather than placing a privileged SNMP SET command in the Hub, its browser code or the generic poller.
+- Scope the pilot to the exact HP J8693A Switch 3500yl-48G, where Core independently validates the discovered switch, physical optical ifIndex and live DOM(1) capability before the single fixed MIB refresh OID. VCT/other cable diagnostics are denied.
+- Do not enable write commands through Discovery or routine sensor polling; this release is for local-first evaluation, with no claim of live field validation.
+
 ## 3.0.32 — Full-walk registration review and TP-Link JetStream support
 
 - Split TP-Link full walks into standard `1.3.6.1.2.1` and private `1.3.6.1.4.1.11863` branches, with a more patient minimum 8-second/two-retry collection policy restricted to opt-in TP-Link full mode; preserve other vendors' settings.

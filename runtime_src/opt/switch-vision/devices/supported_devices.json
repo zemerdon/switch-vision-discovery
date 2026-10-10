@@ -4433,9 +4433,7 @@
       "mapping_profile": "avaya-ers3524gt-pwrplus-20p-4dual",
       "calibration_profile": "avaya_3524gt",
       "default_faceplate": "faceplates/avaya-3524gt.png",
-      "optional_faceplates": [
-        "faceplates/24rj45-4sfp.png"
-      ],
+      "optional_faceplates": [],
       "tested_firmware": [
         "v5.1.0.007"
       ],
@@ -4448,7 +4446,7 @@
         "Ports 1-20 are fixed copper; logical ports 21-24 are dual-personality front copper/SFP positions and use shared logical-port mapping rather than duplicate entities.",
         "Standard POWER-ETHERNET-MIB exposes all 24 PSE rows, a 370 W budget, and active PoE delivery in the captured contribution.",
         "The chassis also has two rear SFP positions, but this contribution does not provide a trustworthy independent IF-MIB binding for them; they remain documented capability only and are not fabricated into the current dashboard contract.",
-        "The dedicated Avaya ERS 3524GT-PWR+ faceplate and owner-calibrated 24-RJ45/4-SFP geometry are the default presentation; the earlier stock faceplate remains an optional fallback. Optional environment telemetry remains pending."
+        "The dedicated Avaya ERS 3524GT-PWR+ faceplate and owner-calibrated 24-RJ45/4-SFP geometry are the sole exact-model presentation; no generic faceplate fallback is assigned. Optional environment telemetry remains pending."
       ],
       "validation": {
         "exact_model_detection": "real_hardware_sysobjectid_and_sysdescr_confirmed",
@@ -4461,9 +4459,7 @@
       "visuals": {
         "status": "experimental",
         "recommended_faceplate": "faceplates/avaya-3524gt.png",
-        "optional_faceplates": [
-          "faceplates/24rj45-4sfp.png"
-        ],
+        "optional_faceplates": [],
         "calibration_profile": "avaya_3524gt",
         "canvas": {
           "width": 2048,
