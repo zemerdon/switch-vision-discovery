@@ -1,3 +1,9 @@
+## 3.0.35 — Calibration Theme Hub editor (Local)
+
+- Add Calibration Theme next to Custom Theme in Hub Settings, grouped by Workspace & Sections, Assets & Selection, Labels & Fields, Buttons & Inputs, and Dropdowns.
+- Independent Desktop and Mobile typography, weight, padding, spacing, closed dropdown and open-menu measurements with compact selectors, instant preview, and independently resettable sections.
+- Persist only the Calibration-editor appearance through the existing authoritative Core settings path. No faceplate geometry, calibration profile, ordinary dashboard, mail, or network-device mutation.
+
 ## 3.0.34 — TP-Link JetStream system-identity MIB probe (Local)
 
 - Add the official TP-Link `TPLINK-SYSINFO-MIB` read-only `tpSysInfoDescription` leaf (`1.3.6.1.4.1.11863.6.1.1.1`) to the bounded JetStream targeted walk; retain hardware/firmware, CPU, memory, PoE and optical diagnostic probes without broadening to the entire vendor tree.
