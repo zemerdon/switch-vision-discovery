@@ -226,6 +226,9 @@ CORE_HUB_SETTINGS_GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
         ("CONF_MANAGEMENT_THEME_SELECTED", "management_theme_selected"),
         ("CONF_CUSTOM_THEMES", "custom_themes"),
     ),
+    "calibration_theme": (
+        ("CONF_CALIBRATION_THEME", "calibration_theme"),
+    ),
 }
 
 
