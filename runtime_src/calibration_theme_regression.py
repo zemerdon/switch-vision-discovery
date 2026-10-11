@@ -16,11 +16,11 @@ for marker in (
     assert marker in HTML, marker
 assert '"/calibration_theme_manager.js"' in PY
 for marker in (
-    "Workspace & Sections", "Assets & Selection", "Labels & Fields",
-    "Buttons & Inputs", "Dropdowns", "Closed control", "Open menu & options",
+    "Global Calibration Controls", "Closed Dropdowns", "Open Dropdown Menu",
+    "Selection — controls, labels and buttons",
     '"desktop"', '"mobile"', "font_weight", "font_size", "row_height",
-    "max_height", "padding", "padding_horizontal", "padding_vertical", "gap", "Live preview",
-    "Reset section", "Reset ", "Default (unchanged)", "Save Calibration Theme", "calibration_theme_core.css", "cal-theme-real-iframe",
+    "max_height", "padding", "padding_horizontal", "padding_vertical", "gap", "Live Selection preview",
+    "Reset ", "Default (unchanged)", "Save Calibration Theme", "calibration_theme_core.css", "cal-theme-real-iframe",
     'api/settings/core', "method:\"POST\"",
     "calibration_theme:{calibration_theme:theme}",
 ):
@@ -44,6 +44,11 @@ assert (ROOT / "calibration_theme_core_rules.js").is_file()
 assert ".cv-cal-tools button" in (ROOT / "calibration_theme_core.css").read_text(encoding="utf-8")
 assert "padding-inline:" in (ROOT / "calibration_theme_core_rules.js").read_text(encoding="utf-8")
 assert "padding-block:" in (ROOT / "calibration_theme_core_rules.js").read_text(encoding="utf-8")
+assert "const SETTINGS = [" in JS
+assert "cal-theme-all-settings" in JS
+assert "FIELD_EXAMPLES.quick_selection+FIELD_EXAMPLES.inputs" in JS
+assert "const GROUPS" not in JS
+assert "focusCategory" not in JS
 assert "localStorage.setItem" not in JS
 assert "set_calibration" not in JS
 assert "send" not in JS

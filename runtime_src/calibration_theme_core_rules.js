@@ -1,6 +1,7 @@
 /* Generated from Core Calibration theme code; do not hand-edit. */
 (() => {
 const SV_CAL_THEME_SELECTORS = Object.freeze({
+  global: ".cv-cal-tools",
   workspace: ".cv-cal-tools",
   section_headers: ".cv-cal-tools .cv-cal-section > summary",
   assets: ".cv-cal-tools .cv-cal-assets-row",
@@ -43,9 +44,23 @@ function calibrationThemeCss(theme) {
   const devices = normalizeCalibrationTheme(theme);
   return Object.entries(devices).map(([device, sections]) => {
     const rules = [];
-    for (const [name, fields] of Object.entries(sections)) {
+    const globalFields = sections.global || {};
+    const globalOwns = (key) => Object.prototype.hasOwnProperty.call(globalFields, key);
+    for (const [name, storedFields] of Object.entries(sections)) {
+      if (name === "global") continue;
       const selector = SV_CAL_THEME_SELECTORS[name];
       if (!selector) continue;
+      const fields = {...storedFields};
+      // Previously saved per-section preferences remain recoverable, but new
+      // global values win for any property they explicitly configure.
+      for (const key of ["font_size", "font_weight", "gap"]) {
+        if (globalOwns(key)) delete fields[key];
+      }
+      if (["padding", "padding_horizontal", "padding_vertical"].some(globalOwns)) {
+        delete fields.padding;
+        if (globalOwns("padding") || globalOwns("padding_horizontal")) delete fields.padding_horizontal;
+        if (globalOwns("padding") || globalOwns("padding_vertical")) delete fields.padding_vertical;
+      }
       const declarations = [];
       if (fields.font_size !== undefined) declarations.push("font-size:" + fields.font_size + "px!important");
       if (fields.font_weight) declarations.push("font-weight:" + (fields.font_weight === "bold" ? 700 : 400) + "!important");
@@ -68,10 +83,36 @@ function calibrationThemeCss(theme) {
         }
       }
     }
+    // Shared editor-wide values. Only the Calibration UI and its detached
+    // option menu are targeted; normal cards and faceplates are unaffected.
+    const type = [];
+    if (globalFields.font_size !== undefined) type.push("font-size:" + globalFields.font_size + "px!important");
+    if (globalFields.font_weight) type.push("font-weight:" + (globalFields.font_weight === "bold" ? 700 : 400) + "!important");
+    if (type.length) {
+      rules.push(".cv-cal-tools, .cv-cal-tools :is(summary,small,span,label,b,button,input,select), .cv-cal-option-menu-item, .cv-cal-option-menu-heading{" + type.join(";") + "}");
+    }
+    const padding = [];
+    if (globalFields.padding !== undefined) padding.push("padding:" + globalFields.padding + "px!important");
+    if (globalFields.padding_horizontal !== undefined) padding.push("padding-inline:" + globalFields.padding_horizontal + "px!important");
+    if (globalFields.padding_vertical !== undefined) padding.push("padding-block:" + globalFields.padding_vertical + "px!important");
+    if (padding.length) {
+      const controls = ".cv-cal-tools .cv-cal-tools-row button, .cv-cal-tools .cv-cal-tools-row input.cv-cal-input, " +
+        ".cv-cal-tools .cv-cal-tools-row select.cv-cal-select, .cv-cal-tools .cv-cal-section > summary, " +
+        ".cv-cal-option-menu-item, .cv-cal-option-menu-heading";
+      rules.push(controls + "{" + padding.join(";") + "}");
+      // Fixed legacy 16px button/input height must not clip customized
+      // vertical padding. Closed dropdown heights have their own setting.
+      rules.push(".cv-cal-tools .cv-cal-tools-row button:not(.cv-cal-select-trigger), " +
+        ".cv-cal-tools .cv-cal-tools-row input.cv-cal-input{height:auto!important;min-height:16px!important}");
+    }
+    if (globalFields.gap !== undefined) {
+      rules.push(".cv-cal-tools, .cv-cal-tools .cv-cal-tools-row, .cv-cal-tools .cv-cal-section-body{" +
+        "gap:" + globalFields.gap + "px!important}");
+    }
     return rules.length
       ? "@media " + (device === "mobile" ? "(max-width:760px)" : "(min-width:761px)") + "{" + rules.join("") + "}"
       : "";
-  }).join("\n");
+  }).join(String.fromCharCode(10));
 }
 window.SwitchVisionCalibrationThemeCoreCss = calibrationThemeCss;
 })();

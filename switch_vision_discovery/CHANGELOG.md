@@ -1,3 +1,9 @@
+## 3.0.37 — One global Calibration Theme panel (Local)
+
+- Replace repetitive per-section Calibration Theme editors with a single compact Desktop/Mobile settings panel: global text size, weight, all-side/axis padding and spacing, plus only closed/open dropdown-specific geometry controls.
+- Keep one real-Core-styled, sandboxed Selection preview with representative dense Assets, target selectors, port-management buttons, quick-selection and inputs. Every edit updates this same preview; the menu can be shown explicitly.
+- Retain pre-existing detailed theme preferences for backward compatibility while new global values take precedence. No saved per-switch Calibration geometry, ordinary dashboard or public release changes.
+
 ## 3.0.36 — Exact-style Calibration Theme preview and padding axes (Local)
 
 - Add horizontal and vertical padding dropdowns to every applicable Calibration Theme section in both Desktop and Mobile; retain all-side padding fallback.
