@@ -5,6 +5,7 @@ const SV_CAL_THEME_SELECTORS = Object.freeze({
   group_labels: ".cv-cal-tools .cv-cal-quick-label",
   subsection_headings: ".cv-cal-tools .cv-cal-subsection-divider > span",
   section_headings: ".cv-cal-tools .cv-cal-section > summary > span",
+  hint_text: ".cv-cal-tools .cv-cal-section > summary > small, .cv-cal-tools .cv-cal-current, .cv-cal-tools .cv-cal-section-layout-help",
   global: ".cv-cal-tools",
   workspace: ".cv-cal-tools",
   section_headers: ".cv-cal-tools .cv-cal-section > summary",
@@ -53,7 +54,7 @@ function calibrationThemeCss(theme) {
     const globalFields = sections.global || {};
     const globalOwns = (key) => Object.prototype.hasOwnProperty.call(globalFields, key);
     for (const [name, storedFields] of Object.entries(sections)) {
-      if (["global", "field_labels", "group_labels", "subsection_headings", "section_headings"].includes(name)) continue;
+      if (["global", "field_labels", "group_labels", "subsection_headings", "section_headings", "hint_text"].includes(name)) continue;
       const selector = SV_CAL_THEME_SELECTORS[name];
       if (!selector) continue;
       const fields = {...storedFields};
@@ -135,7 +136,8 @@ function calibrationThemeCss(theme) {
         "width:" + globalFields.text_input_width + "px!important;max-width:100%!important}");
     }
     if (globalFields.number_input_width !== undefined && globalFields.number_input_width > 0) {
-      rules.push(".cv-cal-tools .cv-cal-port-meta-row input.cv-cal-input[type=number]{" +
+      rules.push(".cv-cal-tools .cv-cal-port-meta-row input.cv-cal-input[type=number], " +
+        ".cv-cal-tools .cv-cal-geometry-row input.cv-cal-coordinate-input{" +
         "width:" + globalFields.number_input_width + "px!important;max-width:100%!important}");
     }
     if (globalFields.line_height !== undefined) {
@@ -158,6 +160,7 @@ function calibrationThemeCss(theme) {
       group_labels: ".cv-cal-tools .cv-cal-section[data-cv-section] .cv-cal-section-body .cv-cal-tools-row .cv-cal-quick-label",
       subsection_headings: ".cv-cal-tools .cv-cal-section[data-cv-section] .cv-cal-subsection-divider > span",
       section_headings: ".cv-cal-tools .cv-cal-section[data-cv-section] > summary > span",
+      hint_text: ".cv-cal-tools .cv-cal-section[data-cv-section] > summary > small, .cv-cal-tools .cv-cal-current, .cv-cal-tools .cv-cal-section-layout-help",
     };
     for (const [role, selector] of Object.entries(roleSelectors)) {
       const settings = sections[role] || {};

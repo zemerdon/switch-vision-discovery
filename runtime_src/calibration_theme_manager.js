@@ -24,6 +24,9 @@
     ["Section Headings — Selection", "section_headings", [
       ["font_size","Text size",7,22,1],["font_weight","Text weight"],
     ]],
+    ["Hint Text — Section descriptions and help", "hint_text", [
+      ["font_size","Text size",7,22,1],["font_weight","Text weight"],
+    ]],
     ["Closed Dropdowns", "dropdown_closed", [
       ["height","Control height",12,48,1],["width","Control width",0,480,10],
     ]],
@@ -41,7 +44,7 @@
     gap:"5–8 px (varies)", row_height:"Auto (content height)",
     row_spacing:"6 px", button_height:"16 px", button_min_width:"30 px",
     input_height:"16 px", line_height:"12 px", label_spacing:"5 px",
-    text_input_width:"127 px", number_input_width:"61 px",
+    text_input_width:"127 px", number_input_width:"110 px (X/Y/W/H), 61 px (other)",
     height:"16 px", width:"Auto / content width",
     max_height:"320 px, viewport-limited",
   });
@@ -121,6 +124,9 @@
     if(category==="subsection_headings")return '<div class="cv-cal-subsection-divider"><span>Quick selection</span></div>'+quick;
     if(category==="section_headings")return '<details class="cv-cal-section" data-cv-section="selection" open>'+
       '<summary><span>Selection</span><small>Port 1 · 24 ports</small></summary></details>';
+    if(category==="hint_text")return '<details class="cv-cal-section" data-cv-section="selection" open>'+
+      '<summary><span>Selection</span><small>Port 1 · 24 ports</small></summary>'+
+      '<div class="cv-cal-section-body"><span class="cv-cal-current">Detected image dimensions appear after selection.</span></div></details>';
     if(category==="dropdown_closed")return field;
     if(category==="dropdown_open") {
       const options=selected.dropdown_open||{};
@@ -263,7 +269,7 @@
       const cssText=await cssResponse.text();
       if(!cssText.includes(".cv-cal-tools{")||cssText.toLowerCase().includes("</style")||typeof window.SwitchVisionCalibrationThemeCoreCss!=="function")
         throw Error("Core Calibration preview assets are invalid");
-      if((window.SwitchVisionCalibrationSelectionButtons?.count||0)<49)
+      if((window.SwitchVisionCalibrationSelectionButtons?.count||0)<48)
         throw Error("Core Selection preview button inventory is incomplete");
       corePreviewCss=cssText;
       const body=await res.json();

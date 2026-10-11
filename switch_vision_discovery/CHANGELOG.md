@@ -1,3 +1,9 @@
+## 3.0.41 — Hint Text and combined LED preview alignment (Local)
+
+- Add a dedicated Desktop/Mobile Hint Text font size and Regular/Bold weight section, previewing the actual grey section summaries and helper text.
+- Track Core 2.7.74's selection layout, new Link+Activity quick controls, larger coordinate inputs and removed separators through Core-derived read-only preview assets.
+- Retain Core-owned settings persistence, existing saved profiles and Core/Hub preview parity; Local-only candidate.
+
 ## 3.0.40 — Auto-sized Calibration Theme examples (Local)
 
 - Remove the arbitrary 310 px iframe preview cap and auto-size the read-only examples from their rendered Core-styled content. Minimum Row Height and Space Between Rows examples can now grow as controls wrap, without a nested iframe scrollbar.

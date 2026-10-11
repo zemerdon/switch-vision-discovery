@@ -19,6 +19,7 @@ for marker in (
     "Global Calibration Controls", "Closed Dropdowns", "Open Dropdown Menu",
     "Field Labels — RJ45 Targets", "Group Labels — Port manager",
     "Subsection Headings — Quick selection", "Section Headings — Selection",
+    "Hint Text — Section descriptions and help",
     '"desktop"', '"mobile"', "font_weight", "font_size", "row_height",
     "max_height", "padding", "padding_horizontal", "padding_vertical", "gap", "cal-theme-inline-sample",
     "Reset ", "Core default (", "Save Calibration Theme", "calibration_theme_core.css", "cal-theme-sample-frame",
@@ -59,7 +60,7 @@ assert "calibration_theme_selection_buttons.js" in HTML
 assert '"/calibration_theme_selection_buttons.js"' in PY
 assert (ROOT / "calibration_theme_selection_buttons.js").is_file()
 selection_inventory = (ROOT / "calibration_theme_selection_buttons.js").read_text()
-assert '"count": 49' in selection_inventory
+assert '"count": 48' in selection_inventory
 for button_name in ("Remove All RJ45 Ports", "Remove All SFP Ports", "Reset name", "All Link LEDs", "Activity LEDs", "Select"):
     assert button_name in selection_inventory
 assert "cal-theme-all-settings" in JS
@@ -79,6 +80,7 @@ assert 'category==="field_labels"' in JS
 assert 'category==="group_labels"' in JS
 assert 'category==="subsection_headings"' in JS
 assert 'category==="section_headings"' in JS
+assert 'category==="hint_text"' in JS
 assert "localStorage.setItem" not in JS
 assert "set_calibration" not in JS
 assert "send" not in JS
