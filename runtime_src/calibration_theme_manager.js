@@ -12,6 +12,18 @@
       ["label_spacing","Label spacing",0,24,1],
       ["text_input_width","Text input width",0,260,5],["number_input_width","Number input width",0,120,1],
     ]],
+    ["Field Labels — RJ45 Targets", "field_labels", [
+      ["font_size","Text size",7,22,1],["font_weight","Text weight"],
+    ]],
+    ["Group Labels — Port manager", "group_labels", [
+      ["font_size","Text size",7,22,1],["font_weight","Text weight"],
+    ]],
+    ["Subsection Headings — Quick selection", "subsection_headings", [
+      ["font_size","Text size",7,22,1],["font_weight","Text weight"],
+    ]],
+    ["Section Headings — Selection", "section_headings", [
+      ["font_size","Text size",7,22,1],["font_weight","Text weight"],
+    ]],
     ["Closed Dropdowns", "dropdown_closed", [
       ["height","Control height",12,48,1],["width","Control width",0,480,10],
     ]],
@@ -52,12 +64,6 @@
   }
   // Real Calibration class names, read-only sample values, and exact Core CSS.
   // No card instance, MQTT state, profile calls or Calibration event handlers.
-  const FIELD_EXAMPLES = {
-    assets: '<div class="cv-cal-tools-row cv-cal-style-row cv-cal-assets-row"><span class="cv-cal-quick-label">Assets</span><label>Logo<select class="cv-cal-select" data-cv-field="logo-file"><option>Use card default</option></select></label><label>Faceplate<select class="cv-cal-select" data-cv-field="faceplate-file"><option>Cisco 3650 (Default / recommended)</option></select></label><button type="button">Refresh files</button><span class="cv-cal-current">2 assets available</span></div>',
-    selection: '<div class="cv-cal-tools-row cv-cal-port-manager-row cv-cal-port-manager-main"><label>Misc Targets<select class="cv-cal-select cv-cal-target-select"><option>Logo</option></select></label><label>RJ45 Targets<select class="cv-cal-select cv-cal-target-select"><option>Port 1</option></select></label><label>SFP Targets<select class="cv-cal-select cv-cal-target-select"><option>SFP1</option></select></label><label>Part<select class="cv-cal-select"><option>Entire Port</option></select></label><span class="cv-cal-quick-label">Port manager</span><button type="button">Add RJ45</button><button type="button">Add SFP</button><button type="button">Duplicate selected</button><button type="button">Remove selected</button></div>',
-    quick_selection: '<div class="cv-cal-subsection-divider"><span>Quick selection</span></div><div class="cv-cal-tools-row cv-cal-quick-row"><span class="cv-cal-quick-label">Quick select</span><button type="button">Status LEDs</button><button type="button">All RJ45</button><button type="button">All SFP</button><button type="button">Port Labels</button><button type="button">All Link LEDs</button><button type="button">All Activity LEDs</button><button type="button">RJ45 Link</button></div>',
-    inputs: '<div class="cv-cal-tools-row cv-cal-port-meta-row"><label>RJ45 key<input class="cv-cal-input" type="number" value="1" readonly></label><button type="button">Renumber</button><label>SFP key<input class="cv-cal-input" value="SFP1" readonly></label><button type="button">Rename</button><label>Display name<input class="cv-cal-input" value="Port 1" readonly></label><button type="button">Set name</button></div>',
-  };
   // Mirror Core's in-page dropdown shell after Calibration initializes.
   // Values and labels come only from the static read-only preview fixtures.
   function materializePreviewSelectShells(html) {
@@ -79,55 +85,81 @@
     for(const button of template.content.querySelectorAll("button:not(.cv-cal-select-trigger)")) button.remove();
     return template.innerHTML;
   }
-  function selectionButtonPreviewHtml() {
+  // Each preview is a tiny, read-only example of its real Calibration
+  // control. Multi-button rows are drawn from Core's verified inventory.
+  function buttonRow(name="cv-cal-port-manager-row", limit=4) {
     const fixture=window.SwitchVisionCalibrationSelectionButtons;
-    if(!fixture || !Array.isArray(fixture.rows) || fixture.count<40) return "";
-    const block=document.createElement("div");
-    for(const row of fixture.rows) {
-      const line=document.createElement("div");
-      line.className=row.css;
-      for(const token of row.tokens) {
-        const element=document.createElement(token[0]==="label"?"span":"button");
-        element.textContent=token[0]==="label"?token[1]:token[2];
-        if(token[0]==="label") element.className="cv-cal-quick-label";
-        else {element.type="button";element.dataset.cvPreviewAction=token[1];}
-        line.append(element);
+    const row=fixture?.rows?.find(item=>item.css.includes(name));
+    if(!row)return "";
+    const div=document.createElement("div");
+    div.className=row.css;
+    for(const token of row.tokens) {
+      if(token[0]==="label") {
+        const label=document.createElement("span");
+        label.className="cv-cal-quick-label";label.textContent=token[1];
+        div.append(label);
+      } else if(div.querySelectorAll("button").length<limit) {
+        const button=document.createElement("button");
+        button.type="button";button.textContent=token[2];
+        div.append(button);
       }
-      block.append(line);
     }
-    return block.innerHTML;
+    return div.outerHTML;
+  }
+  function exampleHtml(category,key) {
+    const buttons=buttonRow("cv-cal-port-manager-row",4);
+    const quick=buttonRow("cv-cal-quick-row",4);
+    const field=materializePreviewSelectShells(
+      '<div class="cv-cal-tools-row cv-cal-port-manager-row cv-cal-port-manager-main">'+
+      '<label>RJ45 Targets<select class="cv-cal-select cv-cal-target-select"><option>Port 1</option></select></label></div>'
+    );
+    const input='<div class="cv-cal-tools-row cv-cal-port-meta-row">'+
+      '<label>RJ45 key<input class="cv-cal-input" type="number" value="1" readonly></label>'+
+      '<label>Display name<input class="cv-cal-input" value="Port 1" readonly></label></div>';
+    if(category==="field_labels")return field;
+    if(category==="group_labels")return buttons;
+    if(category==="subsection_headings")return '<div class="cv-cal-subsection-divider"><span>Quick selection</span></div>'+quick;
+    if(category==="section_headings")return '<details class="cv-cal-section" data-cv-section="selection" open>'+
+      '<summary><span>Selection</span><small>Port 1 · 24 ports</small></summary></details>';
+    if(category==="dropdown_closed")return field;
+    if(category==="dropdown_open")return field+
+      '<div class="cv-cal-option-menu" role="listbox" aria-label="Port choices" '+
+      'style="position:relative!important;inset:auto!important;margin:4px 0;width:220px;max-width:100%;">'+
+      '<div class="cv-cal-option-menu-heading">RJ45 Targets</div>'+
+      '<button class="cv-cal-option-menu-item" aria-selected="true">Port 1</button>'+
+      '<button class="cv-cal-option-menu-item">Port 2</button>'+
+      '<button class="cv-cal-option-menu-item">Port 3</button></div>';
+    if(["input_height","text_input_width","number_input_width","label_spacing"].includes(key)) return input;
+    if(["row_height","row_spacing"].includes(key))return buttons+quick;
+    // Four genuine adjacent action buttons reveal text size, weight, padding,
+    // width and wrapping much better than a solitary mock button.
+    return buttons;
   }
   function preview() {
-    const frame=one(".cal-theme-real-iframe");
-    if(!frame)return;
-    const mobile=mode==="mobile",selected=theme[mode]||{};
-    frame.style.width=mobile?"360px":"850px";
-    frame.style.height=mobile?"560px":"405px";
-    const caption=one(".cal-theme-target-name");
-    if(caption)caption.textContent="Selection — all "+(window.SwitchVisionCalibrationSelectionButtons?.count||0)+" action buttons";
+    const selected=theme[mode]||{};
     const css=window.SwitchVisionCalibrationThemeCoreCss?.({desktop:selected,mobile:selected})||"";
-    const open=selected.dropdown_open||{};
-    const popup=one(".cal-theme-open-toggle")?.checked?
-      '<div class="cv-cal-option-menu" role="listbox" style="position:relative!important;inset:auto!important;width:'+
-      (open.width||220)+'px;max-height:'+(open.max_height||320)+'px;margin:8px 0;">'+
-      '<div class="cv-cal-option-menu-heading">Faceplates</div>'+
-      '<button class="cv-cal-option-menu-item" aria-selected="true">Use card default</button>'+
-      '<button class="cv-cal-option-menu-item">Cisco 3650</button>'+
-      '<button class="cv-cal-option-menu-item">Custom faceplate</button></div>':"";
-    const content=materializePreviewSelectShells(
-      FIELD_EXAMPLES.assets+FIELD_EXAMPLES.selection+
-      FIELD_EXAMPLES.quick_selection+FIELD_EXAMPLES.inputs
-    )+selectionButtonPreviewHtml();
-    const section='<details class="cv-cal-section" data-cv-section="selection" open>'+
-      '<summary><span>Selection</span><small>Port 1 · 24 ports</small></summary>'+
-      '<div class="cv-cal-section-body">'+content+'</div></details>';
-    frame.srcdoc='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">'+
-      '<style>'+corePreviewCss+'</style><style>'+
-      ':root{--cv-text:#eef7ff;--cv-muted:#b9d7ea;}html,body{margin:0;background:#101a22;color:#eef7ff;font:12px Arial,sans-serif;}'+
-      '.cv-cal-tools{margin:0;min-height:100px}.cv-cal-option-menu{max-width:calc(100% - 16px);}' +
-      css+'</style></head><body><div class="cv-cal-tools" inert>'+section+popup+'</div></body></html>';
+    for(const frame of container()?.querySelectorAll(".cal-theme-sample-frame")||[]) {
+      const category=frame.dataset.category, key=frame.dataset.field;
+      const html=exampleHtml(category,key);
+      const isMenu=category==="dropdown_open";
+      const paddingY=selected.global?.padding_vertical??selected.global?.padding??2;
+      const buttonHeight=Math.max(selected.global?.button_height??16,16+2*paddingY);
+      const rowCount=key==="row_height"||key==="row_spacing"||category==="subsection_headings"?2:1;
+      const minimum=category==="section_headings"||category==="field_labels"?84:100;
+      const menuHeight=Math.min(310,94+3*Math.max(selected.dropdown_open?.row_height??32,32));
+      frame.style.height=(isMenu?menuHeight:Math.min(290,Math.max(minimum,26+rowCount*(buttonHeight+18))))+"px";
+      frame.srcdoc='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">'+
+        '<style>'+corePreviewCss+'</style><style>'+
+        ':root{--cv-text:#eef7ff;--cv-muted:#b9d7ea;}html,body{margin:0;padding:0;background:#101a22;color:#eef7ff;font:12px Arial,sans-serif;}'+
+        '.cv-cal-tools{margin:0;min-height:0;padding:4px!important} .cv-cal-tools-row{flex-wrap:wrap!important}'+
+        '.cv-cal-option-menu{z-index:1!important;overflow:auto;}'+
+        css+'</style></head><body><div class="cv-cal-tools" inert>'+
+        '<div class="cv-cal-section" data-cv-section="selection"><div class="cv-cal-section-body">'+
+        html+'</div></div></div></body></html>';
+    }
   }
   function optionsSelect(category, [key, title, min, max, step]) {
+    const field=node("div","cal-theme-setting-with-preview");
     const label=node("label","cal-theme-setting"), text=node("span","",title), select=node("select");
     select.setAttribute("aria-label",category+" "+title);
     const add=(value,label)=>{const opt=node("option","",label);opt.value=String(value);select.append(opt);};
@@ -150,7 +182,13 @@
       const save=one(".cal-theme-save");if(save)save.disabled=false;
       preview();status("Unsaved "+mode+" Calibration Theme changes.");
     };
-    label.append(text,select);return label;
+    label.append(text,select);field.append(label);
+    const sample=node("div","cal-theme-inline-sample");
+    const frame=node("iframe","cal-theme-sample-frame");
+    frame.setAttribute("sandbox","");frame.setAttribute("title","Read-only Calibration "+title+" example");
+    frame.dataset.category=category;frame.dataset.field=key;
+    sample.append(frame);field.append(sample);
+    return field;
   }
   function draw() {
     const root=container();if(!root)return;
@@ -178,23 +216,7 @@
       settings.append(grid);
     }
     settings.append(node("p","muted","Global controls apply throughout Calibration. Closed and open dropdown measurements are separate only where needed. Older detailed preferences are retained, with global values taking priority."));
-    const previewPanel=node("div","cal-theme-preview-panel");
-    previewPanel.append(node("h4","","Live Selection preview — "+mode));
-    previewPanel.append(node("p","muted","Selection contains the densest Calibration controls. Changes appear here before saving."));
-    const pv=node("div","cal-theme-preview");
-    pv.append(node("div","cal-theme-target-name","Selection"));
-    const toggle=node("label","cal-theme-menu-label");
-    const checkbox=node("input","cal-theme-open-toggle");
-    checkbox.type="checkbox";checkbox.checked=false;checkbox.onchange=preview;
-    toggle.append(checkbox,node("span","","Show open dropdown menu"));
-    pv.append(toggle);
-    const viewport=node("div","cal-theme-viewport");
-    const iframe=node("iframe","cal-theme-real-iframe");
-    iframe.setAttribute("sandbox","");
-    iframe.setAttribute("title","Read-only Selection controls styled with exact Core Calibration CSS");
-    viewport.append(iframe);
-    pv.append(viewport);previewPanel.append(pv);
-    layout.append(settings,previewPanel);
+    layout.append(settings);
     root.append(layout);
     const actions=node("div","cal-theme-actions");
     const save=node("button","primary cal-theme-save","Save Calibration Theme");

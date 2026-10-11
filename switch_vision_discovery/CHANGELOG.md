@@ -1,3 +1,10 @@
+## 3.0.39 — Per-control Calibration Theme examples and typography roles (Local)
+
+- Replace the oversized Selection preview with compact source-styled, sandboxed, read-only live examples beneath each settings dropdown. Use several adjacent real Core-derived action buttons for button, padding and spacing settings.
+- Add independent Desktop/Mobile font size and Regular/Bold controls for Field Labels, Group Labels, Subsection Headings and Section Headings. The global typography control applies to button/input/select/menu text only.
+- Show real RJ45 Targets, Port manager, Quick selection and Selection samples. Open-dropdown menu settings display their menu locally without navigating a long button preview.
+- Preserve existing stored Calibration styling, per-switch calibration profiles and ordinary dashboard geometry; no public release or personal HAOS installation.
+
 ## 3.0.38 — Full Selection preview and global Calibration sizing (Local)
 
 - Add compact global Desktop/Mobile dropdowns for row height, button/input minimum height, line height, button width, row and label spacing, and text/number input widths; preserve options both below and above compact Core defaults.

@@ -927,7 +927,7 @@ function cleanDiscovery(){const s=clone(state.discovery.settings);delete s.suppo
 #hubCalibrationThemeSettings > p {margin:0 0 12px}
 #hubCalibrationThemeSettings .cal-theme-modes {display:flex;gap:8px;margin-bottom:12px}
 #hubCalibrationThemeSettings .cal-theme-modes button.selected {border-color:var(--accent);color:var(--heading);background:var(--heading-soft)}
-#hubCalibrationThemeSettings .cal-theme-layout {display:grid;grid-template-columns:minmax(320px,1.1fr) minmax(280px,1fr);gap:15px;align-items:start}
+#hubCalibrationThemeSettings .cal-theme-layout {display:block;min-width:0}
 #hubCalibrationThemeSettings .cal-theme-all-settings {border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0;background:var(--card)}
 #hubCalibrationThemeSettings .cal-theme-all-settings h4 {margin:0 0 10px}
 #hubCalibrationThemeSettings .cal-theme-settings-heading {font-size:12px;font-weight:700;margin:13px 0 5px;border-top:1px solid var(--line-soft);padding-top:10px}
@@ -935,8 +935,11 @@ function cleanDiscovery(){const s=clone(state.discovery.settings);delete s.suppo
 #hubCalibrationThemeSettings .cal-theme-group > summary {font-weight:700;cursor:pointer;padding:5px;font-size:13px}
 #hubCalibrationThemeSettings .cal-theme-category {border-top:1px solid var(--line-soft);padding:7px 4px}
 #hubCalibrationThemeSettings .cal-theme-category > summary {cursor:pointer;font-weight:600;font-size:12px}
-#hubCalibrationThemeSettings .cal-theme-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:8px 0}
+#hubCalibrationThemeSettings .cal-theme-fields {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:10px;margin:8px 0}
 #hubCalibrationThemeSettings .cal-theme-setting {display:grid;gap:4px;font-size:12px;min-width:0}
+#hubCalibrationThemeSettings .cal-theme-setting-with-preview {min-width:0;border:1px solid var(--line-soft);border-radius:7px;padding:8px;background:var(--surface-inset)}
+#hubCalibrationThemeSettings .cal-theme-inline-sample {margin-top:7px;border:1px solid #32526a;border-radius:5px;background:#101a22;overflow:hidden}
+#hubCalibrationThemeSettings .cal-theme-sample-frame {display:block;width:100%;border:0;background:#101a22;max-width:100%}
 #hubCalibrationThemeSettings .cal-theme-setting select {box-sizing:border-box;width:100%;min-width:0;min-height:30px;padding:3px 6px;font-size:12px}
 #hubCalibrationThemeSettings .cal-theme-reset-section {font-size:11px;padding:4px 8px}
 #hubCalibrationThemeSettings .cal-theme-preview-panel {position:sticky;top:10px;border:1px solid var(--line);padding:12px;border-radius:8px;min-width:0}

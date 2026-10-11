@@ -1,6 +1,10 @@
 /* Generated from Core Calibration theme code; do not hand-edit. */
 (() => {
 const SV_CAL_THEME_SELECTORS = Object.freeze({
+  field_labels: ".cv-cal-tools .cv-cal-tools-row label",
+  group_labels: ".cv-cal-tools .cv-cal-quick-label",
+  subsection_headings: ".cv-cal-tools .cv-cal-subsection-divider > span",
+  section_headings: ".cv-cal-tools .cv-cal-section > summary > span",
   global: ".cv-cal-tools",
   workspace: ".cv-cal-tools",
   section_headers: ".cv-cal-tools .cv-cal-section > summary",
@@ -49,7 +53,7 @@ function calibrationThemeCss(theme) {
     const globalFields = sections.global || {};
     const globalOwns = (key) => Object.prototype.hasOwnProperty.call(globalFields, key);
     for (const [name, storedFields] of Object.entries(sections)) {
-      if (name === "global") continue;
+      if (["global", "field_labels", "group_labels", "subsection_headings", "section_headings"].includes(name)) continue;
       const selector = SV_CAL_THEME_SELECTORS[name];
       if (!selector) continue;
       const fields = {...storedFields};
@@ -91,7 +95,8 @@ function calibrationThemeCss(theme) {
     if (globalFields.font_size !== undefined) type.push("font-size:" + globalFields.font_size + "px!important");
     if (globalFields.font_weight) type.push("font-weight:" + (globalFields.font_weight === "bold" ? 700 : 400) + "!important");
     if (type.length) {
-      rules.push(".cv-cal-tools, .cv-cal-tools :is(summary,small,span,label,b,button,input,select), .cv-cal-option-menu-item, .cv-cal-option-menu-heading{" + type.join(";") + "}");
+      rules.push(".cv-cal-tools .cv-cal-tools-row button, .cv-cal-tools .cv-cal-tools-row input, " +
+        ".cv-cal-tools .cv-cal-select-trigger, .cv-cal-tools .cv-cal-tools-row select, .cv-cal-option-menu-item{" + type.join(";") + "}");
     }
     const padding = [];
     if (globalFields.padding !== undefined) padding.push("padding:" + globalFields.padding + "px!important");
@@ -144,6 +149,22 @@ function calibrationThemeCss(theme) {
     if (globalFields.gap !== undefined) {
       rules.push(".cv-cal-tools, .cv-cal-tools .cv-cal-tools-row, .cv-cal-tools .cv-cal-section-body{" +
         "gap:" + globalFields.gap + "px!important}");
+    }
+    // Four semantic Calibration text roles are completely independent from
+    // global control typography. Exact role settings also override legacy
+    // per-section font styling, without changing stored legacy values.
+    const roleSelectors = {
+      field_labels: ".cv-cal-tools .cv-cal-section[data-cv-section] .cv-cal-section-body .cv-cal-tools-row label",
+      group_labels: ".cv-cal-tools .cv-cal-section[data-cv-section] .cv-cal-section-body .cv-cal-tools-row .cv-cal-quick-label",
+      subsection_headings: ".cv-cal-tools .cv-cal-section[data-cv-section] .cv-cal-subsection-divider > span",
+      section_headings: ".cv-cal-tools .cv-cal-section[data-cv-section] > summary > span",
+    };
+    for (const [role, selector] of Object.entries(roleSelectors)) {
+      const settings = sections[role] || {};
+      const decl = [];
+      if (settings.font_size !== undefined) decl.push("font-size:" + settings.font_size + "px!important");
+      if (settings.font_weight) decl.push("font-weight:" + (settings.font_weight === "bold" ? 700 : 400) + "!important");
+      if (decl.length) rules.push(selector + "{" + decl.join(";") + "}");
     }
     return rules.length
       ? "@media " + (device === "mobile" ? "(max-width:760px)" : "(min-width:761px)") + "{" + rules.join("") + "}"
