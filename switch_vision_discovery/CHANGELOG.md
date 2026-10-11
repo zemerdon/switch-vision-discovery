@@ -1,3 +1,9 @@
+## 3.0.38 — Full Selection preview and global Calibration sizing (Local)
+
+- Add compact global Desktop/Mobile dropdowns for row height, button/input minimum height, line height, button width, row and label spacing, and text/number input widths; preserve options both below and above compact Core defaults.
+- Render every Selection action button in the sandboxed live preview using a manifest generated directly from the coordinated Core Selection markup (49 actions in this version). Keep original row classes and grouping labels, plus the matching real Calibration stylesheet, with exact source-parity checks.
+- No live switch interaction, saved Calibration-profile modification, personal HAOS update, or public release.
+
 ## 3.0.37 — One global Calibration Theme panel (Local)
 
 - Replace repetitive per-section Calibration Theme editors with a single compact Desktop/Mobile settings panel: global text size, weight, all-side/axis padding and spacing, plus only closed/open dropdown-specific geometry controls.

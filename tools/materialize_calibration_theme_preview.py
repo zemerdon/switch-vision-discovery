@@ -10,6 +10,33 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT.parent / "core"  # override with --core-path when using a worktree
 import argparse
 import hashlib
+import json
+import re
+from html import escape
+
+def selection_button_fixture(script: str) -> bytes:
+    """Derive the entire static Selection button inventory from Core."""
+    start = script.index('data-cv-section="selection"')
+    end = script.index("</div></details>", start)
+    source = script[start:end]
+    rows = []
+    for css_class, content in re.findall(r'<div class="(cv-cal-tools-row[^"]+)">(.*?)</div>', source, re.S):
+        tokens = []
+        for match in re.finditer(
+            r'<span class="cv-cal-quick-label"[^>]*>([^<]+)</span>'
+            r'|<button[^>]*data-cv-action="([^"]+)"[^>]*>([^<]+)</button>', content, re.S
+        ):
+            if match.group(1) is not None:
+                tokens.append(["label", match.group(1).strip()])
+            else:
+                tokens.append(["button", match.group(2), match.group(3).strip()])
+        if any(token[0] == "button" for token in tokens):
+            rows.append({"css": css_class, "tokens": tokens})
+    count = sum(token[0] == "button" for row in rows for token in row["tokens"])
+    if count < 40:
+        raise ValueError("Core Selection button inventory is incomplete")
+    return ("window.SwitchVisionCalibrationSelectionButtons = " +
+            json.dumps({"rows": rows, "count": count}, ensure_ascii=False) + ";\n").encode()
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -32,6 +59,7 @@ def main() -> None:
     targets = {
         ROOT / "runtime_src/calibration_theme_core.css": css,
         ROOT / "runtime_src/calibration_theme_core_rules.js": out.encode("utf-8"),
+        ROOT / "runtime_src/calibration_theme_selection_buttons.js": selection_button_fixture(script),
     }
     for target, payload in targets.items():
         if target.exists() and target.read_bytes() == payload:

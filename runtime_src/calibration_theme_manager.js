@@ -5,16 +5,34 @@
     ["Global Calibration Controls", "global", [
       ["font_size","Text size",7,22,1],["font_weight","Text weight"],
       ["padding","All-side padding",0,24,1],["padding_horizontal","Horizontal padding",0,24,1],
-      ["padding_vertical","Vertical padding",0,24,1],["gap","Spacing",0,24,1],
+      ["padding_vertical","Vertical padding",0,24,1],["gap","Control spacing",0,24,1],
+      ["row_height","Minimum row height",0,64,1],["row_spacing","Space between rows",0,24,1],
+      ["button_height","Minimum button height",10,48,1],["button_min_width","Minimum button width",12,96,1],
+      ["input_height","Minimum input height",10,48,1],["line_height","Text line height",9,28,1],
+      ["label_spacing","Label spacing",0,24,1],
+      ["text_input_width","Text input width",0,260,5],["number_input_width","Number input width",0,120,1],
     ]],
     ["Closed Dropdowns", "dropdown_closed", [
       ["height","Control height",12,48,1],["width","Control width",0,480,10],
     ]],
     ["Open Dropdown Menu", "dropdown_open", [
-      ["row_height","Option row height",20,64,2],
+      ["row_height","Option row height",12,64,1],
       ["width","Open menu width",0,480,10],["max_height","Maximum menu height",80,600,20],
     ]],
   ];
+  // Describe the installed Core starting points, not invented uniform defaults.
+  // Every numeric size with a fixed baseline has options on BOTH sides.
+  const CORE_DEFAULTS = Object.freeze({
+    font_size:"11–12 px (varies)", font_weight:"Core defaults (varies)",
+    padding:"Core defaults (1px vertical, 2px horizontal)",
+    padding_horizontal:"2 px (typical)", padding_vertical:"1 px (typical)",
+    gap:"5–8 px (varies)", row_height:"Auto (content height)",
+    row_spacing:"6 px", button_height:"16 px", button_min_width:"30 px",
+    input_height:"16 px", line_height:"12 px", label_spacing:"5 px",
+    text_input_width:"127 px", number_input_width:"61 px",
+    height:"16 px", width:"Auto / content width",
+    max_height:"320 px, viewport-limited",
+  });
   let mode = "desktop", theme = {desktop:{},mobile:{}}, loaded = false, dirty = false;
   let corePreviewCss = "";
 
@@ -58,7 +76,26 @@
       select.parentElement.replaceChild(shell,select);
       shell.append(select,trigger);
     }
+    for(const button of template.content.querySelectorAll("button:not(.cv-cal-select-trigger)")) button.remove();
     return template.innerHTML;
+  }
+  function selectionButtonPreviewHtml() {
+    const fixture=window.SwitchVisionCalibrationSelectionButtons;
+    if(!fixture || !Array.isArray(fixture.rows) || fixture.count<40) return "";
+    const block=document.createElement("div");
+    for(const row of fixture.rows) {
+      const line=document.createElement("div");
+      line.className=row.css;
+      for(const token of row.tokens) {
+        const element=document.createElement(token[0]==="label"?"span":"button");
+        element.textContent=token[0]==="label"?token[1]:token[2];
+        if(token[0]==="label") element.className="cv-cal-quick-label";
+        else {element.type="button";element.dataset.cvPreviewAction=token[1];}
+        line.append(element);
+      }
+      block.append(line);
+    }
+    return block.innerHTML;
   }
   function preview() {
     const frame=one(".cal-theme-real-iframe");
@@ -67,7 +104,7 @@
     frame.style.width=mobile?"360px":"850px";
     frame.style.height=mobile?"560px":"405px";
     const caption=one(".cal-theme-target-name");
-    if(caption)caption.textContent="Selection — controls, labels and buttons";
+    if(caption)caption.textContent="Selection — all "+(window.SwitchVisionCalibrationSelectionButtons?.count||0)+" action buttons";
     const css=window.SwitchVisionCalibrationThemeCoreCss?.({desktop:selected,mobile:selected})||"";
     const open=selected.dropdown_open||{};
     const popup=one(".cal-theme-open-toggle")?.checked?
@@ -80,7 +117,7 @@
     const content=materializePreviewSelectShells(
       FIELD_EXAMPLES.assets+FIELD_EXAMPLES.selection+
       FIELD_EXAMPLES.quick_selection+FIELD_EXAMPLES.inputs
-    );
+    )+selectionButtonPreviewHtml();
     const section='<details class="cv-cal-section" data-cv-section="selection" open>'+
       '<summary><span>Selection</span><small>Port 1 · 24 ports</small></summary>'+
       '<div class="cv-cal-section-body">'+content+'</div></details>';
@@ -94,10 +131,11 @@
     const label=node("label","cal-theme-setting"), text=node("span","",title), select=node("select");
     select.setAttribute("aria-label",category+" "+title);
     const add=(value,label)=>{const opt=node("option","",label);opt.value=String(value);select.append(opt);};
-    add("","Default (unchanged)");
+    const baseline = category==="dropdown_open" && key==="row_height" ? "32 px" : CORE_DEFAULTS[key] || "Core defaults";
+    add("","Core default (" + baseline + ")");
     if (key==="font_weight") {add("regular","Regular");add("bold","Bold");}
     else {
-      for (let i=min;i<=max;i+=step) add(i,i===0&&key==="width"?"Auto":i+" px");
+      for (let i=min;i<=max;i+=step) add(i,i===0&&["width","text_input_width","number_input_width","row_height"].includes(key)?"Auto / no extra minimum":i+" px");
       const actual=values(category)[key];
       if (actual!==undefined && !Array.from(select.options).some(o=>o.value===String(actual))) add(actual,actual+" px");
     }
@@ -183,6 +221,8 @@
       const cssText=await cssResponse.text();
       if(!cssText.includes(".cv-cal-tools{")||cssText.toLowerCase().includes("</style")||typeof window.SwitchVisionCalibrationThemeCoreCss!=="function")
         throw Error("Core Calibration preview assets are invalid");
+      if((window.SwitchVisionCalibrationSelectionButtons?.count||0)<49)
+        throw Error("Core Selection preview button inventory is incomplete");
       corePreviewCss=cssText;
       const body=await res.json();
       if(!res.ok||!body.settings)throw Error(body.error||"Core settings unavailable");

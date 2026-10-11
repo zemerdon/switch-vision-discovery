@@ -17,10 +17,10 @@ for marker in (
 assert '"/calibration_theme_manager.js"' in PY
 for marker in (
     "Global Calibration Controls", "Closed Dropdowns", "Open Dropdown Menu",
-    "Selection — controls, labels and buttons",
+    "Selection — all ",
     '"desktop"', '"mobile"', "font_weight", "font_size", "row_height",
     "max_height", "padding", "padding_horizontal", "padding_vertical", "gap", "Live Selection preview",
-    "Reset ", "Default (unchanged)", "Save Calibration Theme", "calibration_theme_core.css", "cal-theme-real-iframe",
+    "Reset ", "Core default (", "Save Calibration Theme", "calibration_theme_core.css", "cal-theme-real-iframe",
     'api/settings/core', "method:\"POST\"",
     "calibration_theme:{calibration_theme:theme}",
 ):
@@ -45,6 +45,14 @@ assert ".cv-cal-tools button" in (ROOT / "calibration_theme_core.css").read_text
 assert "padding-inline:" in (ROOT / "calibration_theme_core_rules.js").read_text(encoding="utf-8")
 assert "padding-block:" in (ROOT / "calibration_theme_core_rules.js").read_text(encoding="utf-8")
 assert "const SETTINGS = [" in JS
+assert "selectionButtonPreviewHtml" in JS
+assert "calibration_theme_selection_buttons.js" in HTML
+assert '"/calibration_theme_selection_buttons.js"' in PY
+assert (ROOT / "calibration_theme_selection_buttons.js").is_file()
+selection_inventory = (ROOT / "calibration_theme_selection_buttons.js").read_text()
+assert '"count": 49' in selection_inventory
+for button_name in ("Remove All RJ45 Ports", "Remove All SFP Ports", "Reset name", "All Link LEDs", "Activity LEDs", "Select"):
+    assert button_name in selection_inventory
 assert "cal-theme-all-settings" in JS
 assert "FIELD_EXAMPLES.quick_selection+FIELD_EXAMPLES.inputs" in JS
 assert "const GROUPS" not in JS

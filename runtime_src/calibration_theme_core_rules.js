@@ -19,7 +19,9 @@ const SV_CAL_THEME_SELECTORS = Object.freeze({
 });
 const SV_CAL_THEME_LIMITS = Object.freeze({
   font_size: [7, 22], padding: [0, 24], padding_horizontal: [0, 24], padding_vertical: [0, 24], gap: [0, 24],
-  height: [12, 48], width: [0, 480], row_height: [20, 64], max_height: [80, 600],
+  height: [12, 48], width: [0, 480], row_height: [0, 64], max_height: [80, 600],
+  button_height: [10, 48], input_height: [10, 48], line_height: [9, 28], button_min_width: [12, 96],
+  row_spacing: [0, 24], label_spacing: [0, 24], text_input_width: [0, 260], number_input_width: [0, 120],
 });
 function normalizeCalibrationTheme(theme) {
   const result = { desktop: {}, mobile: {} };
@@ -100,10 +102,44 @@ function calibrationThemeCss(theme) {
         ".cv-cal-tools .cv-cal-tools-row select.cv-cal-select, .cv-cal-tools .cv-cal-section > summary, " +
         ".cv-cal-option-menu-item, .cv-cal-option-menu-heading";
       rules.push(controls + "{" + padding.join(";") + "}");
-      // Fixed legacy 16px button/input height must not clip customized
-      // vertical padding. Closed dropdown heights have their own setting.
-      rules.push(".cv-cal-tools .cv-cal-tools-row button:not(.cv-cal-select-trigger), " +
-        ".cv-cal-tools .cv-cal-tools-row input.cv-cal-input{height:auto!important;min-height:16px!important}");
+    }
+    const buttons = ".cv-cal-tools .cv-cal-tools-row button:not(.cv-cal-select-trigger)";
+    const inputs = ".cv-cal-tools .cv-cal-tools-row input.cv-cal-input";
+    // Rows must be able to grow and wrap on mobile. A global row height is
+    // a minimum, not an overflow/clipping fixed height.
+    if (globalFields.row_height !== undefined) {
+      rules.push(".cv-cal-tools .cv-cal-tools-row{min-height:" + globalFields.row_height + "px!important}");
+    }
+    if (globalFields.row_spacing !== undefined) {
+      rules.push(".cv-cal-tools .cv-cal-tools-row{margin-bottom:" + globalFields.row_spacing + "px!important}");
+      rules.push(".cv-cal-tools .cv-cal-section-body > .cv-cal-tools-row:last-child{margin-bottom:0!important}");
+    }
+    if (padding.length || globalFields.button_height !== undefined) {
+      const height = globalFields.button_height === undefined ? 16 : globalFields.button_height;
+      rules.push(buttons + "{height:auto!important;min-height:" + height + "px!important}");
+    }
+    if (padding.length || globalFields.input_height !== undefined) {
+      const height = globalFields.input_height === undefined ? 16 : globalFields.input_height;
+      rules.push(inputs + "{height:auto!important;min-height:" + height + "px!important}");
+    }
+    if (globalFields.button_min_width !== undefined) {
+      rules.push(buttons + "{min-width:" + globalFields.button_min_width + "px!important}");
+    }
+    if (globalFields.text_input_width !== undefined && globalFields.text_input_width > 0) {
+      rules.push(".cv-cal-tools .cv-cal-port-meta-row input.cv-cal-input:not([type=number]){" +
+        "width:" + globalFields.text_input_width + "px!important;max-width:100%!important}");
+    }
+    if (globalFields.number_input_width !== undefined && globalFields.number_input_width > 0) {
+      rules.push(".cv-cal-tools .cv-cal-port-meta-row input.cv-cal-input[type=number]{" +
+        "width:" + globalFields.number_input_width + "px!important;max-width:100%!important}");
+    }
+    if (globalFields.line_height !== undefined) {
+      rules.push(".cv-cal-tools, .cv-cal-tools :is(summary,small,span,label,b,button,input,select), " +
+        ".cv-cal-option-menu-item, .cv-cal-option-menu-heading{" +
+        "line-height:" + globalFields.line_height + "px!important}");
+    }
+    if (globalFields.label_spacing !== undefined) {
+      rules.push(".cv-cal-tools label{gap:" + globalFields.label_spacing + "px!important}");
     }
     if (globalFields.gap !== undefined) {
       rules.push(".cv-cal-tools, .cv-cal-tools .cv-cal-tools-row, .cv-cal-tools .cv-cal-section-body{" +
