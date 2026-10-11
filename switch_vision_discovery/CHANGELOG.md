@@ -1,3 +1,9 @@
+## 3.0.36 — Exact-style Calibration Theme preview and padding axes (Local)
+
+- Add horizontal and vertical padding dropdowns to every applicable Calibration Theme section in both Desktop and Mobile; retain all-side padding fallback.
+- Replace the former decorative Hub preview with a sandboxed, read-only viewport showing the actual Core Calibration stylesheet, its original theme-rule generator and corresponding named Calibration fields. Simulated samples cannot mutate saved Calibration profiles, switch state, or real field values.
+- Require exact source parity between the bundled preview CSS/rules and the coordinated Core candidate during component validation; no public release or personal HAOS update.
+
 ## 3.0.35 — Calibration Theme Hub editor (Local)
 
 - Add Calibration Theme next to Custom Theme in Hub Settings, grouped by Workspace & Sections, Assets & Selection, Labels & Fields, Buttons & Inputs, and Dropdowns.

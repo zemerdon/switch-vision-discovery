@@ -434,6 +434,12 @@ def main() -> int:
             core_source_root / "src/custom_components/switch_vision/__init__.py"
         ).read_text(encoding="utf-8")
         errors.extend(check_core_hub_settings_contract(core_settings_source))
+        preview_contract = subprocess.run([
+            sys.executable, "tools/materialize_calibration_theme_preview.py",
+            "--check", "--core-path", str(core_source_root),
+        ], check=False, capture_output=True, text=True)
+        if preview_contract.returncode:
+            errors.append("Calibration Theme preview Core source parity: " + (preview_contract.stderr or preview_contract.stdout).strip()[:320])
     else:
         core_registry = json.loads(fetch_text(args.core_registry_url))
         try:

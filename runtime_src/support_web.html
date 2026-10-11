@@ -940,6 +940,8 @@ function cleanDiscovery(){const s=clone(state.discovery.settings);delete s.suppo
 #hubCalibrationThemeSettings .cal-theme-preview-panel {position:sticky;top:10px;border:1px solid var(--line);padding:12px;border-radius:8px;min-width:0}
 #hubCalibrationThemeSettings .cal-theme-preview-panel h4 {margin:0 0 6px}
 #hubCalibrationThemeSettings .cal-theme-preview-panel p {margin:0 0 9px}
+#hubCalibrationThemeSettings .cal-theme-viewport{max-width:100%;overflow:auto;border:1px solid #32526a;border-radius:5px;background:#101a22}
+#hubCalibrationThemeSettings .cal-theme-real-iframe{display:block;box-sizing:border-box;border:0;max-width:none}
 #hubCalibrationThemeSettings .cal-theme-preview {box-sizing:border-box;max-width:100%;border:1px solid var(--accent);border-radius:6px;background:#09151e;color:#eef7ff;padding:9px;overflow:auto;transition:max-width .15s}
 #hubCalibrationThemeSettings .cal-theme-target-name {font-size:11px;color:#65c8ff;margin-bottom:8px}
 #hubCalibrationThemeSettings .cal-theme-workspace {display:flex;flex-direction:column;gap:7px;border:1px solid #32526a;border-radius:5px;padding:8px;font-size:12px}
@@ -959,6 +961,7 @@ function cleanDiscovery(){const s=clone(state.discovery.settings);delete s.suppo
 @media(max-width:900px) {#hubCalibrationThemeSettings .cal-theme-layout {grid-template-columns:minmax(0,1fr)}#hubCalibrationThemeSettings .cal-theme-preview-panel {position:static;order:-1}}
 @media(max-width:450px) {#hubCalibrationThemeSettings .cal-theme-fields {grid-template-columns:minmax(0,1fr)}}
 </style>
+<script src="calibration_theme_core_rules.js"></script>
 <script src="calibration_theme_manager.js"></script>
 <script src="maintenance.js"></script>
 <script src="calibration_profiles.js"></script>

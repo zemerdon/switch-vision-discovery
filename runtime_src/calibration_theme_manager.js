@@ -8,7 +8,7 @@
     ["controls", "Buttons & Inputs", [["buttons","Buttons"],["inputs","Inputs"]]],
     ["dropdown", "Dropdowns", [["dropdown_closed","Closed control"],["dropdown_open","Open menu & options"]]],
   ];
-  const BASE = [["font_size","Text size",7,22,1],["font_weight","Text weight"],["padding","Padding",0,24,1],["gap","Spacing",0,24,1]];
+  const BASE = [["font_size","Text size",7,22,1],["font_weight","Text weight"],["padding","All-side padding",0,24,1],["padding_horizontal","Horizontal padding",0,24,1],["padding_vertical","Vertical padding",0,24,1],["gap","Spacing",0,24,1]];
   const EXTRA = {
     dropdown_closed: [["height","Control height",12,48,1],["width","Control width",0,480,10]],
     dropdown_open: [["row_height","Option row height",20,64,2],["width","Open menu width",0,480,10],["max_height","Maximum menu height",80,600,20]],
@@ -35,6 +35,8 @@
       if (key==="font_size") el.style.fontSize=val+"px";
       else if (key==="font_weight") el.style.fontWeight=val==="bold"?"700":"400";
       else if (key==="padding") el.style.padding=val+"px";
+      else if (key==="padding_horizontal") el.style.paddingInline=val+"px";
+      else if (key==="padding_vertical") el.style.paddingBlock=val+"px";
       else if (key==="gap") el.style.gap=val+"px";
       else if (key==="height") el.style.height=val+"px";
       else if (key==="width" && val>0) el.style.width=val+"px";
@@ -42,47 +44,55 @@
       else if (key==="max_height") el.style.maxHeight=val+"px";
     }
   }
+  // Real Calibration class names, read-only sample values, and exact Core CSS.
+  // No card instance, MQTT state, profile calls or Calibration event handlers.
+  const FIELD_EXAMPLES = {
+    workspace: '<div class="cv-cal-context-grid"><span><small>Switch</small><b>SW1</b></span><span><small>Model</small><b>Cisco 3650</b></span><span><small>Faceplate</small><b>Default</b></span><span><small>Profile</small><b>Factory</b></span></div><div class="cv-cal-section-layout-help"><span>Drag <b>☰</b> to arrange sections for your current job.</span><button type="button">Reset section layout</button></div>',
+    section_headers: '<div class="cv-cal-tools-row cv-cal-port-manager-row"><label>RJ45 Targets<select class="cv-cal-select"><option>Port 1</option></select></label><button type="button">Add RJ45</button></div>',
+    assets: '<div class="cv-cal-tools-row cv-cal-style-row cv-cal-assets-row"><span class="cv-cal-quick-label">Assets</span><label>Logo<select class="cv-cal-select" data-cv-field="logo-file"><option>Use card default</option></select></label><label>Faceplate<select class="cv-cal-select" data-cv-field="faceplate-file"><option>Cisco 3650 (Default / recommended)</option></select></label><button type="button">Refresh files</button><span class="cv-cal-current">2 assets available</span></div>',
+    selection: '<div class="cv-cal-tools-row cv-cal-port-manager-row cv-cal-port-manager-main"><label>Misc Targets<select class="cv-cal-select cv-cal-target-select"><option>Logo</option></select></label><label>RJ45 Targets<select class="cv-cal-select cv-cal-target-select"><option>Port 1</option></select></label><label>SFP Targets<select class="cv-cal-select cv-cal-target-select"><option>SFP1</option></select></label><label>Part<select class="cv-cal-select"><option>Entire Port</option></select></label><span class="cv-cal-quick-label">Port manager</span><button type="button">Add RJ45</button><button type="button">Add SFP</button><button type="button">Duplicate selected</button><button type="button">Remove selected</button></div>',
+    quick_selection: '<div class="cv-cal-subsection-divider"><span>Quick selection</span></div><div class="cv-cal-tools-row cv-cal-quick-row"><span class="cv-cal-quick-label">Quick select</span><button type="button">Status LEDs</button><button type="button">All RJ45</button><button type="button">All SFP</button><button type="button">Port Labels</button><button type="button">All Link LEDs</button><button type="button">All Activity LEDs</button><button type="button">RJ45 Link</button></div>',
+    labels_leds: '<div class="cv-cal-tools-row cv-cal-style-row cv-cal-port-presentation-row"><span class="cv-cal-quick-label">Port Label</span><button type="button">Show labels</button><label>Port label<select class="cv-cal-select"><option>Port Number</option></select></label><span class="cv-cal-quick-label">Link LED</span><label>Shape<select class="cv-cal-select"><option>Circle</option></select></label><span class="cv-cal-quick-label">Activity LED</span><label>Shape<select class="cv-cal-select"><option>Circle</option></select></label></div>',
+    status_boxes: '<div class="cv-cal-tools-row cv-cal-status-quick-row"><span class="cv-cal-quick-label">Status Box 1</span><button type="button">Box</button><button type="button">All fields</button><button type="button">All labels</button><button type="button">All values</button><span class="cv-cal-quick-label">Status Box 2</span><button type="button">Box</button><button type="button">All fields</button><button type="button">All labels</button><button type="button">All values</button></div>',
+    switch_stack: '<div class="cv-cal-tools-row cv-cal-switch-stack-row"><span class="cv-cal-quick-label">Switch &amp; Stack</span><label>Switch label<input class="cv-cal-input" value="SW1" readonly></label><label>Stack member<input class="cv-cal-input" value="1" readonly></label><button type="button">Apply</button></div>',
+    geometry: '<div class="cv-cal-tools-row cv-cal-geometry-row"><span class="cv-cal-quick-label">Nudge</span><button type="button">←</button><button type="button">↑</button><button type="button">↓</button><button type="button">→</button><label>Step<select class="cv-cal-select"><option>1px</option></select></label><label>X<input class="cv-cal-input cv-cal-coordinate-input" value="120" readonly></label><label>Y<input class="cv-cal-input cv-cal-coordinate-input" value="20" readonly></label></div>',
+    profile_actions: '<div class="cv-cal-tools-row cv-cal-profile-controls"><span class="cv-cal-quick-label">Profile</span><label>Calibration profile<select class="cv-cal-select"><option>Factory</option></select></label><button type="button">Save profile</button><button type="button">Load profile</button><button type="button">Reset</button></div>',
+    buttons: '<div class="cv-cal-tools-row cv-cal-port-manager-row"><span class="cv-cal-quick-label">Port manager</span><button type="button">Add RJ45</button><button type="button">Add SFP</button><button type="button">Duplicate selected</button><button type="button" class="cv-cal-primary">Refresh files</button><button type="button" class="cv-cal-warning">Remove selected</button></div>',
+    inputs: '<div class="cv-cal-tools-row cv-cal-port-meta-row"><label>RJ45 key<input class="cv-cal-input" type="number" value="1" readonly></label><button type="button">Renumber</button><label>SFP key<input class="cv-cal-input" value="SFP1" readonly></label><button type="button">Rename</button><label>Display name<input class="cv-cal-input" value="Port 1" readonly></label><button type="button">Set name</button></div>',
+    dropdown_closed: '<div class="cv-cal-tools-row cv-cal-style-row cv-cal-assets-row"><span class="cv-cal-quick-label">Assets</span><label>Logo<span class="cv-cal-select-shell"><select class="cv-cal-select" aria-hidden="true"><option>Use card default</option></select><button type="button" class="cv-cal-select-trigger">Use card default</button></span></label><label>Faceplate<span class="cv-cal-select-shell"><select class="cv-cal-select" aria-hidden="true"><option>Cisco 3650</option></select><button type="button" class="cv-cal-select-trigger">Cisco 3650</button></span></label></div>',
+    dropdown_open: '<div class="cv-cal-tools-row cv-cal-style-row cv-cal-assets-row"><span class="cv-cal-quick-label">Assets</span><label>Faceplate<span class="cv-cal-select-shell"><select class="cv-cal-select" aria-hidden="true"><option>Use card default</option></select><button type="button" class="cv-cal-select-trigger">Use card default</button></span></label></div>',
+  };
+  const REAL_SECTIONS = {
+    geometry:"position-size",labels_leds:"labels-leds",status_boxes:"status-boxes",
+    switch_stack:"switch-stack",profile_actions:"profile-actions",
+  };
   function preview() {
-    const el=one(".cal-theme-preview");
-    if (!el) return;
-    el.style.maxWidth=mode==="mobile"?"300px":"100%";
-    const heading=one(".cal-theme-target-name");
-    if (heading) heading.textContent=GROUPS.flatMap(group=>group[2]).find(cat=>cat[0]===focusCategory)?.[1] || focusCategory;
-    const examples={
-      workspace:["Calibration", "Settings", "Refresh"],
-      section_headers:["Selection", "Section", "Reset layout"],
-      assets:["Assets", "Logo", "Refresh files"],
-      selection:["Targets", "RJ45 Port", "Add RJ45"],
-      quick_selection:["Quick select", "Status LEDs", "Select all"],
-      labels_leds:["Port Labels", "Link LED", "Show labels"],
-      status_boxes:["Status Box", "CPU / Temperature", "Show field"],
-      switch_stack:["Switch & stack", "Member", "Apply"],
-      geometry:["Position / size", "X / Y", "Nudge"],
-      profile_actions:["Profile", "Saved profile", "Save profile"],
-      buttons:["Actions", "Port manager", "Refresh files"],
-      inputs:["Inputs", "RJ45 key", "Renumber"],
-      dropdown_closed:["Dropdown", "Misc Targets", "Select"],
-      dropdown_open:["Open menu", "Faceplate", "Select"],
-    };
-    const example=examples[focusCategory]||examples.assets;
-    const assetsExample=one(".cal-theme-assets");
-    if(assetsExample?.children[0])assetsExample.children[0].textContent=example[0];
-    if(assetsExample?.children[1])assetsExample.children[1].textContent=example[1];
-    const exampleButton=one(".cal-theme-button");if(exampleButton)exampleButton.textContent=example[2];
-    const targets={workspace:one(".cal-theme-workspace"),section_headers:one(".cal-theme-section-head"),assets:one(".cal-theme-assets"),
-      selection:one(".cal-theme-assets"),quick_selection:one(".cal-theme-assets"),labels_leds:one(".cal-theme-assets"),
-      status_boxes:one(".cal-theme-assets"),switch_stack:one(".cal-theme-assets"),geometry:one(".cal-theme-assets"),
-      profile_actions:one(".cal-theme-assets"),buttons:one(".cal-theme-button"),inputs:one(".cal-theme-input"),
-      dropdown_closed:one(".cal-theme-dropdown"),dropdown_open:one(".cal-theme-open-menu")};
-    for (const target of new Set(Object.values(targets))) if (target) target.removeAttribute("style");
-    for (const opt of container().querySelectorAll(".cal-theme-option")) opt.removeAttribute("style");
-    for (const category of ["workspace","section_headers","assets","buttons","inputs","dropdown_closed","dropdown_open"]) {
-      apply(targets[category],values(category));
-    }
-    apply(targets[focusCategory],values(focusCategory));
-    for (const opt of container().querySelectorAll(".cal-theme-option")) apply(opt,values("dropdown_open"));
-    const menu=targets.dropdown_open;
-    if (menu) menu.hidden=!one(".cal-theme-open-toggle")?.checked;
+    const frame=one(".cal-theme-real-iframe");
+    if (!frame) return;
+    const mobile=mode==="mobile", selected=theme[mode]||{};
+    frame.style.width=mobile?"360px":"850px";
+    frame.style.height=focusCategory==="dropdown_open"?"440px":"345px";
+    const caption=one(".cal-theme-target-name");
+    if (caption) caption.textContent=GROUPS.flatMap(g=>g[2]).find(c=>c[0]===focusCategory)?.[1] || focusCategory;
+    // This is generated directly from the actual Core card function.
+    // Matching the selected values on both media sides lets the iframe's own
+    // viewport choose the real Desktop/Mobile media breakpoint.
+    const css=window.SwitchVisionCalibrationThemeCoreCss?.({desktop:selected,mobile:selected})||"";
+    const options=selected.dropdown_open||{};
+    const menuWidth=options.width||220, menuHeight=options.max_height||320;
+    const showMenu=focusCategory==="dropdown_open" || (one(".cal-theme-open-toggle")?.checked||false);
+    const menu=showMenu?'<div class="cv-cal-option-menu" role="listbox" aria-label="Faceplate options" style="position:relative!important;inset:auto!important;width:'+menuWidth+'px;max-height:'+menuHeight+'px;margin:8px 0;"><div class="cv-cal-option-menu-heading">Faceplates</div><button class="cv-cal-option-menu-item" aria-selected="true">Use card default</button><button class="cv-cal-option-menu-item">Cisco 3650</button><button class="cv-cal-option-menu-item">Custom faceplate</button></div>':"";
+    const name=REAL_SECTIONS[focusCategory]||"selection";
+    const field=FIELD_EXAMPLES[focusCategory]||FIELD_EXAMPLES.assets;
+    const section='<details class="cv-cal-section" data-cv-section="'+name+'" open><summary><span>'+
+      (focusCategory==="geometry"?"Position & Size":focusCategory==="labels_leds"?"Port Labels & LEDs":focusCategory==="status_boxes"?"Status Boxes":focusCategory==="switch_stack"?"Switch & Stack":focusCategory==="profile_actions"?"Profiles":"Selection")+
+      '</span><small>Port 1 · 24 ports</small></summary><div class="cv-cal-section-body">'+field+'</div></details>';
+    const url=String(endpoint("calibration_theme_core.css")).replace(/&/g,"&amp;").replace(/"/g,"&quot;");
+    frame.srcdoc='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="'+url+'"><style>'+
+      ':root{--cv-text:#eef7ff;--cv-muted:#b9d7ea;}html,body{margin:0;background:#101a22;color:#eef7ff;font:12px Arial,sans-serif;}'+
+      '.cv-cal-tools{margin:0;min-height:100px}.cv-cal-option-menu{max-width:calc(100% - 16px);}' +
+      css+'</style></head><body><div class="cv-cal-tools" inert>'+
+      (focusCategory==="workspace"?field:section)+menu+'</div></body></html>';
   }
   function optionsSelect(category, [key, title, min, max, step]) {
     const label=node("label","cal-theme-setting"), text=node("span","",title), select=node("select");
@@ -147,18 +157,16 @@
     previewPanel.append(node("h4","","Live preview — "+mode),node("p","muted","Try settings here before saving to Core."));
     const pv=node("div","cal-theme-preview");
     pv.append(node("div","cal-theme-target-name","Assets"));
-    const workspace=node("div","cal-theme-workspace");
-    workspace.append(node("div","cal-theme-section-head","☰ Selection"));
-    const assets=node("div","cal-theme-assets");
-    assets.append(node("span","","Assets"),node("span","","Logo"),node("span","cal-theme-dropdown","Use card default  ▾"));
-    workspace.append(assets,node("div","cal-theme-input","Port 1"),node("div","cal-theme-button","Refresh files"));
     const show=node("label","cal-theme-menu-label"), checkbox=node("input","cal-theme-open-toggle");
-    checkbox.type="checkbox";checkbox.checked=true;checkbox.onchange=preview;
-    show.append(checkbox,node("span","","Show open dropdown"));
-    workspace.append(show);
-    const menu=node("div","cal-theme-open-menu");
-    for(const title of ["Use card default","Cisco 3650","Custom faceplate","Other options"]) menu.append(node("div","cal-theme-option",title));
-    workspace.append(menu);pv.append(workspace);previewPanel.append(pv);
+    checkbox.type="checkbox";checkbox.checked=false;checkbox.onchange=preview;
+    show.append(checkbox,node("span","","Show the real open dropdown menu"));
+    pv.append(show);
+    const viewport=node("div","cal-theme-viewport");
+    const frame=node("iframe","cal-theme-real-iframe");
+    frame.setAttribute("sandbox","");
+    frame.setAttribute("title","Read-only Core Calibration field preview");
+    frame.setAttribute("loading","eager");
+    viewport.append(frame);pv.append(viewport);previewPanel.append(pv);
     layout.append(list,previewPanel);root.append(layout);
     const actions=node("div","cal-theme-actions");
     const save=node("button","primary cal-theme-save","Save Calibration Theme");
