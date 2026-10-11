@@ -66,6 +66,26 @@
     geometry:"position-size",labels_leds:"labels-leds",status_boxes:"status-boxes",
     switch_stack:"switch-stack",profile_actions:"profile-actions",
   };
+  // Mirror Core's in-page dropdown shell after Calibration initializes.
+  // Values and labels come only from the static read-only preview fixtures.
+  function materializePreviewSelectShells(html) {
+    const template=document.createElement("template");
+    template.innerHTML=html;
+    for (const select of template.content.querySelectorAll("select.cv-cal-select")) {
+      if (select.parentElement?.classList.contains("cv-cal-select-shell")) continue;
+      const shell=document.createElement("span");
+      shell.className="cv-cal-select-shell";
+      const trigger=document.createElement("button");
+      trigger.type="button";
+      trigger.className="cv-cal-select-trigger";
+      trigger.textContent=select.selectedOptions?.[0]?.textContent?.trim()||"Select";
+      select.setAttribute("aria-hidden","true");
+      select.tabIndex=-1;
+      select.parentElement.replaceChild(shell,select);
+      shell.append(select,trigger);
+    }
+    return template.innerHTML;
+  }
   function preview() {
     const frame=one(".cal-theme-real-iframe");
     if (!frame) return;
@@ -83,7 +103,7 @@
     const showMenu=focusCategory==="dropdown_open" || (one(".cal-theme-open-toggle")?.checked||false);
     const menu=showMenu?'<div class="cv-cal-option-menu" role="listbox" aria-label="Faceplate options" style="position:relative!important;inset:auto!important;width:'+menuWidth+'px;max-height:'+menuHeight+'px;margin:8px 0;"><div class="cv-cal-option-menu-heading">Faceplates</div><button class="cv-cal-option-menu-item" aria-selected="true">Use card default</button><button class="cv-cal-option-menu-item">Cisco 3650</button><button class="cv-cal-option-menu-item">Custom faceplate</button></div>':"";
     const name=REAL_SECTIONS[focusCategory]||"selection";
-    const field=FIELD_EXAMPLES[focusCategory]||FIELD_EXAMPLES.assets;
+    const field=materializePreviewSelectShells(FIELD_EXAMPLES[focusCategory]||FIELD_EXAMPLES.assets);
     const section='<details class="cv-cal-section" data-cv-section="'+name+'" open><summary><span>'+
       (focusCategory==="geometry"?"Position & Size":focusCategory==="labels_leds"?"Port Labels & LEDs":focusCategory==="status_boxes"?"Status Boxes":focusCategory==="switch_stack"?"Switch & Stack":focusCategory==="profile_actions"?"Profiles":"Selection")+
       '</span><small>Port 1 · 24 ports</small></summary><div class="cv-cal-section-body">'+field+'</div></details>';
