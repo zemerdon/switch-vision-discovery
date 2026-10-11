@@ -129,9 +129,9 @@
       '<div class="cv-cal-option-menu" role="listbox" aria-label="Port choices" '+
       'style="position:relative!important;inset:auto!important;margin:4px 0;width:'+width+'px;max-width:100%;max-height:'+maxHeight+'px;">'+
       '<div class="cv-cal-option-menu-heading">RJ45 Targets</div>'+
-      '<button class="cv-cal-option-menu-item" aria-selected="true">Port 1</button>'+
-      '<button class="cv-cal-option-menu-item">Port 2</button>'+
-      '<button class="cv-cal-option-menu-item">Port 3</button></div>';
+      Array.from({length:key==="max_height"?64:3},(_,i)=>'<button class="cv-cal-option-menu-item"'+
+        (i===0?' aria-selected="true"':'')+'>Port '+(i+1)+'</button>').join("")+
+      '</div>';
     }
     if(["input_height","text_input_width","number_input_width","label_spacing"].includes(key)) return input;
     if(["row_height","row_spacing"].includes(key))return buttons+quick;
@@ -145,13 +145,10 @@
     for(const frame of container()?.querySelectorAll(".cal-theme-sample-frame")||[]) {
       const category=frame.dataset.category, key=frame.dataset.field;
       const html=exampleHtml(category,key,selected);
-      const isMenu=category==="dropdown_open";
-      const paddingY=selected.global?.padding_vertical??selected.global?.padding??2;
-      const buttonHeight=Math.max(selected.global?.button_height??16,16+2*paddingY);
-      const rowCount=key==="row_height"||key==="row_spacing"||category==="subsection_headings"?2:1;
-      const minimum=category==="section_headings"||category==="field_labels"?84:100;
-      const menuHeight=Math.min(310,94+3*Math.max(selected.dropdown_open?.row_height??32,32));
-      frame.style.height=(isMenu?menuHeight:Math.min(290,Math.max(minimum,26+rowCount*(buttonHeight+18))))+"px";
+      // Frames contain only static, inert Core-styled controls; sandboxed
+      // scripts remain disabled. Read back the rendered document height so
+      // tall rows and the real open-menu max height cannot be clipped.
+      frame.style.height="80px";
       frame.srcdoc='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">'+
         '<style>'+corePreviewCss+'</style><style>'+
         ':root{--cv-text:#eef7ff;--cv-muted:#b9d7ea;}html,body{margin:0;padding:0;background:#101a22;color:#eef7ff;font:12px Arial,sans-serif;}'+
@@ -189,8 +186,27 @@
     label.append(text,select);field.append(label);
     const sample=node("div","cal-theme-inline-sample");
     const frame=node("iframe","cal-theme-sample-frame");
-    frame.setAttribute("sandbox","");frame.setAttribute("title","Read-only Calibration "+title+" example");
+    // Same-origin permits parent-only layout measurement. Sandboxed scripts,
+    // navigation and form submission are still prohibited; content is inert.
+    frame.setAttribute("sandbox","allow-same-origin");
+    frame.setAttribute("title","Read-only Calibration "+title+" example");
     frame.dataset.category=category;frame.dataset.field=key;
+    frame.addEventListener("load",()=>{
+      if(!frame.isConnected)return;
+      let height=0;
+      try {
+        const doc=frame.contentDocument;
+        height=Math.max(doc?.body?.scrollHeight||0,doc?.documentElement?.scrollHeight||0);
+      } catch(_) { /* Use the bounded fallback if a browser restricts access. */ }
+      if(!height) {
+        const selected=theme[mode]||{};
+        height=category==="dropdown_open"?
+          (key==="max_height"?(selected.dropdown_open?.max_height||320)+100:260):
+          (key==="row_height"||key==="row_spacing"?
+            2*(selected.global?.row_height||64)+3*(selected.global?.row_spacing||12)+220:200);
+      }
+      frame.style.height=Math.ceil(Math.max(80,height)+12)+"px";
+    });
     sample.append(frame);field.append(sample);
     return field;
   }

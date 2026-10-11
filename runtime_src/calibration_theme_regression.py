@@ -26,7 +26,12 @@ for marker in (
     "calibration_theme:{calibration_theme:theme}",
 ):
     assert marker in JS, marker
-assert '"sandbox",""' in JS or 'setAttribute("sandbox","")' in JS
+assert 'setAttribute("sandbox","allow-same-origin")' in JS
+assert "allow-scripts" not in JS
+assert "frame.addEventListener(\"load\"" in JS
+assert "frame.contentDocument" in JS
+assert "scrollHeight" in JS and "frame.style.height=Math.ceil" in JS
+assert "Math.min(310" not in JS
 assert "frame.srcdoc=doc" not in JS  # the preview must be the live Core-styled frame below
 assert "frame.srcdoc=" in JS
 assert "corePreviewCss" in JS
@@ -65,6 +70,9 @@ assert 'category==="dropdown_open"' in JS
 assert "const GROUPS" not in JS
 assert "focusCategory" not in JS
 assert "options.width||220" in JS and "options.max_height||320" in JS
+assert 'Array.from({length:key==="max_height"?64:3}' in JS
+assert "max-height:'+maxHeight+'px;" in JS
+assert 'key==="row_height"||key==="row_spacing"' in JS
 assert "const buttons=buttonRow(\"cv-cal-port-manager-row\",4)" in JS
 assert "const quick=buttonRow(\"cv-cal-quick-row\",4)" in JS
 assert 'category==="field_labels"' in JS

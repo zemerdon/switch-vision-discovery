@@ -1,3 +1,9 @@
+## 3.0.40 — Auto-sized Calibration Theme examples (Local)
+
+- Remove the arbitrary 310 px iframe preview cap and auto-size the read-only examples from their rendered Core-styled content. Minimum Row Height and Space Between Rows examples can now grow as controls wrap, without a nested iframe scrollbar.
+- For Maximum Menu Height only, generate enough representative RJ45 options for the real open menu to reach its selected 80–600 px maximum. The menu itself retains its expected internal scroll when options exceed that height; the outer preview grows to display the entire capped menu.
+- Keep the other open-dropdown examples compact and scripts prohibited in sandboxed frames. No Core runtime, saved Calibration profiles, public release, or personal HAOS change.
+
 ## 3.0.39 — Per-control Calibration Theme examples and typography roles (Local)
 
 - Replace the oversized Selection preview with compact source-styled, sandboxed, read-only live examples beneath each settings dropdown. Use several adjacent real Core-derived action buttons for button, padding and spacing settings.
