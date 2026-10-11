@@ -14,6 +14,7 @@
     dropdown_open: [["row_height","Option row height",20,64,2],["width","Open menu width",0,480,10],["max_height","Maximum menu height",80,600,20]],
   };
   let mode = "desktop", theme = {desktop:{},mobile:{}}, loaded = false, dirty = false, focusCategory = "assets";
+  let corePreviewCss = "";
   const opened = new Set(["workspace","dropdown"]);
   const container = () => document.getElementById("hubCalibrationThemeSettings");
   const one = (selector) => container()?.querySelector(selector);
@@ -107,8 +108,7 @@
     const section='<details class="cv-cal-section" data-cv-section="'+name+'" open><summary><span>'+
       (focusCategory==="geometry"?"Position & Size":focusCategory==="labels_leds"?"Port Labels & LEDs":focusCategory==="status_boxes"?"Status Boxes":focusCategory==="switch_stack"?"Switch & Stack":focusCategory==="profile_actions"?"Profiles":"Selection")+
       '</span><small>Port 1 · 24 ports</small></summary><div class="cv-cal-section-body">'+field+'</div></details>';
-    const url=String(endpoint("calibration_theme_core.css")).replace(/&/g,"&amp;").replace(/"/g,"&quot;");
-    frame.srcdoc='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="'+url+'"><style>'+
+    frame.srcdoc='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+corePreviewCss+'</style><style>'+
       ':root{--cv-text:#eef7ff;--cv-muted:#b9d7ea;}html,body{margin:0;background:#101a22;color:#eef7ff;font:12px Arial,sans-serif;}'+
       '.cv-cal-tools{margin:0;min-height:100px}.cv-cal-option-menu{max-width:calc(100% - 16px);}' +
       css+'</style></head><body><div class="cv-cal-tools" inert>'+
@@ -203,7 +203,15 @@
     const root=container();if(!root)return;
     root.textContent="Loading Calibration Theme…";
     try {
-      const res=await fetch(endpoint("api/settings/core"),{cache:"no-store"});
+      const [res,cssResponse]=await Promise.all([
+        fetch(endpoint("api/settings/core"),{cache:"no-store"}),
+        fetch(endpoint("calibration_theme_core.css"),{cache:"no-store"}),
+      ]);
+      if(!cssResponse.ok)throw Error("Core Calibration preview stylesheet unavailable");
+      const cssText=await cssResponse.text();
+      if(!cssText.includes(".cv-cal-tools{")||cssText.toLowerCase().includes("</style")||typeof window.SwitchVisionCalibrationThemeCoreCss!=="function")
+        throw Error("Core Calibration preview assets are invalid");
+      corePreviewCss=cssText;
       const body=await res.json();
       if(!res.ok||!body.settings)throw Error(body.error||"Core settings unavailable");
       theme=clone(body.settings.calibration_theme?.calibration_theme||{desktop:{},mobile:{}});

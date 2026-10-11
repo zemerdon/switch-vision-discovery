@@ -28,6 +28,9 @@ for marker in (
 assert '"sandbox",""' in JS or 'setAttribute("sandbox","")' in JS
 assert "frame.srcdoc=doc" not in JS  # the preview must be the live Core-styled frame below
 assert "frame.srcdoc=" in JS
+assert "corePreviewCss" in JS
+assert 'fetch(endpoint("calibration_theme_core.css")' in JS
+assert 'corePreviewCss+\'</style><style>\'' in JS
 assert "materializePreviewSelectShells" in JS
 assert 'select.setAttribute("aria-hidden","true")' in JS
 assert 'trigger.className="cv-cal-select-trigger"' in JS
