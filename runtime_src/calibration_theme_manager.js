@@ -106,7 +106,7 @@
     }
     return div.outerHTML;
   }
-  function exampleHtml(category,key) {
+  function exampleHtml(category,key,selected) {
     const buttons=buttonRow("cv-cal-port-manager-row",4);
     const quick=buttonRow("cv-cal-quick-row",4);
     const field=materializePreviewSelectShells(
@@ -122,13 +122,17 @@
     if(category==="section_headings")return '<details class="cv-cal-section" data-cv-section="selection" open>'+
       '<summary><span>Selection</span><small>Port 1 · 24 ports</small></summary></details>';
     if(category==="dropdown_closed")return field;
-    if(category==="dropdown_open")return field+
+    if(category==="dropdown_open") {
+      const options=selected.dropdown_open||{};
+      const width=options.width||220, maxHeight=options.max_height||320;
+      return field+
       '<div class="cv-cal-option-menu" role="listbox" aria-label="Port choices" '+
-      'style="position:relative!important;inset:auto!important;margin:4px 0;width:220px;max-width:100%;">'+
+      'style="position:relative!important;inset:auto!important;margin:4px 0;width:'+width+'px;max-width:100%;max-height:'+maxHeight+'px;">'+
       '<div class="cv-cal-option-menu-heading">RJ45 Targets</div>'+
       '<button class="cv-cal-option-menu-item" aria-selected="true">Port 1</button>'+
       '<button class="cv-cal-option-menu-item">Port 2</button>'+
       '<button class="cv-cal-option-menu-item">Port 3</button></div>';
+    }
     if(["input_height","text_input_width","number_input_width","label_spacing"].includes(key)) return input;
     if(["row_height","row_spacing"].includes(key))return buttons+quick;
     // Four genuine adjacent action buttons reveal text size, weight, padding,
@@ -140,7 +144,7 @@
     const css=window.SwitchVisionCalibrationThemeCoreCss?.({desktop:selected,mobile:selected})||"";
     for(const frame of container()?.querySelectorAll(".cal-theme-sample-frame")||[]) {
       const category=frame.dataset.category, key=frame.dataset.field;
-      const html=exampleHtml(category,key);
+      const html=exampleHtml(category,key,selected);
       const isMenu=category==="dropdown_open";
       const paddingY=selected.global?.padding_vertical??selected.global?.padding??2;
       const buttonHeight=Math.max(selected.global?.button_height??16,16+2*paddingY);

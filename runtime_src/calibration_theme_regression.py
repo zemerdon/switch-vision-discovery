@@ -64,6 +64,13 @@ assert "cal-theme-open-toggle" not in JS
 assert 'category==="dropdown_open"' in JS
 assert "const GROUPS" not in JS
 assert "focusCategory" not in JS
+assert "options.width||220" in JS and "options.max_height||320" in JS
+assert "const buttons=buttonRow(\"cv-cal-port-manager-row\",4)" in JS
+assert "const quick=buttonRow(\"cv-cal-quick-row\",4)" in JS
+assert 'category==="field_labels"' in JS
+assert 'category==="group_labels"' in JS
+assert 'category==="subsection_headings"' in JS
+assert 'category==="section_headings"' in JS
 assert "localStorage.setItem" not in JS
 assert "set_calibration" not in JS
 assert "send" not in JS
