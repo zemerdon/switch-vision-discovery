@@ -1,3 +1,8 @@
+## 3.0.46 — Compact Calibration quick-select dropdown preview (Local)
+
+- Regenerate Core 2.7.79's Calibration Theme preview: display the two Status Box dropdowns with all twelve options per box and the reordered rSFP Port manager controls.
+- Match the moved Card Height controls and removal of redundant hint text, while preserving theme saving and existing Calibration data contracts.
+
 ## 3.0.45 — Restore pre-alignment Calibration Theme preview (Local)
 
 - Revert the shared primary label-column experiment and match Core 2.7.78's restored 2.7.76 Calibration layout in the read-only theme preview.

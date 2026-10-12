@@ -19,6 +19,16 @@ def selection_button_fixture(script: str) -> bytes:
     start = script.index('data-cv-section="selection"')
     end = script.index("</div></details>", start)
     source = script[start:end]
+    # Status Box quick controls are now two dropdowns, backed by the complete
+    # 24-action Core contract rather than individually rendered buttons.
+    quick_group_source = re.search(
+        r"const SV_STATUS_BOX_QUICK_GROUPS = Object.freeze\((\[.*?\])\);", script, re.S
+    )
+    if not quick_group_source:
+        raise ValueError("Core Status Box dropdown selection contract is missing")
+    quick_groups = json.loads(quick_group_source.group(1))
+    if len(quick_groups) != 2 or any(sum(len(actions) for _, actions in group) != 12 for group in quick_groups):
+        raise ValueError("Core Status Box dropdown selection contract is incomplete")
     rows = []
     for css_class, content in re.findall(r'<div class="(cv-cal-tools-row[^"]+)">(.*?)</div>', source, re.S):
         tokens = []
@@ -30,13 +40,23 @@ def selection_button_fixture(script: str) -> bytes:
                 tokens.append(["label", match.group(1).strip()])
             else:
                 tokens.append(["button", match.group(2), match.group(3).strip()])
-        if any(token[0] == "button" for token in tokens):
+        if "cv-cal-status-quick-row" in css_class:
+            if content.count('data-cv-quick-group=') != 2:
+                raise ValueError("Core Status Box quick dropdown markup is incomplete")
+            tokens = [
+                ["select", f"Status Box {i}", [
+                    (heading + " · " + label) if heading != "Status Box" else label
+                    for heading, entries in group for label, _target, _part in entries
+                ]] for i, group in enumerate(quick_groups, 1)
+            ]
+        if any(token[0] in ("button", "select") for token in tokens):
             rows.append({"css": css_class, "tokens": tokens})
     count = sum(token[0] == "button" for row in rows for token in row["tokens"])
-    if count < 40:
-        raise ValueError("Core Selection button inventory is incomplete")
+    selects = sum(token[0] == "select" for row in rows for token in row["tokens"])
+    if count < 25 or selects != 2:
+        raise ValueError("Core Selection button/dropdown inventory is incomplete")
     return ("window.SwitchVisionCalibrationSelectionButtons = " +
-            json.dumps({"rows": rows, "count": count}, ensure_ascii=False) + ";\n").encode()
+            json.dumps({"rows": rows, "count": count, "selects": selects}, ensure_ascii=False) + ";\n").encode()
 
 def main() -> None:
     parser = argparse.ArgumentParser()

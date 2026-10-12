@@ -102,7 +102,17 @@
         const label=document.createElement("span");
         label.className="cv-cal-quick-label";label.textContent=token[1];
         div.append(label);
-      } else if(div.querySelectorAll("button").length<limit) {
+      } else if(token[0]==="select") {
+        const label=document.createElement("label");
+        label.className="cv-cal-status-quick-group";
+        label.append(document.createTextNode(token[1]));
+        const select=document.createElement("select");
+        select.className="cv-cal-select cv-cal-status-quick-select";
+        for(const title of token[2]||[]) {
+          const option=document.createElement("option");option.textContent=title;select.append(option);
+        }
+        label.append(select);div.append(label);
+      } else if(token[0]==="button"&&div.querySelectorAll("button").length<limit) {
         const button=document.createElement("button");
         button.type="button";button.textContent=token[2];
         div.append(button);
@@ -113,6 +123,7 @@
   function exampleHtml(category,key,selected) {
     const buttons=buttonRow("cv-cal-port-manager-row",4);
     const quick=buttonRow("cv-cal-quick-row",4);
+    const statusMenus=buttonRow("cv-cal-status-quick-row",4);
     const field=materializePreviewSelectShells(
       '<div class="cv-cal-tools-row cv-cal-port-targets-row cv-cal-port-manager-main">'+
       '<label>RJ45 Targets<select class="cv-cal-select cv-cal-target-select"><option>Port 1</option></select></label></div>'
@@ -129,6 +140,7 @@
       '<summary><span>Selection</span><small>Port 1 · 24 ports</small></summary>'+
       '<div class="cv-cal-section-body"><span class="cv-cal-current">Detected image dimensions appear after selection.</span></div></details>';
     if(category==="dropdown_closed")return materializePreviewSelectShells(
+      statusMenus+
       '<div class="cv-cal-tools-row cv-cal-style-row">'+
       '<label>Font<select class="cv-cal-select"><option selected>Custom / IntelOne</option><option>Arial</option></select></label>'+
       '<label>Port Status Output<select class="cv-cal-select"><option selected>Status Box 1</option><option>Status Box 2</option></select></label>'+
@@ -320,8 +332,9 @@
       const cssText=await cssResponse.text();
       if(!cssText.includes(".cv-cal-tools{")||cssText.toLowerCase().includes("</style")||typeof window.SwitchVisionCalibrationThemeCoreCss!=="function")
         throw Error("Core Calibration preview assets are invalid");
-      if((window.SwitchVisionCalibrationSelectionButtons?.count||0)<48)
-        throw Error("Core Selection preview button inventory is incomplete");
+      if((window.SwitchVisionCalibrationSelectionButtons?.count||0)<25||
+         window.SwitchVisionCalibrationSelectionButtons?.selects!==2)
+        throw Error("Core Selection preview button/dropdown inventory is incomplete");
       corePreviewCss=cssText;
       const body=await res.json();
       if(!res.ok||!body.settings)throw Error(body.error||"Core settings unavailable");

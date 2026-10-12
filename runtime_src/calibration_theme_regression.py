@@ -67,18 +67,19 @@ assert (ROOT / "calibration_theme_selection_buttons.js").is_file()
 selection_inventory = (ROOT / "calibration_theme_selection_buttons.js").read_text()
 inventory = json.loads(selection_inventory.split("=", 1)[1].strip().rstrip(";"))
 assert inventory["count"] == sum(token[0] == "button" for row in inventory["rows"] for token in row["tokens"])
-assert inventory["count"] >= 50
+assert inventory["count"] >= 25
+assert inventory["selects"] == 2
 status_rows = [row for row in inventory["rows"] if "cv-cal-status-quick-row" in row["css"]]
-assert len(status_rows) == 1, "Status Box quick selection should be one coordinated row"
-assert [t[1] for t in status_rows[0]["tokens"] if t[0] == "label"] == [
-    "Status Box 1", "Odd RJ45", "Even RJ45", "Status Box 2", "Odd SFP", "Even SFP",
-], "Status Box quick selection layout must keep the two aligned port groups"
-assert len([t for t in status_rows[0]["tokens"] if t[0] == "button"]) == 24
+assert len(status_rows) == 1, "Status Box selectors must share a row"
+assert [t[1] for t in status_rows[0]["tokens"] if t[0] == "select"] == ["Status Box 1", "Status Box 2"]
+assert [len(t[2]) for t in status_rows[0]["tokens"] if t[0] == "select"] == [12, 12]
+assert not any(t[0] == "button" for t in status_rows[0]["tokens"])
+assert 'const statusMenus=buttonRow("cv-cal-status-quick-row",4);' in JS
 cal_css = (ROOT / "calibration_theme_core.css").read_text(encoding="utf-8")
 assert "max-width: min(100%, 185px);" not in cal_css
 assert ".cv-cal-port-targets-row > label" in cal_css
 assert ".cv-cal-port-presentation-row > .cv-cal-led-shape-label" in cal_css
-for button_name in ("Remove All RJ45 Ports", "Remove All SFP Ports", "Add Rear SFP", "Remove All Rear SFP", "Reset name", "All Link LEDs", "Activity LEDs", "Select"):
+for button_name in ("Remove All RJ45 Ports", "Remove All SFP Ports", "Add rSFP", "Remove All rSFP Ports", "Reset name", "All Link LEDs", "Activity LEDs", "Select"):
     assert button_name in selection_inventory
 assert "cal-theme-all-settings" in JS
 assert "FIELD_EXAMPLES" not in JS
