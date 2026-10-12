@@ -263,7 +263,7 @@ sg200_card="$TMP/cisco-sg200-26/card.yaml"
 grep -Fq '        port_count: 26' "$sg200_card" || note_failure "cisco-sg200-26: logical port count must preserve combo interfaces 25-26"
 grep -Fq '        sfp_port_count: 2' "$sg200_card" || note_failure "cisco-sg200-26: SFP-capable cage count must remain 2"
 grep -Fq '        sfp_logical_port_map: [25,26]' "$sg200_card" || note_failure "cisco-sg200-26: shared SFP logical-port map missing"
-grep -Fq '        calibration_profile: stock_24rj45_2sfp' "$sg200_card" || note_failure "cisco-sg200-26: stock 24-RJ45 + 2-SFP profile missing"
+grep -Fq '        calibration_profile: cisco_sg200_26' "$sg200_card" || note_failure "cisco-sg200-26: dedicated faceplate profile missing"
 
 # Catalyst 3560-C: Gi0/1-8 are fixed copper while Gi0/9-10 are the two
 # dual-purpose copper/SFP positions already represented by the existing

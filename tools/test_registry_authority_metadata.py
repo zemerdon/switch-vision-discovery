@@ -123,8 +123,10 @@ def main() -> int:
     assert sg200["ports"]["combo_ports"] == 2
     assert sg200["ports"]["combo_logical_ports"] == [25, 26]
     assert sg200["mapping_profile"] == "cisco-sg200-26-24p-2dual"
-    assert sg200["default_faceplate"] == "faceplates/24rj45-2sfp.png"
-    assert sg200["calibration_profile"] == "stock_24rj45_2sfp"
+    assert sg200["default_faceplate"] == "faceplates/cisco-sg200-26.png"
+    assert sg200["calibration_profile"] == "cisco_sg200_26"
+    assert sg200["optional_faceplates"] == []
+    assert sg200["visuals"]["recommended_faceplate"] == sg200["default_faceplate"]
     assert "1.3.6.1.4.1.9.6.1.88.26.1" in notes_text(sg200)
 
     usw24g2 = models["USW-24-G2"]

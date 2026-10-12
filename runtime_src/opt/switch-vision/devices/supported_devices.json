@@ -3790,8 +3790,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "cisco-sg200-26-24p-2dual",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
+      "calibration_profile": "cisco_sg200_26",
+      "default_faceplate": "faceplates/cisco-sg200-26.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -3803,7 +3803,7 @@
         "The real-hardware interface set is gi1 through gi26: gi1-gi24 are fixed 1G copper and gi25-gi26 are the two dual-personality 1G copper/SFP logical positions.",
         "The combo positions remain neutral because IF-MIB cannot prove whether the copper or SFP side is populated at a given moment.",
         "Current hardware evidence exposes working link, negotiated-speed and 64-bit traffic counters, including live traffic on gi26.",
-        "The stock 24 RJ45 + 2 SFP faceplate matches the reviewed front-panel presentation: 24 RJ45 positions plus two shared SFP-capable logical uplink cages mapped to ports 25-26."
+        "The dedicated Cisco SG200-26 faceplate and owner-supplied factory geometry are the sole defaults. They draw physical RJ45 sockets 1-26 plus both shared SFP cages; ports 25-26 and SFP1/SFP2 represent two dual-personality logical positions, not extra interfaces."
       ],
       "validation": {
         "exact_model_detection": "real_hardware_sysobjectid_confirmed",
@@ -3815,9 +3815,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
+        "recommended_faceplate": "faceplates/cisco-sg200-26.png",
         "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "calibration_profile": "cisco_sg200_26",
         "canvas": {
           "width": 2048,
           "height": 448

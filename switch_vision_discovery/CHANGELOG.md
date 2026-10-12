@@ -1,3 +1,8 @@
+## 3.0.48 — Cisco SG200-26 dedicated default faceplate (Local)
+
+- Assign Core 2.7.81's owner-supplied `cisco-sg200-26.png` and `cisco_sg200_26` as the sole SG200-26 default and recommended visual; no generic alternative is projected for that model.
+- Preserve exact reviewed hardware identity, 24 fixed copper plus two shared RJ45/SFP logical interfaces, interface bindings and evidence confidence without telemetry speculation.
+
 ## 3.0.47 — Five-menu Calibration preview and theme compatibility (Local)
 
 - Sync the read-only Calibration Theme preview to Core 2.7.80: two four-choice Status Box menus and eight choices each for RJ45, SFP and rSFP.
