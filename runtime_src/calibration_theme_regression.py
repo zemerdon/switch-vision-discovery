@@ -78,6 +78,9 @@ cal_css = (ROOT / "calibration_theme_core.css").read_text(encoding="utf-8")
 assert "max-width: min(100%, 185px);" not in cal_css
 assert ".cv-cal-port-targets-row > label" in cal_css
 assert ".cv-cal-port-presentation-row > .cv-cal-led-shape-label" in cal_css
+assert "--cv-cal-primary-label-width: 130px;" in cal_css
+assert ".cv-cal-section-body > .cv-cal-tools-row > .cv-cal-quick-label:first-child" in cal_css
+assert "flex-basis: 100%;" in cal_css
 for button_name in ("Remove All RJ45 Ports", "Remove All SFP Ports", "Add Rear SFP", "Remove All Rear SFP", "Reset name", "All Link LEDs", "Activity LEDs", "Select"):
     assert button_name in selection_inventory
 assert "cal-theme-all-settings" in JS

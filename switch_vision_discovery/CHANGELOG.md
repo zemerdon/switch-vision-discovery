@@ -1,3 +1,8 @@
+## 3.0.44 — Shared Calibration label-column preview (Local)
+
+- Mirror Core 2.7.77's single first-column label width across the read-only Calibration Theme preview with responsive wrapping, keeping nested selection/LED actions compact and preserved.
+- Retain exact Core CSS/theme generation parity, existing save behaviour and previous Core 2.7.76 / Hub 3.0.43 Calibration layout improvements.
+
 ## 3.0.43 — Calibration target Auto sizing and quick selection parity (Local)
 
 - Refresh the read-only Calibration Theme preview from Core 2.7.76: remove the 185 px closed target-picker cap and reflect wrapping selected-value Auto dropdowns, with the arrow gutter preserved.
