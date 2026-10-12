@@ -37,7 +37,7 @@ expected={
 "SG350-20":("faceplates/24rj45-4sfp.png","stock_24rj45_4sfp",16,4),
 "SG200-26":("faceplates/cisco-sg200-26.png","cisco_sg200_26",24,2),
 "USW-24-G2":("faceplates/unifi-24-rj45-2sfp-inline.png","unifi_24_rj45_2sfp_inline",24,2),
-"HP J8693A Switch 3500yl-48G":("faceplates/48rj45-4sfp.png","stock_48rj45_4sfp",44,4),
+"HP J8693A Switch 3500yl-48G":("faceplates/hp-3500yl-48g.png","hp_3500yl_48g",44,4),
 "USW Flex Mini":("faceplates/usw-flex-mini.png","usw_flex_mini",5,0),
 "USW Flex 2.5G 5":("faceplates/unifi-5rj45.png","default_unifi_5_rj45",5,0),
 "USW WAN":("faceplates/unifi-3sfp.png","unifi_3sfp",1,3),

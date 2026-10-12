@@ -3867,8 +3867,8 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "hp-3500yl-48g-44p-4dual",
-      "calibration_profile": "stock_48rj45_4sfp",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
+      "calibration_profile": "hp_3500yl_48g",
+      "default_faceplate": "faceplates/hp-3500yl-48g.png",
       "optional_faceplates": [],
       "tested_firmware": [],
       "contributor": {
@@ -3892,9 +3892,9 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
+        "recommended_faceplate": "faceplates/hp-3500yl-48g.png",
         "optional_faceplates": [],
-        "calibration_profile": "stock_48rj45_4sfp",
+        "calibration_profile": "hp_3500yl_48g",
         "canvas": {
           "width": 2048,
           "height": 448

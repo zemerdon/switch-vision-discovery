@@ -1,3 +1,8 @@
+## 3.0.49 — HP 3500yl-48G dedicated default artwork (Local)
+
+- Select the exact owner-supplied HP 3500yl-48G faceplate and factory profile as this model’s default while preserving all 48 logical interfaces, four dual-personality RJ45/SFP interfaces and existing observed SNMP mappings.
+- Retain Experimental evidence confidence and existing telemetry claims; no new model or capability claims.
+
 ## 3.0.48 — Cisco SG200-26 dedicated default faceplate (Local)
 
 - Assign Core 2.7.81's owner-supplied `cisco-sg200-26.png` and `cisco_sg200_26` as the sole SG200-26 default and recommended visual; no generic alternative is projected for that model.
