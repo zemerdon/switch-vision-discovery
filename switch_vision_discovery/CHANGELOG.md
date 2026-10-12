@@ -1,3 +1,8 @@
+## 3.0.45 — Restore pre-alignment Calibration Theme preview (Local)
+
+- Revert the shared primary label-column experiment and match Core 2.7.78's restored 2.7.76 Calibration layout in the read-only theme preview.
+- Preserve the rSFP, closed-dropdown Auto sizing, quick-selection, LED shape, and theme-save improvements from prior releases.
+
 ## 3.0.44 — Shared Calibration label-column preview (Local)
 
 - Mirror Core 2.7.77's single first-column label width across the read-only Calibration Theme preview with responsive wrapping, keeping nested selection/LED actions compact and preserved.
