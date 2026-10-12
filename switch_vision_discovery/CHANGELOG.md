@@ -1,3 +1,9 @@
+## 3.0.47 — Five-menu Calibration preview and theme compatibility (Local)
+
+- Sync the read-only Calibration Theme preview to Core 2.7.80: two four-choice Status Box menus and eight choices each for RJ45, SFP and rSFP.
+- Preserve responsive dropdown/spacing, typography and open-menu sizing controls; preview the current source-derived Core CSS and menu labels, including rSFP naming.
+- Confirm the general management UI Theme already provides its field/accent and Calibration preview-highlight roles. No new saved theme settings are needed.
+
 ## 3.0.46 — Compact Calibration quick-select dropdown preview (Local)
 
 - Regenerate Core 2.7.79's Calibration Theme preview: display the two Status Box dropdowns with all twelve options per box and the reordered rSFP Port manager controls.

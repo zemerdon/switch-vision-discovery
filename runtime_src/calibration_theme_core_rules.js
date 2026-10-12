@@ -11,7 +11,7 @@ const SV_CAL_THEME_SELECTORS = Object.freeze({
   section_headers: ".cv-cal-tools .cv-cal-section > summary",
   assets: ".cv-cal-tools .cv-cal-assets-row",
   selection: '.cv-cal-tools .cv-cal-section[data-cv-section=selection] .cv-cal-tools-row:not(.cv-cal-assets-row)',
-  quick_selection: ".cv-cal-tools .cv-cal-quick-row, .cv-cal-tools .cv-cal-parity-row",
+  quick_selection: ".cv-cal-tools .cv-cal-quick-row, .cv-cal-tools .cv-cal-status-quick-row, .cv-cal-tools .cv-cal-parity-row",
   labels_leds: '.cv-cal-tools .cv-cal-section[data-cv-section=labels-leds] .cv-cal-tools-row',
   status_boxes: '.cv-cal-tools .cv-cal-section[data-cv-section=status-boxes] .cv-cal-tools-row',
   switch_stack: '.cv-cal-tools .cv-cal-section[data-cv-section=switch-stack] .cv-cal-tools-row',

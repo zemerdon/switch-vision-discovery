@@ -68,11 +68,11 @@ selection_inventory = (ROOT / "calibration_theme_selection_buttons.js").read_tex
 inventory = json.loads(selection_inventory.split("=", 1)[1].strip().rstrip(";"))
 assert inventory["count"] == sum(token[0] == "button" for row in inventory["rows"] for token in row["tokens"])
 assert inventory["count"] >= 25
-assert inventory["selects"] == 2
+assert inventory["selects"] == 5
 status_rows = [row for row in inventory["rows"] if "cv-cal-status-quick-row" in row["css"]]
-assert len(status_rows) == 1, "Status Box selectors must share a row"
-assert [t[1] for t in status_rows[0]["tokens"] if t[0] == "select"] == ["Status Box 1", "Status Box 2"]
-assert [len(t[2]) for t in status_rows[0]["tokens"] if t[0] == "select"] == [12, 12]
+assert len(status_rows) == 1, "Five Calibration quick selectors must share a row"
+assert [t[1] for t in status_rows[0]["tokens"] if t[0] == "select"] == ["Status Box 1", "Status Box 2", "RJ45", "SFP", "rSFP"]
+assert [len(t[2]) for t in status_rows[0]["tokens"] if t[0] == "select"] == [4, 4, 8, 8, 8]
 assert not any(t[0] == "button" for t in status_rows[0]["tokens"])
 assert 'const statusMenus=buttonRow("cv-cal-status-quick-row",4);' in JS
 cal_css = (ROOT / "calibration_theme_core.css").read_text(encoding="utf-8")
