@@ -1,3 +1,9 @@
+## 3.0.43 — Calibration target Auto sizing and quick selection parity (Local)
+
+- Refresh the read-only Calibration Theme preview from Core 2.7.76: remove the 185 px closed target-picker cap and reflect wrapping selected-value Auto dropdowns, with the arrow gutter preserved.
+- Mirror the side-by-side SFP/rSFP selector layout, Status Box 1/2 quick-action groups with aligned Odd/Even RJ45/SFP buttons, compact Port Label / Show spacing and single-line Link LED Shape and Activity LED Shape labels.
+- Keep theme-save workflows and saved settings unchanged; Core remains the Calibration data owner.
+
 ## 3.0.42 — Content-aware Calibration Theme Auto width (Local)
 
 - Update read-only Calibration Theme Closed Dropdown preview to the exact Core content-aware trigger layout and demonstrate long and short selected labels.
