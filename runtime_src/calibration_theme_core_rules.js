@@ -131,14 +131,18 @@ function calibrationThemeCss(theme) {
     if (globalFields.button_min_width !== undefined) {
       rules.push(buttons + "{min-width:" + globalFields.button_min_width + "px!important}");
     }
-    if (globalFields.text_input_width !== undefined && globalFields.text_input_width > 0) {
+    if (globalFields.text_input_width !== undefined) {
       rules.push(".cv-cal-tools .cv-cal-port-meta-row input.cv-cal-input:not([type=number]){" +
-        "width:" + globalFields.text_input_width + "px!important;max-width:100%!important}");
+        (globalFields.text_input_width > 0
+          ? "width:" + globalFields.text_input_width + "px!important;max-width:100%!important}"
+          : "width:auto!important;field-sizing:content;min-width:7ch!important;max-width:100%!important}"));
     }
-    if (globalFields.number_input_width !== undefined && globalFields.number_input_width > 0) {
+    if (globalFields.number_input_width !== undefined) {
       rules.push(".cv-cal-tools .cv-cal-port-meta-row input.cv-cal-input[type=number], " +
         ".cv-cal-tools .cv-cal-geometry-row input.cv-cal-coordinate-input{" +
-        "width:" + globalFields.number_input_width + "px!important;max-width:100%!important}");
+        (globalFields.number_input_width > 0
+          ? "width:" + globalFields.number_input_width + "px!important;max-width:100%!important}"
+          : "width:auto!important;field-sizing:content;min-width:6ch!important;max-width:100%!important}"));
     }
     if (globalFields.line_height !== undefined) {
       rules.push(".cv-cal-tools, .cv-cal-tools :is(summary,small,span,label,b,button,input,select), " +

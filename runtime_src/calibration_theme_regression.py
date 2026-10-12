@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Hub Calibration Theme grouping, live preview and Core-only save contract."""
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -41,6 +42,10 @@ assert 'corePreviewCss+\'</style><style>\'' in JS
 assert "materializePreviewSelectShells" in JS
 assert 'select.setAttribute("aria-hidden","true")' in JS
 assert 'trigger.className="cv-cal-select-trigger"' in JS
+assert 'cv-cal-target-select-shell' in JS
+assert 'Auto (fit selected value)' in JS
+for selected_label in ("Custom / IntelOne", "Status Box 1", "ROLE", "Very long field name"):
+    assert selected_label in JS, selected_label
 assert "SwitchVisionCalibrationThemeCoreCss" in JS
 assert "RJ45 Targets" in JS and "cv-cal-tools-row" in JS
 assert "Port manager" in JS and "Quick selection" in JS and "Selection" in JS
@@ -60,8 +65,10 @@ assert "calibration_theme_selection_buttons.js" in HTML
 assert '"/calibration_theme_selection_buttons.js"' in PY
 assert (ROOT / "calibration_theme_selection_buttons.js").is_file()
 selection_inventory = (ROOT / "calibration_theme_selection_buttons.js").read_text()
-assert '"count": 48' in selection_inventory
-for button_name in ("Remove All RJ45 Ports", "Remove All SFP Ports", "Reset name", "All Link LEDs", "Activity LEDs", "Select"):
+inventory = json.loads(selection_inventory.split("=", 1)[1].strip().rstrip(";"))
+assert inventory["count"] == sum(token[0] == "button" for row in inventory["rows"] for token in row["tokens"])
+assert inventory["count"] >= 50
+for button_name in ("Remove All RJ45 Ports", "Remove All SFP Ports", "Add Rear SFP", "Remove All Rear SFP", "Reset name", "All Link LEDs", "Activity LEDs", "Select"):
     assert button_name in selection_inventory
 assert "cal-theme-all-settings" in JS
 assert "FIELD_EXAMPLES" not in JS
@@ -70,9 +77,14 @@ assert "cal-theme-open-toggle" not in JS
 assert 'category==="dropdown_open"' in JS
 assert "const GROUPS" not in JS
 assert "focusCategory" not in JS
-assert "options.width||220" in JS and "options.max_height||320" in JS
+assert "options.width>0?options.width:null" in JS and "options.max_height||320" in JS
 assert 'Array.from({length:key==="max_height"?64:3}' in JS
 assert "max-height:'+maxHeight+'px;" in JS
+assert "previewHighlightCss(category,key)" in JS
+assert '--sv-preview-highlight' in JS
+assert '--calibration-preview-highlight' in JS
+assert "syncCalibrationThemeSave" in JS and "savePending" in JS
+assert "Auto (fit menu options)" in JS and "Auto (fit input value)" in JS
 assert 'key==="row_height"||key==="row_spacing"' in JS
 assert "const buttons=buttonRow(\"cv-cal-port-manager-row\",4)" in JS
 assert "const quick=buttonRow(\"cv-cal-quick-row\",4)" in JS

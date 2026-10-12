@@ -23,6 +23,9 @@ for marker in (
     "function selectTab(which='core',focus=false)",
     "const ids=['core','discovery','snmp2mqtt','custom-theme','calibration-theme']",
     "window.SwitchVisionCalibrationTheme?.load?.()",
+    "syncCalibrationThemeSave",
+    "window.SwitchVisionCalibrationTheme?.isDirty?.()",
+    "await window.SwitchVisionCalibrationTheme.savePending()",
     "tab.addEventListener('click',()=>selectTab(tab.dataset.hubSettingsTab))",
     "tab.addEventListener('keydown',tabKeydown)",
     "async function open(which='core'){styles();setView('settings');await load();selectTab(which)}",
@@ -61,6 +64,47 @@ for marker in (
 ):
     assert marker in SOURCE, marker
 assert "const dash=sec('Dashboard presentation'" not in SOURCE
+# Shared save path must use the existing Calibration Theme Core writer and keep
+# the top Save changes enabled on partial failure.
+import subprocess
+import json
+html = (HERE / "support_web.html").read_text()
+fragment = html.split("async function save(){if(!dirty.size", 1)[1].split("async function resetCore()", 1)[0]
+fragment = "async function save(){if(!dirty.size" + fragment
+node_test = """
+const assert=require("node:assert/strict");
+const dirty=new Set(), b={disabled:false}, states=[];
+let pending=true, writes=0, fail=false;
+const window={SwitchVisionCalibrationTheme:{
+  isDirty:()=>pending,
+  savePending:async()=>{writes++;if(fail)throw Error("Theme write blocked");pending=false;return true;}
+}};
+const q=(key)=>key==="hubSettingsSave"?b:null;
+const status=(message,kind)=>states.push({message,kind});
+const syncCalibrationThemeSave=()=>{b.disabled=!dirty.size&&!window.SwitchVisionCalibrationTheme?.isDirty?.()};
+const noop=()=>{};
+const save=new Function("dirty","q","status","req","state","clone","captureSavedCoreActivity","clear",
+  "renderCore","renderSnmp","renderDiscovery","renderDeviceConfiguration",
+  "renderDiscoveryBackupSettings","cleanDiscovery","window","syncCalibrationThemeSave",
+  "return ("+%s+")")(
+  dirty,q,status,async()=>({}),{},x=>x,noop,noop,noop,noop,noop,noop,noop,noop,window,syncCalibrationThemeSave);
+(async()=>{
+  await save();
+  assert.equal(writes,1);
+  assert.equal(pending,false);
+  assert.equal(b.disabled,true);
+  pending=true;fail=true;syncCalibrationThemeSave();
+  await save();
+  assert.equal(writes,2);
+  assert.equal(pending,true);
+  assert.equal(b.disabled,false);
+  assert.match(states.at(-1).message,/Theme write blocked/);
+  console.log("HUB_COMBINED_SAVE_BEHAVIOR_PASS");
+})().catch(err=>{console.error(err);process.exit(1)});
+""" % json.dumps(fragment)
+result = subprocess.run(["node", "-e", node_test], text=True, capture_output=True, timeout=15)
+assert result.returncode == 0, result.stderr or result.stdout
+
 
 # Show UniFi integration belongs to Native dashboard header -> Dashboard
 # presentation. The saved Core discovery preference is reused in-place; it must

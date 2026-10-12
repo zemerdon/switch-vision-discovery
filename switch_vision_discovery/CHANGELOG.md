@@ -1,3 +1,9 @@
+## 3.0.42 — Content-aware Calibration Theme Auto width (Local)
+
+- Update read-only Calibration Theme Closed Dropdown preview to the exact Core content-aware trigger layout and demonstrate long and short selected labels.
+- Clarify content-aware Auto for closed dropdowns (selected label), open dropdowns (menu options), and text/numeric inputs, while preserving Desktop/Mobile pixel overrides.
+- Highlight the exact affected text/control in every Calibration Theme preview (orange by default); add an editable highlight colour role under Custom Theme, with inherited legacy-theme default. Make the main Save changes button also save pending Calibration Theme edits through the existing Core-owned save path. Keep exact Core-derived preview/source parity and Status Box 1/2 Quick Select alignment.
+
 ## 3.0.41 — Hint Text and combined LED preview alignment (Local)
 
 - Add a dedicated Desktop/Mobile Hint Text font size and Regular/Bold weight section, previewing the actual grey section summaries and helper text.

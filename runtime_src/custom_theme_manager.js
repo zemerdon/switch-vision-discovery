@@ -44,6 +44,9 @@
       ["heading_soft", "Heading tint / page glow"],
       ["heading_glow", "Heading glow"],
     ]],
+    ["Calibration Theme preview", [
+      ["calibration_preview_highlight", "Affected control highlight"],
+    ]],
     ["Status & feedback", [
       ["ok", "Success / online"],
       ["ok_soft", "Success background"],
@@ -81,6 +84,7 @@
     link:"#69c8ff",link_hover:"#a6e3ff",button_primary_bg:"#0f4f7d",
     button_primary_text:"#ffffff",button_secondary_bg:"#0a1a2c",
     button_secondary_text:"#edf5fc",button_danger_bg:"#0a1a2c",button_danger_text:"#ff6b6b",
+    calibration_preview_highlight:"#ff9f1c",
   };
 
   const qs = (id) => document.getElementById(id);
@@ -213,7 +217,10 @@
   function captureCurrentPalette() {
     const page = resolveRoleHex("page", FALLBACK.page);
     const colors = {};
-    for (const key of ROLE_KEYS) colors[key] = resolveRoleHex(key, page);
+    for (const key of ROLE_KEYS) colors[key] = key === "calibration_preview_highlight" ?
+      (isHex(document.documentElement.style.getPropertyValue(cssVar(key)).trim()) ?
+        document.documentElement.style.getPropertyValue(cssVar(key)).trim() : FALLBACK[key]) :
+      resolveRoleHex(key, page);
     return colors;
   }
   function completeColors(raw = {}) {
@@ -323,7 +330,7 @@
     return `
       <div class="theme-sample-topbar">
         <div><span class="theme-role-tag">Page title · heading strong</span><h2>Switch Vision Discovery</h2></div>
-        <span class="theme-sample-chip"><span class="theme-role-tag">Chip</span>My Custom Theme</span>
+        <span class="theme-sample-chip"><span class="theme-role-tag">Chip</span>My Custom Theme</span><span class="theme-role-tag" style="color:var(--calibration-preview-highlight,#ff9f1c)">Calibration preview · highlighted control</span>
       </div>
       <div class="theme-sample-nav">
         <button class="theme-sample-tab active"><span class="theme-role-tag">Active tab</span>Devices</button>
