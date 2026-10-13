@@ -11,7 +11,7 @@ JOB = ROOT / "runtime_src/discovery_job.sh"
 STAGE = ROOT / "runtime_src/discovery_dashboard_stage.sh"
 DOCKERFILE = ROOT / "runtime_src/Dockerfile"
 
-EXTRACTED_BODY_SHA256 = "9fa1bd1f9ff8929bfb1cde9ee9dbfbd431a7f72a1050f17c800f4a71f87fd235"
+EXTRACTED_BODY_SHA256 = "8e0b16f0c3196c1a6d7f616b35b0fbf2c23353b6bceed0b2da870fa7b22e3c97"
 HEADER = """# Switch Vision Discovery generated-dashboard-card stage module.
 # Sourced by discovery_job.sh after shared model/registry/card helpers are defined.
 # Keep dashboard-card behavior shell-native; this module is an extraction boundary.
