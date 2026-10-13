@@ -1,3 +1,8 @@
+## 3.0.53 — Pin compatible Core catalog
+
+- Align exact Core source identity with locally built 2.7.84, retaining the same reviewed faceplate catalog data.
+- No additional polling, SNMP writes or hover-based UI.
+
 ## 3.0.52 — Restore Calibration Theme preview loading
 
 - Fix the Hub Calibration Theme preview-loader contract to accept Core's five source-derived quick dropdowns (two Status Box menus plus RJ45, SFP and rear SFP).
