@@ -1,3 +1,8 @@
+## 3.0.54 — Privacy-safe Calibration regression source
+
+- Remove an unnecessary contributor identity from the Calibration Theme regression comment; no runtime or capability change.
+- Preserve Core 2.7.84 binding, HP rear-port handling and five-menu Calibration Theme compatibility.
+
 ## 3.0.53 — Pin compatible Core catalog
 
 - Align exact Core source identity with locally built 2.7.84, retaining the same reviewed faceplate catalog data.

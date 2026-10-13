@@ -71,7 +71,7 @@ assert inventory["count"] == sum(token[0] == "button" for row in inventory["rows
 assert inventory["count"] >= 25
 assert inventory["selects"] == 5
 # The browser loader must accept the exact inventory packaged from Core.
-# A stale hard-coded threshold left Paul's Calibration Theme unusable despite
+# A stale hard-coded threshold left Calibration Theme unusable despite
 # five valid dropdowns: enforce browser/runtime parity, not merely JSON shape.
 loader_select_count = re.search(
     r"SwitchVisionCalibrationSelectionButtons\?\.selects\s*!==\s*(\d+)", JS
