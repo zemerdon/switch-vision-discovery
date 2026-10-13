@@ -2052,6 +2052,53 @@ emit_generated_card_sfp_logical_port_map() {
   echo "        sfp_logical_port_map: ${logical_map}"
 }
 
+# Emit only physically observed HP 3500yl rear-module interfaces. The four
+# owner-supplied rear faceplate positions are artwork, not telemetry proof.
+# The source IF-MIB A1-A4 identities are also used by discovery_yaml_stage.sh
+# to generate the per-switch "Rear 10G N Status" MQTT/HA sensors.
+emit_generated_card_hp_rear_sfp_bindings() {
+  selected_name="$1"
+  entity_prefix="$2"
+  [ -n "$selected_name" ] || return 0
+  case "$entity_prefix" in ''|*[!a-z0-9_]*) return 0 ;; esac
+  exact_model=$(exact_model_for_generated_card "$selected_name")
+  [ "$exact_model" = "HP J8693A Switch 3500yl-48G" ] || return 0
+
+  safe_name=$(printf '%s' "$selected_name" | sed 's/[^A-Za-z0-9._-]/_/g')
+  cap_file="$CAPABILITIES_DIR/${safe_name}-capabilities.json"
+  [ -f "$cap_file" ] || return 0
+
+  bindings=$(jq -c --arg prefix "$entity_prefix" '
+    if (.device.detected_model_text // .device.model_text // "") != "HP J8693A Switch 3500yl-48G"
+       or ((.device.model_override // "") | length) != 0
+    then empty
+    else
+      [.interfaces[]?
+        | select(
+            .physical == true
+            and .media == "uplink"
+            and (.name | type == "string" and test("^A[1-4]$"))
+            and (.if_index | type == "number" and . > 0)
+          )
+      ]
+      | group_by(.name)
+      | map(select(length == 1) | .[0])
+      | map({
+          key: ("rSFP" + (.name[1:])),
+          value: {
+            interface_name: .name,
+            entity_base: ("sensor." + $prefix + "_rear_10g_" + (.name[1:]))
+          }
+        })
+      | from_entries
+      | if length > 0 then . else empty end
+    end
+  ' "$cap_file" 2>/dev/null | awk 'NF && $0 != "null" && $0 != "{}" { print; exit }')
+
+  [ -n "$bindings" ] && printf '        rear_sfp_bindings: %s\n' "$bindings"
+  return 0
+}
+
 build_juniper_port_mode_metadata() {
   output_file="$1"
   : > "$output_file"

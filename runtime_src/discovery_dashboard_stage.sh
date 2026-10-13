@@ -166,6 +166,7 @@ write_generated_dashboard_card() {
         fi
         emit_generated_card_port_counts "$selected"
         emit_generated_card_sfp_logical_port_map "$selected"
+        emit_generated_card_hp_rear_sfp_bindings "$selected" "$safe_prefix"
         case "${effective_model:-${detected_model:-}}" in
           *Juniper*EX3300-48P*)
             # Data/entity numbering may differ from the stock faceplate labels.
@@ -299,6 +300,7 @@ write_generated_dashboard_card() {
       fi
       emit_generated_card_port_counts "$profile"
       emit_generated_card_sfp_logical_port_map "$profile"
+      emit_generated_card_hp_rear_sfp_bindings "$profile" "$safe_prefix"
       case "${exact_model:-}" in
         *Juniper*EX3300-48P*)
           echo "        port_entity_offset: -1"

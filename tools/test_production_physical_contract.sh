@@ -161,6 +161,7 @@ hp_card="$TMP/hp-control/card.yaml"
 grep -Fq '        port_count: 48' "$hp_card" || note_failure "hp-control: combo copper positions not included in visible RJ45 count"
 grep -Fq '        sfp_port_count: 4' "$hp_card" || note_failure "hp-control: SFP cage count changed"
 grep -Fq '        sfp_logical_port_map: [45,46,47,48]' "$hp_card" || note_failure "hp-control: shared logical-port map missing"
+if grep -Fq '        rear_sfp_bindings:' "$hp_card"; then note_failure "hp-control: invented unobserved rear-module bindings"; fi
 
 # J8693A optional rear 10G module: A1-A4 are real observed
 # telemetry ports, but the current front-panel card intentionally remains the
@@ -194,6 +195,10 @@ hp_rear_contract="$hp_rear_dir/physical-contract.json"
 grep -Fq '        port_count: 48' "$hp_rear_card" || note_failure "hp-rear-module: visible RJ45/card count changed"
 grep -Fq '        sfp_port_count: 4' "$hp_rear_card" || note_failure "hp-rear-module: front SFP/card count changed"
 grep -Fq '        sfp_logical_port_map: [45,46,47,48]' "$hp_rear_card" || note_failure "hp-rear-module: front shared logical-port map changed"
+grep -Fq '"rSFP1":{"interface_name":"A1","entity_base":"sensor.hpmod_rear_10g_1"}' "$hp_rear_card" || note_failure "hp-rear-module: A1 observed status not bound"
+grep -Fq '"rSFP2":{"interface_name":"A2","entity_base":"sensor.hpmod_rear_10g_2"}' "$hp_rear_card" || note_failure "hp-rear-module: A2 observed status not bound"
+grep -Fq '"rSFP3":{"interface_name":"A3","entity_base":"sensor.hpmod_rear_10g_3"}' "$hp_rear_card" || note_failure "hp-rear-module: A3 observed status not bound"
+grep -Fq '"rSFP4":{"interface_name":"A4","entity_base":"sensor.hpmod_rear_10g_4"}' "$hp_rear_card" || note_failure "hp-rear-module: A4 observed status not bound"
 jq -e '
   .status == "resolved"
   and .observed.physical == 52
