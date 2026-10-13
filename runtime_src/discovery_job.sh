@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.0.50"
+SWITCH_VISION_DISCOVERY_VERSION="3.0.51"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -2070,7 +2070,9 @@ emit_generated_card_hp_rear_sfp_bindings() {
 
   bindings=$(jq -c --arg prefix "$entity_prefix" '
     if (.device.detected_model_text // .device.model_text // "") != "HP J8693A Switch 3500yl-48G"
-       or ((.device.model_override // "") | length) != 0
+       or ((.device.model_override // "") as $override
+         | $override != ""
+           and $override != (.device.detected_model_text // .device.model_text // ""))
     then empty
     else
       [.interfaces[]?

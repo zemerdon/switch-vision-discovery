@@ -216,6 +216,12 @@ jq -e '
 grep -Fq '    name: HPMOD Rear 10G 1 Speed Bps' "$hp_rear_yaml" || note_failure "hp-rear-module: rear 10G speed telemetry missing"
 grep -Fq 'template: "{{ 10000000000 if (value | int) >= 4294967295 else ([value | int, 10000000000] | min) }}"' "$hp_rear_yaml" || note_failure "hp-rear-module: saturated ifSpeed is not normalized to known 10G capability"
 
+# Guard the real HP capability pattern: an explicitly selected identical
+# model is not a compatibility override and must retain observed A1-A4 bindings.
+if ! python3 "$ROOT/tools/test_hp3500yl_rear_binding_override.py"; then
+  note_failure "hp-rear-module: real-device same-model override suppressed observed rear bindings"
+fi
+
 # J9450A: 22 fixed copper + two dual-personality logical ports;
 # ifIndex/name 25 is CPU and must never become a front-panel sensor.
 tom_hp="$TMP/hp-procurve-1810g-24.txt"

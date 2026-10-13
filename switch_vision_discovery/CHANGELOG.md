@@ -1,3 +1,9 @@
+## 3.0.51 — HP 3500yl observed rear-link binding compatibility
+
+- Preserve physical rear A1–A4 sensor bindings when the selected model exactly matches the detected HP 3500yl; such an identical selection is not an unsafe compatibility override.
+- Continue suppressing bindings for unobserved rear modules or genuinely different model overrides. Keep front dual-personality 45–48 semantics and telemetry unchanged.
+- Add a regression reproducing the contribution's same-model override and protecting the mismatch/no-module fail-closed cases.
+
 ## 3.0.50 — HP 3500yl-48G observed rear optical bindings
 
 - Connect rear A1–A4 visual positions to their matching Home Assistant status sensors only when those physical uplink interfaces were actually observed during device discovery.
