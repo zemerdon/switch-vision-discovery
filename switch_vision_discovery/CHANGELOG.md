@@ -1,3 +1,9 @@
+## 3.0.52 — Restore Calibration Theme preview loading
+
+- Fix the Hub Calibration Theme preview-loader contract to accept Core's five source-derived quick dropdowns (two Status Box menus plus RJ45, SFP and rear SFP).
+- Verify the runtime loader's expected count against the packaged Core-derived inventory in the permanent Calibration Theme regression. This reproduces and closes the exact “inventory is incomplete” error while leaving switch calibration profiles and geometry untouched.
+- Retain the Discovery 3.0.51 HP 3500yl rear A1–A4 observed-binding correction.
+
 ## 3.0.51 — HP 3500yl observed rear-link binding compatibility
 
 - Preserve physical rear A1–A4 sensor bindings when the selected model exactly matches the detected HP 3500yl; such an identical selection is not an unsafe compatibility override.

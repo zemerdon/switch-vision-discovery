@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Hub Calibration Theme grouping, live preview and Core-only save contract."""
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -69,6 +70,16 @@ inventory = json.loads(selection_inventory.split("=", 1)[1].strip().rstrip(";"))
 assert inventory["count"] == sum(token[0] == "button" for row in inventory["rows"] for token in row["tokens"])
 assert inventory["count"] >= 25
 assert inventory["selects"] == 5
+# The browser loader must accept the exact inventory packaged from Core.
+# A stale hard-coded threshold left Paul's Calibration Theme unusable despite
+# five valid dropdowns: enforce browser/runtime parity, not merely JSON shape.
+loader_select_count = re.search(
+    r"SwitchVisionCalibrationSelectionButtons\?\.selects\s*!==\s*(\d+)", JS
+)
+assert loader_select_count, "Calibration Theme loader does not validate selection menus"
+assert int(loader_select_count.group(1)) == inventory["selects"], (
+    "Calibration Theme loader rejects the actual Core dropdown inventory"
+)
 status_rows = [row for row in inventory["rows"] if "cv-cal-status-quick-row" in row["css"]]
 assert len(status_rows) == 1, "Five Calibration quick selectors must share a row"
 assert [t[1] for t in status_rows[0]["tokens"] if t[0] == "select"] == ["Status Box 1", "Status Box 2", "RJ45", "SFP", "rSFP"]

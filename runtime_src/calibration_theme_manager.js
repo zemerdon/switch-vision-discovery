@@ -333,7 +333,7 @@
       if(!cssText.includes(".cv-cal-tools{")||cssText.toLowerCase().includes("</style")||typeof window.SwitchVisionCalibrationThemeCoreCss!=="function")
         throw Error("Core Calibration preview assets are invalid");
       if((window.SwitchVisionCalibrationSelectionButtons?.count||0)<25||
-         window.SwitchVisionCalibrationSelectionButtons?.selects!==2)
+         window.SwitchVisionCalibrationSelectionButtons?.selects!==5)
         throw Error("Core Selection preview button/dropdown inventory is incomplete");
       corePreviewCss=cssText;
       const body=await res.json();
