@@ -1,3 +1,9 @@
+## 3.0.50 — HP 3500yl-48G observed rear optical bindings
+
+- Connect rear A1–A4 visual positions to their matching Home Assistant status sensors only when those physical uplink interfaces were actually observed during device discovery.
+- Leave optional rear positions unbound when the module is absent; preserve the front 45–48 dual-personality mapping and avoid inventing ports or link states.
+- Coordinate with Core 2.7.83 so missing or unavailable rear status displays as unknown instead of incorrectly showing Down.
+
 ## 3.0.49 — HP 3500yl-48G dedicated default artwork (Local)
 
 - Select the exact owner-supplied HP 3500yl-48G faceplate and factory profile as this model’s default while preserving all 48 logical interfaces, four dual-personality RJ45/SFP interfaces and existing observed SNMP mappings.
