@@ -1,3 +1,9 @@
+## 3.0.55 — Evidence-bound HP rear interface indexes
+
+- Include the actually observed rear A1–A4 IF-MIB `if_index` in the existing per-switch Discovery bindings, preserving separate factory geometry and existing link/status entity bases.
+- Keep missing rear interfaces unbound; do not infer that a present interface is a populated optical/CX4 module, create module-specific sensor entities or issue SNMP writes.
+- Pair with Core 2.7.85 for guarded selection of observed rear optical module candidates.
+
 ## 3.0.54 — Privacy-safe Calibration regression source
 
 - Remove an unnecessary contributor identity from the Calibration Theme regression comment; no runtime or capability change.

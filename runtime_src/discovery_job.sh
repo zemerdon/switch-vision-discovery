@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.0.54"
+SWITCH_VISION_DISCOVERY_VERSION="3.0.55"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -2089,7 +2089,8 @@ emit_generated_card_hp_rear_sfp_bindings() {
           key: ("rSFP" + (.name[1:])),
           value: {
             interface_name: .name,
-            entity_base: ("sensor." + $prefix + "_rear_10g_" + (.name[1:]))
+            entity_base: ("sensor." + $prefix + "_rear_10g_" + (.name[1:])),
+            if_index: .if_index
           }
         })
       | from_entries

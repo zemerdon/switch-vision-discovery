@@ -41,13 +41,13 @@ def emitted(override: str | None, ports: bool = True) -> str:
 class Hp3500RearBindingOverride(unittest.TestCase):
     def test_no_override_emits_observed_rear_sensors(self) -> None:
         result = emitted(None)
-        self.assertIn('"rSFP1":{"interface_name":"A1","entity_base":"sensor.hptest_rear_10g_1"}', result)
-        self.assertIn('"rSFP4":{"interface_name":"A4","entity_base":"sensor.hptest_rear_10g_4"}', result)
+        self.assertIn('"rSFP1":{"interface_name":"A1","entity_base":"sensor.hptest_rear_10g_1","if_index":49}', result)
+        self.assertIn('"rSFP4":{"interface_name":"A4","entity_base":"sensor.hptest_rear_10g_4","if_index":52}', result)
 
     def test_identical_override_does_not_hide_observed_rear_sensors(self) -> None:
         result = emitted(HP)
-        self.assertIn('"rSFP1":{"interface_name":"A1","entity_base":"sensor.hptest_rear_10g_1"}', result)
-        self.assertIn('"rSFP4":{"interface_name":"A4","entity_base":"sensor.hptest_rear_10g_4"}', result)
+        self.assertIn('"rSFP1":{"interface_name":"A1","entity_base":"sensor.hptest_rear_10g_1","if_index":49}', result)
+        self.assertIn('"rSFP4":{"interface_name":"A4","entity_base":"sensor.hptest_rear_10g_4","if_index":52}', result)
 
     def test_different_override_cannot_invent_binds(self) -> None:
         self.assertEqual(emitted("Another Vendor Test Model"), "")
