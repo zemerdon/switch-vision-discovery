@@ -1,3 +1,10 @@
+## 3.0.56 — Hub faceplate upgrade offers after Core restart
+
+- Periodically compare each registered switch's exact-model recommended stock faceplate with its existing saved Core Calibration image, using Core's read-only installed asset fingerprints. The check starts when Home Assistant Core is available and needs no new Discovery walk or Hub restart.
+- Show the full-width **New Faceplate Upgrade Available** section above Hub cards, with the real current image above the available image. **Keep Current** collapses it to the title and right-aligned red **Upgrade Faceplate** button; the red button reopens the preview.
+- **Upgrade Faceplate** confirms and invokes the existing model-scoped Core Reset Current Switch service. Only successful, verified resets remove the offer; unmatched models, missing old images and ambiguous saved profile scopes fail closed.
+- No automatic Calibration resets, new editor, new discovery model admission or installed-asset changes.
+
 ## 3.0.55 — Evidence-bound HP rear interface indexes
 
 - Include the actually observed rear A1–A4 IF-MIB `if_index` in the existing per-switch Discovery bindings, preserving separate factory geometry and existing link/status entity bases.

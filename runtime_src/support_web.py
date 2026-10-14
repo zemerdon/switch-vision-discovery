@@ -68,6 +68,7 @@ import hub_component_settings
 import hub_device_control
 import hub_diagnostics
 import hub_autodiscover
+import faceplate_upgrade_offers as faceplate_offers
 
 SUPPORT_ADDRESS = "switch-vision@zemerdon.com"
 SUPERVISOR_INGRESS_IP = "172.30.32.2"
@@ -2596,6 +2597,113 @@ def _calibration_profile_name(
         )
 
     return profile
+
+
+
+_FACEPLATE_UPGRADE_LOCK = threading.RLock()
+
+
+def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
+    """Read saved Core calibration and reviewed model defaults only after Core is ready."""
+    core_assets = _home_assistant_ws({"type": "switch_vision/list_assets"})
+    if not isinstance(core_assets, dict) or not core_assets.get("core_version"):
+        raise RuntimeError("Switch Vision Core has not finished starting.")
+    assets = faceplate_offers.installed_assets(core_assets)
+    if not assets:
+        raise RuntimeError("Core faceplate fingerprints are not available.")
+    registry = json.loads(DEFAULT_REGISTRY_FILE.read_text(encoding="utf-8"))
+    defaults = faceplate_offers.registry_defaults(registry)
+    if not defaults:
+        raise RuntimeError("Reviewed Discovery model defaults are unavailable.")
+
+    inventory = _configured_devices_snapshot(options_file)
+    # Saved generated YAML contains the last authoritative exact model for
+    # automatic-detection switches. No fresh discovery walk is necessary.
+    detected_models = {}
+    if DEFAULT_GENERATED_CARD.is_file():
+        try:
+            if DEFAULT_GENERATED_CARD.stat().st_size <= 3 * 1024 * 1024:
+                generated = list(yaml.safe_load_all(DEFAULT_GENERATED_CARD.read_text(encoding="utf-8")))
+                detected_models = faceplate_offers.generated_exact_models(generated, set(defaults))
+        except (OSError, UnicodeDecodeError, yaml.YAMLError):
+            detected_models = {}
+    devices = []
+    for row in inventory.get("devices", []):
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("switch_name") or "")
+        model = str(row.get("switch_model") or "")
+        if model not in defaults:
+            model = detected_models.get(name, "")
+        key = str(row.get("device_key") or "")
+        if model in defaults and key.startswith("snmp:") and name:
+            devices.append({"device_key": key, "switch_name": name,
+                            "display_name": str(row.get("display_name") or ""),
+                            "resolved_model": model})
+
+    # Calibration base keys normalise spaces/punctuation. Never permit two
+    # configured devices that collapse to one key to reset each other.
+    profile_owners: dict[str, int] = {}
+    for row in inventory.get("devices", []):
+        name = str(row.get("switch_name") or "")
+        compact = re.sub(r"[^A-Za-z0-9_-]+", "_", name.strip()).strip("_")[:96]
+        if compact:
+            profile_owners[compact] = profile_owners.get(compact, 0) + 1
+    devices = [
+        device for device in devices
+        if profile_owners.get(
+            re.sub(r"[^A-Za-z0-9_-]+", "_", device["switch_name"].strip()).strip("_")[:96], 0
+        ) == 1
+    ]
+
+    profiles_result = _home_assistant_ws({"type": "switch_vision/list_calibrations"})
+    if not isinstance(profiles_result, dict) or not isinstance(profiles_result.get("items"), list):
+        raise RuntimeError("Core saved Calibration information is unavailable.")
+    offers = faceplate_offers.offers_from_saved(
+        devices, defaults, assets, profiles_result["items"], faceplate_offers.load()
+    )
+    return {"ok": True, "core_version": str(core_assets["core_version"]),
+            "offers": offers, "count": len(offers), "devices_checked": len(devices)}
+
+
+def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
+    """Reuse the exact existing Core Reset Current Switch service, never a new editor."""
+    if not isinstance(body, dict):
+        raise ValueError("Faceplate request must be an object.")
+    action = str(body.get("action") or "")
+    if action not in {"keep", "upgrade"}:
+        raise ValueError("Unknown faceplate action.")
+    key = _plain_text(body.get("device_key"), "device_key", max_length=320, allow_empty=False)
+    offered_sha = str(body.get("available_sha256") or "").strip().lower()
+    with _FACEPLATE_UPGRADE_LOCK:
+        offers = _faceplate_upgrade_snapshot(options_file)["offers"]
+        matched = [item for item in offers if item["device_key"] == key
+                   and item["available_sha256"] == offered_sha]
+        if len(matched) != 1:
+            raise ValueError("The faceplate offer changed. Refresh Hub and try again.")
+        offer = matched[0]
+        if action == "keep":
+            faceplate_offers.keep_current(key, offered_sha)
+            return {"ok": True, "action": "kept", "device_key": key}
+
+        base = offer["base_profile"]
+        # The Core service removes only this exact switch's saved profile and
+        # its faceplate-specific children, just like Reset Current Switch.
+        _home_assistant_service(
+            "switch_vision", "reset_calibrations",
+            {"scope": "switch", "base_profile": base},
+        )
+        result = _home_assistant_ws({"type": "switch_vision/list_calibrations"})
+        if not isinstance(result, dict) or not isinstance(result.get("items"), list):
+            raise RuntimeError("Could not verify the Core reset. Recheck Core status.")
+        if any(item.get("active") and item.get("base_profile") == base
+               and (faceplate_offers.filename(item.get("faceplate")) == offer["current_file"]
+                    or faceplate_offers.filename(item.get("saved_calibration_image")) == offer["current_file"])
+               for item in result["items"] if isinstance(item, dict)):
+            raise RuntimeError("The saved old Calibration is still active; the offer was kept.")
+        # The completed offer disappears because Core no longer has the old
+        # saved Calibration. No second model/faceplate state is written.
+        return {"ok": True, "action": "upgraded", "device_key": key}
 
 
 def _set_discovery_ui_density(value: Any) -> dict[str, str]:
@@ -5898,7 +6006,7 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json(scan_mqtt_entities())
             except (ValueError, RuntimeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-        elif path in {"/calibration_profiles.js", "/calibration_profiles_manager.js", "/maintenance.js", "/custom_theme_manager.js", "/calibration_theme_manager.js", "/calibration_theme_core_rules.js", "/calibration_theme_core.css", "/calibration_theme_selection_buttons.js", "/credits_v25.js", "/credits_v25.css"}:
+        elif path in {"/calibration_profiles.js", "/calibration_profiles_manager.js", "/faceplate_upgrades.js", "/maintenance.js", "/custom_theme_manager.js", "/calibration_theme_manager.js", "/calibration_theme_core_rules.js", "/calibration_theme_core.css", "/calibration_theme_selection_buttons.js", "/credits_v25.js", "/credits_v25.css"}:
             script_path = Path("/" + Path(path).name)
 
             if not script_path.is_file():
@@ -5965,6 +6073,12 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json(_autodiscover_status())
             except (ValueError, RuntimeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        elif path == "/api/faceplate-upgrades":
+            try:
+                with _FACEPLATE_UPGRADE_LOCK:
+                    self._json(_faceplate_upgrade_snapshot(self.app.options_file))
+            except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+                self._json({"ok": False, "offers": [], "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
         elif path == "/api/configured-devices":
             self._json(_configured_devices_snapshot(self.app.options_file))
         elif path == "/api/diagnostics":
@@ -6224,6 +6338,19 @@ class SupportHandler(BaseHTTPRequestHandler):
                 )
 
                 return
+
+        if path == "/api/faceplate-upgrades/action":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 4096:
+                    raise ValueError("Invalid faceplate action request size.")
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                self._json(_faceplate_upgrade_action(self.app.options_file, payload))
+            except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except (OSError, RuntimeError) as exc:
+                self._json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
 
         if path == "/api/secrets/reveal":
             try:

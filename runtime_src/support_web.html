@@ -122,12 +122,25 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 .hub-hp-optics-warning p{line-height:1.5}
 .hub-hp-optics-warning input[type=password]{width:100%;max-width:580px}
 .hub-hp-optics-warning input[type=checkbox]{width:20px;height:20px;accent-color:#d33a35}
+.hub-faceplate-offer{margin:10px 0 18px}.hub-faceplate-offer .hub-faceplate-offer-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.hub-faceplate-offer-head h2{margin:0}.hub-faceplate-offer .hub-faceplate-visual{border:1px solid var(--line-soft);background:var(--surface-inset);padding:12px;border-radius:10px;margin:12px 0}.hub-faceplate-visual img{display:block;width:100%;height:auto;object-fit:contain;max-height:310px;margin:6px auto}.hub-faceplate-visual strong{display:block}.hub-faceplate-offer .hub-faceplate-red{background:#b4232c;color:#fff;border:1px solid #da555a;font-weight:700}.hub-faceplate-offer .hub-faceplate-red:hover{background:#922026;color:#fff}.hub-faceplate-offer .hub-faceplate-offer-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.hub-faceplate-offer .hub-faceplate-offer-message{margin:10px 0 0;white-space:pre-wrap}.hub-faceplate-offer .hub-faceplate-offer-text{margin:10px 0}.hub-faceplate-offer .hub-faceplate-offer-status{color:var(--muted);font-size:var(--sv-font-small)}@media(max-width:600px){.hub-faceplate-offer .hub-faceplate-offer-head{align-items:flex-start}.hub-faceplate-offer .hub-faceplate-offer-actions{justify-content:stretch}.hub-faceplate-offer .hub-faceplate-offer-actions button{flex:1}}
 </style>
 <link rel="stylesheet" href="credits_v25.css">
 </head>
 <body><main>
 <div class="topbar"><button id="backButton" class="back-button" type="button">← Back to Home Assistant</button><h1 id="pageHeading" class="page-title">Switch Vision Hub</h1><div class="topbar-tools"><label class="theme-picker" title="Management UI theme. Switch dashboards are not affected."><span class="topbar-theme-label">Theme</span><select id="themeSelect" aria-label="Management UI theme"><option value="switch-vision">Switch Vision</option><option value="cisco-classic">Cisco Classic</option><option value="cisco-nexus">Cisco Nexus</option><option value="unifi">UniFi</option></select></label><a class="sponsor-chip" href="https://github.com/sponsors/zemerdon" target="_blank" rel="noopener noreferrer" title="Support Switch Vision on GitHub Sponsors"><span class="heart">♥</span><span>Sponsor</span></a></div></div>
 <p id="pageLead" class="lead hidden"></p>
+
+<section id="faceplateUpgradeSection" class="card hub-faceplate-offer hidden" aria-label="New Faceplate Upgrade Available" aria-live="polite">
+  <div class="hub-faceplate-offer-head"><h2>New Faceplate Upgrade Available</h2><button id="faceplateUpgradeCollapsedButton" class="hub-faceplate-red hidden" type="button">Upgrade Faceplate</button></div>
+  <div id="faceplateUpgradeExpanded">
+    <p id="faceplateUpgradeDevice" class="hub-faceplate-offer-text"></p>
+    <div class="hub-faceplate-visual"><strong>Current Faceplate</strong><img id="faceplateUpgradeOldImage" alt="Current switch faceplate" loading="lazy"><span id="faceplateUpgradeOldDescription" class="hub-faceplate-offer-status"></span></div>
+    <div class="hub-faceplate-visual"><strong>Available Faceplate</strong><img id="faceplateUpgradeNewImage" alt="New switch faceplate" loading="lazy"><span id="faceplateUpgradeNewDescription" class="hub-faceplate-offer-status"></span></div>
+    <p class="muted">Upgrading uses Reset Current Switch to restore the latest stock faceplate and factory Calibration. Any saved custom Calibration for this switch will be reset.</p>
+    <div class="hub-faceplate-offer-actions"><button id="faceplateUpgradeKeepButton" type="button">Keep Current</button><button id="faceplateUpgradeApplyButton" class="primary" type="button">Upgrade Faceplate</button></div>
+  </div>
+  <p id="faceplateUpgradeMessage" class="hub-faceplate-offer-message muted" role="status"></p>
+</section>
 
 <section id="homeCard" class="card">
 <div class="home-status"><span id="homeStatusDot" class="status-dot"></span><strong id="homeStatus">Ready</strong></div>
@@ -974,4 +987,5 @@ function cleanDiscovery(){const s=clone(state.discovery.settings);delete s.suppo
 <script src="maintenance.js"></script>
 <script src="calibration_profiles.js"></script>
 <script src="calibration_profiles_manager.js"></script>
+<script src="faceplate_upgrades.js"></script>
 </body></html>

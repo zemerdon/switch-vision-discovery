@@ -258,7 +258,7 @@ assert "opacity:.42;" in PROFILE_MANAGER
 assert "filter:saturate(.15);" in PROFILE_MANAGER
 assert "background:var(--accent-soft)" in PROFILE_MANAGER
 assert "display:none!important" in PROFILE_MANAGER
-assert 'elif path in {"/calibration_profiles.js", "/calibration_profiles_manager.js", "/maintenance.js", "/custom_theme_manager.js", "/calibration_theme_manager.js", "/calibration_theme_core_rules.js", "/calibration_theme_core.css", "/calibration_theme_selection_buttons.js", "/credits_v25.js", "/credits_v25.css"}:' in SOURCE
+assert 'elif path in {"/calibration_profiles.js", "/calibration_profiles_manager.js", "/faceplate_upgrades.js", "/maintenance.js", "/custom_theme_manager.js", "/calibration_theme_manager.js", "/calibration_theme_core_rules.js", "/calibration_theme_core.css", "/calibration_theme_selection_buttons.js", "/credits_v25.js", "/credits_v25.css"}:' in SOURCE
 assert '<script src="calibration_profiles_manager.js"></script>' in SOURCE
 
 # SHA-256 remains an internal integrity primitive. Do not surface an integrity

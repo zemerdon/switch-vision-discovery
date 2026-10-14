@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Offline tests for Hub detection after Home Assistant Core restart."""
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import json
+import faceplate_upgrade_offers as f
+
+
+def test():
+    old_hash, new_hash = "a" * 64, "b" * 64
+    inventory = [{"device_key": "snmp:SW3", "switch_name": "SW3",
+                  "display_name": "PoE switch", "resolved_model": "TL-SG2008P"}]
+    recommended = {"TL-SG2008P": "new.png"}
+    images = {"old.png": old_hash, "new.png": new_hash}
+    saved = [{"base_profile": "native_SW3", "active": True, "model": "stock",
+              "faceplate": "default", "faceplate_source": "default",
+              "saved_calibration_image": "old.png"}]
+
+    offers = f.offers_from_saved(inventory, recommended, images, saved)
+    assert len(offers) == 1 and offers[0]["current_file"] == "old.png"
+    assert offers[0]["base_profile"] == "native_SW3"
+    assert offers[0]["collapsed"] is False
+
+    with TemporaryDirectory() as directory:
+        state = Path(directory) / "offers.json"
+        f.keep_current("snmp:SW3", new_hash, state)
+        assert f.load(state) == {"snmp:SW3": new_hash}
+        offers = f.offers_from_saved(inventory, recommended, images, saved, f.load(state))
+        assert offers[0]["collapsed"] is True
+        # A future different offered SHA must reopen the comparison.
+        offers = f.offers_from_saved(inventory, recommended,
+                                     {"old.png": old_hash, "new.png": "c" * 64},
+                                     saved, f.load(state))
+        assert offers[0]["collapsed"] is False
+
+    # Existing per-switch reset clears that saved profile => offer disappears.
+    assert f.offers_from_saved(inventory, recommended, images, []) == []
+    # Ambiguous native/custom scopes => no unsafe one-click reset.
+    assert f.offers_from_saved(inventory, recommended, images,
+                              saved + [{**saved[0], "base_profile": "custom_SW3"}]) == []
+    # The same model on a different switch cannot borrow SW3's saved profile.
+    sw4 = [{**inventory[0], "device_key": "snmp:SW4", "switch_name": "SW4"}]
+    assert f.offers_from_saved(sw4, recommended, images, saved) == []
+    # No real old image => never show a false before/after visual.
+    assert f.offers_from_saved(inventory, recommended, {"new.png": new_hash}, saved) == []
+    # Changed content at same name can't preserve the original for comparison.
+    assert f.offers_from_saved(inventory, {"TL-SG2008P": "old.png"},
+                               {"old.png": new_hash}, saved) == []
+    # Existing per-user custom stock selection remains a real offer until reset.
+    custom = [{**saved[0], "faceplate": "old.png", "faceplate_source": "custom"}]
+    assert len(f.offers_from_saved(inventory, recommended, images, custom)) == 1
+    assert f.filename("../../secret.png") == ""
+    assert f.installed_assets({"faceplate_fingerprints": {
+        "new.png": {"sha256": new_hash}, "../bad.png": {"sha256": old_hash}
+    }}) == {"new.png": new_hash}
+    assert f.registry_defaults({"devices": [{"model": "TL-SG2008P",
+        "dashboard_support": True, "default_faceplate": "faceplates/new.png"}]}) == recommended
+
+    doc = {"views": [{"cards": [{"type": "custom:switch-vision-3650",
+        "discovery_selected_switch": "SW3", "switch_model": "TL-SG2008P"}]}]}
+    assert f.generated_exact_models(doc, set(recommended)) == {"SW3": "TL-SG2008P"}
+    doc["views"][0]["cards"].append({"type": "custom:switch-vision-3650",
+        "discovery_selected_switch": "SW3", "switch_model": "Different model"})
+    assert f.generated_exact_models(doc, {"TL-SG2008P", "Different model"}) == {}
+    print("FACEPLATE_UPGRADE_OFFERS_PASS")
+
+
+if __name__ == "__main__":
+    test()
