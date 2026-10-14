@@ -54,6 +54,19 @@ def test() -> None:
             item = first["offers"][0]
             assert item["base_profile"] == "native_SW3"
             assert item["collapsed"] is False
+            # Existing generated exact-model card resolves an auto-selected model
+            # immediately after Core starts; no new Discovery run is invoked.
+            saved_card = root / "generated-card.yaml"
+            saved_card.write_text("""views:
+  - cards:
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: SW3
+        switch_model: TL-SG2008P
+""")
+            hub.DEFAULT_GENERATED_CARD = saved_card
+            mock_inv["devices"][0]["switch_model"] = "auto"
+            assert hub._faceplate_upgrade_snapshot(root)["count"] == 1
+            mock_inv["devices"][0]["switch_model"] = "TL-SG2008P"
             body = {"action": "keep", "device_key": "snmp:SW3", "available_sha256": "b" * 64}
             assert hub._faceplate_upgrade_action(root, body)["action"] == "kept"
             assert hub._faceplate_upgrade_snapshot(root)["offers"][0]["collapsed"] is True

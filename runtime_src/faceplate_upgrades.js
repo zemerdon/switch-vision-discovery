@@ -8,10 +8,13 @@
   const get = id => document.getElementById(id);
   const expanded = get("faceplateUpgradeExpanded");
   const collapsedButton = get("faceplateUpgradeCollapsedButton");
+  const selector = get("faceplateUpgradeSwitchSelect");
   const keepButton = get("faceplateUpgradeKeepButton");
   const applyButton = get("faceplateUpgradeApplyButton");
   const message = get("faceplateUpgradeMessage");
   let currentOffer = null;
+  let latestOffers = [];
+  let selectedKey = '';
   let manuallyExpandedKey = '';
   let updating = false;
   let refreshInFlight = false;
@@ -29,8 +32,19 @@
   }
 
   function render(offers) {
-    const offer = Array.isArray(offers) && offers.length ? offers[0] : null;
+    latestOffers = Array.isArray(offers) ? offers : [];
+    const offer = latestOffers.find(item => item.device_key === selectedKey) ||
+                  latestOffers.find(item => !item.collapsed) || latestOffers[0] || null;
     currentOffer = offer;
+    selectedKey = offer ? offer.device_key : '';
+    selector.classList.toggle("hidden", latestOffers.length < 2);
+    selector.replaceChildren(...latestOffers.map(item => {
+      const option = document.createElement("option");
+      option.value = item.device_key;
+      option.textContent = (item.display_name || item.switch_name || "Switch") + " · " + item.model;
+      return option;
+    }));
+    selector.value = selectedKey;
     root.classList.toggle("hidden", !offer);
     if (!offer) {
       status("");
@@ -108,6 +122,12 @@
     }
   }
 
+  selector.addEventListener("change", () => {
+    if (updating) return;
+    selectedKey = selector.value;
+    manuallyExpandedKey = '';
+    render(latestOffers);
+  });
   collapsedButton.addEventListener("click", () => {
     // Red button only reopens the offer; it never applies silently.
     manuallyExpandedKey = currentOffer?.device_key || "";
@@ -116,6 +136,7 @@
   });
   keepButton.addEventListener("click", () => act("keep"));
   applyButton.addEventListener("click", () => act("upgrade"));
+  window.addEventListener("focus", () => { if (!document.hidden) void refresh(); });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) void refresh();
   });

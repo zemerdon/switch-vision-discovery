@@ -20,6 +20,17 @@ def test():
     assert len(offers) == 1 and offers[0]["current_file"] == "old.png"
     assert offers[0]["base_profile"] == "native_SW3"
     assert offers[0]["collapsed"] is False
+    # Two legitimate switches can be offered independently and matched by model.
+    second_device = {"device_key": "snmp:SW4", "switch_name": "SW4",
+                     "resolved_model": "Model B"}
+    second_profile = {**saved[0], "base_profile": "native_SW4",
+                      "saved_calibration_image": "old-b.png"}
+    both = f.offers_from_saved(
+        inventory + [second_device], {**recommended, "Model B": "new-b.png"},
+        {**images, "old-b.png": "c" * 64, "new-b.png": "d" * 64},
+        saved + [second_profile])
+    assert {entry["device_key"] for entry in both} == {"snmp:SW3", "snmp:SW4"}
+    assert next(entry for entry in both if entry["device_key"] == "snmp:SW4")["model"] == "Model B"
 
     with TemporaryDirectory() as directory:
         state = Path(directory) / "offers.json"

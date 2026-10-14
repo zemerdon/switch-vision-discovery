@@ -1,3 +1,9 @@
+## 3.0.57 — Multiple faceplate offers and focus refresh
+
+- When more than one switch has a stock faceplate upgrade, let the owner choose each switch independently without changing the existing per-switch Calibration reset contract. A kept offer remains collapsed, with its red button reopening only that switch’s comparison.
+- Refresh offers on browser-window focus as well as page visibility and the existing five-minute timer. Keep the original current-above-available images and error visibility.
+- Add an executable Hub UI regression for multiple switch selection, Keep Current, reopening, reset failure/success, offer disappearance and refresh triggers.
+
 ## 3.0.56 — Hub faceplate upgrade offers after Core restart
 
 - Periodically compare each registered switch's exact-model recommended stock faceplate with its existing saved Core Calibration image, using Core's read-only installed asset fingerprints. The check starts when Home Assistant Core is available and needs no new Discovery walk or Hub restart.
