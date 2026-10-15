@@ -2674,7 +2674,8 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
         raise RuntimeError("Core artwork selections are unavailable.")
     offers = faceplate_offers.offers_from_choices(
         devices, defaults, assets,
-        profiles_result["stock_artwork_choices"], faceplate_offers.load()
+        profiles_result["stock_artwork_choices"], faceplate_offers.load(),
+        core_assets.get("faceplate_revisions", {}),
     )
     return {"ok": True, "core_version": str(core_assets["core_version"]),
             "offers": offers, "count": len(offers), "devices_checked": len(devices)}
@@ -2685,7 +2686,7 @@ def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
     if not isinstance(body, dict):
         raise ValueError("Faceplate request must be an object.")
     action = str(body.get("action") or "")
-    if action not in {"keep", "upgrade"}:
+    if action not in {"keep", "upgrade", "select"}:
         raise ValueError("Unknown faceplate action.")
     key = _plain_text(body.get("device_key"), "device_key", max_length=320, allow_empty=False)
     offered_sha = str(body.get("available_sha256") or "").strip().lower()
@@ -2699,26 +2700,34 @@ def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
             raise ValueError("The faceplate offer changed. Refresh Hub and try again.")
         offer = matched[0]
         if action == "keep":
-            faceplate_offers.keep_current(f"{key}@{requested_base}", offered_sha)
+            faceplate_offers.keep_current(f"{key}@{requested_base}", offer.get("available_geometry_sha256") or offered_sha)
             return {"ok": True, "action": "kept", "device_key": key}
 
+        selected_sha = str(body.get("selected_sha256") or offered_sha).strip().lower() if action == "select" else offered_sha
+        selected_version = str(body.get("selected_version") or "") if action == "select" else str(offer.get("available_version") or "")
+        if action == "select" and not any(row.get("sha256") == selected_sha and row.get("version") == selected_version for row in offer.get("versions", [])):
+            raise ValueError("Selected faceplate revision is not available.")
         result = _home_assistant_ws({
             "type": "switch_vision/approve_stock_artwork",
             "base_profile": requested_base,
             "filename": offer["available_file"],
             "previous_filename": offer["current_file"],
             "expected_sha256": offer["current_sha256"],
-            "approved_sha256": offered_sha,
+            "approved_sha256": selected_sha,
+            "approved_version": selected_version,
+            "expected_version": offer.get("current_version") or "",
         })
         if (not isinstance(result, dict) or result.get("ok") is not True
-                or result.get("sha256") != offered_sha):
+                or result.get("sha256") != selected_sha):
             raise RuntimeError("Core did not confirm the requested per-switch artwork selection.")
         verified = _home_assistant_ws({"type": "switch_vision/list_calibrations"})
         chosen = (verified.get("stock_artwork_choices") or {}).get(requested_base) if isinstance(verified, dict) else None
-        if (not isinstance(chosen, dict) or chosen.get("sha256") != offered_sha
-                or chosen.get("filename") != offer["available_file"]):
+        if (not isinstance(chosen, dict) or chosen.get("sha256") != selected_sha
+                or chosen.get("filename") != offer["available_file"]
+                or (selected_version and chosen.get("version") != selected_version)):
             raise RuntimeError("The approved artwork selection could not be verified.")
-        return {"ok": True, "action": "upgraded", "device_key": key}
+        return {"ok": True, "action": "selected" if action == "select" else "upgraded",
+                "device_key": key, "sha256": selected_sha}
 
 
 def _set_discovery_ui_density(value: Any) -> dict[str, str]:

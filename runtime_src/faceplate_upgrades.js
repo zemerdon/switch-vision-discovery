@@ -12,6 +12,7 @@
   const keepButton = get("faceplateUpgradeKeepButton");
   const applyButton = get("faceplateUpgradeApplyButton");
   const message = get("faceplateUpgradeMessage");
+  const versionList = get("faceplateRevisionList");
   let currentOffer = null;
   let latestOffers = [];
   let selectedKey = '';
@@ -24,7 +25,15 @@
     // Never use the new same-name stock URL to fake the previous image.
     if (!/^[a-z0-9][a-z0-9_.-]{0,140}\.(png|jpg|jpeg|webp)$/i.test(filename) ||
         !/^[a-f0-9]{64}$/.test(sha)) return "";
+    if (previousPath === "faceplates/" + filename) {
+      return "/local/switch-vision/faceplates/" + encodeURIComponent(filename) + "?v=" + sha.slice(0, 16);
+    }
     if (previousPath) {
+      const parts = previousPath.split("/");
+      if (parts.length === 3 && parts[0] === "faceplates-old" && parts[2] === filename &&
+          parts[1].split(".").length === 3 && parts[1].split(".").every(n => n.length > 0 && String(Number(n)) === n)) {
+        return "/local/switch-vision/" + parts.map(encodeURIComponent).join("/") + "?v=" + sha.slice(0, 16);
+      }
       const allowed = /^faceplate-history\/(legacy|[a-f0-9]{64})\/([a-z0-9][a-z0-9_.-]{0,140}\.png)$/i.exec(previousPath);
       if (!allowed || allowed[2] !== filename ||
           (allowed[1] !== "legacy" && allowed[1] !== sha)) return "";
@@ -72,6 +81,22 @@
       (offer.same_filename ? " · updated SHA " + offer.available_sha256.slice(0, 12) : "");
     get("faceplateUpgradeExplanation").textContent =
       "The existing image stays selected until you approve the updated stock artwork. Keep Current retains the verified earlier image; Upgrade Faceplate changes only this switch's artwork choice. Saved Calibration geometry is untouched.";
+    if (versionList) {
+      versionList.replaceChildren(...(Array.isArray(offer.versions) ? offer.versions : []).map(item => {
+        const section = document.createElement("details");
+        const heading = document.createElement("summary");
+        heading.textContent = "Core " + item.version;
+        const preview = document.createElement("img");
+        preview.src = imageUrl(offer.available_file, item.sha256, item.path);
+        preview.alt = "Faceplate for Core " + item.version;
+        const choose = document.createElement("button");
+        choose.textContent = item.sha256 === offer.current_sha256 ? "Currently selected" : "Use this version";
+        choose.disabled = item.sha256 === offer.current_sha256;
+        choose.addEventListener("click", () => act("select", item.sha256, item.version));
+        section.replaceChildren(heading, preview, choose);
+        return section;
+      }));
+    }
     if (!updating) status("");
   }
 
@@ -92,10 +117,10 @@
     }
   }
 
-  async function act(action) {
+  async function act(action, selectedSha = "", selectedVersion = "") {
     const offer = currentOffer;
     if (!offer || updating) return;
-    if (action === "upgrade" && !window.confirm(
+    if ((action === "upgrade" || action === "select") && !window.confirm(
       "Upgrade the stock faceplate for " + (offer.display_name || offer.switch_name) +
       "?\n\nOnly this switch's approved artwork version will change. " +
       "Saved Calibration and other switches are unchanged."
@@ -109,7 +134,7 @@
       const reply = await fetch(endpoint("api/faceplate-upgrades/action"), {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({action, device_key: offer.device_key, base_profile: offer.base_profile, available_sha256: offer.available_sha256}),
+        body: JSON.stringify({action, device_key: offer.device_key, base_profile: offer.base_profile, available_sha256: offer.available_sha256, selected_sha256: selectedSha, selected_version: selectedVersion}),
       });
       const data = await reply.json();
       if (!reply.ok || !data.ok) throw new Error(data.error || "Faceplate action failed");

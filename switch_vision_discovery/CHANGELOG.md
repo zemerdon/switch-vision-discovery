@@ -1,3 +1,9 @@
+## 3.0.62 — Versioned faceplate and geometry picker (Local)
+
+- Let the owner expand and preview every verified Core-versioned faceplate for each configured switch and select any compatible revision.
+- Keep the model registry authoritative, use Core's exact image-and-factory-geometry revision identity, and preserve saved user Calibration.
+- Continue to tolerate older Core versions that do not yet expose the version catalog.
+
 ## 3.0.61 — Direct-upgrade faceplate consent (Local)
 
 - Coordinate Hub old/new artwork comparison against Core 2.7.92's Installer-recorded initial selection.

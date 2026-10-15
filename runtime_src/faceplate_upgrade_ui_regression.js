@@ -34,7 +34,7 @@ async function run() {
     "faceplateUpgradeCollapsedButton", "faceplateUpgradeKeepButton", "faceplateUpgradeApplyButton",
     "faceplateUpgradeMessage", "faceplateUpgradeDevice", "faceplateUpgradeOldImage",
     "faceplateUpgradeNewImage", "faceplateUpgradeOldDescription",
-    "faceplateUpgradeNewDescription", "faceplateUpgradeExplanation",
+    "faceplateUpgradeNewDescription", "faceplateUpgradeExplanation", "faceplateRevisionList",
   ];
   const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
   const docEvents = {};
@@ -46,7 +46,10 @@ async function run() {
   let offers = [
     {device_key: "snmp:SW3", base_profile: "native_SW3", switch_name: "SW3", model: "Model A",
       current_file: "old-a.png", available_file: "new-a.png",
-      current_sha256: "a".repeat(64), available_sha256: "b".repeat(64), collapsed: false},
+      current_sha256: "a".repeat(64), available_sha256: "b".repeat(64), collapsed: false,
+      versions: [
+        {filename:"new-a.png",version:"2.7.90",sha256:"a".repeat(64),geometry_sha256:"c".repeat(64),path:"faceplates-old/2.7.90/new-a.png"},
+        {filename:"new-a.png",version:"2.7.93",sha256:"b".repeat(64),geometry_sha256:"d".repeat(64),path:"faceplates/new-a.png"}]},
     {device_key: "snmp:SW4", base_profile: "native_SW4", switch_name: "SW4", model: "Model B",
       current_file: "old-b.png", available_file: "new-b.png",
       current_sha256: "c".repeat(64), available_sha256: "d".repeat(64), collapsed: false},
@@ -87,6 +90,9 @@ async function run() {
   const get = id => nodes[id];
 
   assert.equal(get("faceplateUpgradeSwitchSelect").options.length, 2);
+  assert.equal(get("faceplateRevisionList").options.length, 2, "both Core revisions expandable");
+  assert.match(get("faceplateRevisionList").options[0].options[1].src, /faceplates-old\/2\.7\.90\/new-a\.png/);
+  assert.ok(get("faceplateRevisionList").options[1].options[2].listeners.click, "revision selector wired");
   assert.equal(get("faceplateUpgradeDevice").textContent, "SW3 · Model A");
   assert.match(get("faceplateUpgradeOldImage").src, /old-a\.png\?v=/);
   assert.ok(!get("faceplateUpgradeSection").classList.contains("hidden"));

@@ -131,6 +131,10 @@ def test():
                                        "filename": "old.png", "sha256": old_hash,
                                        "path": f"faceplate-history/{old_hash}/old.png"}})
     assert len(renamed) == 1 and renamed[0]["same_filename"] is False
+    versions = [{"filename":"new.png","version":"2.7.92","sha256":new_hash,"geometry_sha256":old_hash,"path":"faceplates-old/2.7.92/new.png"},{"filename":"new.png","version":"2.7.93","sha256":new_hash,"geometry_sha256":new_hash,"path":"faceplates/new.png"}]
+    selected = {"native_SW3":{"filename":"new.png","sha256":new_hash,"version":"2.7.92","path":"faceplates-old/2.7.92/new.png"}}
+    offer = f.offers_from_choices(inventory, recommended, {"new.png":new_hash}, selected, revisions={"new.png":versions})
+    assert len(offer) == 1 and not offer[0]["collapsed"] and len(offer[0]["versions"]) == 2
     print("FACEPLATE_UPGRADE_OFFERS_PASS")
 
 

@@ -24,6 +24,7 @@ trap 'sv_self_test_cleanup' EXIT HUP INT TERM
 SV_COPY_DEBUG_TEST_DIR="$BASE_DIR"
 python3 "$BASE_DIR/faceplate_upgrade_offers_regression.py"
 python3 "$BASE_DIR/faceplate_upgrade_hub_integration_regression.py"
+python3 "$BASE_DIR/faceplate_version_picker_regression.py"
 if command -v node >/dev/null 2>&1; then
     node "$BASE_DIR/faceplate_upgrade_ui_regression.js"
 else

@@ -123,6 +123,7 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 .hub-hp-optics-warning input[type=password]{width:100%;max-width:580px}
 .hub-hp-optics-warning input[type=checkbox]{width:20px;height:20px;accent-color:#d33a35}
 .hub-faceplate-offer{margin:10px 0 18px}.hub-faceplate-offer .hub-faceplate-offer-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.hub-faceplate-offer-head h2{margin:0}.hub-faceplate-offer .hub-faceplate-visual{border:1px solid var(--line-soft);background:var(--surface-inset);padding:12px;border-radius:10px;margin:12px 0}.hub-faceplate-visual img{display:block;width:100%;height:auto;object-fit:contain;max-height:310px;margin:6px auto}.hub-faceplate-visual strong{display:block}.hub-faceplate-offer .hub-faceplate-red{background:#b4232c;color:#fff;border:1px solid #da555a;font-weight:700}.hub-faceplate-offer .hub-faceplate-red:hover{background:#922026;color:#fff}.hub-faceplate-offer .hub-faceplate-offer-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.hub-faceplate-offer .hub-faceplate-offer-message{margin:10px 0 0;white-space:pre-wrap}.hub-faceplate-offer .hub-faceplate-offer-text{margin:10px 0}.hub-faceplate-offer .hub-faceplate-offer-status{color:var(--muted);font-size:var(--sv-font-small)}@media(max-width:600px){.hub-faceplate-offer .hub-faceplate-offer-head{align-items:flex-start}.hub-faceplate-offer .hub-faceplate-offer-actions{justify-content:stretch}.hub-faceplate-offer .hub-faceplate-offer-actions button{flex:1}}
+.hub-faceplate-revision-list{display:grid;gap:10px;margin:12px 0}.hub-faceplate-revision-list details{border:1px solid var(--line-soft);border-radius:10px;background:var(--surface-inset);padding:12px}.hub-faceplate-revision-list summary{cursor:pointer;font-weight:700}.hub-faceplate-revision-list img{display:block;width:100%;max-height:300px;object-fit:contain;margin:10px auto}.hub-faceplate-revision-list button{margin:6px 0}
 </style>
 <link rel="stylesheet" href="credits_v25.css">
 </head>
@@ -131,12 +132,13 @@ body.density-ultra_dense .unified-device-summary{padding:4px 0!important}
 <p id="pageLead" class="lead hidden"></p>
 
 <section id="faceplateUpgradeSection" class="card hub-faceplate-offer hidden" aria-label="New Faceplate Upgrade Available" aria-live="polite">
-  <div class="hub-faceplate-offer-head"><h2>New Faceplate Upgrade Available</h2><select id="faceplateUpgradeSwitchSelect" class="hidden" aria-label="Switch with available faceplate upgrade"></select><button id="faceplateUpgradeCollapsedButton" class="hub-faceplate-red hidden" type="button">Upgrade Faceplate</button></div>
+  <div class="hub-faceplate-offer-head"><h2>New Faceplate Upgrade Available</h2><select id="faceplateUpgradeSwitchSelect" class="hidden" aria-label="Switch with available faceplate upgrade"></select><button id="faceplateUpgradeCollapsedButton" class="hub-faceplate-red hidden" type="button">Browse Faceplate Versions</button></div>
   <div id="faceplateUpgradeExpanded">
     <p id="faceplateUpgradeDevice" class="hub-faceplate-offer-text"></p>
     <div class="hub-faceplate-visual"><strong>Current Faceplate</strong><img id="faceplateUpgradeOldImage" alt="Current switch faceplate" loading="lazy"><span id="faceplateUpgradeOldDescription" class="hub-faceplate-offer-status"></span></div>
     <div class="hub-faceplate-visual"><strong>Available Faceplate</strong><img id="faceplateUpgradeNewImage" alt="New switch faceplate" loading="lazy"><span id="faceplateUpgradeNewDescription" class="hub-faceplate-offer-status"></span></div>
-    <p id="faceplateUpgradeExplanation" class="muted">Keep your current approved faceplate or select the newly installed stock artwork. Calibration is preserved.</p>
+    <p id="faceplateUpgradeExplanation" class="muted">Choose an artwork version. Each revision retains its matching factory geometry; saved custom Calibration is preserved.</p>
+    <div id="faceplateRevisionList" class="hub-faceplate-revision-list" aria-label="Available artwork and geometry revisions"></div>
     <div class="hub-faceplate-offer-actions"><button id="faceplateUpgradeKeepButton" type="button">Keep Current</button><button id="faceplateUpgradeApplyButton" class="primary" type="button">Upgrade Faceplate</button></div>
   </div>
   <p id="faceplateUpgradeMessage" class="hub-faceplate-offer-message muted" role="status"></p>

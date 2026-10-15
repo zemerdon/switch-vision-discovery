@@ -199,6 +199,7 @@ def offers_from_choices(
     assets: dict[str, str],
     choices: Any,
     collapsed: dict[str, str] | None = None,
+    revisions: dict[str, list[dict[str, str]]] | None = None,
 ) -> list[dict[str, str]]:
     """Compare the actual approved per-switch image, independent of geometry.
 
@@ -208,6 +209,7 @@ def offers_from_choices(
     """
     choices = choices if isinstance(choices, dict) else {}
     collapsed = collapsed or {}
+    revisions = revisions or {}
     offers: list[dict[str, str]] = []
     seen: set[str] = set()
     for device in inventory:
@@ -235,14 +237,28 @@ def offers_from_choices(
             old_path = str(current.get("path") or "")
             if not old_file or not _SHA.fullmatch(old_sha) or not old_path:
                 continue
-            if old_file == target_file and old_sha == target_sha:
+            available_versions = revisions.get(target_file, [])
+            if not isinstance(available_versions, list):
+                available_versions = []
+            valid_versions = [row for row in available_versions[:64]
+                              if isinstance(row, dict) and row.get('filename') == target_file
+                              and _SHA.fullmatch(str(row.get('sha256', '')))
+                              and _SHA.fullmatch(str(row.get('geometry_sha256', '')))
+                              and isinstance(row.get('path'), str)]
+            if old_file == target_file and old_sha == target_sha and len(valid_versions) < 2:
                 continue
             if old_file == target_file:
-                if old_path != f"faceplate-history/{old_sha}/{old_file}":
+                allowed_paths = {f"faceplate-history/{old_sha}/{old_file}"}
+                allowed_paths.update(row["path"] for row in valid_versions if row["sha256"] == old_sha)
+                if old_sha != target_sha and old_path not in allowed_paths:
                     continue
             elif (old_path != f"faceplates/{old_file}"
                   and old_path != f"faceplate-history/{old_sha}/{old_file}"):
                 continue
+            current_version = str(current.get("version") or "")
+            latest = next((row for row in valid_versions if row.get("path") == f"faceplates/{target_file}"), {})
+            latest_version = str(latest.get("version") or "")
+            latest_geometry = str(latest.get("geometry_sha256") or "")
             choice_key = f"{key}@{base}"
             offers.append({
                 "device_key": key,
@@ -252,11 +268,16 @@ def offers_from_choices(
                 "base_profile": base,
                 "current_file": old_file,
                 "current_sha256": old_sha,
-                "current_preview": old_path if old_path.startswith("faceplate-history/") else "",
+                "current_preview": old_path if old_path.startswith(("faceplate-history/", "faceplates-old/")) else "",
                 "same_filename": old_file == target_file,
                 "available_file": target_file,
                 "available_sha256": target_sha,
-                "collapsed": collapsed.get(choice_key) == target_sha,
+                "collapsed": collapsed.get(choice_key) == (latest_geometry or target_sha)
+                    or (old_sha == target_sha and (not current_version or current_version == latest_version)),
+                "current_version": current_version,
+                "available_version": latest_version,
+                "available_geometry_sha256": latest_geometry,
+                "versions": valid_versions,
             })
             break
     return offers
