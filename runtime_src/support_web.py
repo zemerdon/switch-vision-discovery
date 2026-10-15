@@ -2656,18 +2656,32 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
         ) == 1
     ]
 
+    # First read on a new install records a per-switch approved stock SHA,
+    # without creating or resetting Calibration. Subsequent Core upgrades
+    # retain that pin and Hub can compare the outgoing image with new art.
+    for device in devices:
+        name = str(device["switch_name"])
+        base = re.sub(r"[^A-Za-z0-9_-]+", "_", name.strip()).strip("_")[:96]
+        if not base:
+            continue
+        _home_assistant_ws({
+            "type": "switch_vision/get_calibration",
+            "profile": "native_" + base,
+            "stock_faceplate": defaults[device["resolved_model"]],
+        })
     profiles_result = _home_assistant_ws({"type": "switch_vision/list_calibrations"})
-    if not isinstance(profiles_result, dict) or not isinstance(profiles_result.get("items"), list):
-        raise RuntimeError("Core saved Calibration information is unavailable.")
-    offers = faceplate_offers.offers_from_saved(
-        devices, defaults, assets, profiles_result["items"], faceplate_offers.load()
+    if not isinstance(profiles_result, dict) or not isinstance(profiles_result.get("stock_artwork_choices"), dict):
+        raise RuntimeError("Core artwork selections are unavailable.")
+    offers = faceplate_offers.offers_from_choices(
+        devices, defaults, assets,
+        profiles_result["stock_artwork_choices"], faceplate_offers.load()
     )
     return {"ok": True, "core_version": str(core_assets["core_version"]),
             "offers": offers, "count": len(offers), "devices_checked": len(devices)}
 
 
 def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
-    """Reuse the exact existing Core Reset Current Switch service, never a new editor."""
+    """Approve exact switch artwork only; never reset saved Calibration geometry."""
     if not isinstance(body, dict):
         raise ValueError("Faceplate request must be an object.")
     action = str(body.get("action") or "")
@@ -2675,34 +2689,35 @@ def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
         raise ValueError("Unknown faceplate action.")
     key = _plain_text(body.get("device_key"), "device_key", max_length=320, allow_empty=False)
     offered_sha = str(body.get("available_sha256") or "").strip().lower()
+    requested_base = str(body.get("base_profile") or "").strip()
     with _FACEPLATE_UPGRADE_LOCK:
         offers = _faceplate_upgrade_snapshot(options_file)["offers"]
         matched = [item for item in offers if item["device_key"] == key
-                   and item["available_sha256"] == offered_sha]
+                   and item["available_sha256"] == offered_sha
+                   and item["base_profile"] == requested_base]
         if len(matched) != 1:
             raise ValueError("The faceplate offer changed. Refresh Hub and try again.")
         offer = matched[0]
         if action == "keep":
-            faceplate_offers.keep_current(key, offered_sha)
+            faceplate_offers.keep_current(f"{key}@{requested_base}", offered_sha)
             return {"ok": True, "action": "kept", "device_key": key}
 
-        base = offer["base_profile"]
-        # The Core service removes only this exact switch's saved profile and
-        # its faceplate-specific children, just like Reset Current Switch.
-        _home_assistant_service(
-            "switch_vision", "reset_calibrations",
-            {"scope": "switch", "base_profile": base},
-        )
-        result = _home_assistant_ws({"type": "switch_vision/list_calibrations"})
-        if not isinstance(result, dict) or not isinstance(result.get("items"), list):
-            raise RuntimeError("Could not verify the Core reset. Recheck Core status.")
-        if any(item.get("active") and item.get("base_profile") == base
-               and (faceplate_offers.filename(item.get("faceplate")) == offer["current_file"]
-                    or faceplate_offers.filename(item.get("saved_calibration_image")) == offer["current_file"])
-               for item in result["items"] if isinstance(item, dict)):
-            raise RuntimeError("The saved old Calibration is still active; the offer was kept.")
-        # The completed offer disappears because Core no longer has the old
-        # saved Calibration. No second model/faceplate state is written.
+        result = _home_assistant_ws({
+            "type": "switch_vision/approve_stock_artwork",
+            "base_profile": requested_base,
+            "filename": offer["available_file"],
+            "previous_filename": offer["current_file"],
+            "expected_sha256": offer["current_sha256"],
+            "approved_sha256": offered_sha,
+        })
+        if (not isinstance(result, dict) or result.get("ok") is not True
+                or result.get("sha256") != offered_sha):
+            raise RuntimeError("Core did not confirm the requested per-switch artwork selection.")
+        verified = _home_assistant_ws({"type": "switch_vision/list_calibrations"})
+        chosen = (verified.get("stock_artwork_choices") or {}).get(requested_base) if isinstance(verified, dict) else None
+        if (not isinstance(chosen, dict) or chosen.get("sha256") != offered_sha
+                or chosen.get("filename") != offer["available_file"]):
+            raise RuntimeError("The approved artwork selection could not be verified.")
         return {"ok": True, "action": "upgraded", "device_key": key}
 
 

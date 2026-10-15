@@ -44,10 +44,10 @@ async function run() {
   let resets = 0;
   let failReset = false;
   let offers = [
-    {device_key: "snmp:SW3", switch_name: "SW3", model: "Model A",
+    {device_key: "snmp:SW3", base_profile: "native_SW3", switch_name: "SW3", model: "Model A",
       current_file: "old-a.png", available_file: "new-a.png",
       current_sha256: "a".repeat(64), available_sha256: "b".repeat(64), collapsed: false},
-    {device_key: "snmp:SW4", switch_name: "SW4", model: "Model B",
+    {device_key: "snmp:SW4", base_profile: "native_SW4", switch_name: "SW4", model: "Model B",
       current_file: "old-b.png", available_file: "new-b.png",
       current_sha256: "c".repeat(64), available_sha256: "d".repeat(64), collapsed: false},
   ];
@@ -71,10 +71,11 @@ async function run() {
     const offer = offers.find(item => item.device_key === body.device_key &&
       item.available_sha256 === body.available_sha256);
     assert.ok(offer, "exact per-switch offer");
+    assert.equal(body.base_profile, offer.base_profile, "exact artwork scope");
     if (body.action === "keep") offer.collapsed = true;
     else if (body.action === "upgrade") {
       resets++;
-      if (failReset) return {ok: false, json: async () => ({error: "Core reset failed"})};
+      if (failReset) return {ok: false, json: async () => ({error: "Core artwork approval failed"})};
       offers = offers.filter(item => item !== offer);
     } else throw Error("unexpected action");
     return {ok: true, json: async () => ({ok: true})};
@@ -103,7 +104,7 @@ async function run() {
   get("faceplateUpgradeApplyButton").trigger("click");
   await drain();
   assert.equal(resets, 1);
-  assert.match(get("faceplateUpgradeMessage").textContent, /Core reset failed/);
+  assert.match(get("faceplateUpgradeMessage").textContent, /Core artwork approval failed/);
   assert.equal(offers.length, 2, "failed action retains the offer");
   failReset = false;
   get("faceplateUpgradeApplyButton").trigger("click");
@@ -127,7 +128,7 @@ async function run() {
   await drain();
   assert.ok(reads > beforeVisible, "tab visibility triggers check");
   offers = [{
-    device_key: "snmp:SW3", switch_name: "SW3", model: "Model A",
+    device_key: "snmp:SW3", base_profile: "native_SW3", switch_name: "SW3", model: "Model A",
     current_file: "same.png", available_file: "same.png",
     current_sha256: "a".repeat(64), available_sha256: "b".repeat(64),
     current_preview: "faceplate-history/" + "a".repeat(64) + "/same.png",
@@ -139,7 +140,7 @@ async function run() {
     /faceplate-history\/[a-f0-9]{64}\/same\.png\?v=/,
     "old image must come from historical bytes, not new same-name stock art");
   assert.match(get("faceplateUpgradeNewImage").src, /faceplates\/same\.png\?v=/);
-  assert.match(get("faceplateUpgradeExplanation").textContent, /already uses the same stock filename/);
+  assert.match(get("faceplateUpgradeExplanation").textContent, /Saved Calibration geometry is untouched/);
   assert.match(get("faceplateUpgradeOldDescription").textContent, /previous SHA/);
   offers = [];
   timer();

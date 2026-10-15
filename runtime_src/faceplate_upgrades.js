@@ -70,9 +70,8 @@
       (offer.same_filename ? " · previous SHA " + offer.current_sha256.slice(0, 12) : "");
     get("faceplateUpgradeNewDescription").textContent = offer.available_file +
       (offer.same_filename ? " · updated SHA " + offer.available_sha256.slice(0, 12) : "");
-    get("faceplateUpgradeExplanation").textContent = offer.same_filename
-      ? "The updated image already uses the same stock filename. Keep Current preserves your saved Calibration; Upgrade Faceplate is optional and resets only this switch's saved Calibration to factory settings."
-      : "Upgrading uses Reset Current Switch to restore the latest stock faceplate and factory Calibration. Any saved custom Calibration for this switch will be reset.";
+    get("faceplateUpgradeExplanation").textContent =
+      "The existing image stays selected until you approve the updated stock artwork. Keep Current retains the verified earlier image; Upgrade Faceplate changes only this switch's artwork choice. Saved Calibration geometry is untouched.";
     if (!updating) status("");
   }
 
@@ -98,20 +97,19 @@
     if (!offer || updating) return;
     if (action === "upgrade" && !window.confirm(
       "Upgrade the stock faceplate for " + (offer.display_name || offer.switch_name) +
-      "?\n\nThis uses the existing Reset Current Switch behavior. " +
-      "All saved faceplate-specific Calibration for this switch will be removed. " +
-      "Other switches are unchanged."
+      "?\n\nOnly this switch's approved artwork version will change. " +
+      "Saved Calibration and other switches are unchanged."
     )) return;
     updating = true;
     keepButton.disabled = true;
     applyButton.disabled = true;
     collapsedButton.disabled = true;
-    status(action === "keep" ? "Keeping current faceplate…" : "Restoring the latest factory faceplate…");
+    status(action === "keep" ? "Keeping current faceplate…" : "Approving the updated faceplate…");
     try {
       const reply = await fetch(endpoint("api/faceplate-upgrades/action"), {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({action, device_key: offer.device_key, available_sha256: offer.available_sha256}),
+        body: JSON.stringify({action, device_key: offer.device_key, base_profile: offer.base_profile, available_sha256: offer.available_sha256}),
       });
       const data = await reply.json();
       if (!reply.ok || !data.ok) throw new Error(data.error || "Faceplate action failed");

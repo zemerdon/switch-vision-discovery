@@ -1,3 +1,9 @@
+## 3.0.59 — Per-switch approved faceplate selection (Local)
+
+- Compare Core's verified per-switch stock artwork pins against current reviewed model defaults after restart.
+- Keep Current preserves the selected archived image, while Upgrade Faceplate asks Core to approve only the target artwork SHA, preserving Calibration and all unrelated switches.
+- Support unchanged stock filenames and archived historical preview; reject ambiguous or missing archived originals.
+
 ## 3.0.58 — Version-aware same-filename faceplate upgrades (Local)
 
 - Compare verified saved stock artwork SHA-256 against current Core stock image even when both retain the canonical model filename.

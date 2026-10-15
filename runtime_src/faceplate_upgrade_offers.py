@@ -190,3 +190,73 @@ def keep_current(key: str, sha: str, path: Path | None = None) -> None:
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+
+def offers_from_choices(
+    inventory: list[dict[str, str]],
+    defaults: dict[str, str],
+    assets: dict[str, str],
+    choices: Any,
+    collapsed: dict[str, str] | None = None,
+) -> list[dict[str, str]]:
+    """Compare the actual approved per-switch image, independent of geometry.
+
+    Core alone supplies verified stock revisions and retained historical
+    preview paths. We never infer prior pixels from a matching filename,
+    and we never offer a reset of a switch's saved Calibration.
+    """
+    choices = choices if isinstance(choices, dict) else {}
+    collapsed = collapsed or {}
+    offers: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for device in inventory:
+        key = str(device.get("device_key") or "")
+        name = str(device.get("switch_name") or "")
+        model = str(device.get("resolved_model") or "")
+        if not _KEY.fullmatch(key) or not name or model not in defaults or key in seen:
+            continue
+        seen.add(key)
+        target_file = defaults[model]
+        target_sha = assets.get(target_file)
+        if not target_sha:
+            continue
+        scope_choices = [
+            (base, choices.get(base))
+            for base in sorted(_profile_base(name))
+            if isinstance(choices.get(base), dict)
+        ]
+        # Each scope owns an independent selection. Show the first pending
+        # scope, then offer the other after approval, without cross-switch
+        # or cross-scope mutation.
+        for base, current in scope_choices:
+            old_file = filename(current.get("filename"))
+            old_sha = str(current.get("sha256") or "").lower()
+            old_path = str(current.get("path") or "")
+            if not old_file or not _SHA.fullmatch(old_sha) or not old_path:
+                continue
+            if old_file == target_file and old_sha == target_sha:
+                continue
+            if old_file == target_file:
+                if old_path != f"faceplate-history/{old_sha}/{old_file}":
+                    continue
+            elif (old_path != f"faceplates/{old_file}"
+                  and old_path != f"faceplate-history/{old_sha}/{old_file}"):
+                continue
+            choice_key = f"{key}@{base}"
+            offers.append({
+                "device_key": key,
+                "switch_name": name,
+                "display_name": str(device.get("display_name") or "")[:120],
+                "model": model,
+                "base_profile": base,
+                "current_file": old_file,
+                "current_sha256": old_sha,
+                "current_preview": old_path if old_path.startswith("faceplate-history/") else "",
+                "same_filename": old_file == target_file,
+                "available_file": target_file,
+                "available_sha256": target_sha,
+                "collapsed": collapsed.get(choice_key) == target_sha,
+            })
+            break
+    return offers

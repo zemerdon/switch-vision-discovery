@@ -96,6 +96,41 @@ def test():
     doc["views"][0]["cards"].append({"type": "custom:switch-vision-3650",
         "discovery_selected_switch": "SW3", "switch_model": "Different model"})
     assert f.generated_exact_models(doc, {"TL-SG2008P", "Different model"}) == {}
+    # Per-switch installed artwork selection is independent of whether
+    # Calibration was ever saved. Same-name updates require real old bytes.
+    pins = {"native_SW3": {
+        "filename": "new.png", "sha256": old_hash,
+        "path": f"faceplate-history/{old_hash}/new.png",
+    }}
+    stock_offers = f.offers_from_choices(inventory, recommended,
+                                        {"new.png": new_hash}, pins)
+    assert len(stock_offers) == 1
+    assert stock_offers[0]["same_filename"] is True
+    assert stock_offers[0]["current_preview"] == f"faceplate-history/{old_hash}/new.png"
+    assert stock_offers[0]["base_profile"] == "native_SW3"
+    assert f.offers_from_choices(inventory, recommended,
+                                 {"new.png": new_hash}, {}) == []
+    assert f.offers_from_choices(inventory, recommended,
+                                 {"new.png": new_hash}, {"native_SW3": {
+                                     "filename": "new.png", "sha256": old_hash,
+                                     "unavailable": "true"}}) == []
+    pins["native_SW3"] = {
+        "filename": "new.png", "sha256": new_hash, "path": "faceplates/new.png",
+    }
+    assert f.offers_from_choices(inventory, recommended, {"new.png": new_hash}, pins) == []
+    # A Custom panel remains independently pending after Native approves.
+    pins["custom_SW3"] = {
+        "filename": "new.png", "sha256": old_hash,
+        "path": f"faceplate-history/{old_hash}/new.png",
+    }
+    assert f.offers_from_choices(inventory, recommended,
+                                 {"new.png": new_hash}, pins)[0]["base_profile"] == "custom_SW3"
+    # Rename a recommended filename without erasing an existing older choice.
+    renamed = f.offers_from_choices(inventory, recommended,
+                                   {"new.png": new_hash}, {"native_SW3": {
+                                       "filename": "old.png", "sha256": old_hash,
+                                       "path": f"faceplate-history/{old_hash}/old.png"}})
+    assert len(renamed) == 1 and renamed[0]["same_filename"] is False
     print("FACEPLATE_UPGRADE_OFFERS_PASS")
 
 
