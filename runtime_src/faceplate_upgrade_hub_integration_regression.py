@@ -84,6 +84,25 @@ def test() -> None:
             assert result["action"] == "upgraded"
             assert hub._faceplate_upgrade_snapshot(root)["count"] == 0
             assert len(services) == 2
+            # Same canonical filename, different verified bytes: same per-switch
+            # Core reset, with an authentic archived old image for preview.
+            current.append({"base_profile": "native_SW3", "active": True,
+                "faceplate": "default", "faceplate_source": "default",
+                "saved_calibration_image": "new.png",
+                "saved_stock_sha256": "a" * 64,
+                "saved_stock_preview": "faceplate-history/" + "a" * 64 + "/new.png"})
+            identical_name = hub._faceplate_upgrade_snapshot(root)
+            assert identical_name["count"] == 1
+            candidate = identical_name["offers"][0]
+            assert candidate["same_filename"] is True
+            assert candidate["current_file"] == candidate["available_file"] == "new.png"
+            assert candidate["current_sha256"] != candidate["available_sha256"]
+            assert hub._faceplate_upgrade_action(root, {
+                "action": "upgrade", "device_key": "snmp:SW3",
+                "available_sha256": "b" * 64,
+            })["action"] == "upgraded"
+            assert hub._faceplate_upgrade_snapshot(root)["count"] == 0
+            assert len(services) == 3
             # A conflicting profile base (SW 3 => SW_3) disables both offers.
             current.append({"base_profile": "native_SW_3", "active": True,
                 "faceplate": "default", "faceplate_source": "default",

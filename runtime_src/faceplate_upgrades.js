@@ -19,10 +19,19 @@
   let updating = false;
   let refreshInFlight = false;
 
-  function imageUrl(filename, sha) {
-    // Only consume server-validated filenames and digests.
+  function imageUrl(filename, sha, previousPath = "") {
+    // A previous revision retains its real bytes outside the stock catalog.
+    // Never use the new same-name stock URL to fake the previous image.
     if (!/^[a-z0-9][a-z0-9_.-]{0,140}\.(png|jpg|jpeg|webp)$/i.test(filename) ||
         !/^[a-f0-9]{64}$/.test(sha)) return "";
+    if (previousPath) {
+      const allowed = /^faceplate-history\/(legacy|[a-f0-9]{64})\/([a-z0-9][a-z0-9_.-]{0,140}\.png)$/i.exec(previousPath);
+      if (!allowed || allowed[2] !== filename ||
+          (allowed[1] !== "legacy" && allowed[1] !== sha)) return "";
+      return "/local/switch-vision/faceplate-history/" +
+        encodeURIComponent(allowed[1]) + "/" + encodeURIComponent(allowed[2]) +
+        "?v=" + sha.slice(0, 16);
+    }
     return "/local/switch-vision/faceplates/" + encodeURIComponent(filename) + "?v=" + sha.slice(0, 16);
   }
 
@@ -55,10 +64,15 @@
     collapsedButton.classList.toggle("hidden", !shouldCollapse);
     const label = offer.display_name || offer.switch_name || "Switch";
     get("faceplateUpgradeDevice").textContent = label + " · " + offer.model;
-    get("faceplateUpgradeOldImage").src = imageUrl(offer.current_file, offer.current_sha256);
+    get("faceplateUpgradeOldImage").src = imageUrl(offer.current_file, offer.current_sha256, offer.current_preview || "");
     get("faceplateUpgradeNewImage").src = imageUrl(offer.available_file, offer.available_sha256);
-    get("faceplateUpgradeOldDescription").textContent = offer.current_file;
-    get("faceplateUpgradeNewDescription").textContent = offer.available_file;
+    get("faceplateUpgradeOldDescription").textContent = offer.current_file +
+      (offer.same_filename ? " · previous SHA " + offer.current_sha256.slice(0, 12) : "");
+    get("faceplateUpgradeNewDescription").textContent = offer.available_file +
+      (offer.same_filename ? " · updated SHA " + offer.available_sha256.slice(0, 12) : "");
+    get("faceplateUpgradeExplanation").textContent = offer.same_filename
+      ? "The updated image already uses the same stock filename. Keep Current preserves your saved Calibration; Upgrade Faceplate is optional and resets only this switch's saved Calibration to factory settings."
+      : "Upgrading uses Reset Current Switch to restore the latest stock faceplate and factory Calibration. Any saved custom Calibration for this switch will be reset.";
     if (!updating) status("");
   }
 

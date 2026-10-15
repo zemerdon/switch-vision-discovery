@@ -54,7 +54,30 @@ def test():
     assert f.offers_from_saved(sw4, recommended, images, saved) == []
     # No real old image => never show a false before/after visual.
     assert f.offers_from_saved(inventory, recommended, {"new.png": new_hash}, saved) == []
-    # Changed content at same name can't preserve the original for comparison.
+    # Same-name stock edits must compare actual old/new bytes, not filenames.
+    same = [{**saved[0], "saved_calibration_image": "new.png",
+             "saved_stock_sha256": old_hash,
+             "saved_stock_preview": f"faceplate-history/{old_hash}/new.png"}]
+    same_offers = f.offers_from_saved(inventory, recommended,
+                                      {"new.png": new_hash}, same)
+    assert len(same_offers) == 1 and same_offers[0]["same_filename"] is True
+    assert same_offers[0]["current_preview"] == f"faceplate-history/{old_hash}/new.png"
+    assert same_offers[0]["current_sha256"] == old_hash
+    # A legacy saved profile may reference the Installer's first stock image.
+    legacy = [{**same[0], "saved_stock_preview": "faceplate-history/legacy/new.png"}]
+    assert len(f.offers_from_saved(inventory, recommended,
+                                  {"new.png": new_hash}, legacy)) == 1
+    # Unknown, identical or forged old pixels must never trigger a reset.
+    for broken in (
+        {**same[0], "saved_stock_sha256": new_hash},
+        {**same[0], "saved_stock_sha256": ""},
+        {**same[0], "saved_stock_preview": "new.png"},
+        {**same[0], "saved_stock_preview": "../secret.png"},
+        {**same[0], "saved_stock_preview": f"faceplate-history/{new_hash}/new.png"},
+    ):
+        assert f.offers_from_saved(inventory, recommended,
+                                   {"new.png": new_hash}, [broken]) == []
+    # Changed content with no retained proof still fails closed.
     assert f.offers_from_saved(inventory, {"TL-SG2008P": "old.png"},
                                {"old.png": new_hash}, saved) == []
     # Existing per-user custom stock selection remains a real offer until reset.

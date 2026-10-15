@@ -1,3 +1,9 @@
+## 3.0.58 — Version-aware same-filename faceplate upgrades (Local)
+
+- Compare verified saved stock artwork SHA-256 against current Core stock image even when both retain the canonical model filename.
+- Show retained historical pixels above the updated image, with cache-busted URLs and explicit descriptions for the same-name case; do not fabricate the old preview when history is absent or tampered.
+- Keep the existing per-switch Reset Current Switch confirmation, Keep Current preference, model scoping and Calibration controls unchanged; explain that updating pixels does not require resetting geometry.
+
 ## 3.0.57 — Multiple faceplate offers and focus refresh
 
 - When more than one switch has a stock faceplate upgrade, let the owner choose each switch independently without changing the existing per-switch Calibration reset contract. A kept offer remains collapsed, with its red button reopening only that switch’s comparison.

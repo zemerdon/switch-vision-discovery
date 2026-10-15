@@ -121,9 +121,22 @@ def offers_from_saved(
         source = str(active.get("faceplate_source") or "").strip().lower()
         selected = filename(active.get("faceplate"))
         old_file = selected if source == "custom" and selected else filename(active.get("saved_calibration_image"))
-        if not old_file or old_file == new_file:
+        if not old_file:
             continue
-        old_hash = assets.get(old_file)
+        # Retained stock artwork is content-addressed, not renamed. For an
+        # in-place PNG correction Core proves the saved original's SHA and
+        # immutable historical preview; a filename alone is never evidence.
+        same_file = old_file == new_file
+        preview = old_file
+        if same_file:
+            old_hash = str(active.get("saved_stock_sha256") or "").lower()
+            preview = str(active.get("saved_stock_preview") or "")
+            allowed = (f"faceplate-history/{old_hash}/{old_file}",
+                       f"faceplate-history/legacy/{old_file}")
+            if not _SHA.fullmatch(old_hash) or old_hash == new_hash or preview not in allowed:
+                continue
+        else:
+            old_hash = assets.get(old_file)
         if not old_hash:
             continue
         offers.append({
@@ -134,6 +147,8 @@ def offers_from_saved(
             "base_profile": str(active["base_profile"]),
             "current_file": old_file,
             "current_sha256": old_hash,
+            "current_preview": preview,
+            "same_filename": same_file,
             "available_file": new_file,
             "available_sha256": new_hash,
             "collapsed": collapsed.get(key) == new_hash,

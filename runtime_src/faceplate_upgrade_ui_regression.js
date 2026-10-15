@@ -34,7 +34,7 @@ async function run() {
     "faceplateUpgradeCollapsedButton", "faceplateUpgradeKeepButton", "faceplateUpgradeApplyButton",
     "faceplateUpgradeMessage", "faceplateUpgradeDevice", "faceplateUpgradeOldImage",
     "faceplateUpgradeNewImage", "faceplateUpgradeOldDescription",
-    "faceplateUpgradeNewDescription",
+    "faceplateUpgradeNewDescription", "faceplateUpgradeExplanation",
   ];
   const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
   const docEvents = {};
@@ -126,6 +126,21 @@ async function run() {
   docEvents.visibilitychange();
   await drain();
   assert.ok(reads > beforeVisible, "tab visibility triggers check");
+  offers = [{
+    device_key: "snmp:SW3", switch_name: "SW3", model: "Model A",
+    current_file: "same.png", available_file: "same.png",
+    current_sha256: "a".repeat(64), available_sha256: "b".repeat(64),
+    current_preview: "faceplate-history/" + "a".repeat(64) + "/same.png",
+    same_filename: true, collapsed: false,
+  }];
+  timer();
+  await drain();
+  assert.match(get("faceplateUpgradeOldImage").src,
+    /faceplate-history\/[a-f0-9]{64}\/same\.png\?v=/,
+    "old image must come from historical bytes, not new same-name stock art");
+  assert.match(get("faceplateUpgradeNewImage").src, /faceplates\/same\.png\?v=/);
+  assert.match(get("faceplateUpgradeExplanation").textContent, /already uses the same stock filename/);
+  assert.match(get("faceplateUpgradeOldDescription").textContent, /previous SHA/);
   offers = [];
   timer();
   await drain();
