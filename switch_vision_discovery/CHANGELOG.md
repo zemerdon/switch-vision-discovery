@@ -1,3 +1,9 @@
+## 3.0.60 — Coordinate latest Cisco 3850 artwork and Core stock pin (Local)
+
+- Validate Hub's existing per-switch, exact-SHA faceplate approval workflow against Core 2.7.91 and the revised Cisco 3850-12XS stock image.
+- Continue to display the verified previous image when declined and offer the newly installed image without resetting Calibration or changing port geometry.
+- No independent device-discovery, registry or SNMP behavior changes.
+
 ## 3.0.59 — Per-switch approved faceplate selection (Local)
 
 - Compare Core's verified per-switch stock artwork pins against current reviewed model defaults after restart.
