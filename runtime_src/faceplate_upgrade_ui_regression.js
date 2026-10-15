@@ -148,6 +148,23 @@ async function run() {
   assert.match(get("faceplateUpgradeNewImage").src, /faceplates\/same\.png\?v=/);
   assert.match(get("faceplateUpgradeExplanation").textContent, /Saved Calibration geometry is untouched/);
   assert.match(get("faceplateUpgradeOldDescription").textContent, /previous SHA/);
+  offers = [{
+    device_key: "snmp:SW3", base_profile: "native_SW3", switch_name: "SW3", model: "Model A",
+    current_file: "same.png", available_file: "same.png",
+    current_sha256: "a".repeat(64), available_sha256: "a".repeat(64),
+    current_preview: "faceplate-history/revisions/2.7.70/same.png",
+    current_version: "2.7.70", available_version: "2.7.99", same_filename: true,
+    collapsed: false,
+    versions: [
+      {filename:"same.png",version:"2.7.70",sha256:"a".repeat(64),geometry_sha256:"c".repeat(64),path:"faceplates-old/2.7.70/same.png"},
+      {filename:"same.png",version:"2.7.99",sha256:"a".repeat(64),geometry_sha256:"d".repeat(64),path:"faceplates/same.png"},
+    ],
+  }];
+  timer();
+  await drain();
+  assert.ok(get("faceplateUpgradeOldImage").src.includes("faceplate-history/revisions/2.7.70/same.png"));
+  assert.equal(get("faceplateRevisionList").options[0].options[2].disabled, true);
+  assert.equal(get("faceplateRevisionList").options[1].options[2].disabled, false);
   offers = [];
   timer();
   await drain();

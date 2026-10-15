@@ -34,6 +34,12 @@
           parts[1].split(".").length === 3 && parts[1].split(".").every(n => n.length > 0 && String(Number(n)) === n)) {
         return "/local/switch-vision/" + parts.map(encodeURIComponent).join("/") + "?v=" + sha.slice(0, 16);
       }
+      if (parts.length === 4 && parts[0] === "faceplate-history" &&
+          parts[1] === "revisions" && parts[3] === filename &&
+          parts[2].split(".").length === 3 &&
+          parts[2].split(".").every(n => n.length > 0 && String(Number(n)) === n)) {
+        return "/local/switch-vision/" + parts.map(encodeURIComponent).join("/") + "?v=" + sha.slice(0, 16);
+      }
       const allowed = /^faceplate-history\/(legacy|[a-f0-9]{64})\/([a-z0-9][a-z0-9_.-]{0,140}\.png)$/i.exec(previousPath);
       if (!allowed || allowed[2] !== filename ||
           (allowed[1] !== "legacy" && allowed[1] !== sha)) return "";
@@ -90,8 +96,10 @@
         preview.src = imageUrl(offer.available_file, item.sha256, item.path);
         preview.alt = "Faceplate for Core " + item.version;
         const choose = document.createElement("button");
-        choose.textContent = item.sha256 === offer.current_sha256 ? "Currently selected" : "Use this version";
-        choose.disabled = item.sha256 === offer.current_sha256;
+        const chosen = item.sha256 === offer.current_sha256 &&
+          item.version === offer.current_version;
+        choose.textContent = chosen ? "Currently selected" : "Use this version";
+        choose.disabled = chosen;
         choose.addEventListener("click", () => act("select", item.sha256, item.version));
         section.replaceChildren(heading, preview, choose);
         return section;

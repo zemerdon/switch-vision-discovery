@@ -1,3 +1,8 @@
+## 3.0.63 — Distinct revision selection and runtime identity (Local)
+
+- Correct the packaged runtime version and compare both revision identity and PNG SHA when showing a selected historical faceplate.
+- Preview locally retained, exact-version older artwork without replacing user Calibration or model ports.
+
 ## 3.0.62 — Versioned faceplate and geometry picker (Local)
 
 - Let the owner expand and preview every verified Core-versioned faceplate for each configured switch and select any compatible revision.
