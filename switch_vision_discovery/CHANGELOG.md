@@ -1,3 +1,8 @@
+## 3.0.61 — Direct-upgrade faceplate consent (Local)
+
+- Coordinate Hub old/new artwork comparison against Core 2.7.92's Installer-recorded initial selection.
+- Preserve Keep Current / Upgrade Faceplate actions and unaffected Calibration settings.
+
 ## 3.0.60 — Coordinate latest Cisco 3850 artwork and Core stock pin (Local)
 
 - Validate Hub's existing per-switch, exact-SHA faceplate approval workflow against Core 2.7.91 and the revised Cisco 3850-12XS stock image.
