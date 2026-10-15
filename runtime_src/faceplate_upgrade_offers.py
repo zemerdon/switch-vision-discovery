@@ -273,7 +273,9 @@ def offers_from_choices(
                 "available_file": target_file,
                 "available_sha256": target_sha,
                 "collapsed": collapsed.get(choice_key) == (latest_geometry or target_sha)
-                    or (old_sha == target_sha and (not current_version or current_version == latest_version)),
+                    or (old_file == target_file and old_sha == target_sha
+                        and current_version == latest_version
+                        and bool(latest_version)),
                 "current_version": current_version,
                 "available_version": latest_version,
                 "available_geometry_sha256": latest_geometry,
@@ -281,3 +283,102 @@ def offers_from_choices(
             })
             break
     return offers
+
+
+def selectable_for_devices(
+    inventory: list[dict[str, str]],
+    defaults: dict[str, str],
+    assets: dict[str, str],
+    choices: Any,
+    revisions: Any,
+) -> list[dict[str, Any]]:
+    """Always-available model-scoped selection for verified installed pairs.
+
+    Unlike one-time offers, keep dismissals cannot hide these options. All
+    images and revisions originate from Core's verified catalogue, and only
+    the affected native/custom profile is ever returned.
+    """
+    if not isinstance(choices, dict) or not isinstance(revisions, dict):
+        return []
+    result = []
+    seen = set()
+    for device in inventory[:256]:
+        key = str(device.get("device_key") or "")
+        name = str(device.get("switch_name") or "")
+        model = str(device.get("resolved_model") or "")
+        if not _KEY.fullmatch(key) or not name or model not in defaults or key in seen:
+            continue
+        seen.add(key)
+        recommended = defaults[model]
+        if recommended not in assets:
+            continue
+        for base in sorted(_profile_base(name)):
+            current = choices.get(base)
+            if not isinstance(current, dict):
+                continue
+            old_file = filename(current.get("filename"))
+            sha = str(current.get("sha256") or "")
+            path = str(current.get("path") or "")
+            if not old_file or not _SHA.fullmatch(sha) or not path:
+                continue
+            options = []
+            identities = set()
+            # Once upgraded, previously chosen generic artwork remains
+            # available for this switch only. Core owns the remembered,
+            # server-approved set; unrelated models cannot be added by Hub.
+            historical_names = current.get("eligible_faceplates", [])
+            if not isinstance(historical_names, list):
+                historical_names = []
+            eligible = [old_file, recommended, *historical_names[:16]]
+            for image in dict.fromkeys(eligible):
+                if not filename(image) or image not in assets:
+                    continue
+                for row in revisions.get(image, [])[:64] if isinstance(revisions.get(image), list) else []:
+                    if (not isinstance(row, dict) or row.get("filename") != image
+                            or not _SHA.fullmatch(str(row.get("sha256") or ""))
+                            or not _SHA.fullmatch(str(row.get("geometry_sha256") or ""))):
+                        continue
+                    version = str(row.get("version") or "")
+                    asset_path = str(row.get("path") or "")
+                    if not version or not asset_path or not (
+                        asset_path == "faceplates/" + image
+                        or re.fullmatch(
+                            r"faceplate-history/revisions/sha/[a-f0-9]{64}/"
+                            + re.escape(image), asset_path)
+                        or re.fullmatch(
+                            r"faceplates-old/\d+\.\d+\.\d+/"
+                            + re.escape(image), asset_path)
+                    ):
+                        continue
+                    identity = (image, row["sha256"], row["geometry_sha256"], version)
+                    if identity in identities:
+                        continue
+                    identities.add(identity)
+                    options.append({k: row[k] for k in (
+                        "filename", "sha256", "geometry_sha256", "version", "path"
+                    )})
+            if len(options) < 2:
+                continue
+            selected_version = str(current.get("version") or "")
+            selected_geo = str(current.get("geometry_sha256") or "")
+            selected = any(
+                o["filename"] == old_file and o["sha256"] == sha
+                and (not selected_version or o["version"] == selected_version)
+                and (not selected_geo or o["geometry_sha256"] == selected_geo)
+                for o in options
+            )
+            # Do not suggest an unverified current selection; fail closed
+            # rather than silently present a new model's image as current.
+            if not selected:
+                continue
+            result.append({
+                "device_key": key, "switch_name": name,
+                "display_name": str(device.get("display_name") or "")[:120],
+                "model": model, "base_profile": base,
+                "current_file": old_file, "current_sha256": sha,
+                "current_version": selected_version,
+                "current_geometry_sha256": selected_geo,
+                "available_file": recommended,
+                "options": options,
+            })
+    return result

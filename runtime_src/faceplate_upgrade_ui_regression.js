@@ -81,7 +81,7 @@ async function run() {
       if (failReset) return {ok: false, json: async () => ({error: "Core artwork approval failed"})};
       offers = offers.filter(item => item !== offer);
     } else throw Error("unexpected action");
-    return {ok: true, json: async () => ({ok: true})};
+    return {ok: true, json: async () => ({ok: true, calibration_reset: body.action !== "keep"})};
   };
   const script = fs.readFileSync(path.join(__dirname, "faceplate_upgrades.js"), "utf8");
   vm.runInNewContext(script, {document, window, fetch, endpoint: x => x});
@@ -146,7 +146,7 @@ async function run() {
     /faceplate-history\/[a-f0-9]{64}\/same\.png\?v=/,
     "old image must come from historical bytes, not new same-name stock art");
   assert.match(get("faceplateUpgradeNewImage").src, /faceplates\/same\.png\?v=/);
-  assert.match(get("faceplateUpgradeExplanation").textContent, /Saved Calibration geometry is untouched/);
+  assert.match(get("faceplateUpgradeExplanation").textContent, /resets this switch's saved visual Calibration/);
   assert.match(get("faceplateUpgradeOldDescription").textContent, /previous SHA/);
   offers = [{
     device_key: "snmp:SW3", base_profile: "native_SW3", switch_name: "SW3", model: "Model A",

@@ -20,6 +20,111 @@
   let updating = false;
   let refreshInFlight = false;
 
+  // Device Overview owns the always-available picker. This shares Hub's
+  // existing SHA-verified Core response and per-switch approval endpoint.
+  const expandedDeviceFaceplates = new Set();
+  let selections = [];
+  let selectingFaceplate = false;
+
+  function populateDeviceFaceplates() {
+    const hosts = typeof document.querySelectorAll === "function"
+      ? document.querySelectorAll(".hub-device-faceplates[data-switch-key]") : [];
+    for (const host of hosts) {
+      const deviceKey = host.dataset.switchKey || "";
+      const matches = selections.filter(row => row.device_key === deviceKey);
+      host.replaceChildren();
+      if (!matches.length) continue;
+      const details = document.createElement("details");
+      details.className = "hub-device-faceplate-versions";
+      details.open = expandedDeviceFaceplates.has(deviceKey);
+      details.addEventListener("toggle", () => {
+        if (details.open) expandedDeviceFaceplates.add(deviceKey);
+        else expandedDeviceFaceplates.delete(deviceKey);
+      });
+      const heading = document.createElement("summary");
+      heading.textContent = "Faceplates · " + matches.reduce((n,row) => n + row.options.length, 0) +
+        " available";
+      details.append(heading);
+      for (const row of matches) {
+        const caption = document.createElement("div");
+        caption.className = "muted";
+        caption.textContent = "Model: " + row.model +
+          " · " + (row.base_profile.startsWith("native_") ? "Native" : "Custom") + " dashboard";
+        details.append(caption);
+        const gallery = document.createElement("div");
+        gallery.className = "hub-faceplate-device-gallery";
+        for (const item of row.options) {
+          const current = item.filename === row.current_file &&
+            item.sha256 === row.current_sha256 &&
+            (!row.current_version || row.current_version === item.version) &&
+            (!row.current_geometry_sha256 ||
+              row.current_geometry_sha256 === item.geometry_sha256);
+          const card = document.createElement("div");
+          card.className = "hub-faceplate-device-option";
+          const preview = document.createElement("img");
+          preview.src = imageUrl(item.filename, item.sha256, item.path);
+          preview.alt = "Faceplate " + item.filename;
+          preview.loading = "lazy";
+          const label = document.createElement("div");
+          label.textContent = item.filename +
+            (item.version.startsWith("sha-") ?
+              " · Revision " + item.version.slice(4, 16) :
+              " · Core " + item.version);
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = current ? "secondary" : "";
+          button.textContent = current ? "Currently selected" : "Select faceplate";
+          button.disabled = selectingFaceplate || current;
+          button.addEventListener("click", async event => {
+            event.stopPropagation();
+            if (selectingFaceplate) return;
+            const warning = "Use this faceplate for " +
+              (row.display_name || row.switch_name) + "?\n\n" +
+              "This will REPLACE this switch's saved visual Calibration with " +
+              "the selected faceplate's matching factory geometry. " +
+              "Custom port positions, labels and other Calibration adjustments " +
+              "for this switch will be reset. Other switches and the physical " +
+              "network equipment will not be changed.\n\nContinue?";
+            if (!window.confirm(warning)) return;
+            selectingFaceplate = true;
+            populateDeviceFaceplates();
+            try {
+              const reply = await fetch(endpoint("api/faceplate-upgrades/action"), {
+                method: "POST", headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({
+                  action: "pick", device_key: row.device_key,
+                  base_profile: row.base_profile,
+                  available_sha256: row.current_sha256,
+                  expected_filename: row.current_file,
+                  expected_version: row.current_version,
+                  selected_filename: item.filename,
+                  selected_sha256: item.sha256,
+                  selected_version: item.version,
+                }),
+              });
+              const data = await reply.json();
+              if (!reply.ok || !data.ok || data.calibration_reset !== true)
+                throw new Error(data.error || "Core did not confirm the reset");
+              await refresh();
+            } catch (error) {
+              window.alert("Faceplate change was not confirmed: " +
+                (error.message || error));
+            } finally {
+              selectingFaceplate = false;
+              populateDeviceFaceplates();
+            }
+          });
+          card.append(preview,label,button);
+          gallery.append(card);
+        }
+        details.append(gallery);
+      }
+      host.append(details);
+    }
+  }
+
+  window.svPopulateFaceplateSelectors = populateDeviceFaceplates;
+
   function imageUrl(filename, sha, previousPath = "") {
     // A previous revision retains its real bytes outside the stock catalog.
     // Never use the new same-name stock URL to fake the previous image.
@@ -39,6 +144,11 @@
           parts[2].split(".").length === 3 &&
           parts[2].split(".").every(n => n.length > 0 && String(Number(n)) === n)) {
         return "/local/switch-vision/" + parts.map(encodeURIComponent).join("/") + "?v=" + sha.slice(0, 16);
+      }
+      const localRevision = /^faceplate-history\/revisions\/sha\/([a-f0-9]{64})\/([a-z0-9][a-z0-9_.-]{0,140}\.png)$/i.exec(previousPath);
+      if (localRevision && localRevision[2] === filename) {
+        return "/local/switch-vision/" + previousPath.split("/").map(encodeURIComponent).join("/") +
+          "?v=" + sha.slice(0, 16);
       }
       const allowed = /^faceplate-history\/(legacy|[a-f0-9]{64})\/([a-z0-9][a-z0-9_.-]{0,140}\.png)$/i.exec(previousPath);
       if (!allowed || allowed[2] !== filename ||
@@ -86,15 +196,17 @@
     get("faceplateUpgradeNewDescription").textContent = offer.available_file +
       (offer.same_filename ? " · updated SHA " + offer.available_sha256.slice(0, 12) : "");
     get("faceplateUpgradeExplanation").textContent =
-      "The existing image stays selected until you approve the updated stock artwork. Keep Current retains the verified earlier image; Upgrade Faceplate changes only this switch's artwork choice. Saved Calibration geometry is untouched.";
+      "The existing image stays selected until you approve the updated stock artwork. Keep Current retains the verified earlier image and Calibration. Upgrade Faceplate resets this switch's saved visual Calibration to the selected faceplate's verified factory geometry.";
     if (versionList) {
       versionList.replaceChildren(...(Array.isArray(offer.versions) ? offer.versions : []).map(item => {
         const section = document.createElement("details");
         const heading = document.createElement("summary");
-        heading.textContent = "Core " + item.version;
+        heading.textContent = String(item.version || "").startsWith("sha-")
+          ? "Stock revision " + item.version.slice(4, 16)
+          : "Core " + item.version;
         const preview = document.createElement("img");
         preview.src = imageUrl(offer.available_file, item.sha256, item.path);
-        preview.alt = "Faceplate for Core " + item.version;
+        preview.alt = "Faceplate revision " + item.version;
         const choose = document.createElement("button");
         const chosen = item.sha256 === offer.current_sha256 &&
           item.version === offer.current_version;
@@ -115,11 +227,15 @@
       const reply = await fetch(endpoint("api/faceplate-upgrades"), {cache: "no-store"});
       const data = await reply.json();
       if (!reply.ok || !data.ok) throw new Error(data.error || "Core is not ready");
+      selections = Array.isArray(data.selections) ? data.selections : [];
       render(data.offers);
+      populateDeviceFaceplates();
     } catch (_error) {
       // A Core restart/outage must not expose an unverified offer.
       root.classList.add("hidden");
       currentOffer = null;
+      selections = [];
+      populateDeviceFaceplates();
     } finally {
       refreshInFlight = false;
     }
@@ -130,8 +246,7 @@
     if (!offer || updating) return;
     if ((action === "upgrade" || action === "select") && !window.confirm(
       "Upgrade the stock faceplate for " + (offer.display_name || offer.switch_name) +
-      "?\n\nOnly this switch's approved artwork version will change. " +
-      "Saved Calibration and other switches are unchanged."
+      "?\n\nThis will replace this switch's saved visual Calibration with the selected faceplate's matching factory geometry. Other switches and physical equipment are unchanged."
     )) return;
     updating = true;
     keepButton.disabled = true;
@@ -145,7 +260,8 @@
         body: JSON.stringify({action, device_key: offer.device_key, base_profile: offer.base_profile, available_sha256: offer.available_sha256, selected_sha256: selectedSha, selected_version: selectedVersion}),
       });
       const data = await reply.json();
-      if (!reply.ok || !data.ok) throw new Error(data.error || "Faceplate action failed");
+      if (!reply.ok || !data.ok || (action !== "keep" && data.calibration_reset !== true))
+        throw new Error(data.error || "Faceplate and factory Calibration reset could not be verified");
       if (action === "keep") {
         manuallyExpandedKey = "";
         expanded.hidden = true;

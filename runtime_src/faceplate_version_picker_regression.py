@@ -57,7 +57,7 @@ def test() -> None:
                               if row["sha256"] == message["approved_sha256"]
                               and row["version"] == message["approved_version"])
                 choices["native_SW3"] = dict(chosen)
-                return {"ok": True, "sha256": chosen["sha256"]}
+                return {"ok": True, "sha256": chosen["sha256"], "calibration_reset": True}
             raise AssertionError(message)
 
         try:

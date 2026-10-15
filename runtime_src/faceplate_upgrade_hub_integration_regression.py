@@ -61,14 +61,14 @@ def test() -> None:
                     "filename": stock_name, "sha256": new_sha,
                     "path": "faceplates/" + stock_name,
                 }
-                return {"ok": True, "sha256": new_sha}
+                return {"ok": True, "sha256": new_sha, "calibration_reset": True}
             raise AssertionError(payload)
 
         hub.DEFAULT_REGISTRY_FILE = registry
         hub.DEFAULT_GENERATED_CARD = root / "no-generated-card.yaml"
         hub._home_assistant_ws = websocket
         hub._home_assistant_service = lambda *_: (_ for _ in ()).throw(
-            AssertionError("Artwork changes must never reset Calibration")
+            AssertionError("Use Core's single atomic artwork + Calibration reset transaction")
         )
         hub._configured_devices_snapshot = lambda _options: inventory
         hub.faceplate_offers.DEFAULT_PATH = root / "preferences.json"
@@ -97,6 +97,7 @@ def test() -> None:
             assert hub._faceplate_upgrade_action(root, body)["action"] == "upgraded"
             assert hub._faceplate_upgrade_snapshot(root)["count"] == 0
             assert len(operations) == 2
+            assert operations[-1]["reset_switch_calibration"] is True
             assert json.dumps(saved_calibration, sort_keys=True) == original_calibration
             # No old pixels => cannot fabricate old/new preview or approval.
             choices["native_SW3"] = {

@@ -1,3 +1,9 @@
+## 3.0.64 — Shared stock to dedicated model upgrades (Local)
+
+- Offer a model-specific dedicated faceplate and paired factory geometry even when its PNG bytes match a shared generic faceplate.
+- Recognise verified Installer-managed SHA revision previews and use revision fingerprints rather than Core release numbers for new revisions.
+- Keep existing device artwork until explicit approval; new devices use the current reviewed model mapping, without modifying user Calibration.
+
 ## 3.0.63 — Distinct revision selection and runtime identity (Local)
 
 - Correct the packaged runtime version and compare both revision identity and PNG SHA when showing a selected historical faceplate.

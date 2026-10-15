@@ -2672,29 +2672,36 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
     profiles_result = _home_assistant_ws({"type": "switch_vision/list_calibrations"})
     if not isinstance(profiles_result, dict) or not isinstance(profiles_result.get("stock_artwork_choices"), dict):
         raise RuntimeError("Core artwork selections are unavailable.")
+    revisions = core_assets.get("faceplate_revisions", {})
+    selections = faceplate_offers.selectable_for_devices(
+        devices, defaults, assets, profiles_result["stock_artwork_choices"],
+        revisions,
+    )
     offers = faceplate_offers.offers_from_choices(
         devices, defaults, assets,
         profiles_result["stock_artwork_choices"], faceplate_offers.load(),
-        core_assets.get("faceplate_revisions", {}),
+        revisions,
     )
     return {"ok": True, "core_version": str(core_assets["core_version"]),
-            "offers": offers, "count": len(offers), "devices_checked": len(devices)}
+            "offers": offers, "count": len(offers),
+            "selections": selections, "devices_checked": len(devices)}
 
 
 def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
-    """Approve exact switch artwork only; never reset saved Calibration geometry."""
+    """Require exact per-switch consent for one visual factory Calibration reset."""
     if not isinstance(body, dict):
         raise ValueError("Faceplate request must be an object.")
     action = str(body.get("action") or "")
-    if action not in {"keep", "upgrade", "select"}:
+    if action not in {"keep", "upgrade", "select", "pick"}:
         raise ValueError("Unknown faceplate action.")
     key = _plain_text(body.get("device_key"), "device_key", max_length=320, allow_empty=False)
     offered_sha = str(body.get("available_sha256") or "").strip().lower()
     requested_base = str(body.get("base_profile") or "").strip()
     with _FACEPLATE_UPGRADE_LOCK:
-        offers = _faceplate_upgrade_snapshot(options_file)["offers"]
+        snapshot = _faceplate_upgrade_snapshot(options_file)
+        offers = snapshot["selections"] if action == "pick" else snapshot["offers"]
         matched = [item for item in offers if item["device_key"] == key
-                   and item["available_sha256"] == offered_sha
+                   and (action == "pick" or item["available_sha256"] == offered_sha)
                    and item["base_profile"] == requested_base]
         if len(matched) != 1:
             raise ValueError("The faceplate offer changed. Refresh Hub and try again.")
@@ -2703,19 +2710,32 @@ def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
             faceplate_offers.keep_current(f"{key}@{requested_base}", offer.get("available_geometry_sha256") or offered_sha)
             return {"ok": True, "action": "kept", "device_key": key}
 
-        selected_sha = str(body.get("selected_sha256") or offered_sha).strip().lower() if action == "select" else offered_sha
-        selected_version = str(body.get("selected_version") or "") if action == "select" else str(offer.get("available_version") or "")
-        if action == "select" and not any(row.get("sha256") == selected_sha and row.get("version") == selected_version for row in offer.get("versions", [])):
+        selected_sha = str(body.get("selected_sha256") or offered_sha).strip().lower() if action in {"select", "pick"} else offered_sha
+        selected_version = str(body.get("selected_version") or "") if action in {"select", "pick"} else str(offer.get("available_version") or "")
+        rows = offer.get("options", []) if action == "pick" else offer.get("versions", [])
+        selected_rows = [row for row in rows if row.get("sha256") == selected_sha
+                         and row.get("version") == selected_version
+                         and (action != "pick" or row.get("filename") == str(body.get("selected_filename") or ""))]
+        if action in {"select", "pick"} and len(selected_rows) != 1:
             raise ValueError("Selected faceplate revision is not available.")
+        target_file = selected_rows[0]["filename"] if action == "pick" else offer["available_file"]
+        if action == "pick" and (str(body.get("expected_filename") or "") != offer["current_file"]
+              or str(body.get("expected_version") or "") != offer["current_version"]
+              or offered_sha != offer["current_sha256"]):
+            raise ValueError("The switch selection changed; refresh Hub.")
+        if (target_file == offer["current_file"] and selected_sha == offer["current_sha256"]
+              and selected_version == offer.get("current_version")):
+            return {"ok": True, "action": "unchanged", "device_key": key}
         result = _home_assistant_ws({
             "type": "switch_vision/approve_stock_artwork",
             "base_profile": requested_base,
-            "filename": offer["available_file"],
+            "filename": target_file,
             "previous_filename": offer["current_file"],
             "expected_sha256": offer["current_sha256"],
             "approved_sha256": selected_sha,
             "approved_version": selected_version,
             "expected_version": offer.get("current_version") or "",
+            "reset_switch_calibration": True,
         })
         if (not isinstance(result, dict) or result.get("ok") is not True
                 or result.get("sha256") != selected_sha):
@@ -2723,11 +2743,13 @@ def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
         verified = _home_assistant_ws({"type": "switch_vision/list_calibrations"})
         chosen = (verified.get("stock_artwork_choices") or {}).get(requested_base) if isinstance(verified, dict) else None
         if (not isinstance(chosen, dict) or chosen.get("sha256") != selected_sha
-                or chosen.get("filename") != offer["available_file"]
+                or chosen.get("filename") != target_file
                 or (selected_version and chosen.get("version") != selected_version)):
             raise RuntimeError("The approved artwork selection could not be verified.")
-        return {"ok": True, "action": "selected" if action == "select" else "upgraded",
-                "device_key": key, "sha256": selected_sha}
+        if result.get("calibration_reset") is not True:
+            raise RuntimeError("Core did not confirm this switch's factory Calibration reset.")
+        return {"ok": True, "action": "selected" if action in {"select", "pick"} else "upgraded",
+                "device_key": key, "sha256": selected_sha, "calibration_reset": True}
 
 
 def _set_discovery_ui_density(value: Any) -> dict[str, str]:

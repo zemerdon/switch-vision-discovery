@@ -131,6 +131,32 @@ def test():
                                        "filename": "old.png", "sha256": old_hash,
                                        "path": f"faceplate-history/{old_hash}/old.png"}})
     assert len(renamed) == 1 and renamed[0]["same_filename"] is False
+    # The main adoption path: a shared stock PNG gets a dedicated model
+    # filename and factory geometry. It remains an offer even if artwork
+    # pixels happen to match, or the earlier pin predates revision versions.
+    identical_art = f.offers_from_choices(
+        inventory, recommended, {"new.png": old_hash},
+        {"native_SW3": {"filename": "old.png", "sha256": old_hash,
+                        "path": "faceplates/old.png"}},
+        revisions={"new.png": [{
+            "filename": "new.png", "version": "sha-" + "c" * 20,
+            "sha256": old_hash, "geometry_sha256": "d" * 64,
+            "path": "faceplates/new.png",
+        }]},
+    )
+    assert len(identical_art) == 1
+    assert identical_art[0]["collapsed"] is False
+    assert identical_art[0]["same_filename"] is False
+    assert identical_art[0]["available_geometry_sha256"] == "d" * 64
+    # Existing generic artwork must remain selectable for that switch; other
+    # switches using the same generic stock have no offer unless their own
+    # exact model mapping changes.
+    assert f.offers_from_choices(
+        inventory, {"TL-SG2008P": "old.png"},
+        {"old.png": old_hash, "new.png": old_hash},
+        {"native_SW3": {"filename": "old.png", "sha256": old_hash,
+                        "path": "faceplates/old.png"}},
+    ) == []
     versions = [{"filename":"new.png","version":"2.7.92","sha256":new_hash,"geometry_sha256":old_hash,"path":"faceplates-old/2.7.92/new.png"},{"filename":"new.png","version":"2.7.93","sha256":new_hash,"geometry_sha256":new_hash,"path":"faceplates/new.png"}]
     selected = {"native_SW3":{"filename":"new.png","sha256":new_hash,"version":"2.7.92","path":"faceplates-old/2.7.92/new.png"}}
     offer = f.offers_from_choices(inventory, recommended, {"new.png":new_hash}, selected, revisions={"new.png":versions})
