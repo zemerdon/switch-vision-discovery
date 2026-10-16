@@ -85,7 +85,10 @@ def test() -> None:
             assert calls == []
             assert hub._faceplate_upgrade_action(root, request)["action"] == "selected"
             assert choices["native_SW3"]["version"] == "2.7.93"
-            assert hub._faceplate_upgrade_snapshot(root)["offers"][0]["collapsed"]
+            after = hub._faceplate_upgrade_snapshot(root)
+            assert after["offers"] == []
+            assert after["selections"][0]["current_version"] == "2.7.93"
+            assert len(after["selections"][0]["options"]) == 2
             assert json.dumps(user_calibration, sort_keys=True) == saved
             assert len(calls) == 1
         finally:
