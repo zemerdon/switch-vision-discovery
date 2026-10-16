@@ -1,3 +1,8 @@
+## 3.0.71 — Coordinate Native artwork reset with Core 2.8.2 (Local)
+
+- Bind Discovery Hub's existing Native-only Upgrade Faceplate workflow to the exact Core 2.8.2 source, which completes the successful factory Calibration save and artwork SHA refresh after a verified approval.
+- Preserve the existing Hub preview/approval UI, manual Custom artwork selection and single-switch authorization semantics. Installer handles normal updates without faceplate approval UI.
+
 ## 3.0.70 — Cisco 3850 artwork coordination (Local)
 
 - Align the exact Core dependency with 2.8.1 for the newly supplied 3850-12XS stock faceplate.
