@@ -122,12 +122,12 @@ async function run() {
   assert.equal(get("faceplateRevisionList").options.length, 2, "both Core revisions expandable");
   assert.match(get("faceplateRevisionList").options[0].options[1].src, /faceplates-old\/2\.7\.90\/new-a\.png/);
   assert.ok(get("faceplateRevisionList").options[1].options[2].listeners.click, "revision selector wired");
-  assert.equal(get("faceplateUpgradeDevice").textContent, "SW3 · Model A");
+  assert.equal(get("faceplateUpgradeDevice").textContent, "SW3 · Model A · Native dashboard");
   assert.match(get("faceplateUpgradeOldImage").src, /old-a\.png\?v=/);
   assert.ok(!get("faceplateUpgradeSection").classList.contains("hidden"));
   get("faceplateUpgradeSwitchSelect").value = "snmp:SW4";
   get("faceplateUpgradeSwitchSelect").trigger("change");
-  assert.equal(get("faceplateUpgradeDevice").textContent, "SW4 · Model B");
+  assert.equal(get("faceplateUpgradeDevice").textContent, "SW4 · Model B · Native dashboard");
   get("faceplateUpgradeKeepButton").trigger("click");
   await drain();
   assert.ok(get("faceplateUpgradeExpanded").hidden, "keep collapses the selected switch");
@@ -146,7 +146,7 @@ async function run() {
   await drain();
   assert.equal(resets, 2);
   assert.equal(offers.length, 1);
-  assert.equal(get("faceplateUpgradeDevice").textContent, "SW3 · Model A");
+  assert.equal(get("faceplateUpgradeDevice").textContent, "SW3 · Model A · Native dashboard");
   assert.ok(get("faceplateUpgradeSwitchSelect").classList.contains("hidden"),
     "single remaining offer needs no switch selector");
 
@@ -175,7 +175,7 @@ async function run() {
     /faceplate-history\/[a-f0-9]{64}\/same\.png\?v=/,
     "old image must come from historical bytes, not new same-name stock art");
   assert.match(get("faceplateUpgradeNewImage").src, /faceplates\/same\.png\?v=/);
-  assert.match(get("faceplateUpgradeExplanation").textContent, /resets this switch's saved visual Calibration/);
+  assert.match(get("faceplateUpgradeExplanation").textContent, /resets only this Native dashboard's saved visual Calibration/);
   assert.match(get("faceplateUpgradeOldDescription").textContent, /previous SHA/);
   offers = [{
     device_key: "snmp:SW3", base_profile: "native_SW3", switch_name: "SW3", model: "Model A",
