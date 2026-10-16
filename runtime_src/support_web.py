@@ -40,6 +40,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 from registry_lookup import lookup as registry_lookup
+from snmp2mqtt_addon_selector import select_snmp2mqtt_addon
 from mqtt_maintenance_runtime import (
     generated_yaml_generation_id,
     repair_mqtt_entities,
@@ -2773,30 +2774,7 @@ def _set_discovery_ui_density(value: Any) -> dict[str, str]:
 
 
 def _find_snmp2mqtt_addon() -> dict[str, Any] | None:
-    payload = _supervisor_json("/addons")
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-    addons = data.get("addons", []) if isinstance(data, dict) else []
-    candidates: list[tuple[int, dict[str, Any]]] = []
-    for addon in addons if isinstance(addons, list) else []:
-        if not isinstance(addon, dict):
-            continue
-        slug = str(addon.get("slug") or "")
-        name = str(addon.get("name") or "")
-        haystack = f"{slug} {name}".lower().replace("-", "_")
-        if "snmp2mqtt" not in haystack or "discovery" in haystack:
-            continue
-        score = 0
-        if "switch_vision" in haystack or "switch vision" in haystack:
-            score += 10
-        if slug.endswith("switch_vision_snmp2mqtt") or slug.endswith("switch_vision_snmp2mqtt_addon"):
-            score += 10
-        if name.strip().lower() == "switch vision snmp2mqtt":
-            score += 20
-        candidates.append((score, addon))
-    if not candidates:
-        return None
-    candidates.sort(key=lambda item: item[0], reverse=True)
-    return candidates[0][1]
+    return select_snmp2mqtt_addon(_supervisor_json("/addons"))
 
 
 def _snmp2mqtt_runtime_info() -> dict[str, Any]:

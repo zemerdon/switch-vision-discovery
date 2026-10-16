@@ -20,6 +20,7 @@ from urllib.request import Request, urlopen
 import yaml
 
 from supervisor_runtime import read_supervisor_token
+from entity_state_sanitizer import SAFE_TEXT_STATES, safe_entity_state as _safe_state
 
 BASE_SANITIZER = Path(os.environ.get("SWITCH_VISION_BASE_SANITIZER", "/sanitize_support_bundle.py"))
 HA_STATES_URL = os.environ.get("SWITCH_VISION_HA_STATES_URL", "http://supervisor/core/api/states")
@@ -31,21 +32,6 @@ SAFE_OBJECT_SUFFIXES = (
     "_speed_mbps",
     "_speed_bps",
 )
-SAFE_TEXT_STATES = {
-    "up",
-    "down",
-    "on",
-    "off",
-    "true",
-    "false",
-    "online",
-    "offline",
-    "available",
-    "unavailable",
-    "unknown",
-}
-
-
 def _slugify_sensor_name(value: Any) -> str:
     text = str(value or "").strip().lower().replace("-", "_").replace("~", "_")
     text = re.sub(r"[^a-z0-9_]+", "_", text)
@@ -78,18 +64,6 @@ def expected_entity_ids(generated_yaml: Path) -> list[str]:
             domain = "binary_sensor" if sensor.get("binary_sensor") is True else "sensor"
             expected.add(f"{domain}.{object_id}")
     return sorted(expected)
-
-
-def _safe_state(entity_id: str, raw: Any) -> str | None:
-    text = str(raw if raw is not None else "").strip()
-    if not text:
-        return None
-    if re.fullmatch(r"-?\d+(?:\.\d+)?", text):
-        return text
-    lowered = text.casefold()
-    if entity_id.endswith("_status") and lowered in SAFE_TEXT_STATES:
-        return lowered
-    return "<NON_NUMERIC>"
 
 
 def build_snapshot(expected: list[str], states: list[dict[str, Any]]) -> dict[str, Any]:

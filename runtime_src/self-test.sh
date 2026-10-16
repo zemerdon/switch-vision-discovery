@@ -22,6 +22,8 @@ sv_self_test_cleanup() {
 }
 trap 'sv_self_test_cleanup' EXIT HUP INT TERM
 SV_COPY_DEBUG_TEST_DIR="$BASE_DIR"
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/snmp2mqtt_addon_selector_regression.py"
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/entity_state_sanitizer_regression.py"
 python3 "$BASE_DIR/faceplate_upgrade_offers_regression.py"
 python3 "$BASE_DIR/faceplate_upgrade_hub_integration_regression.py"
 python3 "$BASE_DIR/faceplate_device_picker_regression.py"
@@ -2179,8 +2181,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.71"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.71"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.72"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.72"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"

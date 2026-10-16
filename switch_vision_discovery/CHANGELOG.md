@@ -1,3 +1,9 @@
+## 3.0.72 — Consolidate Hub/maintenance add-on selection (Local)
+
+- Replace two copies of the SNMP2MQTT Supervisor add-on ranking logic with a single pure, local selector, retaining the same filtering, preference ranking, stable tie order, and independent Supervisor request/error handling.
+- Consolidate three identical strict Home Assistant entity-state sanitizers into one tested local helper, preserving the exact numeric/status allowlist and sensitive-value redaction across diagnostics, walk correlation and snapshot generation.
+- Add runtime/self-test regressions for malformed add-on lists, preferred selection, Hub/MQTT maintenance parity, strict state redaction and three-module equivalence. No options, MQTT topics, model capabilities, protected evidence or installed add-on state are changed.
+
 ## 3.0.71 — Coordinate Native artwork reset with Core 2.8.2 (Local)
 
 - Bind Discovery Hub's existing Native-only Upgrade Faceplate workflow to the exact Core 2.8.2 source, which completes the successful factory Calibration save and artwork SHA refresh after a verified approval.

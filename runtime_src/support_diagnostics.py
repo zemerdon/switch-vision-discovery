@@ -25,6 +25,7 @@ from urllib.request import Request, urlopen
 import yaml
 
 from supervisor_runtime import read_supervisor_token
+from entity_state_sanitizer import safe_entity_state as _safe_state
 from walk_correlation import build_port_pipeline as build_correlated_port_pipeline
 
 DIAG_DIR = Path("diagnostics")
@@ -650,20 +651,6 @@ def _slug(value: Any) -> str:
     text = str(value or "").strip().lower().replace("-", "_").replace("~", "_")
     text = re.sub(r"[^a-z0-9_]+", "_", text)
     return text.strip("_")
-
-def _safe_state(entity_id: str, raw: Any) -> str | None:
-    text = str(raw if raw is not None else "").strip()
-    if not text:
-        return None
-    if re.fullmatch(r"-?\d+(?:\.\d+)?", text):
-        return text
-    lowered = text.casefold()
-    if entity_id.endswith("_status") and lowered in {
-        "up", "down", "on", "off", "true", "false",
-        "online", "offline", "available", "unavailable", "unknown",
-    }:
-        return lowered
-    return "<NON_NUMERIC>"
 
 def _ha_states() -> tuple[list[dict[str, Any]], str | None]:
     token = read_supervisor_token()
