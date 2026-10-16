@@ -146,6 +146,22 @@ def test():
         inventory, recommended, {"new.png": new_hash}, split_pins,
         revisions=revisions)
     assert len(pending) == 1 and pending[0]["base_profile"] == "native_SW3"
+    # The user-visible Native dashboard takes priority when both scopes
+    # retain the old art; approving it must leave Custom independently due.
+    old_pin = {"filename": "new.png", "sha256": old_hash,
+               "geometry_sha256": "f" * 64, "version": "sha-" + "f" * 20,
+               "path": f"faceplate-history/revisions/sha/{old_hash}/new.png"}
+    both_due = {"custom_SW3": dict(old_pin), "native_SW3": dict(old_pin)}
+    first = f.offers_from_choices(inventory, recommended,
+                                  {"new.png": new_hash}, both_due,
+                                  revisions=revisions)
+    assert len(first) == 1 and first[0]["base_profile"] == "native_SW3"
+    both_due["native_SW3"] = dict(split_pins["custom_SW3"])
+    next_due = f.offers_from_choices(inventory, recommended,
+                                     {"new.png": new_hash}, both_due,
+                                     revisions=revisions)
+    assert len(next_due) == 1 and next_due[0]["base_profile"] == "custom_SW3"
+    assert both_due["custom_SW3"]["sha256"] == old_hash
     # When both scopes already use the latest image/geometry there is no offer,
     # even though older verified revisions remain available in the picker.
     split_pins["native_SW3"] = dict(split_pins["custom_SW3"])

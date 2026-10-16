@@ -229,7 +229,8 @@
     expanded.hidden = shouldCollapse;
     collapsedButton.classList.toggle("hidden", !shouldCollapse);
     const label = offer.display_name || offer.switch_name || "Switch";
-    get("faceplateUpgradeDevice").textContent = label + " · " + offer.model;
+    const scopeName = offer.base_profile.startsWith("native_") ? "Native dashboard" : "Custom dashboard";
+    get("faceplateUpgradeDevice").textContent = label + " · " + offer.model + " · " + scopeName;
     const oldPreview = get("faceplateUpgradeOldImage");
     oldPreview.hidden = offer.old_preview_unavailable === true;
     oldPreview.src = offer.old_preview_unavailable ? "" : imageUrl(offer.current_file, offer.current_sha256, offer.current_preview || "");
@@ -240,7 +241,9 @@
     get("faceplateUpgradeNewDescription").textContent = offer.available_file +
       (offer.same_filename ? " · updated SHA " + offer.available_sha256.slice(0, 12) : "");
     get("faceplateUpgradeExplanation").textContent =
-      "The existing image stays selected until you approve the updated stock artwork. Keep Current retains the verified earlier image and Calibration. Upgrade Faceplate resets this switch's saved visual Calibration to the selected faceplate's verified factory geometry.";
+      "The existing image stays selected until you approve the updated stock artwork. Keep Current retains the verified earlier image and Calibration. " +
+      "Upgrade Faceplate resets only this " + scopeName + "'s saved visual Calibration to the selected faceplate's verified factory geometry. " +
+      "Native and Custom dashboards are approved separately; another offer may appear afterward.";
     if (versionList) {
       versionList.replaceChildren(...(Array.isArray(offer.versions) ? offer.versions : []).map(item => {
         const section = document.createElement("details");
@@ -289,7 +292,8 @@
     const offer = currentOffer;
     if (!offer || updating) return;
     if ((action === "upgrade" || action === "select") && !window.confirm(
-      "Upgrade the stock faceplate for " + (offer.display_name || offer.switch_name) +
+      "Upgrade the " + (offer.base_profile.startsWith("native_") ? "Native" : "Custom") +
+      " dashboard stock faceplate for " + (offer.display_name || offer.switch_name) +
       "?\n\nThis will replace this switch's saved visual Calibration with the selected faceplate's matching factory geometry. Other switches and physical equipment are unchanged."
     )) return;
     updating = true;
@@ -312,7 +316,8 @@
         collapsedButton.classList.remove("hidden");
         status("");
       } else {
-        status("The new factory faceplate was selected.");
+        status("The " + (offer.base_profile.startsWith("native_") ? "Native" : "Custom") +
+          " dashboard factory faceplate was selected. Other dashboard scopes remain unchanged.");
       }
     } catch (err) {
       status("Faceplate upgrade was not completed: " + (err.message || err), true);

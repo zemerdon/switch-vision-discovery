@@ -231,6 +231,11 @@ def offers_from_choices(
         # Each scope owns an independent selection. Show the first pending
         # scope, then offer the other after approval, without cross-switch
         # or cross-scope mutation.
+        # When both dashboards need an upgrade, Native is the visible
+        # generated dashboard and must be offered first. Approval remains
+        # strictly one scope at a time; the other scope is re-evaluated on
+        # the next Hub refresh rather than silently resetting its Calibration.
+        scope_choices.sort(key=lambda item: (0 if item[0].startswith("native_") else 1, item[0]))
         for base, current in scope_choices:
             old_file = filename(current.get("filename"))
             old_sha = str(current.get("sha256") or "").lower()

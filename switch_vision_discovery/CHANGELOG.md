@@ -1,3 +1,10 @@
+## 3.0.68 — Native-first faceplate upgrades (Local)
+
+- When Native and Custom dashboards both have older verified stock artwork, Hub offers Native first, then Custom after Native approval.
+- The upgrade banner and confirmation identify the exact Native or Custom dashboard being updated.
+- Keep each existing Core artwork and Calibration transaction strictly one-scope-only, without resetting the other dashboard or guessing missing stock evidence.
+- Add dual-scope ordering and follow-up regressions.
+
 ## 3.0.67 — Honor pending Native artwork when Custom is current (Local)
 
 - Do not let an already-current Custom or Native artwork pin suppress a genuinely older selection in the other dashboard scope just because historical versions remain selectable.
