@@ -223,19 +223,14 @@ def offers_from_choices(
         target_sha = assets.get(target_file)
         if not target_sha:
             continue
+        # Hub's automated upgrade is Native-only. Keep Custom's independent
+        # stock choice/Calibration entirely out of the offer path; manual
+        # Custom artwork selection remains in the existing picker and Core.
         scope_choices = [
             (base, choices.get(base))
             for base in sorted(_profile_base(name))
-            if isinstance(choices.get(base), dict)
+            if base.startswith("native_") and isinstance(choices.get(base), dict)
         ]
-        # Each scope owns an independent selection. Show the first pending
-        # scope, then offer the other after approval, without cross-switch
-        # or cross-scope mutation.
-        # When both dashboards need an upgrade, Native is the visible
-        # generated dashboard and must be offered first. Approval remains
-        # strictly one scope at a time; the other scope is re-evaluated on
-        # the next Hub refresh rather than silently resetting its Calibration.
-        scope_choices.sort(key=lambda item: (0 if item[0].startswith("native_") else 1, item[0]))
         for base, current in scope_choices:
             old_file = filename(current.get("filename"))
             old_sha = str(current.get("sha256") or "").lower()

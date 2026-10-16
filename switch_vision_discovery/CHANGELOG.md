@@ -1,3 +1,9 @@
+## 3.0.69 — Native-only Hub faceplate upgrade (Local)
+
+- Restrict automatic New Faceplate Upgrade Available offers and approvals to the Native dashboard. Custom's separate saved artwork and Calibration never trigger another upgrade offer or change from that Hub workflow.
+- Keep manually selecting Custom artwork through the existing independent faceplate picker/Core Calibration controls. Strictly reject forged Custom requests to the automatic upgrade/keep/version-select actions; continue to verify Native model, prior SHA, selected revision and completed factory Calibration reset through Core.
+- Update the Hub explanation and confirmation to identify Native as the only automatic upgrade target. Add regressions for both-scopes outdated, Custom-only outdated, no follow-up Custom offer and the protected Custom manual picker.
+
 ## 3.0.68 — Native-first faceplate upgrades (Local)
 
 - When Native and Custom dashboards both have older verified stock artwork, Hub offers Native first, then Custom after Native approval.

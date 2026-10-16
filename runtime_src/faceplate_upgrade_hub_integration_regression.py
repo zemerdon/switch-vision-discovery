@@ -79,6 +79,29 @@ def test() -> None:
             assert offer["same_filename"] is True
             assert offer["base_profile"] == "native_SW3"
             assert offer["current_preview"] == f"faceplate-history/{old_sha}/{stock_name}"
+            # The automatic Hub endpoint must fail closed on a forged Custom
+            # request without invoking Core or changing persisted choices.
+            choices["custom_SW3"] = {
+                "filename": stock_name, "sha256": old_sha,
+                "path": f"faceplate-history/{old_sha}/{stock_name}",
+            }
+            assert len(hub._faceplate_upgrade_snapshot(root)["offers"]) == 1
+            custom_before = dict(choices["custom_SW3"])
+            for action_name in ("keep", "upgrade", "select"):
+                try:
+                    hub._faceplate_upgrade_action(root, {
+                        "action": action_name, "device_key": "snmp:SW3",
+                        "base_profile": "custom_SW3", "available_sha256": new_sha,
+                    })
+                except ValueError as exc:
+                    assert "Native dashboards only" in str(exc)
+                else:
+                    raise AssertionError("Custom automatic upgrade was accepted")
+                assert choices["custom_SW3"] == custom_before
+                assert operations == []
+            # The separate manual Custom faceplate picker remains supported.
+            manual = hub._faceplate_upgrade_snapshot(root)["selections"]
+            assert any(row["base_profile"] == "custom_SW3" for row in manual)
             body = {"device_key": "snmp:SW3", "base_profile": "native_SW3",
                     "available_sha256": new_sha, "action": "keep"}
             assert hub._faceplate_upgrade_action(root, body)["action"] == "kept"

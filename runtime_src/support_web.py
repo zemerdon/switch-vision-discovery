@@ -2699,6 +2699,11 @@ def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
     key = _plain_text(body.get("device_key"), "device_key", max_length=320, allow_empty=False)
     offered_sha = str(body.get("available_sha256") or "").strip().lower()
     requested_base = str(body.get("base_profile") or "").strip()
+    # Automated Hub upgrade/retained-version offers may only target Native.
+    # The independent manual picker ('pick') remains scoped to the selected
+    # Native/Custom profile and retains its own strict offer matching.
+    if action != "pick" and not requested_base.startswith("native_"):
+        raise ValueError("Hub faceplate upgrades apply to Native dashboards only.")
     with _FACEPLATE_UPGRADE_LOCK:
         snapshot = _faceplate_upgrade_snapshot(options_file)
         offers = snapshot["selections"] if action == "pick" else snapshot["offers"]

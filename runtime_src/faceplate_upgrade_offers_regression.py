@@ -118,13 +118,14 @@ def test():
         "filename": "new.png", "sha256": new_hash, "path": "faceplates/new.png",
     }
     assert f.offers_from_choices(inventory, recommended, {"new.png": new_hash}, pins) == []
-    # A Custom panel remains independently pending after Native approves.
+    # Custom artwork is independently selectable manually, but does not
+    # generate an automatic Hub upgrade even when it remains out of date.
     pins["custom_SW3"] = {
         "filename": "new.png", "sha256": old_hash,
         "path": f"faceplate-history/{old_hash}/new.png",
     }
     assert f.offers_from_choices(inventory, recommended,
-                                 {"new.png": new_hash}, pins)[0]["base_profile"] == "custom_SW3"
+                                 {"new.png": new_hash}, pins) == []
     # Regression: a Custom dashboard already using the latest stock artwork
     # must not mask an older Native dashboard's genuine pending upgrade.
     revisions = {"new.png": [
@@ -146,8 +147,8 @@ def test():
         inventory, recommended, {"new.png": new_hash}, split_pins,
         revisions=revisions)
     assert len(pending) == 1 and pending[0]["base_profile"] == "native_SW3"
-    # The user-visible Native dashboard takes priority when both scopes
-    # retain the old art; approving it must leave Custom independently due.
+    # Hub offers only Native when both scopes are outdated. Once Native is
+    # approved, it must never follow up with an automatic Custom offer.
     old_pin = {"filename": "new.png", "sha256": old_hash,
                "geometry_sha256": "f" * 64, "version": "sha-" + "f" * 20,
                "path": f"faceplate-history/revisions/sha/{old_hash}/new.png"}
@@ -160,8 +161,12 @@ def test():
     next_due = f.offers_from_choices(inventory, recommended,
                                      {"new.png": new_hash}, both_due,
                                      revisions=revisions)
-    assert len(next_due) == 1 and next_due[0]["base_profile"] == "custom_SW3"
+    assert next_due == []
     assert both_due["custom_SW3"]["sha256"] == old_hash
+    custom_only = {"custom_SW3": dict(old_pin)}
+    assert f.offers_from_choices(inventory, recommended,
+                                 {"new.png": new_hash}, custom_only,
+                                 revisions=revisions) == []
     # When both scopes already use the latest image/geometry there is no offer,
     # even though older verified revisions remain available in the picker.
     split_pins["native_SW3"] = dict(split_pins["custom_SW3"])

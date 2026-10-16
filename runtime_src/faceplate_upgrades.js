@@ -229,7 +229,7 @@
     expanded.hidden = shouldCollapse;
     collapsedButton.classList.toggle("hidden", !shouldCollapse);
     const label = offer.display_name || offer.switch_name || "Switch";
-    const scopeName = offer.base_profile.startsWith("native_") ? "Native dashboard" : "Custom dashboard";
+    const scopeName = "Native dashboard";
     get("faceplateUpgradeDevice").textContent = label + " · " + offer.model + " · " + scopeName;
     const oldPreview = get("faceplateUpgradeOldImage");
     oldPreview.hidden = offer.old_preview_unavailable === true;
@@ -243,7 +243,7 @@
     get("faceplateUpgradeExplanation").textContent =
       "The existing image stays selected until you approve the updated stock artwork. Keep Current retains the verified earlier image and Calibration. " +
       "Upgrade Faceplate resets only this " + scopeName + "'s saved visual Calibration to the selected faceplate's verified factory geometry. " +
-      "Native and Custom dashboards are approved separately; another offer may appear afterward.";
+      "Hub upgrades are Native-only. Custom artwork and Calibration are never changed by this action.";
     if (versionList) {
       versionList.replaceChildren(...(Array.isArray(offer.versions) ? offer.versions : []).map(item => {
         const section = document.createElement("details");
@@ -292,8 +292,7 @@
     const offer = currentOffer;
     if (!offer || updating) return;
     if ((action === "upgrade" || action === "select") && !window.confirm(
-      "Upgrade the " + (offer.base_profile.startsWith("native_") ? "Native" : "Custom") +
-      " dashboard stock faceplate for " + (offer.display_name || offer.switch_name) +
+      "Upgrade the Native dashboard stock faceplate for " + (offer.display_name || offer.switch_name) +
       "?\n\nThis will replace this switch's saved visual Calibration with the selected faceplate's matching factory geometry. Other switches and physical equipment are unchanged."
     )) return;
     updating = true;
@@ -316,8 +315,7 @@
         collapsedButton.classList.remove("hidden");
         status("");
       } else {
-        status("The " + (offer.base_profile.startsWith("native_") ? "Native" : "Custom") +
-          " dashboard factory faceplate was selected. Other dashboard scopes remain unchanged.");
+        status("The Native dashboard factory faceplate was selected. Custom artwork and Calibration were not changed.");
       }
     } catch (err) {
       status("Faceplate upgrade was not completed: " + (err.message || err), true);
