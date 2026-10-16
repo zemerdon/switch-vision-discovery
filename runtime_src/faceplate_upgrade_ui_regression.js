@@ -8,6 +8,8 @@ const vm = require("node:vm");
 class Element {
   constructor() {
     this.value = "";
+    this.children = [];
+    this.dataset = {};
     this.hidden = false;
     this.disabled = false;
     this.style = {};
@@ -24,7 +26,8 @@ class Element {
     };
   }
   addEventListener(name, fn) { this.listeners[name] = fn; }
-  replaceChildren(...items) { this.options = items; }
+  replaceChildren(...items) { this.options = items; this.children = items; }
+  append(...items) { this.children.push(...items); }
   trigger(name) { assert.ok(this.listeners[name], name); return this.listeners[name](); }
 }
 
@@ -37,12 +40,28 @@ async function run() {
     "faceplateUpgradeNewDescription", "faceplateUpgradeExplanation", "faceplateRevisionList",
   ];
   const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
+  const hosts = ["snmp:SW3", "snmp:SW5"].map(deviceKey => {
+    const element = new Element();
+    element.dataset.switchKey = deviceKey;
+    return element;
+  });
   const docEvents = {};
   const winEvents = {};
   let timer = null;
   let reads = 0;
   let resets = 0;
   let failReset = false;
+  const selections = [{
+    device_key: "snmp:SW3", base_profile: "native_SW3", switch_name: "SW3",
+    model: "Model A", verified_current: true, current_file: "old-a.png",
+    current_sha256: "a".repeat(64), current_path: "faceplates/old-a.png",
+    current_version: "", current_geometry_sha256: "",
+    options: [{filename:"old-a.png",version:"sha-"+ "1".repeat(20),
+      sha256:"a".repeat(64),geometry_sha256:"c".repeat(64),path:"faceplates/old-a.png"}],
+  },{
+    device_key: "snmp:SW5", base_profile: "", model: "", verified_current: false,
+    current_file: "", current_sha256: "", current_path: "", options: [],
+  }];
   let offers = [
     {device_key: "snmp:SW3", base_profile: "native_SW3", switch_name: "SW3", model: "Model A",
       current_file: "old-a.png", available_file: "new-a.png",
@@ -58,6 +77,7 @@ async function run() {
     hidden: false,
     getElementById: id => nodes[id],
     createElement: () => new Element(),
+    querySelectorAll: selector => selector === ".hub-device-faceplates[data-switch-key]" ? hosts : [],
     addEventListener: (name, fn) => { docEvents[name] = fn; },
   };
   const window = {
@@ -68,7 +88,7 @@ async function run() {
   const fetch = async (_url, request) => {
     if (!request || !request.method || request.method === "GET") {
       reads++;
-      return {ok: true, json: async () => ({ok: true, offers})};
+      return {ok: true, json: async () => ({ok: true, offers, selections})};
     }
     const body = JSON.parse(request.body);
     const offer = offers.find(item => item.device_key === body.device_key &&
@@ -89,6 +109,15 @@ async function run() {
   await drain();
   const get = id => nodes[id];
 
+  assert.equal(hosts[0].children[0].textContent, "Faceplates");
+  assert.ok(hosts[0].children.length >= 3, "single faceplate row should include current artwork");
+  assert.match(hosts[0].children[2].children[1].textContent,
+    /Currently selected: old-a.png/, "single current revision remains visible");
+  assert.ok(!hosts[0].children.some(item => item.className === "hub-device-faceplate-versions"),
+    "no extra selector for one choice");
+  assert.equal(hosts[1].children[0].textContent, "Faceplates");
+  assert.match(hosts[1].children[2].textContent, /not verified by Core/,
+    "registered device without verified art shows a safe status");
   assert.equal(get("faceplateUpgradeSwitchSelect").options.length, 2);
   assert.equal(get("faceplateRevisionList").options.length, 2, "both Core revisions expandable");
   assert.match(get("faceplateRevisionList").options[0].options[1].src, /faceplates-old\/2\.7\.90\/new-a\.png/);

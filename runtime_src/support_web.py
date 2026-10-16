@@ -2636,7 +2636,7 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
         if model not in defaults:
             model = detected_models.get(name, "")
         key = str(row.get("device_key") or "")
-        if model in defaults and key.startswith("snmp:") and name:
+        if key.startswith("snmp:") and name:
             devices.append({"device_key": key, "switch_name": name,
                             "display_name": str(row.get("display_name") or ""),
                             "resolved_model": model})
@@ -2660,6 +2660,8 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
     # without creating or resetting Calibration. Subsequent Core upgrades
     # retain that pin and Hub can compare the outgoing image with new art.
     for device in devices:
+        if device["resolved_model"] not in defaults:
+            continue
         name = str(device["switch_name"])
         base = re.sub(r"[^A-Za-z0-9_-]+", "_", name.strip()).strip("_")[:96]
         if not base:

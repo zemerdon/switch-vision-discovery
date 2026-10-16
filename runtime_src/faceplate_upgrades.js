@@ -33,8 +33,19 @@
       const deviceKey = host.dataset.switchKey || "";
       const matches = selections.filter(row => row.device_key === deviceKey);
       host.replaceChildren();
-      if (!matches.length) continue;
+      const sectionTitle = document.createElement("div");
+      sectionTitle.className = "hub-faceplate-current-title";
+      sectionTitle.textContent = "Faceplates";
+      host.append(sectionTitle);
+      if (!matches.length) {
+        const unavailable = document.createElement("p");
+        unavailable.className = "muted";
+        unavailable.textContent = "Current faceplate not verified yet. Check that the updated Core is running and refresh Device Overview.";
+        host.append(unavailable);
+        continue;
+      }
       const details = document.createElement("details");
+      let hasAlternatives = false;
       details.className = "hub-device-faceplate-versions";
       details.open = expandedDeviceFaceplates.has(deviceKey);
       details.addEventListener("toggle", () => {
@@ -42,23 +53,53 @@
         else expandedDeviceFaceplates.delete(deviceKey);
       });
       const heading = document.createElement("summary");
-      heading.textContent = "Faceplates · " + matches.reduce((n,row) => n + row.options.length, 0) +
-        " available";
+      heading.textContent = "View available faceplates";
       details.append(heading);
       for (const row of matches) {
         const caption = document.createElement("div");
         caption.className = "muted";
         caption.textContent = "Model: " + row.model +
           " · " + (row.base_profile.startsWith("native_") ? "Native" : "Custom") + " dashboard";
-        details.append(caption);
+        host.append(caption);
+        const currentInfo = document.createElement("div");
+        currentInfo.className = "hub-faceplate-current";
+        if (row.verified_current) {
+          const artwork = document.createElement("img");
+          artwork.src = imageUrl(row.current_file, row.current_sha256, row.current_path);
+          artwork.alt = "Currently selected stock faceplate";
+          artwork.loading = "lazy";
+          if (artwork.src) currentInfo.append(artwork);
+          const description = document.createElement("div");
+          description.textContent = "Currently selected: " + row.current_file +
+            (row.current_version ? " · " +
+              (row.current_version.startsWith("sha-") ? "Revision " + row.current_version.slice(4,16) :
+                "Core " + row.current_version) : "");
+          currentInfo.append(description);
+        } else {
+          currentInfo.classList.add("muted");
+          currentInfo.textContent = "Current stock faceplate not verified by Core. Existing Calibration is unchanged.";
+        }
+        host.append(currentInfo);
+        const isCurrent = item => row.verified_current &&
+          item.filename === row.current_file &&
+          item.sha256 === row.current_sha256 &&
+          (!row.current_version || row.current_version === item.version) &&
+          (!row.current_geometry_sha256 ||
+            row.current_geometry_sha256 === item.geometry_sha256);
+        if (!row.options.some(item => !isCurrent(item))) {
+          const note = document.createElement("p");
+          note.className = "muted";
+          note.textContent = row.verified_current ?
+            "No other verified factory faceplate revisions are available for this switch." :
+            "Faceplate selection is unavailable until Core verifies the switch's stock artwork.";
+          host.append(note);
+          continue;
+        }
+        hasAlternatives = true;
         const gallery = document.createElement("div");
         gallery.className = "hub-faceplate-device-gallery";
         for (const item of row.options) {
-          const current = item.filename === row.current_file &&
-            item.sha256 === row.current_sha256 &&
-            (!row.current_version || row.current_version === item.version) &&
-            (!row.current_geometry_sha256 ||
-              row.current_geometry_sha256 === item.geometry_sha256);
+          const current = isCurrent(item);
           const card = document.createElement("div");
           card.className = "hub-faceplate-device-option";
           const preview = document.createElement("img");
@@ -119,7 +160,7 @@
         }
         details.append(gallery);
       }
-      host.append(details);
+      if (hasAlternatives) host.append(details);
     }
   }
 

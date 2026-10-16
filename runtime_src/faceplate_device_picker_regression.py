@@ -85,8 +85,16 @@ def test() -> None:
             hub.faceplate_offers.DEFAULT_PATH = base / "offer-preferences.json"
             snapshot = hub._faceplate_upgrade_snapshot(base / "options.json")
             assert snapshot["count"] == 1
-            assert len(snapshot["selections"]) == 1
+            assert len(snapshot["selections"]) == 2
             assert len(snapshot["selections"][0]["options"]) == 2
+            assert snapshot["selections"][0]["verified_current"] is True
+            assert snapshot["selections"][0]["current_file"] == old_file
+            # Every registered device remains visible even when Core cannot
+            # verify an old stock selection; no reset button is exposed.
+            missing = snapshot["selections"][1]
+            assert missing["device_key"] == "snmp:SW4"
+            assert missing["verified_current"] is False
+            assert missing["options"] == []
             proposal = snapshot["offers"][0]
             # Dismissing the automatic offer never hides the device picker.
             keep = {"action": "keep", "device_key": "snmp:SW3",
@@ -94,7 +102,7 @@ def test() -> None:
             assert hub._faceplate_upgrade_action(base, keep)["action"] == "kept"
             snapshot = hub._faceplate_upgrade_snapshot(base)
             assert snapshot["offers"][0]["collapsed"] is True
-            assert len(snapshot["selections"]) == 1
+            assert len(snapshot["selections"]) == 2
             assert reset_count == 0
             pick = {
                 "action": "pick", "device_key": "snmp:SW3",
@@ -125,6 +133,46 @@ def test() -> None:
             except ValueError: pass
             else: raise AssertionError("Stale second adoption was accepted")
             assert reset_count == 1
+            # One verified current faceplate is useful information and must
+            # not disappear merely because no upgrade choices exist.
+            one = hub.faceplate_offers.selectable_for_devices(
+                [{"device_key": "snmp:SW3", "switch_name": "SW3",
+                  "display_name": "Rack Switch", "resolved_model": "SG200-26"}],
+                {"SG200-26": old_file}, {old_file: old_sha},
+                {"native_SW3": {"filename": old_file, "sha256": old_sha,
+                                "path": "faceplates/" + old_file}},
+                {old_file: catalog[old_file]},
+            )
+            assert len(one) == 1
+            assert one[0]["verified_current"] is True
+            assert one[0]["current_file"] == old_file
+            assert len(one[0]["options"]) == 1
+            # An unrecognised model with an already verified Core artwork pin
+            # still reports its current selection without inventing an offer.
+            unresolved_model = hub.faceplate_offers.selectable_for_devices(
+                [{"device_key": "snmp:SW3", "switch_name": "SW3",
+                  "display_name": "Rack Switch", "resolved_model": ""}],
+                {}, {old_file: old_sha},
+                {"native_SW3": {"filename": old_file, "sha256": old_sha,
+                                "path": "faceplates/" + old_file}},
+                {old_file: catalog[old_file]},
+            )
+            assert len(unresolved_model) == 1
+            assert unresolved_model[0]["verified_current"] is True
+            assert len(unresolved_model[0]["options"]) == 1
+            # An older Core pin with verified artwork but no revision version
+            # must still be shown without offering an unsafe selection.
+            without_catalog = hub.faceplate_offers.selectable_for_devices(
+                [{"device_key": "snmp:SW3", "switch_name": "SW3",
+                  "display_name": "Rack Switch", "resolved_model": "SG200-26"}],
+                {"SG200-26": old_file}, {old_file: old_sha},
+                {"native_SW3": {"filename": old_file, "sha256": old_sha,
+                                "path": "faceplates/" + old_file}},
+                {},
+            )
+            assert len(without_catalog) == 1
+            assert without_catalog[0]["verified_current"] is True
+            assert without_catalog[0]["options"] == []
         finally:
             (hub.DEFAULT_REGISTRY_FILE, hub.DEFAULT_GENERATED_CARD,
              hub._home_assistant_ws, hub._configured_devices_snapshot,

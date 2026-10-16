@@ -306,12 +306,13 @@ def selectable_for_devices(
         key = str(device.get("device_key") or "")
         name = str(device.get("switch_name") or "")
         model = str(device.get("resolved_model") or "")
-        if not _KEY.fullmatch(key) or not name or model not in defaults or key in seen:
+        if not _KEY.fullmatch(key) or not name or key in seen:
             continue
         seen.add(key)
-        recommended = defaults[model]
+        recommended = defaults.get(model, "")
         if recommended not in assets:
-            continue
+            recommended = ""
+        found_current = False
         for base in sorted(_profile_base(name)):
             current = choices.get(base)
             if not isinstance(current, dict):
@@ -319,8 +320,23 @@ def selectable_for_devices(
             old_file = filename(current.get("filename"))
             sha = str(current.get("sha256") or "")
             path = str(current.get("path") or "")
-            if not old_file or not _SHA.fullmatch(sha) or not path:
+            if (not old_file or not _SHA.fullmatch(sha) or not path
+                    or current.get("unavailable")):
                 continue
+            # Core supplies only verified, server-owned selected paths. A
+            # missing/tampered choice is never represented as active artwork.
+            if not (path == "faceplates/" + old_file
+                    or re.fullmatch(
+                        r"faceplate-history/revisions/sha/[a-f0-9]{64}/"
+                        + re.escape(old_file), path)
+                    or re.fullmatch(
+                        r"faceplates-old/\d+\.\d+\.\d+/"
+                        + re.escape(old_file), path)
+                    or re.fullmatch(
+                        r"faceplate-history/(?:legacy|[a-f0-9]{64})/"
+                        + re.escape(old_file), path)):
+                continue
+            found_current = True
             options = []
             identities = set()
             # Once upgraded, previously chosen generic artwork remains
@@ -357,8 +373,6 @@ def selectable_for_devices(
                     options.append({k: row[k] for k in (
                         "filename", "sha256", "geometry_sha256", "version", "path"
                     )})
-            if len(options) < 2:
-                continue
             selected_version = str(current.get("version") or "")
             selected_geo = str(current.get("geometry_sha256") or "")
             selected = any(
@@ -369,9 +383,10 @@ def selectable_for_devices(
             )
             # Do not suggest an unverified current selection; fail closed
             # rather than silently present a new model's image as current.
-            if not selected:
-                continue
             result.append({
+                "verified_current": True,
+                "current_in_catalog": selected,
+                "current_path": path,
                 "device_key": key, "switch_name": name,
                 "display_name": str(device.get("display_name") or "")[:120],
                 "model": model, "base_profile": base,
@@ -380,5 +395,19 @@ def selectable_for_devices(
                 "current_geometry_sha256": selected_geo,
                 "available_file": recommended,
                 "options": options,
+            })
+        if not found_current:
+            # Visibility and mutation authority are independent: every
+            # configured SNMP switch appears in Device Overview even when a
+            # verified stock pin/profile is not available yet.
+            result.append({
+                "verified_current": False, "device_key": key,
+                "switch_name": name,
+                "display_name": str(device.get("display_name") or "")[:120],
+                "model": model, "base_profile": "",
+                "current_file": "", "current_sha256": "",
+                "current_version": "", "current_geometry_sha256": "",
+                "current_path": "", "available_file": recommended,
+                "options": [],
             })
     return result

@@ -1,3 +1,9 @@
+## 3.0.65 — Current faceplate visible in Device Overview (Local)
+
+- Always show a **Faceplates** section under each registered SNMP switch in Discovery → Device Overview, including its verified currently selected stock artwork even when no upgrade exists.
+- Only expand a version picker when a different verified compatible revision is available; keep the exact warned, per-switch Calibration-reset approval for changes.
+- Show a clear read-only unavailable status when Core cannot verify a current stock selection, without inventing artwork or mutating Calibration; cover single-choice, unresolved and multi-version cases with permanent regressions.
+
 ## 3.0.64 — Shared stock to dedicated model upgrades (Local)
 
 - Offer a model-specific dedicated faceplate and paired factory geometry even when its PNG bytes match a shared generic faceplate.
