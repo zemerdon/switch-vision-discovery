@@ -1,3 +1,8 @@
+## 3.0.70 — Cisco 3850 artwork coordination (Local)
+
+- Align the exact Core dependency with 2.8.1 for the newly supplied 3850-12XS stock faceplate.
+- Retain Native-only Hub upgrade offers, manual Custom artwork selection and Calibration safeguards.
+
 ## 3.0.69 — Native-only Hub faceplate upgrade (Local)
 
 - Restrict automatic New Faceplate Upgrade Available offers and approvals to the Native dashboard. Custom's separate saved artwork and Calibration never trigger another upgrade offer or change from that Hub workflow.
