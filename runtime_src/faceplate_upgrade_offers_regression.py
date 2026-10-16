@@ -125,6 +125,32 @@ def test():
     }
     assert f.offers_from_choices(inventory, recommended,
                                  {"new.png": new_hash}, pins)[0]["base_profile"] == "custom_SW3"
+    # Regression: a Custom dashboard already using the latest stock artwork
+    # must not mask an older Native dashboard's genuine pending upgrade.
+    revisions = {"new.png": [
+        {"filename": "new.png", "sha256": new_hash, "geometry_sha256": "e" * 64,
+         "version": "sha-" + "e" * 20, "path": "faceplates/new.png"},
+        {"filename": "new.png", "sha256": old_hash, "geometry_sha256": "f" * 64,
+         "version": "sha-" + "f" * 20,
+         "path": f"faceplate-history/revisions/sha/{old_hash}/new.png"},
+    ]}
+    split_pins = {
+        "custom_SW3": {"filename": "new.png", "sha256": new_hash,
+                       "geometry_sha256": "e" * 64, "version": "sha-" + "e" * 20,
+                       "path": "faceplates/new.png"},
+        "native_SW3": {"filename": "new.png", "sha256": old_hash,
+                       "geometry_sha256": "f" * 64, "version": "sha-" + "f" * 20,
+                       "path": f"faceplate-history/revisions/sha/{old_hash}/new.png"},
+    }
+    pending = f.offers_from_choices(
+        inventory, recommended, {"new.png": new_hash}, split_pins,
+        revisions=revisions)
+    assert len(pending) == 1 and pending[0]["base_profile"] == "native_SW3"
+    # When both scopes already use the latest image/geometry there is no offer,
+    # even though older verified revisions remain available in the picker.
+    split_pins["native_SW3"] = dict(split_pins["custom_SW3"])
+    assert f.offers_from_choices(inventory, recommended, {"new.png": new_hash},
+                                 split_pins, revisions=revisions) == []
     # Rename a recommended filename without erasing an existing older choice.
     renamed = f.offers_from_choices(inventory, recommended,
                                    {"new.png": new_hash}, {"native_SW3": {

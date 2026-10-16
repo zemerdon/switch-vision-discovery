@@ -246,8 +246,22 @@ def offers_from_choices(
                               and _SHA.fullmatch(str(row.get('sha256', '')))
                               and _SHA.fullmatch(str(row.get('geometry_sha256', '')))
                               and isinstance(row.get('path'), str)]
-            if old_file == target_file and old_sha == target_sha and len(valid_versions) < 2:
-                continue
+            current_version = str(current.get("version") or "")
+            current_geometry = str(current.get("geometry_sha256") or "")
+            latest = next((row for row in valid_versions
+                           if row.get("path") == f"faceplates/{target_file}"), {})
+            latest_version = str(latest.get("version") or "")
+            latest_geometry = str(latest.get("geometry_sha256") or "")
+            # A current Native/Custom scope is never an upgrade offer just
+            # because the catalogue contains older selectable revisions.
+            # Otherwise an already-current Custom pin masks a genuinely
+            # outdated Native pin for the same switch.
+            # Same-PNG geometry-only changes still count as upgrades.
+            if old_file == target_file and old_sha == target_sha:
+                if ((current_version and current_version == latest_version)
+                        or (current_geometry and current_geometry == latest_geometry)
+                        or not latest_version):
+                    continue
             if old_file == target_file:
                 allowed_paths = {f"faceplate-history/{old_sha}/{old_file}"}
                 allowed_paths.update(row["path"] for row in valid_versions if row["sha256"] == old_sha)
@@ -256,10 +270,6 @@ def offers_from_choices(
             elif (old_path != f"faceplates/{old_file}"
                   and old_path != f"faceplate-history/{old_sha}/{old_file}" and not old_unavailable):
                 continue
-            current_version = str(current.get("version") or "")
-            latest = next((row for row in valid_versions if row.get("path") == f"faceplates/{target_file}"), {})
-            latest_version = str(latest.get("version") or "")
-            latest_geometry = str(latest.get("geometry_sha256") or "")
             choice_key = f"{key}@{base}"
             offers.append({
                 "device_key": key,

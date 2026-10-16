@@ -1,3 +1,9 @@
+## 3.0.67 — Honor pending Native artwork when Custom is current (Local)
+
+- Do not let an already-current Custom or Native artwork pin suppress a genuinely older selection in the other dashboard scope just because historical versions remain selectable.
+- Preserve explicit, per-switch approval and the independent Native/Custom Calibration scope; same-PNG changes with different verified factory geometry remain eligible.
+- Permanently regress a 3850-style latest Custom / older Native pin combination and the both-current case.
+
 ## 3.0.66 — Recover unavailable old-artwork upgrade offers (Local)
 
 - When a switch retains a verified old-artwork SHA but its historical preview has become unavailable, Hub still offers the model's verified latest factory artwork and geometry instead of silently hiding the upgrade.
