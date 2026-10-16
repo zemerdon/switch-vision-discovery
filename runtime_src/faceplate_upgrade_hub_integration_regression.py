@@ -99,12 +99,16 @@ def test() -> None:
             assert len(operations) == 2
             assert operations[-1]["reset_switch_calibration"] is True
             assert json.dumps(saved_calibration, sort_keys=True) == original_calibration
-            # No old pixels => cannot fabricate old/new preview or approval.
+            # If old bytes cannot be shown, still offer verified current stock;
+            # never fabricate an image representing the missing old revision.
             choices["native_SW3"] = {
                 "filename": stock_name, "sha256": old_sha,
                 "unavailable": "true",
             }
-            assert hub._faceplate_upgrade_snapshot(root)["count"] == 0
+            unavailable = hub._faceplate_upgrade_snapshot(root)
+            assert unavailable["count"] == 1
+            assert unavailable["offers"][0]["old_preview_unavailable"] is True
+            assert unavailable["offers"][0]["current_preview"] == ""
             # Existing generated exact-model card remains supported without
             # triggering a new discovery run.
             saved_card = root / "generated-card.yaml"
@@ -116,7 +120,7 @@ def test() -> None:
 """)
             hub.DEFAULT_GENERATED_CARD = saved_card
             inventory["devices"][0]["switch_model"] = "auto"
-            assert hub._faceplate_upgrade_snapshot(root)["count"] == 0
+            assert hub._faceplate_upgrade_snapshot(root)["count"] == 1
             # Names that collapse to one profile cannot select each other's art.
             inventory["devices"] = [
                 {"device_key": "snmp:A B", "switch_name": "A B",

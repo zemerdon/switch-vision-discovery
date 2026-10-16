@@ -230,10 +230,13 @@
     collapsedButton.classList.toggle("hidden", !shouldCollapse);
     const label = offer.display_name || offer.switch_name || "Switch";
     get("faceplateUpgradeDevice").textContent = label + " · " + offer.model;
-    get("faceplateUpgradeOldImage").src = imageUrl(offer.current_file, offer.current_sha256, offer.current_preview || "");
+    const oldPreview = get("faceplateUpgradeOldImage");
+    oldPreview.hidden = offer.old_preview_unavailable === true;
+    oldPreview.src = offer.old_preview_unavailable ? "" : imageUrl(offer.current_file, offer.current_sha256, offer.current_preview || "");
     get("faceplateUpgradeNewImage").src = imageUrl(offer.available_file, offer.available_sha256);
     get("faceplateUpgradeOldDescription").textContent = offer.current_file +
-      (offer.same_filename ? " · previous SHA " + offer.current_sha256.slice(0, 12) : "");
+      (offer.same_filename ? " · previous SHA " + offer.current_sha256.slice(0, 12) : "") +
+      (offer.old_preview_unavailable ? " · historical preview unavailable" : "");
     get("faceplateUpgradeNewDescription").textContent = offer.available_file +
       (offer.same_filename ? " · updated SHA " + offer.available_sha256.slice(0, 12) : "");
     get("faceplateUpgradeExplanation").textContent =

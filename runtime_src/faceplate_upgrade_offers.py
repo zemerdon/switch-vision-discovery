@@ -235,7 +235,8 @@ def offers_from_choices(
             old_file = filename(current.get("filename"))
             old_sha = str(current.get("sha256") or "").lower()
             old_path = str(current.get("path") or "")
-            if not old_file or not _SHA.fullmatch(old_sha) or not old_path:
+            old_unavailable = bool(current.get("unavailable"))
+            if not old_file or not _SHA.fullmatch(old_sha) or (not old_path and not old_unavailable):
                 continue
             available_versions = revisions.get(target_file, [])
             if not isinstance(available_versions, list):
@@ -250,10 +251,10 @@ def offers_from_choices(
             if old_file == target_file:
                 allowed_paths = {f"faceplate-history/{old_sha}/{old_file}"}
                 allowed_paths.update(row["path"] for row in valid_versions if row["sha256"] == old_sha)
-                if old_sha != target_sha and old_path not in allowed_paths:
+                if old_sha != target_sha and old_path not in allowed_paths and not old_unavailable:
                     continue
             elif (old_path != f"faceplates/{old_file}"
-                  and old_path != f"faceplate-history/{old_sha}/{old_file}"):
+                  and old_path != f"faceplate-history/{old_sha}/{old_file}" and not old_unavailable):
                 continue
             current_version = str(current.get("version") or "")
             latest = next((row for row in valid_versions if row.get("path") == f"faceplates/{target_file}"), {})
@@ -269,6 +270,7 @@ def offers_from_choices(
                 "current_file": old_file,
                 "current_sha256": old_sha,
                 "current_preview": old_path if old_path.startswith(("faceplate-history/", "faceplates-old/")) else "",
+                "old_preview_unavailable": old_unavailable,
                 "same_filename": old_file == target_file,
                 "available_file": target_file,
                 "available_sha256": target_sha,

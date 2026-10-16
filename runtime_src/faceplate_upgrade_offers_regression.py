@@ -113,7 +113,7 @@ def test():
     assert f.offers_from_choices(inventory, recommended,
                                  {"new.png": new_hash}, {"native_SW3": {
                                      "filename": "new.png", "sha256": old_hash,
-                                     "unavailable": "true"}}) == []
+                                     "unavailable": "true"}}) != []
     pins["native_SW3"] = {
         "filename": "new.png", "sha256": new_hash, "path": "faceplates/new.png",
     }

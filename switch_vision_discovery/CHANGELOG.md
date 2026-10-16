@@ -1,3 +1,9 @@
+## 3.0.66 — Recover unavailable old-artwork upgrade offers (Local)
+
+- When a switch retains a verified old-artwork SHA but its historical preview has become unavailable, Hub still offers the model's verified latest factory artwork and geometry instead of silently hiding the upgrade.
+- Never substitute the new image as a false old preview; explicitly label the old preview unavailable and require the existing per-switch user approval before updating Core's selection and saved visual Calibration.
+- Retain normal Keep Current behavior and per-switch revision matching.
+
 ## 3.0.65 — Current faceplate visible in Device Overview (Local)
 
 - Always show a **Faceplates** section under each registered SNMP switch in Discovery → Device Overview, including its verified currently selected stock artwork even when no upgrade exists.
