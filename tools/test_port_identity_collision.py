@@ -147,14 +147,13 @@ import support_web as web
 body = json.dumps({"device_key": "snmp:test", "enabled": False}).encode()
 selected = Path("/test/runtime/discovery_contract_entrypoint.py")
 responses = []
-handler = SimpleNamespace(
-    path="/api/configured-devices/state",
-    headers={"Content-Length": str(len(body))},
-    rfile=io.BytesIO(body),
-    app=SimpleNamespace(options_file=Path("/unused/options.json"), discovery_script=selected),
-    _allow_ingress_request=lambda: True,
-    _json=lambda payload, *args: responses.append(payload),
-)
+handler = web.SupportHandler.__new__(web.SupportHandler)
+handler.path = "/api/configured-devices/state"
+handler.headers = {"Content-Length": str(len(body))}
+handler.rfile = io.BytesIO(body)
+handler.server = SimpleNamespace(options_file=Path("/unused/options.json"), discovery_script=selected)
+handler._allow_ingress_request = lambda: True
+handler._json = lambda payload, *args: responses.append(payload)
 with patch.object(web, "_set_configured_device_state", return_value={}), \
      patch.object(web, "_apply_saved_device_order_to_dashboard", return_value={"updated": True}), \
      patch.object(web, "_start_device_state_application", return_value={"started": True}) as queue:
