@@ -1,3 +1,8 @@
+## 3.0.82 — Isolate AutoDiscover Hub HTTP dispatch (Local)
+
+- Extract the existing AutoDiscover scan and add POST request handling into one dedicated SupportHandler method, retaining the Supervisor ingress guard, distinct scan/add serialization, request limits, responses and errors without changing discovery or device mutations.
+- Add real in-memory handler regressions for successful scan/add dispatch, denied ingress, JSON/size rejection, conflicts, and scan/add failure handling. Tests do not contact physical switches or mutate HAOS.
+
 ## 3.0.81 — Isolate UniFi2MQTT Hub POST routing (Local)
 
 - Move the three UniFi2MQTT Hub install, connection-test and settings routes to a dedicated existing-handler method, preserving Supervisor ingress authorization, operation serialization, request limits, response codes and connection-error redaction.

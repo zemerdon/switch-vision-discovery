@@ -822,7 +822,116 @@ def test_unifi_http_dispatch_contract() -> None:
         assert send(connection, b'{}') == [(400, {"error": "redacted"})]
 
 
+def test_autodiscover_http_dispatch_contract() -> None:
+    """Exercise actual AutoDiscover scan/add HTTP dispatch without scanning devices."""
+    import io
+    from types import SimpleNamespace
+
+    events: list[str] = []
+
+    @contextmanager
+    def exclusive(label: str):
+        events.append("exclusive:" + label)
+        try:
+            yield
+        finally:
+            events.append("exclusive-exit:" + label)
+
+    @contextmanager
+    def mutation(label: str):
+        events.append("mutation:" + label)
+        try:
+            yield
+        finally:
+            events.append("mutation-exit:" + label)
+
+    def send(path: str, body: bytes = b'{"source":"fixture"}',
+             *, length: int | None = None, allowed: bool = True):
+        handler = hub.SupportHandler.__new__(hub.SupportHandler)
+        handler.path = path
+        handler.headers = {"Content-Length": str(len(body) if length is None else length)}
+        handler.rfile = io.BytesIO(body)
+        handler.server = SimpleNamespace()
+        handler._allow_ingress_request = lambda: allowed
+        replies: list[tuple[int, object]] = []
+
+        def emit(payload, status=200):
+            events.append("reply")
+            replies.append((int(status), payload))
+
+        handler._json = emit
+        hub.SupportHandler.do_POST(handler)
+        return replies
+
+    scan = "/api/autodiscover/scan"
+    add = "/api/autodiscover/add"
+    with patched(
+        _exclusive_operation=exclusive,
+        _device_configuration_update=mutation,
+        _autodiscover_scan=lambda data: events.append("scan") or {"scanned": data["source"]},
+        _autodiscover_add=lambda data: events.append("add") or {"added": data["source"]},
+    ):
+        events.clear()
+        assert send(scan) == [(200, {"scanned": "fixture"})]
+        assert events == [
+            "exclusive:AutoDiscover scan", "scan", "reply",
+            "exclusive-exit:AutoDiscover scan",
+        ]
+        events.clear()
+        assert send(add + "/") == [(200, {"added": "fixture"})]
+        assert events == [
+            "mutation:AutoDiscover add devices", "add", "reply",
+            "mutation-exit:AutoDiscover add devices",
+        ]
+
+        events.clear()
+        assert send(scan, allowed=False) == []
+        assert send(add, allowed=False) == []
+        assert events == [], "Denied Supervisor ingress must not acquire locks or act"
+
+        for route, limit, label in (
+            (scan, 16384, "AutoDiscover scan"),
+            (add, 65536, "AutoDiscover add devices"),
+        ):
+            for body, requested in (
+                (b'{}', 0), (b'{}', limit + 1),
+                (b'{bad', None),
+            ):
+                events.clear()
+                answer = send(route, body, length=requested)
+                assert len(answer) == 1 and answer[0][0] == 400, (route, answer)
+                assert "scan" not in events and "add" not in events, events
+                assert events[0].endswith(label), events
+                assert events[1].endswith(label) and events[-1] == "reply", events
+
+    @contextmanager
+    def busy(_label):
+        raise hub.OperationConflict("busy")
+        yield
+
+    with patched(_exclusive_operation=busy, _device_configuration_update=busy):
+        assert send(scan) == [(409, {"error": "busy"})]
+        assert send(add) == [(409, {"error": "busy"})]
+
+    def broken_scan(_data):
+        raise RuntimeError("scan error")
+
+    def broken_add(_data):
+        raise OSError("add failed")
+
+    with patched(
+        _exclusive_operation=exclusive,
+        _device_configuration_update=mutation,
+        _autodiscover_scan=broken_scan,
+        _autodiscover_add=broken_add,
+    ):
+        assert send(scan) == [(400, {"error": "scan error"})]
+        assert send(add) == [(400, {"error": "add failed"})]
+
+
 def main() -> int:
+    test_autodiscover_http_dispatch_contract()
+    print("PASS: AutoDiscover HTTP ingress, serialized locks, request limits and error contracts")
     test_unifi_http_dispatch_contract()
     print("PASS: UniFi2MQTT ingress, operations, payload limits and safe error contracts")
     test_configured_device_http_dispatch_contract()

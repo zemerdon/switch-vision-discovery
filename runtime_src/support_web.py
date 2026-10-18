@@ -6434,6 +6434,28 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
+    def _handle_autodiscover_post(self, path: str) -> None:
+        if path == "/api/autodiscover/scan":
+            try:
+                with _exclusive_operation("AutoDiscover scan"):
+                    data = self._read_json_request(16384, "Invalid AutoDiscover scan request size.")
+                    self._json(_autodiscover_scan(data))
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/autodiscover/add":
+            try:
+                with _device_configuration_update("AutoDiscover add devices"):
+                    data = self._read_json_request(65536, "Invalid AutoDiscover add request size.")
+                    self._json(_autodiscover_add(data))
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
     def do_POST(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():
             return
@@ -6527,25 +6549,8 @@ class SupportHandler(BaseHTTPRequestHandler):
         }:
             self._handle_unifi2mqtt_post(path)
             return
-        if path == "/api/autodiscover/scan":
-            try:
-                with _exclusive_operation("AutoDiscover scan"):
-                    data = self._read_json_request(16384, "Invalid AutoDiscover scan request size.")
-                    self._json(_autodiscover_scan(data))
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-            return
-        if path == "/api/autodiscover/add":
-            try:
-                with _device_configuration_update("AutoDiscover add devices"):
-                    data = self._read_json_request(65536, "Invalid AutoDiscover add request size.")
-                    self._json(_autodiscover_add(data))
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except (ValueError, RuntimeError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        if path in {"/api/autodiscover/scan", "/api/autodiscover/add"}:
+            self._handle_autodiscover_post(path)
             return
         if path in {
             "/api/configured-devices/state",
