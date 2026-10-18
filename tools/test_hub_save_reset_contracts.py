@@ -1029,7 +1029,86 @@ def test_hub_settings_http_dispatch_contract() -> None:
                 assert events == ["response"], (route, events)
 
 
+def test_hp_optics_http_dispatch_contract() -> None:
+    """Verify the real Supervisor-gated optics handler without sending a HA command."""
+    import io
+    import json
+    from types import SimpleNamespace
+
+    route = "/api/optics/settings"
+    safe_error = {"error": "HP optics settings could not be saved safely."}
+    calls: list[dict] = []
+
+    def ws(payload):
+        calls.append(payload)
+        return {"saved": True}
+
+    def send(body: bytes, *, declared: str | None = None, allowed: bool = True):
+        handler = hub.SupportHandler.__new__(hub.SupportHandler)
+        handler.path = route + "/?source=test"
+        handler.headers = {"Content-Length": str(len(body)) if declared is None else declared}
+        handler.rfile = io.BytesIO(body)
+        handler.server = SimpleNamespace()
+        handler._allow_ingress_request = lambda: allowed
+        replies: list[tuple[int, object]] = []
+        handler._json = lambda obj, status=200: replies.append((int(status), obj))
+        hub.SupportHandler.do_POST(handler)
+        return replies
+
+    with patched(_home_assistant_ws=ws):
+        assert send(b'{"enabled":true,"write_community":"fixture"}') == [
+            (200, {"saved": True})
+        ]
+        assert calls == [{
+            "type": "switch_vision/set_hp_optics_settings",
+            "enabled": True,
+            "write_community": "fixture",
+        }]
+        calls.clear()
+        assert send(b'{"enabled":false}') == [(200, {"saved": True})]
+        assert calls == [{
+            "type": "switch_vision/set_hp_optics_settings",
+            "enabled": False,
+            "write_community": "",
+        }]
+        calls.clear()
+
+        assert send(b'{"enabled":true}', allowed=False) == []
+        assert calls == [], "Ingress denial must not call Home Assistant"
+
+        bad_payloads = (
+            (b"{}", None),
+            (b"{}", "0"),
+            (b"{}", "8193"),
+            (b"{}", "NaN"),
+            (b"{", None),
+            (b"\xff", None),
+            (b"[]", None),
+            (b"null", None),
+            (b'{"enabled":"true"}', None),
+            (b'{"enabled":1}', None),
+            (b'{"enabled":true,"other":1}', None),
+            (b'{"enabled":true,"write_community":null}', None),
+            (b'{"enabled":true,"write_community":1}', None),
+            (json.dumps({"enabled": True, "write_community": "x" * 257}).encode(), None),
+        )
+        for body, declared in bad_payloads:
+            reply = send(body, declared=declared)
+            assert reply == [(400, safe_error)], (body[:25], reply)
+            assert calls == [], "Invalid request must not touch HA"
+
+    def failed(_payload):
+        raise RuntimeError("credential-sensitive backend details")
+
+    with patched(_home_assistant_ws=failed):
+        assert send(b'{"enabled":true,"write_community":"fixture"}') == [
+            (400, safe_error)
+        ]
+
+
 def main() -> int:
+    test_hp_optics_http_dispatch_contract()
+    print("PASS: HP optics ingress, credential input validation and redacted errors")
     test_hub_settings_http_dispatch_contract()
     print("PASS: Hub settings ingress, route-specific locks, request limits and error semantics")
     test_autodiscover_http_dispatch_contract()

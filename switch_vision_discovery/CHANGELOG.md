@@ -1,3 +1,8 @@
+## 3.0.84 — Isolate HP optics Hub POST routing (Local)
+
+- Extract the HP optics settings POST route into a dedicated Hub handler method without changing its validation, Supervisor ingress, credential bounds, Home Assistant request contract, or generic failure response.
+- Add in-memory HTTP tests for allowed/denied access, enabled/disabled and default community values, invalid lengths/JSON/types, credential limits and redacted backend errors. No live Home Assistant changes.
+
 ## 3.0.83 — Isolate Hub settings POST routing (Local)
 
 - Extract the existing Core, SNMP2MQTT and Discovery settings-save POST routes into a single dedicated handler method, preserving Supervisor ingress, per-route payload limits, existing serialization, response and error semantics without modifying settings persistence.

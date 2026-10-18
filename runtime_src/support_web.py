@@ -6478,6 +6478,30 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
+    def _handle_hp_optics_post(self, path: str) -> None:
+        if path == "/api/optics/settings":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not (0 < length <= 8192):
+                    raise ValueError("Invalid HP optics settings request size.")
+                data = json.loads(self.rfile.read(length).decode("utf-8"))
+                if not isinstance(data, dict):
+                    raise ValueError("HP optics settings must be an object.")
+                if set(data) - {"enabled", "write_community"} or type(data.get("enabled")) is not bool:
+                    raise ValueError("Invalid HP optics settings.")
+                community = data.get("write_community", "")
+                if not isinstance(community, str) or len(community) > 256:
+                    raise ValueError("Invalid HP optics credential.")
+                self._json(_home_assistant_ws({
+                    "type": "switch_vision/set_hp_optics_settings",
+                    "enabled": data["enabled"],
+                    "write_community": community,
+                }))
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError):
+                self._json({"error": "HP optics settings could not be saved safely."}, HTTPStatus.BAD_REQUEST)
+            return
+
+
     def do_POST(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():
             return
@@ -6516,25 +6540,7 @@ class SupportHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/optics/settings":
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                if not (0 < length <= 8192):
-                    raise ValueError("Invalid HP optics settings request size.")
-                data = json.loads(self.rfile.read(length).decode("utf-8"))
-                if not isinstance(data, dict):
-                    raise ValueError("HP optics settings must be an object.")
-                if set(data) - {"enabled", "write_community"} or type(data.get("enabled")) is not bool:
-                    raise ValueError("Invalid HP optics settings.")
-                community = data.get("write_community", "")
-                if not isinstance(community, str) or len(community) > 256:
-                    raise ValueError("Invalid HP optics credential.")
-                self._json(_home_assistant_ws({
-                    "type": "switch_vision/set_hp_optics_settings",
-                    "enabled": data["enabled"],
-                    "write_community": community,
-                }))
-            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError):
-                self._json({"error": "HP optics settings could not be saved safely."}, HTTPStatus.BAD_REQUEST)
+            self._handle_hp_optics_post(path)
             return
 
         if path in {"/api/settings/core", "/api/settings/snmp2mqtt", "/api/settings/discovery"}:
