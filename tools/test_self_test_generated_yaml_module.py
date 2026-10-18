@@ -15,7 +15,7 @@ HEADER = """# Switch Vision Discovery self-test generated-YAML regression module
 # Keep this as an exact behavioral extraction; production logic is not duplicated here.
 
 """
-EXTRACTED_BODY_SHA256 = "7c7673ea1801d64b5f07b82c19ff2572c70ac64f8bf498b576a01239818621ee"
+EXTRACTED_BODY_SHA256 = "7855fd1e3db21f917755fcf1b88e943a6354a14b516a7bf53e9923ea8dfce6ec"
 START_MARKER = "# v2.1.28 generated SNMP2MQTT YAML publication regression."
 END_MARKER = "# community-validation UniFi exact-model/API mapping regression."
 
