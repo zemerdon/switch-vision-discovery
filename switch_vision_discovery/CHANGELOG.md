@@ -1,3 +1,7 @@
+## 3.0.78 — Exact Calibration backup restoration (Local)
+
+- Restore Calibration through Core's reviewed administrator-only exact-backup path so missing stock-faceplate SHA metadata stays missing, and supplied stock SHA values remain subject to Core's installed-asset verification.
+
 ## 3.0.77 — Cisco switch temperature selection (Local)
 
 - Correct the generic Cisco temperature entity to read ambient Inlet when available instead of the hotter HotSpot sensor; keep Inlet, Outlet, HotSpot and environmental alarm readings separately.

@@ -46,8 +46,10 @@ def main() -> int:
     assert service_calls[0][0:2] == ("switch_vision", "save_calibration")
     assert service_calls[0][2]["profile"] == profile
     assert service_calls[0][2]["mirror_to_base"] is False
+    assert service_calls[0][2]["restore_exact_stock_pin"] is True
     assert service_calls[1][2]["profile"] == profile
     assert service_calls[1][2]["mirror_to_base"] is True
+    assert service_calls[1][2]["restore_exact_stock_pin"] is True
 
     invalid = copy.deepcopy(calibrations)
     invalid["active_profiles"] = {"WRONG-BASE": profile}

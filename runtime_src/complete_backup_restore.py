@@ -36,6 +36,7 @@ def restore_core_calibrations(
                 "profile": profile,
                 "calibration": calibration,
                 "mirror_to_base": False,
+                "restore_exact_stock_pin": True,
             },
         )
         restored += 1
@@ -61,6 +62,7 @@ def restore_core_calibrations(
                     "profile": profile,
                     "calibration": calibration,
                     "mirror_to_base": True,
+                    "restore_exact_stock_pin": True,
                 },
             )
     return restored
