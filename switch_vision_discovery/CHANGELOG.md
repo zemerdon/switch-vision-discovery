@@ -1,3 +1,8 @@
+## 3.0.73 — Simplify Hub device dashboard refresh (Local)
+
+- Consolidate three identical immediate dashboard-refresh response paths used for device enable/disable, reorder and reset order into one existing-Hub helper. Preserve exact responses, warning truncation, serialized device mutation and coalesced SNMP state application.
+- Extend the device-ordering regression to check success, pending, error and all three endpoint contracts. No model, port, SNMP, UniFi, MQTT or Calibration behaviour changes.
+
 ## 3.0.72 — Consolidate Hub/maintenance add-on selection (Local)
 
 - Replace two copies of the SNMP2MQTT Supervisor add-on ranking logic with a single pure, local selector, retaining the same filtering, preference ranking, stable tie order, and independent Supervisor request/error handling.

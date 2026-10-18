@@ -2426,6 +2426,19 @@ def _apply_saved_device_order_to_dashboard(
     return {"updated": True, "full_source_seeded": seeded, **result}
 
 
+def _record_device_dashboard_refresh(result: dict[str, Any]) -> None:
+    """Preserve the same immediate projection response for all device mutations."""
+    try:
+        dashboard = _apply_saved_device_order_to_dashboard()
+        result["dashboard_refresh_started"] = bool(dashboard.get("updated"))
+        result["dashboard_refresh_pending"] = not bool(dashboard.get("updated"))
+        result["dashboard_projection"] = dashboard
+    except (OSError, RuntimeError, ValueError) as exc:
+        result["dashboard_refresh_started"] = False
+        result["dashboard_refresh_pending"] = True
+        result["dashboard_refresh_warning"] = str(exc)[:240]
+
+
 def _home_assistant_service(domain: str, service: str, payload: dict[str, Any]) -> None:
     """Call a Home Assistant service through the supported Supervisor Core proxy."""
     token = _read_supervisor_token()
@@ -6513,15 +6526,7 @@ class SupportHandler(BaseHTTPRequestHandler):
                     data = json.loads(self.rfile.read(length).decode("utf-8"))
                     result = _set_configured_device_state(self.app.options_file, data)
                     key = str(data.get("device_key") or "") if isinstance(data, dict) else ""
-                    try:
-                        dashboard = _apply_saved_device_order_to_dashboard()
-                        result["dashboard_refresh_started"] = bool(dashboard.get("updated"))
-                        result["dashboard_refresh_pending"] = not bool(dashboard.get("updated"))
-                        result["dashboard_projection"] = dashboard
-                    except (OSError, RuntimeError, ValueError) as exc:
-                        result["dashboard_refresh_started"] = False
-                        result["dashboard_refresh_pending"] = True
-                        result["dashboard_refresh_warning"] = str(exc)[:240]
+                    _record_device_dashboard_refresh(result)
                     result["polling_refresh_started"] = False
                     if key.startswith("snmp:"):
                         queued = _start_device_state_application(self.app.discovery_script)
@@ -6550,15 +6555,7 @@ class SupportHandler(BaseHTTPRequestHandler):
                         raise ValueError("Invalid device order request size.")
                     data = json.loads(self.rfile.read(length).decode("utf-8"))
                     result = _move_configured_device(self.app.options_file, data)
-                    try:
-                        dashboard = _apply_saved_device_order_to_dashboard()
-                        result["dashboard_refresh_started"] = bool(dashboard.get("updated"))
-                        result["dashboard_refresh_pending"] = not bool(dashboard.get("updated"))
-                        result["dashboard_projection"] = dashboard
-                    except (OSError, RuntimeError, ValueError) as exc:
-                        result["dashboard_refresh_started"] = False
-                        result["dashboard_refresh_pending"] = True
-                        result["dashboard_refresh_warning"] = str(exc)[:240]
+                    _record_device_dashboard_refresh(result)
                     self._json(result)
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
@@ -6569,15 +6566,7 @@ class SupportHandler(BaseHTTPRequestHandler):
             try:
                 with _device_configuration_update("Device order reset"):
                     result = _reset_configured_device_order(self.app.options_file)
-                    try:
-                        dashboard = _apply_saved_device_order_to_dashboard()
-                        result["dashboard_refresh_started"] = bool(dashboard.get("updated"))
-                        result["dashboard_refresh_pending"] = not bool(dashboard.get("updated"))
-                        result["dashboard_projection"] = dashboard
-                    except (OSError, RuntimeError, ValueError) as exc:
-                        result["dashboard_refresh_started"] = False
-                        result["dashboard_refresh_pending"] = True
-                        result["dashboard_refresh_warning"] = str(exc)[:240]
+                    _record_device_dashboard_refresh(result)
                     self._json(result)
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)

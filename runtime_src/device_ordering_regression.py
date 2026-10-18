@@ -394,16 +394,57 @@ assert "Toggle whether this device is actively polled" in source
 # Reorder must apply directly to the existing dashboard source and must not start
 # a Discovery/card-regeneration operation that disables subsequent row actions.
 state_handler = source.split('if path == "/api/configured-devices/state":', 1)[1].split('if path == "/api/configured-devices/order":', 1)[0]
-assert "_apply_saved_device_order_to_dashboard()" in state_handler
+assert "_record_device_dashboard_refresh(result)" in state_handler
 assert "_start_dashboard_card_regeneration" not in state_handler
 assert "_start_device_state_application(self.app.discovery_script)" in state_handler
 assert web.DEFAULT_DISCOVERY_SCRIPT == Path("/discovery_contract_entrypoint.py")
 assert 'with _device_configuration_update("Device configuration update"):' in state_handler
 
 order_handler = source.split('if path == "/api/configured-devices/order":', 1)[1].split('if path == "/api/configuration/import":', 1)[0]
-assert "_apply_saved_device_order_to_dashboard()" in order_handler
+assert "_record_device_dashboard_refresh(result)" in order_handler
 assert "_start_dashboard_card_regeneration" not in order_handler
 assert 'with _device_configuration_update("Device order update"):' in order_handler
+reset_handler = source.split('if path == "/api/configured-devices/reset-order":', 1)[1].split('if path == "/api/switches/import":', 1)[0]
+assert "_record_device_dashboard_refresh(result)" in reset_handler
+assert "_start_dashboard_card_regeneration" not in reset_handler
+
+# The three routes must retain identical success, pending and warning payloads.
+original_dashboard_projection = web._apply_saved_device_order_to_dashboard
+try:
+    web._apply_saved_device_order_to_dashboard = lambda: {"updated": True, "projection": "ready"}
+    success = {"device_key": "snmp:SW1"}
+    web._record_device_dashboard_refresh(success)
+    assert success == {
+        "device_key": "snmp:SW1",
+        "dashboard_refresh_started": True,
+        "dashboard_refresh_pending": False,
+        "dashboard_projection": {"updated": True, "projection": "ready"},
+    }, success
+
+    web._apply_saved_device_order_to_dashboard = lambda: {"updated": False, "reason": "dashboard_missing"}
+    pending = {"status": "saved"}
+    web._record_device_dashboard_refresh(pending)
+    assert pending == {
+        "status": "saved",
+        "dashboard_refresh_started": False,
+        "dashboard_refresh_pending": True,
+        "dashboard_projection": {"updated": False, "reason": "dashboard_missing"},
+    }, pending
+
+    def failing_projection():
+        raise RuntimeError("s" * 300)
+
+    web._apply_saved_device_order_to_dashboard = failing_projection
+    warning = {"status": "saved"}
+    web._record_device_dashboard_refresh(warning)
+    assert warning == {
+        "status": "saved",
+        "dashboard_refresh_started": False,
+        "dashboard_refresh_pending": True,
+        "dashboard_refresh_warning": "s" * 240,
+    }, warning
+finally:
+    web._apply_saved_device_order_to_dashboard = original_dashboard_projection
 
 # Device mutations remain available while the background SNMP state reconciler
 # owns the long-running operation, but remain blocked by a real Discovery run.
