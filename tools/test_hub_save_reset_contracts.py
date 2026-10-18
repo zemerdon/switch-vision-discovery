@@ -712,7 +712,119 @@ def test_configured_device_http_dispatch_contract() -> None:
         ]
 
 
+def test_unifi_http_dispatch_contract() -> None:
+    """Exercise actual Supervisor-gated UniFi POST routing without external effects."""
+    import io
+    from types import SimpleNamespace
+
+    events: list[str] = []
+
+    @contextmanager
+    def operation(label: str):
+        events.append("enter:" + label)
+        try:
+            yield
+        finally:
+            events.append("exit:" + label)
+
+    def send(path: str, data: bytes = b"", *, length: int | None = None,
+             ingress: bool = True) -> list[tuple[int, object]]:
+        handler = hub.SupportHandler.__new__(hub.SupportHandler)
+        handler.path = path
+        handler.headers = {"Content-Length": str(len(data) if length is None else length)}
+        handler.rfile = io.BytesIO(data)
+        handler.server = SimpleNamespace()
+        handler._allow_ingress_request = lambda: ingress
+        responses: list[tuple[int, object]] = []
+
+        def emit(value, status=200):
+            events.append("response")
+            responses.append((int(status), value))
+
+        handler._json = emit
+        hub.SupportHandler.do_POST(handler)
+        return responses
+
+    install = "/api/unifi2mqtt/install"
+    connection = "/api/unifi2mqtt/test-connection"
+    settings = "/api/unifi2mqtt/settings"
+
+    with patched(
+        _exclusive_operation=operation,
+        _install_unifi2mqtt=lambda: events.append("install") or {"installed": True},
+        _test_unifi2mqtt_connection=lambda data: (
+            events.append("test") or {"tested": data["transport"]}
+        ),
+        _save_unifi2mqtt_settings=lambda data: (
+            events.append("settings") or {"saved": data["enabled"]}
+        ),
+        _unifi_test_safe_reason=lambda _exc: "safe connection error",
+    ):
+        events.clear()
+        assert send(install) == [(200, {"installed": True})]
+        assert events == [
+            "enter:UniFi2MQTT installation", "install", "response",
+            "exit:UniFi2MQTT installation",
+        ]
+        events.clear()
+        assert send(connection, b'{"transport":"local"}') == [
+            (200, {"tested": "local"})
+        ]
+        assert events == ["test", "response"]
+
+        events.clear()
+        assert send(settings, b'{"enabled":true}') == [(200, {"saved": True})]
+        assert events == [
+            "enter:UniFi2MQTT settings update", "settings", "response",
+            "exit:UniFi2MQTT settings update",
+        ]
+
+        events.clear()
+        for route in (install, connection, settings):
+            assert send(route, b'{}', ingress=False) == []
+        assert events == [], "Denied Supervisor ingress must have no effect"
+
+        for route, limit in ((connection, 16384), (settings, 32768)):
+            events.clear()
+            reply = send(route, b'{}', length=limit + 1)
+            assert reply[0][0] == 400, (route, reply)
+            assert "test" not in events and "settings" not in events
+            events.clear()
+            reply = send(route, b"{")
+            assert reply[0][0] == 400, (route, reply)
+            assert "test" not in events and "settings" not in events
+
+    @contextmanager
+    def busy(_label: str):
+        raise hub.OperationConflict("busy")
+        yield
+
+    with patched(_exclusive_operation=busy):
+        for route in (install, settings):
+            assert send(route, b'{}') == [(409, {"error": "busy"})]
+
+    def failed_install():
+        raise RuntimeError("install unavailable")
+
+    with patched(
+        _exclusive_operation=operation,
+        _install_unifi2mqtt=failed_install,
+    ):
+        assert send(install) == [(400, {"error": "install unavailable"})]
+
+    def failed_connection(_data):
+        raise RuntimeError("secret should be redacted")
+
+    with patched(
+        _test_unifi2mqtt_connection=failed_connection,
+        _unifi_test_safe_reason=lambda _exc: "redacted",
+    ):
+        assert send(connection, b'{}') == [(400, {"error": "redacted"})]
+
+
 def main() -> int:
+    test_unifi_http_dispatch_contract()
+    print("PASS: UniFi2MQTT ingress, operations, payload limits and safe error contracts")
     test_configured_device_http_dispatch_contract()
     print("PASS: configured-device HTTP dispatch, serialization, ingress and error contracts")
     with tempfile.TemporaryDirectory(prefix="sv-hub-save-reset-contracts-") as temp:

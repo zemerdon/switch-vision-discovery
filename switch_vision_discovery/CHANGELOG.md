@@ -1,3 +1,8 @@
+## 3.0.81 — Isolate UniFi2MQTT Hub POST routing (Local)
+
+- Move the three UniFi2MQTT Hub install, connection-test and settings routes to a dedicated existing-handler method, preserving Supervisor ingress authorization, operation serialization, request limits, response codes and connection-error redaction.
+- Add isolated in-memory HTTP route tests for successful calls, blocked ingress, invalid and oversized JSON, conflicting operations, installation failure and safe connection errors; no live controller, HAOS or MQTT changes.
+
 ## 3.0.80 — Isolate configured-device Hub POST dispatch (Local)
 
 - Extract configured-device state, reorder and reset-order request dispatch into one existing Hub-handler method, preserving Supervisor ingress gating, serialized operation boundaries, responses, error codes and SNMP/UniFi refresh scheduling.

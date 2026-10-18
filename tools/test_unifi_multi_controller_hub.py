@@ -231,6 +231,7 @@ def test_connection_test_ui_contract() -> None:
         "function appendUnifiConnectionTestDebug(result)",
         "endpoint('api/unifi2mqtt/test-connection')",
         'if path == "/api/unifi2mqtt/test-connection":',
+        'self._handle_unifi2mqtt_post(path)',
         '.unifi-test-debug pre{display:block!important;max-height:280px;overflow:auto',
     ):
         assert marker in source, marker

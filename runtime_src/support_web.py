@@ -6400,6 +6400,40 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
+    def _handle_unifi2mqtt_post(self, path: str) -> None:
+        if path == "/api/unifi2mqtt/install":
+            try:
+                with _exclusive_operation("UniFi2MQTT installation"):
+                    self._json(_install_unifi2mqtt())
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except RuntimeError as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/unifi2mqtt/test-connection":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0 or length > 16384:
+                    raise ValueError("Invalid UniFi connection test request size.")
+                data = json.loads(self.rfile.read(length).decode("utf-8"))
+                self._json(_test_unifi2mqtt_connection(data))
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": _unifi_test_safe_reason(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/unifi2mqtt/settings":
+            try:
+                with _exclusive_operation("UniFi2MQTT settings update"):
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 32768:
+                        raise ValueError("Invalid UniFi2MQTT settings request size.")
+                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    self._json(_save_unifi2mqtt_settings(data))
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
     def do_POST(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():
             return
@@ -6486,37 +6520,12 @@ class SupportHandler(BaseHTTPRequestHandler):
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
-        if path == "/api/unifi2mqtt/install":
-            try:
-                with _exclusive_operation("UniFi2MQTT installation"):
-                    self._json(_install_unifi2mqtt())
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except RuntimeError as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-            return
-        if path == "/api/unifi2mqtt/test-connection":
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                if length <= 0 or length > 16384:
-                    raise ValueError("Invalid UniFi connection test request size.")
-                data = json.loads(self.rfile.read(length).decode("utf-8"))
-                self._json(_test_unifi2mqtt_connection(data))
-            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"error": _unifi_test_safe_reason(exc)}, HTTPStatus.BAD_REQUEST)
-            return
-        if path == "/api/unifi2mqtt/settings":
-            try:
-                with _exclusive_operation("UniFi2MQTT settings update"):
-                    length = int(self.headers.get("Content-Length", "0"))
-                    if length <= 0 or length > 32768:
-                        raise ValueError("Invalid UniFi2MQTT settings request size.")
-                    data = json.loads(self.rfile.read(length).decode("utf-8"))
-                    self._json(_save_unifi2mqtt_settings(data))
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        if path in {
+            "/api/unifi2mqtt/install",
+            "/api/unifi2mqtt/test-connection",
+            "/api/unifi2mqtt/settings",
+        }:
+            self._handle_unifi2mqtt_post(path)
             return
         if path == "/api/autodiscover/scan":
             try:
