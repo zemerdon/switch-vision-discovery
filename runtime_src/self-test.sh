@@ -324,6 +324,85 @@ print("Switch Vision Discovery expected dependency HTTP classification: PASS")
 PY_HUB_EXPECTED_HTTP
 ! grep -Fq 'HTTPStatus.BAD_GATEWAY' "$SV_HUB_SOURCE"
 
+# Exact, self-contained HTTP attachment contract: four download routes must
+# retain their exported bytes and headers, and failure limits stay unchanged.
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY_DOWNLOAD_ATTACHMENT'
+from http import HTTPStatus
+from io import BytesIO
+from pathlib import Path
+from types import SimpleNamespace
+import json
+import support_web as web
+
+names = (
+    "_discovery_export", "_switches_export", "_switch_vision_backup_export",
+    "_diagnostics_snapshot", "_diagnostics_text",
+)
+originals = {name: getattr(web, name) for name in names}
+web._discovery_export = lambda *_: {"kind": "discovery"}
+web._switches_export = lambda *_: {"kind": "switches"}
+web._switch_vision_backup_export = lambda *_: {"kind": "complete"}
+web._diagnostics_snapshot = lambda *_: {"kind": "diagnostics"}
+web._diagnostics_text = lambda *_: "safe diagnostics\n"
+
+def handler():
+    obj = web.SupportHandler.__new__(web.SupportHandler)
+    obj.server = SimpleNamespace(version="regression", options_file=Path("/dev/null"))
+    obj.wfile = BytesIO()
+    obj.calls = []
+    obj.send_response = lambda code: obj.calls.append(("status", code))
+    obj.send_header = lambda key, value: obj.calls.append((key, value))
+    obj.end_headers = lambda: obj.calls.append(("end", None))
+    obj._json = lambda data, status=HTTPStatus.OK: obj.calls.append(("json-error", status, data))
+    return obj
+
+try:
+    cases = (
+        ("_configuration_download", "switch-vision-discovery-configuration.json", "application/json; charset=utf-8", {"kind": "discovery"}),
+        ("_switches_configuration_download", "switch-vision-switch-configuration.json", "application/json; charset=utf-8", {"kind": "switches"}),
+        ("_complete_configuration_download", "switch-vision-complete-backup.json", "application/json; charset=utf-8", {"kind": "complete"}),
+        ("_diagnostics_download", "switch-vision-diagnostics.txt", "text/plain; charset=utf-8", None),
+    )
+    for method, filename, content_type, payload in cases:
+        obj = handler()
+        getattr(obj, method)()
+        body = ("safe diagnostics\n".encode("utf-8") if payload is None
+                else (json.dumps(payload, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
+        expected = [
+            ("status", HTTPStatus.OK),
+            ("Content-Type", content_type),
+            ("Content-Length", str(len(body))),
+            ("Content-Disposition", f'attachment; filename="{filename}"'),
+            ("Cache-Control", "no-store"),
+            ("end", None),
+        ]
+        assert obj.calls == expected, (method, obj.calls)
+        assert obj.wfile.getvalue() == body, method
+    limit = web.MAX_COMPLETE_BACKUP_BYTES
+    try:
+        web.MAX_COMPLETE_BACKUP_BYTES = 1
+        obj = handler()
+        obj._complete_configuration_download()
+        assert obj.calls == [(
+            "json-error", HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+            {"error": "Complete Switch Vision backup exceeds the 128 MiB safety limit."},
+        )], obj.calls
+        assert not obj.wfile.getvalue()
+    finally:
+        web.MAX_COMPLETE_BACKUP_BYTES = limit
+    web._discovery_export = lambda *_: (_ for _ in ()).throw(RuntimeError("export unavailable"))
+    obj = handler()
+    obj._configuration_download()
+    assert obj.calls == [
+        ("json-error", HTTPStatus.SERVICE_UNAVAILABLE, {"error": "export unavailable"}),
+    ], obj.calls
+    assert not obj.wfile.getvalue()
+finally:
+    for name, original in originals.items():
+        setattr(web, name, original)
+print("Hub HTTP attachments and rejection contracts: PASS")
+PY_DOWNLOAD_ATTACHMENT
+
 # v2.3.7 explicit font range + shared Hub component geometry regression
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/hub_density_regression.py"
 # v2.3.6 themed visual hierarchy / elegance regression
@@ -2181,8 +2260,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.73"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.73"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.74"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.74"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"

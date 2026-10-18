@@ -5923,6 +5923,17 @@ class SupportHandler(BaseHTTPRequestHandler):
             while chunk := source.read(1024 * 128):
                 self.wfile.write(chunk)
 
+    def _write_attachment(
+        self, body: bytes, filename: str, *, content_type: str = "application/json; charset=utf-8"
+    ) -> None:
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
     def _configuration_download(self) -> None:
         try:
             payload = _discovery_export(self.app.options_file, self.app.version)
@@ -5930,13 +5941,7 @@ class SupportHandler(BaseHTTPRequestHandler):
             self._json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
         body = (json.dumps(payload, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Content-Disposition", 'attachment; filename="switch-vision-discovery-configuration.json"')
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+        self._write_attachment(body, "switch-vision-discovery-configuration.json")
 
     def _switches_configuration_download(self) -> None:
         try:
@@ -5945,16 +5950,7 @@ class SupportHandler(BaseHTTPRequestHandler):
             self._json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
         body = (json.dumps(payload, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header(
-            "Content-Disposition",
-            'attachment; filename="switch-vision-switch-configuration.json"',
-        )
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+        self._write_attachment(body, "switch-vision-switch-configuration.json")
 
     def _complete_configuration_download(self) -> None:
         try:
@@ -5969,24 +5965,12 @@ class SupportHandler(BaseHTTPRequestHandler):
                 HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
             )
             return
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Content-Disposition", 'attachment; filename="switch-vision-complete-backup.json"')
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+        self._write_attachment(body, "switch-vision-complete-backup.json")
 
     def _diagnostics_download(self) -> None:
         data = _diagnostics_snapshot(self.app.version, self.app.options_file)
         body = _diagnostics_text(data).encode("utf-8")
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Content-Disposition", 'attachment; filename="switch-vision-diagnostics.txt"')
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+        self._write_attachment(body, "switch-vision-diagnostics.txt", content_type="text/plain; charset=utf-8")
 
     def do_GET(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():

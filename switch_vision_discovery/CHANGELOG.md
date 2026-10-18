@@ -1,3 +1,8 @@
+## 3.0.74 — Consolidate Hub download response headers (Local)
+
+- Share the exact HTTP attachment response writer across Discovery, switch-configuration, complete-backup and diagnostics downloads, removing four duplicate header/body-write blocks.
+- Preserve each payload, filename, content type, JSON formatting, 128 MiB complete-backup limit, existing error classification and no-store behavior. Add source-owned regression coverage for exact responses and rejected/error exports. No device or Calibration behavior changes.
+
 ## 3.0.73 — Simplify Hub device dashboard refresh (Local)
 
 - Consolidate three identical immediate dashboard-refresh response paths used for device enable/disable, reorder and reset order into one existing-Hub helper. Preserve exact responses, warning truncation, serialized device mutation and coalesced SNMP state application.
