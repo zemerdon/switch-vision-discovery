@@ -507,6 +507,7 @@ def test_discovery_exit10_warning_and_handoff_contract() -> None:
             try:
                 with patched(
                     DEFAULT_DISCOVERY_LOG=log_path,
+                    DEFAULT_CURRENT_DISCOVERY_DEBUG=root / "current-debug.log",
                     DEFAULT_GENERATED_SNMP2MQTT=generated_yaml,
                     _ensure_runtime_paths=lambda: None,
                     _self_addon_options=lambda: {"generate_support_my_switch_bundle": True},
