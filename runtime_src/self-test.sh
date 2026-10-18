@@ -403,6 +403,79 @@ finally:
 print("Hub HTTP attachments and rejection contracts: PASS")
 PY_DOWNLOAD_ATTACHMENT
 
+# All four YAML download endpoints reuse the existing Hub response writer.
+# Assert identical status, body, headers and failure behavior without reading
+# actual HAOS configuration or protected originals.
+PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY_YAML_ATTACHMENT'
+from io import BytesIO
+from http import HTTPStatus
+from pathlib import Path
+import tempfile
+import support_web as hub
+
+old = (hub._generated_dashboard_export, hub.DEFAULT_GENERATED_CARD, hub.DEFAULT_GENERATED_SNMP2MQTT)
+try:
+    with tempfile.TemporaryDirectory(prefix="sv-hub-yaml-") as temp:
+        root = Path(temp)
+        card, mqtt = root / "card.yaml", root / "mqtt.yaml"
+        card.write_bytes(b"card:\n  utf8: \xc3\xa9\n")
+        mqtt.write_bytes(b"mqtt:\n  enabled: true\n")
+        hub.DEFAULT_GENERATED_CARD = card
+        hub.DEFAULT_GENERATED_SNMP2MQTT = mqtt
+        hub._generated_dashboard_export = lambda _card, **kw: {
+            "valid": True,
+            "text": ("custom:\n  mode: selected\n" if kw.get("custom_dashboard")
+                     else "dashboard:\n  mode: default\n"),
+        }
+
+        def get(path):
+            h = hub.SupportHandler.__new__(hub.SupportHandler)
+            h.path = path
+            h._allow_ingress_request = lambda: True
+            h.wfile = BytesIO()
+            h.calls = []
+            h.send_response = lambda status: h.calls.append(("status", status))
+            h.send_header = lambda key, value: h.calls.append((key, value))
+            h.end_headers = lambda: h.calls.append(("end", None))
+            h.send_error = lambda *args: h.calls.append(("error", args))
+            h.do_GET()
+            return h
+
+        cases = (
+            ("/download/switch-vision-dashboard.yaml", b"dashboard:\n  mode: default\n", "switch-vision-dashboard.yaml"),
+            ("/download/switch-vision-custom-dashboard.yaml", b"custom:\n  mode: selected\n", "switch-vision-custom-dashboard.yaml"),
+            ("/download/generated-dashboard-card.yaml", card.read_bytes(), "generated-dashboard-card.yaml"),
+            ("/download/generated-snmp2mqtt.yaml", mqtt.read_bytes(), "generated-snmp2mqtt.yaml"),
+        )
+        for route, body, filename in cases:
+            response = get(route)
+            expected = [
+                ("status", HTTPStatus.OK),
+                ("Content-Type", "application/yaml; charset=utf-8"),
+                ("Content-Length", str(len(body))),
+                ("Content-Disposition", f'attachment; filename="{filename}"'),
+                ("Cache-Control", "no-store"),
+                ("end", None),
+            ]
+            assert response.calls == expected, (route, response.calls)
+            assert response.wfile.getvalue() == body, route
+
+        hub._generated_dashboard_export = lambda *_a, **_kw: {"valid": False, "error": "no export"}
+        for route in (cases[0][0], cases[1][0]):
+            response = get(route)
+            assert response.calls == [("error", (HTTPStatus.BAD_REQUEST, "no export"))]
+            assert not response.wfile.getvalue()
+        card.unlink()
+        mqtt.unlink()
+        for route in (cases[2][0], cases[3][0]):
+            response = get(route)
+            assert response.calls == [("error", (HTTPStatus.NOT_FOUND,))]
+            assert not response.wfile.getvalue()
+finally:
+    hub._generated_dashboard_export, hub.DEFAULT_GENERATED_CARD, hub.DEFAULT_GENERATED_SNMP2MQTT = old
+print("Hub YAML download byte/header/error contracts: PASS")
+PY_YAML_ATTACHMENT
+
 # v2.3.7 explicit font range + shared Hub component geometry regression
 PYTHONPATH="$BASE_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 "$BASE_DIR/hub_density_regression.py"
 # v2.3.6 themed visual hierarchy / elegance regression
@@ -2260,8 +2333,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.74"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.74"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.75"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.75"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"

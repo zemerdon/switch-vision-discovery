@@ -6151,50 +6151,34 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self.send_error(HTTPStatus.BAD_REQUEST, str(result.get("error") or "Dashboard export failed"))
             else:
                 body = str(result.get("text") or "").encode("utf-8")
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "application/yaml; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Content-Disposition", 'attachment; filename="switch-vision-dashboard.yaml"')
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                self.wfile.write(body)
+                self._write_attachment(
+                    body, "switch-vision-dashboard.yaml", content_type="application/yaml; charset=utf-8"
+                )
         elif path == "/download/switch-vision-custom-dashboard.yaml":
             result = _generated_dashboard_export(DEFAULT_GENERATED_CARD, custom_dashboard=True)
             if not result.get("valid"):
                 self.send_error(HTTPStatus.BAD_REQUEST, str(result.get("error") or "Custom dashboard export failed"))
             else:
                 body = str(result.get("text") or "").encode("utf-8")
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "application/yaml; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Content-Disposition", 'attachment; filename="switch-vision-custom-dashboard.yaml"')
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                self.wfile.write(body)
+                self._write_attachment(
+                    body, "switch-vision-custom-dashboard.yaml", content_type="application/yaml; charset=utf-8"
+                )
         elif path == "/download/generated-dashboard-card.yaml":
             if not DEFAULT_GENERATED_CARD.is_file():
                 self.send_error(HTTPStatus.NOT_FOUND)
             else:
                 body = DEFAULT_GENERATED_CARD.read_bytes()
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "application/yaml; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Content-Disposition", 'attachment; filename="generated-dashboard-card.yaml"')
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                self.wfile.write(body)
+                self._write_attachment(
+                    body, "generated-dashboard-card.yaml", content_type="application/yaml; charset=utf-8"
+                )
         elif path == "/download/generated-snmp2mqtt.yaml":
             if not DEFAULT_GENERATED_SNMP2MQTT.is_file():
                 self.send_error(HTTPStatus.NOT_FOUND)
             else:
                 body = DEFAULT_GENERATED_SNMP2MQTT.read_bytes()
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "application/yaml; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Content-Disposition", 'attachment; filename="generated-snmp2mqtt.yaml"')
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                self.wfile.write(body)
+                self._write_attachment(
+                    body, "generated-snmp2mqtt.yaml", content_type="application/yaml; charset=utf-8"
+                )
         elif path == "/download/switch-vision-backup.json":
             self._complete_configuration_download()
         elif path == "/download/switch-vision-switch-configuration.json":

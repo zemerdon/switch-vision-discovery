@@ -1,3 +1,8 @@
+## 3.0.75 — Reuse Hub attachment writer for YAML downloads (Local)
+
+- Reuse the existing attachment response writer in four dashboard/generated YAML downloads, removing repeated status/header/body-write code without adding another module.
+- Preserve exact output bytes, filenames, no-store headers, MIME type, missing-file 404 responses and failed-export 400 responses. Source-owned regressions verify those contracts. No model, port, SNMP, UniFi, MQTT, Calibration or backup behavior changes.
+
 ## 3.0.74 — Consolidate Hub download response headers (Local)
 
 - Share the exact HTTP attachment response writer across Discovery, switch-configuration, complete-backup and diagnostics downloads, removing four duplicate header/body-write blocks.
