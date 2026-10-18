@@ -5894,6 +5894,12 @@ class SupportHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _read_json_request(self, maximum: int, error: str) -> Any:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0 or length > maximum:
+            raise ValueError(error)
+        return json.loads(self.rfile.read(length).decode("utf-8"))
+
     def _html(self) -> None:
         body = _page_with_ui_preferences(self.app.version).encode("utf-8")
         self.send_response(HTTPStatus.OK)
@@ -6419,10 +6425,7 @@ class SupportHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/ui-density":
             try:
-                length = int(self.headers.get("Content-Length", "0"))
-                if length <= 0 or length > 4096:
-                    raise ValueError("Invalid UI density request size.")
-                data = json.loads(self.rfile.read(length).decode("utf-8"))
+                data = self._read_json_request(4096, "Invalid UI density request size.")
                 self._json({"preferences": _set_discovery_ui_density(data.get("density"))})
             except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
@@ -6462,10 +6465,7 @@ class SupportHandler(BaseHTTPRequestHandler):
         if path == "/api/autodiscover/scan":
             try:
                 with _exclusive_operation("AutoDiscover scan"):
-                    length = int(self.headers.get("Content-Length", "0"))
-                    if length <= 0 or length > 16384:
-                        raise ValueError("Invalid AutoDiscover scan request size.")
-                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    data = self._read_json_request(16384, "Invalid AutoDiscover scan request size.")
                     self._json(_autodiscover_scan(data))
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
@@ -6475,10 +6475,7 @@ class SupportHandler(BaseHTTPRequestHandler):
         if path == "/api/autodiscover/add":
             try:
                 with _device_configuration_update("AutoDiscover add devices"):
-                    length = int(self.headers.get("Content-Length", "0"))
-                    if length <= 0 or length > 65536:
-                        raise ValueError("Invalid AutoDiscover add request size.")
-                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    data = self._read_json_request(65536, "Invalid AutoDiscover add request size.")
                     self._json(_autodiscover_add(data))
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
@@ -6488,10 +6485,7 @@ class SupportHandler(BaseHTTPRequestHandler):
         if path == "/api/configured-devices/state":
             try:
                 with _device_configuration_update("Device configuration update"):
-                    length = int(self.headers.get("Content-Length", "0"))
-                    if length <= 0 or length > 8192:
-                        raise ValueError("Invalid device state request size.")
-                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    data = self._read_json_request(8192, "Invalid device state request size.")
                     result = _set_configured_device_state(self.app.options_file, data)
                     key = str(data.get("device_key") or "") if isinstance(data, dict) else ""
                     _record_device_dashboard_refresh(result)
@@ -6518,10 +6512,7 @@ class SupportHandler(BaseHTTPRequestHandler):
         if path == "/api/configured-devices/order":
             try:
                 with _device_configuration_update("Device order update"):
-                    length = int(self.headers.get("Content-Length", "0"))
-                    if length <= 0 or length > 8192:
-                        raise ValueError("Invalid device order request size.")
-                    data = json.loads(self.rfile.read(length).decode("utf-8"))
+                    data = self._read_json_request(8192, "Invalid device order request size.")
                     result = _move_configured_device(self.app.options_file, data)
                     _record_device_dashboard_refresh(result)
                     self._json(result)

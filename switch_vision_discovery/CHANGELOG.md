@@ -1,3 +1,8 @@
+## 3.0.76 — Consolidate bounded Hub JSON request parsing (Local)
+
+- Reuse one existing-handler method for content-length validation, bounded UTF-8 decoding and JSON parsing across five Discovery Hub UI/AutoDiscover/device APIs.
+- Preserve every route's exact byte limit, invalid-size message, malformed-body response and operation boundaries; source regression checks success and invalid inputs. No changes to SNMP, UniFi, telemetry, cards, Calibration, device mutations or backups.
+
 ## 3.0.75 — Reuse Hub attachment writer for YAML downloads (Local)
 
 - Reuse the existing attachment response writer in four dashboard/generated YAML downloads, removing repeated status/header/body-write code without adding another module.

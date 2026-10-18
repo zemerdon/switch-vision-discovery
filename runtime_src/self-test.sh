@@ -403,6 +403,67 @@ finally:
 print("Hub HTTP attachments and rejection contracts: PASS")
 PY_DOWNLOAD_ATTACHMENT
 
+# Hub JSON request parsing: preserve each route's precise size cap and
+# error response, while using fakes to avoid mutating any real device state.
+PYTHONPATH="$BASE_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY_BOUND_JSON'
+import io
+import json
+from contextlib import nullcontext
+from http import HTTPStatus
+from unittest.mock import patch
+import support_web as hub
+
+cases = (
+    ("/api/ui-density", 4096, "Invalid UI density request size."),
+    ("/api/autodiscover/scan", 16384, "Invalid AutoDiscover scan request size."),
+    ("/api/autodiscover/add", 65536, "Invalid AutoDiscover add request size."),
+    ("/api/configured-devices/state", 8192, "Invalid device state request size."),
+    ("/api/configured-devices/order", 8192, "Invalid device order request size."),
+)
+
+def request(route, body, declared=None):
+    h = hub.SupportHandler.__new__(hub.SupportHandler)
+    h.path = route
+    h.headers = {"Content-Length": str(len(body) if declared is None else declared)}
+    h.rfile = io.BytesIO(body)
+    h._allow_ingress_request = lambda: True
+    responses = []
+    h._json = lambda data, status=HTTPStatus.OK: responses.append((int(status), data))
+    h.server = type("FixtureApp", (), {"options_file": None, "discovery_script": None})()
+    h.do_POST()
+    assert len(responses) == 1, (route, responses)
+    return responses[0], h.rfile.tell()
+
+with (
+    patch.object(hub, "_set_discovery_ui_density", side_effect=lambda value: {"density": value}),
+    patch.object(hub, "_exclusive_operation", side_effect=lambda name: nullcontext()),
+    patch.object(hub, "_device_configuration_update", side_effect=lambda name: nullcontext()),
+    patch.object(hub, "_autodiscover_scan", side_effect=lambda data: {"received": data}),
+    patch.object(hub, "_autodiscover_add", side_effect=lambda data: {"received": data}),
+    patch.object(hub, "_set_configured_device_state", side_effect=lambda opts, data: {"received": data}),
+    patch.object(hub, "_move_configured_device", side_effect=lambda opts, data: {"received": data}),
+    patch.object(hub, "_record_device_dashboard_refresh"),
+):
+    valid = json.dumps({"density": "compact", "device_key": "fixture:sample", "value": "\u00e9"}).encode()
+    for route, maximum, error in cases:
+        (status, result), read_bytes = request(route, valid)
+        assert status == 200 and read_bytes == len(valid), (route, status, read_bytes)
+        for body, declared, exact_error in (
+            (b"", 0, error),
+            (b"{}", maximum + 1, error),
+            (b'{"oops"', None, None),
+            (b"\xff", None, None),
+            (b"{}", "bad", None),
+        ):
+            (status, response), read_bytes = request(route, body, declared)
+            assert status == 400, (route, status, response)
+            if exact_error:
+                assert response["error"] == exact_error, (route, response)
+            if declared in (0, maximum + 1, "bad"):
+                assert read_bytes == 0, (route, read_bytes)
+print("Hub bounded JSON request route contracts: PASS (5 routes; success + invalid inputs)")
+PY_BOUND_JSON
+
 # All four YAML download endpoints reuse the existing Hub response writer.
 # Assert identical status, body, headers and failure behavior without reading
 # actual HAOS configuration or protected originals.
@@ -2333,8 +2394,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.75"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.75"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.76"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.76"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"
