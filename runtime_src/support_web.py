@@ -6198,6 +6198,156 @@ class SupportHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(HTTPStatus.NOT_FOUND)
 
+    def _handle_calibration_profile_post(self, path: str) -> None:
+        try:
+            length = int(
+                self.headers.get(
+                    "Content-Length",
+                    "0",
+                )
+            )
+
+            maximum = (
+                3 * 1024 * 1024
+                if path ==
+                "/api/calibration-profiles/save"
+                else 8192
+            )
+
+            if (
+                length <= 0
+                or
+                length > maximum
+            ):
+                raise ValueError(
+                    "Invalid Calibration Profile "
+                    "request size."
+                )
+
+            data = json.loads(
+                self.rfile.read(
+                    length
+                ).decode("utf-8")
+            )
+
+            if not isinstance(
+                data,
+                dict,
+            ):
+                raise ValueError(
+                    "Calibration Profile request "
+                    "must contain a JSON object."
+                )
+
+            profile = (
+                _calibration_profile_name(
+                    data.get("profile")
+                )
+            )
+
+            if (
+                path ==
+                "/api/calibration-profiles/get"
+            ):
+                result = (
+                    _home_assistant_ws(
+                        {
+                            "type":
+                            "switch_vision/get_calibration",
+                            "profile":
+                            profile,
+                        }
+                    )
+                )
+
+                self._json(
+                    result
+                    if isinstance(
+                        result,
+                        dict,
+                    )
+                    else {}
+                )
+
+                return
+
+            if (
+                path ==
+                "/api/calibration-profiles/delete"
+            ):
+                result = _home_assistant_ws(
+                    {
+                        "type":
+                        "switch_vision/delete_calibration",
+                        "profile":
+                        profile,
+                    }
+                )
+
+                self._json(
+                    result
+                    if isinstance(
+                        result,
+                        dict,
+                    )
+                    else {
+                        "ok": True,
+                        "profile":
+                        profile,
+                    }
+                )
+
+                return
+
+            calibration = data.get(
+                "calibration"
+            )
+
+            if not isinstance(
+                calibration,
+                dict,
+            ):
+                raise ValueError(
+                    "Calibration data must "
+                    "contain one JSON object."
+                )
+
+            _home_assistant_service(
+                "switch_vision",
+                "save_calibration",
+                {
+                    "profile":
+                    profile,
+                    "calibration":
+                    calibration,
+                    "mirror_to_base":
+                    False,
+                },
+            )
+
+            self._json(
+                {
+                    "ok": True,
+                    "profile":
+                    profile,
+                }
+            )
+
+            return
+
+        except (
+            ValueError,
+            RuntimeError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ) as exc:
+            self._json(
+                {"error": str(exc)},
+                HTTPStatus.BAD_REQUEST,
+            )
+
+            return
+
     def do_POST(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():
             return
@@ -6208,154 +6358,8 @@ class SupportHandler(BaseHTTPRequestHandler):
             "/api/calibration-profiles/save",
             "/api/calibration-profiles/delete",
         }:
-            try:
-                length = int(
-                    self.headers.get(
-                        "Content-Length",
-                        "0",
-                    )
-                )
-
-                maximum = (
-                    3 * 1024 * 1024
-                    if path ==
-                    "/api/calibration-profiles/save"
-                    else 8192
-                )
-
-                if (
-                    length <= 0
-                    or
-                    length > maximum
-                ):
-                    raise ValueError(
-                        "Invalid Calibration Profile "
-                        "request size."
-                    )
-
-                data = json.loads(
-                    self.rfile.read(
-                        length
-                    ).decode("utf-8")
-                )
-
-                if not isinstance(
-                    data,
-                    dict,
-                ):
-                    raise ValueError(
-                        "Calibration Profile request "
-                        "must contain a JSON object."
-                    )
-
-                profile = (
-                    _calibration_profile_name(
-                        data.get("profile")
-                    )
-                )
-
-                if (
-                    path ==
-                    "/api/calibration-profiles/get"
-                ):
-                    result = (
-                        _home_assistant_ws(
-                            {
-                                "type":
-                                "switch_vision/get_calibration",
-                                "profile":
-                                profile,
-                            }
-                        )
-                    )
-
-                    self._json(
-                        result
-                        if isinstance(
-                            result,
-                            dict,
-                        )
-                        else {}
-                    )
-
-                    return
-
-                if (
-                    path ==
-                    "/api/calibration-profiles/delete"
-                ):
-                    result = _home_assistant_ws(
-                        {
-                            "type":
-                            "switch_vision/delete_calibration",
-                            "profile":
-                            profile,
-                        }
-                    )
-
-                    self._json(
-                        result
-                        if isinstance(
-                            result,
-                            dict,
-                        )
-                        else {
-                            "ok": True,
-                            "profile":
-                            profile,
-                        }
-                    )
-
-                    return
-
-                calibration = data.get(
-                    "calibration"
-                )
-
-                if not isinstance(
-                    calibration,
-                    dict,
-                ):
-                    raise ValueError(
-                        "Calibration data must "
-                        "contain one JSON object."
-                    )
-
-                _home_assistant_service(
-                    "switch_vision",
-                    "save_calibration",
-                    {
-                        "profile":
-                        profile,
-                        "calibration":
-                        calibration,
-                        "mirror_to_base":
-                        False,
-                    },
-                )
-
-                self._json(
-                    {
-                        "ok": True,
-                        "profile":
-                        profile,
-                    }
-                )
-
-                return
-
-            except (
-                ValueError,
-                RuntimeError,
-                UnicodeDecodeError,
-                json.JSONDecodeError,
-            ) as exc:
-                self._json(
-                    {"error": str(exc)},
-                    HTTPStatus.BAD_REQUEST,
-                )
-
-                return
+            self._handle_calibration_profile_post(path)
+            return
 
         if path == "/api/faceplate-upgrades/action":
             try:

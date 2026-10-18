@@ -450,7 +450,98 @@ def test_support_privacy_processing_preserves_bridge_diagnostic_contract() -> No
         assert report.is_file()
 
 
+
+def test_calibration_http_post_routes_preserve_contract() -> None:
+    """Exercise real handler dispatch without contacting HAOS or writing Calibration."""
+    import io
+    from types import SimpleNamespace
+
+    calls: list[tuple[str, object]] = []
+
+    def home_assistant_ws(data: dict) -> dict:
+        calls.append(("ws", data))
+        if data["type"] == "switch_vision/get_calibration":
+            return {"calibration": {"link_shape": "triangle-left"}}
+        return {"ok": True, "profile": data["profile"]}
+
+    def home_assistant_service(domain: str, name: str, data: dict) -> None:
+        calls.append(("service", (domain, name, data)))
+
+    def request(
+        route: str,
+        raw: bytes,
+        *,
+        allowed: bool = True,
+        declared_length: int | None = None,
+    ) -> list[tuple[int, object]]:
+        handler = hub.SupportHandler.__new__(hub.SupportHandler)
+        handler.path = route
+        handler.headers = {
+            "Content-Length": str(len(raw) if declared_length is None else declared_length)
+        }
+        handler.rfile = io.BytesIO(raw)
+        handler.server = SimpleNamespace()
+        handler._allow_ingress_request = lambda: allowed
+        responses: list[tuple[int, object]] = []
+        handler._json = lambda body, status=200: responses.append((int(status), body))
+        hub.SupportHandler.do_POST(handler)
+        return responses
+
+    with patched(
+        _home_assistant_ws=home_assistant_ws,
+        _home_assistant_service=home_assistant_service,
+    ):
+        profile = b'{"profile":"native_SW1"}'
+        get = request("/api/calibration-profiles/get", profile)
+        assert get == [(200, {"calibration": {"link_shape": "triangle-left"}})], get
+        assert calls.pop() == (
+            "ws", {"type": "switch_vision/get_calibration", "profile": "native_SW1"}
+        )
+
+        delete = request("/api/calibration-profiles/delete", profile)
+        assert delete == [(200, {"ok": True, "profile": "native_SW1"})], delete
+        assert calls.pop() == (
+            "ws", {"type": "switch_vision/delete_calibration", "profile": "native_SW1"}
+        )
+
+        save = request(
+            "/api/calibration-profiles/save",
+            b'{"profile":"native_SW1","calibration":{"link_shape":"triangle-left"}}',
+        )
+        assert save == [(200, {"ok": True, "profile": "native_SW1"})], save
+        assert calls.pop() == (
+            "service",
+            (
+                "switch_vision", "save_calibration",
+                {
+                    "profile": "native_SW1",
+                    "calibration": {"link_shape": "triangle-left"},
+                    "mirror_to_base": False,
+                },
+            ),
+        )
+
+        invalid = [
+            ("/api/calibration-profiles/get", b""),
+            ("/api/calibration-profiles/get", b"not-json"),
+            ("/api/calibration-profiles/get", b"[]"),
+            ("/api/calibration-profiles/save", profile),
+            ("/api/calibration-profiles/get", b"x", 8193),
+            ("/api/calibration-profiles/save", b"x", 3 * 1024 * 1024 + 1),
+        ]
+        for case in invalid:
+            route, raw, *length = case
+            errors = request(route, raw, declared_length=length[0] if length else None)
+            assert len(errors) == 1 and errors[0][0] == 400, (route, errors)
+            assert "error" in errors[0][1], errors
+
+        assert request("/api/calibration-profiles/delete", profile, allowed=False) == []
+        assert calls == [], calls
+
+
 def main() -> int:
+    test_calibration_http_post_routes_preserve_contract()
+    print("PASS: ingress-gated Calibration HTTP get/save/delete and malformed/oversized errors")
     test_successful_calibration_list_round_trip()
     print("PASS: Calibration/Core WebSocket success round trip")
     test_management_view_protects_active_base_and_target()

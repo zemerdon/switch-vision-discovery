@@ -1,3 +1,8 @@
+## 3.0.79 — Simplify Calibration Profile POST dispatch (Local)
+
+- Move the existing Hub Calibration Profile get/save/delete POST handling into one SupportHandler method, reducing central POST dispatch coupling without changing Supervisor ingress, request size limits, Core WebSocket/service calls or HTTP errors.
+- Exercise real in-memory HTTP dispatch for success, malformed/oversized bodies and blocked ingress. No Calibration data, switch configuration or HAOS state is modified by the tests.
+
 ## 3.0.78 — Exact Calibration backup restoration (Local)
 
 - Restore Calibration through Core's reviewed administrator-only exact-backup path so missing stock-faceplate SHA metadata stays missing, and supplied stock SHA values remain subject to Core's installed-asset verification.
