@@ -370,7 +370,7 @@ write_generated_yaml_for_walk() {
     function temp_role(name) {
       if (name ~ /Inlet/) return "Temperature Inlet"
       if (name ~ /Outlet/) return "Temperature Outlet"
-      if (name ~ /HotSpot/) return "Temperature"
+      if (name ~ /HotSpot/) return "Temperature HotSpot"
       return "Temperature"
     }
     function temp_member(name, arr) {
@@ -1265,12 +1265,21 @@ write_generated_yaml_for_walk() {
         if (!ext_used_present && (idx in std_poe_used_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.4." idx, label " PoE Used W")
         if (!ext_budget_present && (idx in std_poe_budget_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.2." idx, label " PoE Budget W")
       }
+      # The main card temperature is the ambient inlet reading, not the
+      # hotter internal HotSpot. Keep each named sensor and the HotSpot alarm;
+      # models without an inlet retain their existing primary fallback.
+      delete inlet_member
+      for (idx=1; idx<=maxtemp; idx++) if (idx in temp_idx && temp_name[idx] ~ /Inlet/)
+        inlet_member[temp_member(temp_name[idx])]=1
       for (idx=1; idx<=maxtemp; idx++) if (idx in temp_idx) {
         role=temp_role(temp_name[idx])
         member=temp_member(temp_name[idx])
         label=member_label(member)
+        if (role == "Temperature HotSpot" && !inlet_member[member]) role="Temperature"
         yaml_sensor("1.3.6.1.4.1.9.9.13.1.3.1.3." idx, label " " role)
-        if (role == "Temperature") yaml_sensor("1.3.6.1.4.1.9.9.13.1.3.1.6." idx, label " Temperature Status")
+        if (role == "Temperature Inlet") yaml_sensor("1.3.6.1.4.1.9.9.13.1.3.1.3." idx, label " Temperature")
+        if (role == "Temperature HotSpot" || role == "Temperature")
+          yaml_sensor("1.3.6.1.4.1.9.9.13.1.3.1.6." idx, label " Temperature Status")
       }
 
       chunk=0

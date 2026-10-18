@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.0.76"
+SWITCH_VISION_DISCOVERY_VERSION="3.0.77"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -2249,10 +2249,8 @@ write_report() {
           echo "- Polling groups: chunked status 30s, chunked traffic 10s, walk-aware VLAN/trunk 30s, slow system/interface 300s"
           if grep -q "CHANGE_ME" "$GENERATED_YAML_PATH" 2>/dev/null; then
             echo "- FAIL: CHANGE_ME found in generated YAML; do not use this file."
-          elif grep -q "Temperature HotSpot" "$GENERATED_YAML_PATH" 2>/dev/null; then
-            echo "- WARN: HotSpot duplicate labels found; review generated YAML."
           else
-            echo "- PASS: duplicate HotSpot/Temperature labels avoided."
+            echo "- PASS: primary temperature and separately labelled HotSpot sensors are supported."
             echo "- PASS: all generated YAML targets have management hosts."
             echo "- PASS: VLAN ID sensors are walk-aware; missing VLAN OIDs are skipped."
           fi

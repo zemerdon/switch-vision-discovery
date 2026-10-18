@@ -2,6 +2,72 @@
 # Sourced by self-test.sh with the existing self-test environment intact.
 # Keep this as an exact behavioral extraction; production logic is not duplicated here.
 
+
+# The report must not treat a distinctly named diagnostic HotSpot sensor as an
+# invalid duplicate of the primary temperature entity.
+! grep -Fq 'WARN: HotSpot duplicate labels found' "$BASE_DIR/discovery_job.sh"
+grep -Fq 'primary temperature and separately labelled HotSpot sensors are supported' "$BASE_DIR/discovery_job.sh"
+
+# Cisco ENVMON sensor semantics: default card Temperature follows inlet, while
+# the hotter HotSpot and its alarm remain available for diagnostics.
+# Only synthetic OID rows derived from reviewed hardware contracts are used.
+PYTHONPATH="$BASE_DIR" python3 - "$YAML_STAGE_SOURCE" <<'PY_CISCO_INLET'
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+stage = sys.argv[1]
+oid = "1.3.6.1.4.1.9.9.13.1.3.1"
+def capture(sensors, ports=("Gi1/0/1",), member_map=""):
+    with tempfile.TemporaryDirectory(prefix="sv-cisco-temp-") as folder:
+        walk = Path(folder) / "capture.txt"
+        lines = [".1.3.6.1.2.1.1.1.0 = STRING: Cisco IOS Software WS-C3650-48PS-L"]
+        for idx, port in enumerate(ports, 1):
+            lines.append(f'.1.3.6.1.2.1.31.1.1.1.1.{idx} = STRING: {port}')
+        for suffix, kind, value in sensors:
+            lines.append(f'.{oid}.2.{suffix} = STRING: "Switch {int(suffix)//1000} - {kind} Temp Sensor, GREEN "')
+            lines.append(f'.{oid}.3.{suffix} = Gauge32: {value}')
+        walk.write_text("\n".join(lines) + "\n")
+        result = subprocess.run(
+            ["sh", "-c", '. "$1"; write_generated_yaml_for_walk "$2" "192.0.2.77" "fixture" "public" "$3"',
+             "sh", stage, str(walk), member_map], capture_output=True, text=True, check=True)
+        pairs = re.findall(r'(?m)^  - oid: (\S+)\n    name: (.+)$', result.stdout)
+        assert pairs, result.stdout
+        return {name: o for o, name in pairs}
+
+def assert_member(mapping, prefix, inlet, outlet, hotspot):
+    assert mapping[prefix + " Temperature"] == oid + ".3." + str(inlet), mapping
+    assert mapping[prefix + " Temperature Inlet"] == oid + ".3." + str(inlet), mapping
+    assert mapping[prefix + " Temperature Outlet"] == oid + ".3." + str(outlet), mapping
+    assert mapping[prefix + " Temperature HotSpot"] == oid + ".3." + str(hotspot), mapping
+    assert mapping[prefix + " Temperature Status"] == oid + ".6." + str(hotspot), mapping
+
+m = capture(((1011, "Inlet", 34), (1012, "Outlet", 42), (1013, "HotSpot", 54)))
+assert_member(m, "fixture", 1011, 1012, 1013)
+m = capture(((1012, "Inlet", 27), (1013, "Outlet", 37), (1014, "HotSpot", 47)))
+assert_member(m, "fixture", 1012, 1013, 1014)
+m = capture(((1011, "Inlet", 35), (1012, "Outlet", 39), (1013, "HotSpot", 50),
+             (2011, "Inlet", 34), (2012, "Outlet", 39), (2013, "HotSpot", 49)),
+            ports=("Gi1/0/1", "Gi2/0/1"), member_map="1=member1,2=member2")
+assert_member(m, "member1", 1011, 1012, 1013)
+assert_member(m, "member2", 2011, 2012, 2013)
+# Single-sensor 2960-family descriptions and hotspot-only partial captures
+# must retain the legacy generic temperature entity.
+with tempfile.TemporaryDirectory(prefix="sv-cisco-single-") as folder:
+    walk = Path(folder) / "capture.txt"
+    walk.write_text(".1.3.6.1.2.1.1.1.0 = STRING: Cisco WS-C2960X-24PS-L\n"
+                    f'.{oid}.2.1008 = STRING: "SW#1, Sensor#1, GREEN "\n'
+                    f'.{oid}.3.1008 = Gauge32: 39\n')
+    res = subprocess.run(["sh", "-c", '. "$1"; write_generated_yaml_for_walk "$2" "192.0.2.78" "fixture" public',
+                          "sh", stage, str(walk)], capture_output=True, text=True, check=True)
+    assert "    name: fixture Temperature\n" in res.stdout
+m = capture(((1013, "HotSpot", 54),))
+assert m["fixture Temperature"] == oid + ".3.1013", m
+print("Cisco inlet-first main temperature, HotSpot diagnostics, stack and fallback: PASS")
+PY_CISCO_INLET
+
 # v2.1.28 generated SNMP2MQTT YAML publication regression. An invalid/empty
 # target candidate must never replace an already-valid live handoff file.
 yaml_guard="$BASE_DIR/generated_yaml_guard.py"

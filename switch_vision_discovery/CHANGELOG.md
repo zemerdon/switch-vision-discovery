@@ -1,3 +1,8 @@
+## 3.0.77 — Cisco switch temperature selection (Local)
+
+- Correct the generic Cisco temperature entity to read ambient Inlet when available instead of the hotter HotSpot sensor; keep Inlet, Outlet, HotSpot and environmental alarm readings separately.
+- Preserve single-sensor/HotSpot-only fallback and stack-member isolation, with generated-YAML regression coverage. No switch writes or Core Calibration changes.
+
 ## 3.0.76 — Consolidate bounded Hub JSON request parsing (Local)
 
 - Reuse one existing-handler method for content-length validation, bounded UTF-8 decoding and JSON parsing across five Discovery Hub UI/AutoDiscover/device APIs.
