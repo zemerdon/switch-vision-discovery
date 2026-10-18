@@ -595,7 +595,126 @@ def test_latest_contribution_exposes_evidence_metadata() -> None:
         assert latest["evidence"] == evidence
 
 
+def test_configured_device_http_dispatch_contract() -> None:
+    """Check the real ingress-gated handler with isolated, reversible effects."""
+    import io
+    from types import SimpleNamespace
+
+    events: list[str] = []
+
+    @contextmanager
+    def mutation(name: str):
+        events.append("enter:" + name)
+        try:
+            yield
+        finally:
+            events.append("exit:" + name)
+
+    def response(route: str, body: bytes = b"", *, allowed: bool = True,
+                 declared_length: int | None = None):
+        handler = hub.SupportHandler.__new__(hub.SupportHandler)
+        handler.path = route
+        handler.headers = {
+            "Content-Length": str(len(body) if declared_length is None else declared_length)
+        }
+        handler.rfile = io.BytesIO(body)
+        handler.server = SimpleNamespace(
+            options_file=Path("/unused/options.json"),
+            discovery_script=Path("/unused/discovery.sh"),
+        )
+        handler._allow_ingress_request = lambda: allowed
+        results: list[tuple[int, object]] = []
+        def emit(payload, status=200):
+            events.append("response")
+            results.append((int(status), payload))
+        handler._json = emit
+        hub.SupportHandler.do_POST(handler)
+        return results
+
+    with patched(
+        _device_configuration_update=mutation,
+        _set_configured_device_state=lambda _path, _data: (
+            events.append("state") or {"updated": True}
+        ),
+        _move_configured_device=lambda _path, _data: (
+            events.append("order") or {"ordered": True}
+        ),
+        _reset_configured_device_order=lambda _path: (
+            events.append("reset") or {"reset": True}
+        ),
+        _record_device_dashboard_refresh=lambda result: events.append("dashboard"),
+        _start_device_state_application=lambda _script: (
+            events.append("queue") or {
+                "started": True, "coalesced": True, "generation": 3
+            }
+        ),
+    ):
+        routes = (
+            ("/api/configured-devices/state",
+             b'{"device_key":"snmp:SW1","enabled":false}', "state", "Device configuration update"),
+            ("/api/configured-devices/order",
+             b'{"device_key":"snmp:SW1","direction":"up"}', "order", "Device order update"),
+            ("/api/configured-devices/reset-order", b"", "reset", "Device order reset"),
+        )
+        for route, body, operation, label in routes:
+            events.clear()
+            replies = response(route, body)
+            assert len(replies) == 1 and replies[0][0] == 200, replies
+            expected = ["enter:" + label, operation, "dashboard"]
+            if operation == "state":
+                expected.append("queue")
+                result = replies[0][1]
+                assert result["polling_refresh_started"] is True
+                assert result["polling_refresh_coalesced"] is True
+                assert result["polling_refresh_generation"] == 3
+            expected.extend(["response", "exit:" + label])
+            assert events == expected, (route, events)
+
+        events.clear()
+        unifi = response("/api/configured-devices/state", b'{"device_key":"unifi:U1"}')
+        assert unifi[0][1]["polling_refresh_pending"] is True
+        assert unifi[0][1]["polling_refresh_started"] is False
+        assert "queue" not in events
+
+        for route in ("/api/configured-devices/state", "/api/configured-devices/order"):
+            events.clear()
+            assert response(route, b"{", declared_length=8193)[0][0] == 400
+            assert response(route, b"broken-json")[0][0] == 400
+            assert not any(item in events for item in ("state", "order", "dashboard", "queue"))
+        events.clear()
+        assert response("/api/configured-devices/reset-order", allowed=False) == []
+        assert events == []
+
+    @contextmanager
+    def busy(_name: str):
+        raise hub.OperationConflict("busy")
+        yield
+
+    with patched(_device_configuration_update=busy):
+        for route in (
+            "/api/configured-devices/state",
+            "/api/configured-devices/order",
+            "/api/configured-devices/reset-order",
+        ):
+            assert response(route, b'{"device_key":"snmp:SW1"}')[0] == (
+                409, {"error": "busy"}
+            )
+
+    def broken_reset(_path: Path):
+        raise OSError("unavailable")
+
+    with patched(
+        _device_configuration_update=mutation,
+        _reset_configured_device_order=broken_reset,
+    ):
+        assert response("/api/configured-devices/reset-order") == [
+            (400, {"error": "unavailable"})
+        ]
+
+
 def main() -> int:
+    test_configured_device_http_dispatch_contract()
+    print("PASS: configured-device HTTP dispatch, serialization, ingress and error contracts")
     with tempfile.TemporaryDirectory(prefix="sv-hub-save-reset-contracts-") as temp:
         with patched(DEFAULT_DEVICE_CONTROL=Path(temp) / "device-control.json"):
             test_discovery_save_and_write_only_secrets()

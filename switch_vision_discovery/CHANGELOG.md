@@ -1,3 +1,8 @@
+## 3.0.80 — Isolate configured-device Hub POST dispatch (Local)
+
+- Extract configured-device state, reorder and reset-order request dispatch into one existing Hub-handler method, preserving Supervisor ingress gating, serialized operation boundaries, responses, error codes and SNMP/UniFi refresh scheduling.
+- Expand in-memory HTTP handler regressions for state/order/reset success, operation-lock ordering, SNMP and UniFi refresh semantics, rejected ingress, malformed and oversized JSON, conflict and reset I/O failure. No live device or owner HAOS changes.
+
 ## 3.0.79 — Simplify Calibration Profile POST dispatch (Local)
 
 - Move the existing Hub Calibration Profile get/save/delete POST handling into one SupportHandler method, reducing central POST dispatch coupling without changing Supervisor ingress, request size limits, Core WebSocket/service calls or HTTP errors.

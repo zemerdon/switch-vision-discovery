@@ -6348,6 +6348,58 @@ class SupportHandler(BaseHTTPRequestHandler):
 
             return
 
+    def _handle_configured_device_post(self, path: str) -> None:
+        if path == "/api/configured-devices/state":
+            try:
+                with _device_configuration_update("Device configuration update"):
+                    data = self._read_json_request(8192, "Invalid device state request size.")
+                    result = _set_configured_device_state(self.app.options_file, data)
+                    key = str(data.get("device_key") or "") if isinstance(data, dict) else ""
+                    _record_device_dashboard_refresh(result)
+                    result["polling_refresh_started"] = False
+                    if key.startswith("snmp:"):
+                        queued = _start_device_state_application(self.app.discovery_script)
+                        result["polling_refresh_started"] = bool(queued.get("started"))
+                        result["polling_refresh_pending"] = True
+                        result["polling_refresh_coalesced"] = bool(queued.get("coalesced"))
+                        result["polling_refresh_generation"] = queued.get("generation")
+                    elif key.startswith("unifi:"):
+                        # UniFi2MQTT reads the shared control file on its normal poll loop;
+                        # no Discovery/card-regeneration operation is required here.
+                        result["polling_refresh_pending"] = True
+                    # Keep response ordering aligned with the serialized mutation
+                    # order so concurrent UI clicks cannot render an older snapshot
+                    # after a newer one has already been returned.
+                    self._json(result)
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/configured-devices/order":
+            try:
+                with _device_configuration_update("Device order update"):
+                    data = self._read_json_request(8192, "Invalid device order request size.")
+                    result = _move_configured_device(self.app.options_file, data)
+                    _record_device_dashboard_refresh(result)
+                    self._json(result)
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if path == "/api/configured-devices/reset-order":
+            try:
+                with _device_configuration_update("Device order reset"):
+                    result = _reset_configured_device_order(self.app.options_file)
+                    _record_device_dashboard_refresh(result)
+                    self._json(result)
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, OSError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
     def do_POST(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():
             return
@@ -6486,55 +6538,12 @@ class SupportHandler(BaseHTTPRequestHandler):
             except (ValueError, RuntimeError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
-        if path == "/api/configured-devices/state":
-            try:
-                with _device_configuration_update("Device configuration update"):
-                    data = self._read_json_request(8192, "Invalid device state request size.")
-                    result = _set_configured_device_state(self.app.options_file, data)
-                    key = str(data.get("device_key") or "") if isinstance(data, dict) else ""
-                    _record_device_dashboard_refresh(result)
-                    result["polling_refresh_started"] = False
-                    if key.startswith("snmp:"):
-                        queued = _start_device_state_application(self.app.discovery_script)
-                        result["polling_refresh_started"] = bool(queued.get("started"))
-                        result["polling_refresh_pending"] = True
-                        result["polling_refresh_coalesced"] = bool(queued.get("coalesced"))
-                        result["polling_refresh_generation"] = queued.get("generation")
-                    elif key.startswith("unifi:"):
-                        # UniFi2MQTT reads the shared control file on its normal poll loop;
-                        # no Discovery/card-regeneration operation is required here.
-                        result["polling_refresh_pending"] = True
-                    # Keep response ordering aligned with the serialized mutation
-                    # order so concurrent UI clicks cannot render an older snapshot
-                    # after a newer one has already been returned.
-                    self._json(result)
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-            return
-        if path == "/api/configured-devices/order":
-            try:
-                with _device_configuration_update("Device order update"):
-                    data = self._read_json_request(8192, "Invalid device order request size.")
-                    result = _move_configured_device(self.app.options_file, data)
-                    _record_device_dashboard_refresh(result)
-                    self._json(result)
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-            return
-        if path == "/api/configured-devices/reset-order":
-            try:
-                with _device_configuration_update("Device order reset"):
-                    result = _reset_configured_device_order(self.app.options_file)
-                    _record_device_dashboard_refresh(result)
-                    self._json(result)
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except (ValueError, RuntimeError, OSError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        if path in {
+            "/api/configured-devices/state",
+            "/api/configured-devices/order",
+            "/api/configured-devices/reset-order",
+        }:
+            self._handle_configured_device_post(path)
             return
         if path == "/api/switches/import":
             try:
