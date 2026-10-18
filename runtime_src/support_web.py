@@ -6502,6 +6502,21 @@ class SupportHandler(BaseHTTPRequestHandler):
             return
 
 
+    def _handle_faceplate_upgrade_post(self, path: str) -> None:
+        if path == "/api/faceplate-upgrades/action":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 4096:
+                    raise ValueError("Invalid faceplate action request size.")
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                self._json(_faceplate_upgrade_action(self.app.options_file, payload))
+            except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except (OSError, RuntimeError) as exc:
+                self._json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
+
+
     def do_POST(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():
             return
@@ -6516,16 +6531,7 @@ class SupportHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/faceplate-upgrades/action":
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 4096:
-                    raise ValueError("Invalid faceplate action request size.")
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
-                self._json(_faceplate_upgrade_action(self.app.options_file, payload))
-            except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
-            except (OSError, RuntimeError) as exc:
-                self._json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            self._handle_faceplate_upgrade_post(path)
             return
 
         if path == "/api/secrets/reveal":

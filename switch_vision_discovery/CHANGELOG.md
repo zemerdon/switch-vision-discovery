@@ -1,3 +1,8 @@
+## 3.0.85 — Isolate stock faceplate upgrade Hub POST action (Local)
+
+- Move the existing faceplate-upgrade action POST body into a dedicated Hub handler method without changing Supervisor ingress, request-size validation, Core reset handoff, or HTTP 400/503 error semantics. No second Calibration system.
+- Add isolated real-handler HTTP regressions for accepted action, denied ingress, malformed/oversized requests, invalid action and unavailable Core responses. No live Core or HAOS changes.
+
 ## 3.0.84 — Isolate HP optics Hub POST routing (Local)
 
 - Extract the HP optics settings POST route into a dedicated Hub handler method without changing its validation, Supervisor ingress, credential bounds, Home Assistant request contract, or generic failure response.

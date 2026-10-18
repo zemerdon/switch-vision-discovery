@@ -1106,7 +1106,66 @@ def test_hp_optics_http_dispatch_contract() -> None:
         ]
 
 
+def test_faceplate_upgrade_http_dispatch_contract() -> None:
+    """Exercise actual Supervisor-gated stock faceplate action without touching Core."""
+    import io
+    from types import SimpleNamespace
+
+    events: list[tuple[object, object]] = []
+    options = Path("/nonexistent/sv-test-faceplate-options.json")
+
+    def action(options_file, payload):
+        events.append((options_file, payload))
+        return {"ok": True, "action": payload["action"]}
+
+    def send(body: bytes = b'{"action":"reset"}', *,
+             size: str | None = None, allowed: bool = True):
+        handler = hub.SupportHandler.__new__(hub.SupportHandler)
+        handler.path = "/api/faceplate-upgrades/action/?from=test"
+        handler.headers = {"Content-Length": str(len(body)) if size is None else size}
+        handler.rfile = io.BytesIO(body)
+        handler.server = SimpleNamespace(options_file=options)
+        handler._allow_ingress_request = lambda: allowed
+        replies: list[tuple[int, object]] = []
+        handler._json = lambda response, status=200: replies.append((int(status), response))
+        hub.SupportHandler.do_POST(handler)
+        return replies
+
+    with patched(_faceplate_upgrade_action=action):
+        assert send() == [(200, {"ok": True, "action": "reset"})]
+        assert events == [(options, {"action": "reset"})]
+        events.clear()
+        assert send(allowed=False) == []
+        assert events == [], "Denied Supervisor ingress must cause no action"
+
+        for body, length in (
+            (b"{}", "0"), (b"{}", "4097"),
+            (b"{}", "-1"), (b"{}", "not-a-number"),
+            (b"{bad", None), (b"\xff", None),
+        ):
+            result = send(body, size=length)
+            assert len(result) == 1 and result[0][0] == 400, (body, length, result)
+            assert result[0][1]["ok"] is False
+            assert events == [], "Rejected request must cause no action"
+
+    def invalid(_options, _payload):
+        raise ValueError("Invalid faceplate action")
+
+    with patched(_faceplate_upgrade_action=invalid):
+        assert send() == [(400, {"ok": False, "error": "Invalid faceplate action"})]
+
+    for failure in (OSError, RuntimeError):
+        def unavailable(_options, _payload):
+            raise failure("Core faceplate reset unavailable")
+        with patched(_faceplate_upgrade_action=unavailable):
+            assert send() == [(503, {
+                "ok": False, "error": "Core faceplate reset unavailable",
+            })]
+
+
 def main() -> int:
+    test_faceplate_upgrade_http_dispatch_contract()
+    print("PASS: faceplate action ingress, payload-size, dispatch and HTTP error boundaries")
     test_hp_optics_http_dispatch_contract()
     print("PASS: HP optics ingress, credential input validation and redacted errors")
     test_hub_settings_http_dispatch_contract()
