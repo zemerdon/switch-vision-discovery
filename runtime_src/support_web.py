@@ -6456,6 +6456,28 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
+    def _handle_hub_settings_post(self, path: str) -> None:
+        if path in {"/api/settings/core", "/api/settings/snmp2mqtt", "/api/settings/discovery"}:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                maximum = 1024 * 1024 if path == "/api/settings/discovery" else 256 * 1024
+                if length <= 0 or length > maximum:
+                    raise ValueError("Invalid Hub settings request size.")
+                data = json.loads(self.rfile.read(length).decode("utf-8"))
+                if path == "/api/settings/core":
+                    self._json(_save_core_settings(data))
+                elif path == "/api/settings/snmp2mqtt":
+                    with _exclusive_operation("SNMP2MQTT settings update"):
+                        self._json(_save_snmp2mqtt_settings(data))
+                else:
+                    with _exclusive_operation("Discovery settings update"):
+                        self._json(_save_discovery_settings(data))
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
     def do_POST(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():
             return
@@ -6516,24 +6538,7 @@ class SupportHandler(BaseHTTPRequestHandler):
             return
 
         if path in {"/api/settings/core", "/api/settings/snmp2mqtt", "/api/settings/discovery"}:
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                maximum = 1024 * 1024 if path == "/api/settings/discovery" else 256 * 1024
-                if length <= 0 or length > maximum:
-                    raise ValueError("Invalid Hub settings request size.")
-                data = json.loads(self.rfile.read(length).decode("utf-8"))
-                if path == "/api/settings/core":
-                    self._json(_save_core_settings(data))
-                elif path == "/api/settings/snmp2mqtt":
-                    with _exclusive_operation("SNMP2MQTT settings update"):
-                        self._json(_save_snmp2mqtt_settings(data))
-                else:
-                    with _exclusive_operation("Discovery settings update"):
-                        self._json(_save_discovery_settings(data))
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            self._handle_hub_settings_post(path)
             return
         if path == "/api/ui-density":
             try:

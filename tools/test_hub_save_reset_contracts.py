@@ -929,7 +929,109 @@ def test_autodiscover_http_dispatch_contract() -> None:
         assert send(add) == [(400, {"error": "add failed"})]
 
 
+def test_hub_settings_http_dispatch_contract() -> None:
+    """Check actual Supervisor-gated settings POST dispatch without HAOS mutations."""
+    import io
+    from types import SimpleNamespace
+
+    events: list[str] = []
+
+    @contextmanager
+    def operation(label: str):
+        events.append("enter:" + label)
+        try:
+            yield
+        finally:
+            events.append("exit:" + label)
+
+    def send(route: str, body: bytes = b'{"token":"fixture"}',
+             *, declared_length: int | None = None, allowed: bool = True):
+        handler = hub.SupportHandler.__new__(hub.SupportHandler)
+        handler.path = route
+        handler.headers = {
+            "Content-Length": str(len(body) if declared_length is None else declared_length)
+        }
+        handler.rfile = io.BytesIO(body)
+        handler.server = SimpleNamespace()
+        handler._allow_ingress_request = lambda: allowed
+        results: list[tuple[int, object]] = []
+
+        def emit(payload, status=200):
+            events.append("response")
+            results.append((int(status), payload))
+
+        handler._json = emit
+        hub.SupportHandler.do_POST(handler)
+        return results
+
+    routes = (
+        ("/api/settings/core", "core", None, 256 * 1024),
+        ("/api/settings/snmp2mqtt", "snmp", "SNMP2MQTT settings update", 256 * 1024),
+        ("/api/settings/discovery", "discovery", "Discovery settings update", 1024 * 1024),
+    )
+    with patched(
+        _exclusive_operation=operation,
+        _save_core_settings=lambda data: events.append("core") or {"core": data["token"]},
+        _save_snmp2mqtt_settings=lambda data: events.append("snmp") or {"snmp": data["token"]},
+        _save_discovery_settings=lambda data: events.append("discovery") or {"discovery": data["token"]},
+    ):
+        for route, action, lock, maximum in routes:
+            events.clear()
+            assert send(route + "/", b'{"token":"fixture"}') == [
+                (200, {action: "fixture"})
+            ]
+            expected = ([f"enter:{lock}"] if lock else []) + [action, "response"]
+            if lock:
+                expected.append(f"exit:{lock}")
+            assert events == expected, (route, events)
+            events.clear()
+            assert send(route, allowed=False) == []
+            assert events == [], (route, events)
+
+            for content, size in (
+                (b'{}', 0),
+                (b'{}', maximum + 1),
+                (b'{not-json', None),
+            ):
+                events.clear()
+                reply = send(route, content, declared_length=size)
+                assert len(reply) == 1 and reply[0][0] == 400, (route, reply)
+                assert action not in events, (route, events)
+                assert events[-1] == "response", (route, events)
+                assert events == ["response"], (route, events)
+
+    @contextmanager
+    def busy(_label):
+        raise hub.OperationConflict("already running")
+        yield
+
+    with patched(_exclusive_operation=busy):
+        for route in (routes[1][0], routes[2][0]):
+            assert send(route) == [(409, {"error": "already running"})]
+
+    def failed(_data):
+        raise ValueError("invalid settings")
+
+    with patched(
+        _save_core_settings=failed,
+        _save_snmp2mqtt_settings=failed,
+        _save_discovery_settings=failed,
+        _exclusive_operation=operation,
+    ):
+        for route, _action, lock, _max in routes:
+            events.clear()
+            assert send(route) == [(400, {"error": "invalid settings"})]
+            if lock:
+                assert events == [
+                    f"enter:{lock}", f"exit:{lock}", "response"
+                ], (route, events)
+            else:
+                assert events == ["response"], (route, events)
+
+
 def main() -> int:
+    test_hub_settings_http_dispatch_contract()
+    print("PASS: Hub settings ingress, route-specific locks, request limits and error semantics")
     test_autodiscover_http_dispatch_contract()
     print("PASS: AutoDiscover HTTP ingress, serialized locks, request limits and error contracts")
     test_unifi_http_dispatch_contract()

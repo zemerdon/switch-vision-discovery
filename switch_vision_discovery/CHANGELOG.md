@@ -1,3 +1,8 @@
+## 3.0.83 — Isolate Hub settings POST routing (Local)
+
+- Extract the existing Core, SNMP2MQTT and Discovery settings-save POST routes into a single dedicated handler method, preserving Supervisor ingress, per-route payload limits, existing serialization, response and error semantics without modifying settings persistence.
+- Add in-memory HTTP regressions for each settings-save route, denied ingress, malformed/oversized requests, exclusive-operation conflicts and validation failures. No live HAOS/configuration changes.
+
 ## 3.0.82 — Isolate AutoDiscover Hub HTTP dispatch (Local)
 
 - Extract the existing AutoDiscover scan and add POST request handling into one dedicated SupportHandler method, retaining the Supervisor ingress guard, distinct scan/add serialization, request limits, responses and errors without changing discovery or device mutations.
