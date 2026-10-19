@@ -1,3 +1,7 @@
+## 3.0.89 — Consolidate Hub configuration snapshots (Local)
+
+- Use one private atomic snapshot writer and one stored-walk configuration path for Discovery, SNMP2MQTT regeneration, device-state application and dashboard regeneration; preserve the distinct workflow paths, permissions, error messages and no-live-walk safeguards.
+
 ## 3.0.85 — Isolate stock faceplate upgrade Hub POST action (Local)
 
 - Move the existing faceplate-upgrade action POST body into a dedicated Hub handler method without changing Supervisor ingress, request-size validation, Core reset handoff, or HTTP 400/503 error semantics. No second Calibration system.

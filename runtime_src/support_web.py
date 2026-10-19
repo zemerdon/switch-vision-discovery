@@ -2159,6 +2159,54 @@ def _self_addon_options() -> dict[str, Any]:
     return dict(options)
 
 
+def _write_private_discovery_options_snapshot(
+    destination: Path,
+    options: dict[str, Any],
+    *,
+    failure_message: str,
+) -> Path:
+    """One private, atomic writer for transient Discovery option snapshots."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(json.dumps(options, indent=2) + "\n", encoding="utf-8")
+        os.chmod(temporary, 0o600)
+        temporary.replace(destination)
+        os.chmod(destination, 0o600)
+    except OSError as exc:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise RuntimeError(f"{failure_message}: {exc}") from exc
+    return destination
+
+
+def _stored_walk_regeneration_options(
+    options: dict[str, Any],
+    *,
+    generate_snmp2mqtt: bool,
+) -> dict[str, Any]:
+    """Keep all stored-walk workflows on the same no-live-walk contract."""
+    _validate_inventory_identities(options)
+    regenerated = dict(options)
+    rows = regenerated.get("switches")
+    has_inventory = isinstance(rows, list) and any(
+        isinstance(row, dict)
+        and (str(row.get("switch_name") or "").strip() or str(row.get("switch_host") or "").strip())
+        for row in rows
+    )
+    if has_inventory:
+        regenerated["enable_switch_list"] = True
+    regenerated["run_snmp_walks"] = False
+    regenerated["run_live_snmpwalk"] = False
+    regenerated["clean_output_before_walk"] = False
+    regenerated["parse_all_walks"] = True
+    regenerated["generate_snmp2mqtt"] = generate_snmp2mqtt
+    regenerated["generate_support_my_switch_bundle"] = False
+    return regenerated
+
+
 def _write_authoritative_discovery_options_snapshot(
     destination: Path = Path("/tmp/switch_vision_discovery_options.json"),
     *,
@@ -2172,20 +2220,10 @@ def _write_authoritative_discovery_options_snapshot(
     source_options = dict(options) if isinstance(options, dict) else _self_addon_options()
     snapshot_options = _effective_discovery_options(source_options)
     snapshot_options["generate_support_my_switch_bundle"] = False
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
-    try:
-        temporary.write_text(json.dumps(snapshot_options, indent=2) + "\n", encoding="utf-8")
-        os.chmod(temporary, 0o600)
-        temporary.replace(destination)
-        os.chmod(destination, 0o600)
-    except OSError as exc:
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise RuntimeError(f"Could not prepare the authoritative Discovery configuration snapshot: {exc}") from exc
-    return destination
+    return _write_private_discovery_options_snapshot(
+        destination, snapshot_options,
+        failure_message="Could not prepare the authoritative Discovery configuration snapshot",
+    )
 
 
 def _write_snmp2mqtt_regeneration_options_snapshot(
@@ -2193,39 +2231,16 @@ def _write_snmp2mqtt_regeneration_options_snapshot(
 ) -> Path:
     """Prepare a safe stored-walk-only snapshot for SNMP2MQTT YAML regeneration."""
     options = _self_addon_options()
-    _validate_inventory_identities(options)
-    regenerated = dict(options)
-    rows = regenerated.get("switches")
-    has_inventory = isinstance(rows, list) and any(
-        isinstance(row, dict)
-        and (str(row.get("switch_name") or "").strip() or str(row.get("switch_host") or "").strip())
-        for row in rows
+    regenerated = _stored_walk_regeneration_options(
+        options, generate_snmp2mqtt=True,
     )
-    if has_inventory:
-        regenerated["enable_switch_list"] = True
-    regenerated["run_snmp_walks"] = False
-    regenerated["run_live_snmpwalk"] = False
-    regenerated["clean_output_before_walk"] = False
-    regenerated["parse_all_walks"] = True
-    regenerated["generate_snmp2mqtt"] = True
-    regenerated["generate_support_my_switch_bundle"] = False
     regenerated["report_path"] = "/tmp/switch_vision_regenerate_report.txt"
     regenerated["last_run_summary_path"] = "/tmp/switch_vision_regenerate_summary.txt"
     regenerated["generated_card_path"] = "/tmp/switch_vision_regenerate_dashboard.yaml"
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
-    try:
-        temporary.write_text(json.dumps(regenerated, indent=2) + "\n", encoding="utf-8")
-        os.chmod(temporary, 0o600)
-        temporary.replace(destination)
-        os.chmod(destination, 0o600)
-    except OSError as exc:
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise RuntimeError(f"Could not prepare SNMP2MQTT regeneration configuration: {exc}") from exc
-    return destination
+    return _write_private_discovery_options_snapshot(
+        destination, regenerated,
+        failure_message="Could not prepare SNMP2MQTT regeneration configuration",
+    )
 
 
 def _write_device_state_application_options_snapshot(
@@ -2233,41 +2248,18 @@ def _write_device_state_application_options_snapshot(
 ) -> Path:
     """Apply saved enable/disable state to SNMP polling and dashboard outputs without new walks."""
     options = _effective_discovery_options(_self_addon_options())
-    _validate_inventory_identities(options)
-    regenerated = dict(options)
-    rows = regenerated.get("switches")
-    has_inventory = isinstance(rows, list) and any(
-        isinstance(row, dict)
-        and (str(row.get("switch_name") or "").strip() or str(row.get("switch_host") or "").strip())
-        for row in rows
+    regenerated = _stored_walk_regeneration_options(
+        options, generate_snmp2mqtt=True,
     )
-    if has_inventory:
-        regenerated["enable_switch_list"] = True
-    regenerated["run_snmp_walks"] = False
-    regenerated["run_live_snmpwalk"] = False
-    regenerated["clean_output_before_walk"] = False
-    regenerated["parse_all_walks"] = True
-    regenerated["generate_snmp2mqtt"] = True
-    regenerated["generate_support_my_switch_bundle"] = False
     regenerated["report_path"] = "/tmp/switch_vision_apply_device_state_report.txt"
     regenerated["last_run_summary_path"] = "/tmp/switch_vision_apply_device_state_summary.txt"
     regenerated["generated_yaml_path"] = str(DEFAULT_GENERATED_SNMP2MQTT)
     regenerated["generated_card_path"] = str(DEFAULT_GENERATED_CARD)
     regenerated["snmp_log_path"] = "/tmp/switch_vision_apply_device_state_snmp.log"
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
-    try:
-        temporary.write_text(json.dumps(regenerated, indent=2) + "\n", encoding="utf-8")
-        os.chmod(temporary, 0o600)
-        temporary.replace(destination)
-        os.chmod(destination, 0o600)
-    except OSError as exc:
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise RuntimeError(f"Could not prepare device-state application configuration: {exc}") from exc
-    return destination
+    return _write_private_discovery_options_snapshot(
+        destination, regenerated,
+        failure_message="Could not prepare device-state application configuration",
+    )
 
 
 def _write_dashboard_card_regeneration_options_snapshot(
@@ -2275,41 +2267,18 @@ def _write_dashboard_card_regeneration_options_snapshot(
 ) -> Path:
     """Prepare a stored-state-only snapshot for dashboard Card YAML regeneration."""
     options = _effective_discovery_options(_self_addon_options())
-    _validate_inventory_identities(options)
-    regenerated = dict(options)
-    rows = regenerated.get("switches")
-    has_inventory = isinstance(rows, list) and any(
-        isinstance(row, dict)
-        and (str(row.get("switch_name") or "").strip() or str(row.get("switch_host") or "").strip())
-        for row in rows
+    regenerated = _stored_walk_regeneration_options(
+        options, generate_snmp2mqtt=False,
     )
-    if has_inventory:
-        regenerated["enable_switch_list"] = True
-    regenerated["run_snmp_walks"] = False
-    regenerated["run_live_snmpwalk"] = False
-    regenerated["clean_output_before_walk"] = False
-    regenerated["parse_all_walks"] = True
-    regenerated["generate_snmp2mqtt"] = False
-    regenerated["generate_support_my_switch_bundle"] = False
     regenerated["report_path"] = "/tmp/switch_vision_regenerate_card_report.txt"
     regenerated["last_run_summary_path"] = "/tmp/switch_vision_regenerate_card_summary.txt"
     regenerated["generated_yaml_path"] = "/tmp/switch_vision_regenerate_card_snmp2mqtt.yaml"
     regenerated["generated_card_path"] = str(DEFAULT_GENERATED_CARD)
     regenerated["snmp_log_path"] = "/tmp/switch_vision_regenerate_card_snmp.log"
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
-    try:
-        temporary.write_text(json.dumps(regenerated, indent=2) + "\n", encoding="utf-8")
-        os.chmod(temporary, 0o600)
-        temporary.replace(destination)
-        os.chmod(destination, 0o600)
-    except OSError as exc:
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise RuntimeError(f"Could not prepare Dashboard Card regeneration configuration: {exc}") from exc
-    return destination
+    return _write_private_discovery_options_snapshot(
+        destination, regenerated,
+        failure_message="Could not prepare Dashboard Card regeneration configuration",
+    )
 
 
 def _hub_device_control_runtime() -> hub_device_control.HubDeviceControlRuntime:
