@@ -6562,6 +6562,45 @@ class SupportHandler(BaseHTTPRequestHandler):
             raise
         self._json({"started": True, "mode": "regenerate_yaml"}, HTTPStatus.ACCEPTED)
 
+    def _handle_discovery_run_post(self, path: str) -> None:
+        if path == "/api/discovery/start":
+            try:
+                _claim_operation("Discovery")
+            except OperationConflict as exc:
+                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+                return
+            _DISCOVERY_STOP_REQUESTED.clear()
+            _set_discovery_state(
+                running=True,
+                started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                finished_at=None,
+                success=None,
+                message="Preparing Discovery",
+                log_tail=[],
+                stage="Preparing Discovery",
+                mode="discovery",
+                switch="",
+                target="",
+                command="",
+                activity="Validating configured switches",
+                phase="preparing",
+                snmp2mqtt={"status": "Waiting", "action": "none", "slug": None, "state": None, "message": "Waiting for Discovery to complete"},
+            )
+            thread = threading.Thread(target=_run_discovery, args=(self.app.discovery_script,), daemon=True)
+            try:
+                thread.start()
+            except Exception:
+                _release_operation("Discovery")
+                raise
+            self._json({"started": True}, HTTPStatus.ACCEPTED)
+            return
+        if path == "/api/discovery/stop":
+            if not _request_discovery_stop():
+                self._json({"error": "Discovery is not running."}, HTTPStatus.CONFLICT)
+                return
+            self._json({"stopping": True}, HTTPStatus.ACCEPTED)
+            return
+
     def do_POST(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():
             return
@@ -6732,42 +6771,8 @@ class SupportHandler(BaseHTTPRequestHandler):
             except OperationConflict as exc:
                 self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
             return
-        if path == "/api/discovery/start":
-            try:
-                _claim_operation("Discovery")
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-                return
-            _DISCOVERY_STOP_REQUESTED.clear()
-            _set_discovery_state(
-                running=True,
-                started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                finished_at=None,
-                success=None,
-                message="Preparing Discovery",
-                log_tail=[],
-                stage="Preparing Discovery",
-                mode="discovery",
-                switch="",
-                target="",
-                command="",
-                activity="Validating configured switches",
-                phase="preparing",
-                snmp2mqtt={"status": "Waiting", "action": "none", "slug": None, "state": None, "message": "Waiting for Discovery to complete"},
-            )
-            thread = threading.Thread(target=_run_discovery, args=(self.app.discovery_script,), daemon=True)
-            try:
-                thread.start()
-            except Exception:
-                _release_operation("Discovery")
-                raise
-            self._json({"started": True}, HTTPStatus.ACCEPTED)
-            return
-        if path == "/api/discovery/stop":
-            if not _request_discovery_stop():
-                self._json({"error": "Discovery is not running."}, HTTPStatus.CONFLICT)
-                return
-            self._json({"stopping": True}, HTTPStatus.ACCEPTED)
+        if path in {"/api/discovery/start", "/api/discovery/stop"}:
+            self._handle_discovery_run_post(path)
             return
         if path != "/api/create":
             self.send_error(HTTPStatus.NOT_FOUND)

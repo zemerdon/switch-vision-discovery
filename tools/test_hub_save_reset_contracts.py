@@ -1311,7 +1311,112 @@ def test_regenerate_yaml_http_dispatch_contract() -> None:
         assert events[-1] == ("release", operation)
 
 
+def test_discovery_start_stop_http_dispatch_contract() -> None:
+    """Exercise actual ingress, operation and worker lifecycle for run/stop routes."""
+    import io
+    from types import SimpleNamespace
+
+    events: list[tuple] = []
+    script = Path("/unused/discovery.sh")
+    stop_allowed = [True]
+
+    def claim(name):
+        events.append(("claim", name))
+
+    def release(name):
+        events.append(("release", name))
+
+    def state(**fields):
+        events.append(("state", fields))
+
+    def make_thread(*, target, args, daemon):
+        assert target is hub._run_discovery
+        events.append(("thread", args, daemon))
+        return SimpleNamespace(start=lambda: events.append(("start-thread",)))
+
+    def stop():
+        events.append(("stop-request",))
+        return stop_allowed[0]
+
+    def send(route: str, *, allowed: bool = True):
+        handler = hub.SupportHandler.__new__(hub.SupportHandler)
+        handler.path = route + "/?from=fixture"
+        handler.headers = {"Content-Length": "0"}
+        handler.rfile = io.BytesIO()
+        handler.server = SimpleNamespace(discovery_script=script)
+        handler._allow_ingress_request = lambda: allowed
+        replies: list[tuple[int, object]] = []
+        handler._json = lambda body, status=200: replies.append((int(status), body))
+        handler.send_error = lambda status: replies.append((int(status), "not found"))
+        hub.SupportHandler.do_POST(handler)
+        return replies
+
+    with patched(
+        _claim_operation=claim,
+        _release_operation=release,
+        _DISCOVERY_STOP_REQUESTED=SimpleNamespace(clear=lambda: events.append(("clear",))),
+        _set_discovery_state=state,
+        _request_discovery_stop=stop,
+        threading=SimpleNamespace(Thread=make_thread),
+    ):
+        for route in ("/api/discovery/start", "/api/discovery/stop"):
+            assert send(route, allowed=False) == []
+            assert events == [], "Denied Supervisor ingress cannot start or stop Discovery"
+
+        assert send("/api/discovery/start") == [(202, {"started": True})]
+        assert [row[0] for row in events] == [
+            "claim", "clear", "state", "thread", "start-thread"
+        ], events
+        assert events[0] == ("claim", "Discovery")
+        fields = events[2][1]
+        assert fields["running"] is True and fields["mode"] == "discovery"
+        assert fields["phase"] == "preparing" and fields["success"] is None
+        assert fields["activity"] == "Validating configured switches"
+        assert fields["snmp2mqtt"]["status"] == "Waiting"
+        assert events[3] == ("thread", (script,), True)
+        assert not any(row[0] == "release" for row in events)
+        events.clear()
+
+        assert send("/api/discovery/stop") == [(202, {"stopping": True})]
+        assert events == [("stop-request",)]
+        events.clear()
+
+        stop_allowed[0] = False
+        assert send("/api/discovery/stop") == [(409, {"error": "Discovery is not running."})]
+        assert events == [("stop-request",)]
+        events.clear()
+
+        def conflict(_name):
+            raise hub.OperationConflict("Discovery busy")
+
+        with patched(_claim_operation=conflict):
+            assert send("/api/discovery/start") == [(409, {"error": "Discovery busy"})]
+        assert events == [], "Conflicting start must not modify state or launch worker"
+
+        def bad_start():
+            events.append(("failed-thread",))
+            raise RuntimeError("Worker start failed")
+
+        with patched(threading=SimpleNamespace(Thread=lambda **kw: SimpleNamespace(start=bad_start))):
+            try:
+                send("/api/discovery/start")
+            except RuntimeError as exc:
+                assert str(exc) == "Worker start failed"
+            else:
+                raise AssertionError("Worker start failure must propagate")
+        assert [row[0] for row in events] == [
+            "claim", "clear", "state", "failed-thread", "release"
+        ], events
+        assert events[-1] == ("release", "Discovery")
+        events.clear()
+
+        assert send("/api/discovery/not-a-route") == [(404, "not found")]
+        assert events == [], "Unknown Discovery action must be rejected"
+
+
 def main() -> int:
+    test_discovery_start_stop_http_dispatch_contract()
+    print("PASS: Discovery start/stop ingress, state, worker, conflict and failure boundaries")
     test_regenerate_yaml_http_dispatch_contract()
     print("PASS: YAML regeneration ingress, operation lock, state, thread and error contracts")
     test_ui_density_http_dispatch_contract()
