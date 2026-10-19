@@ -4423,10 +4423,17 @@ def _test_unifi2mqtt_connection(data: Any) -> dict[str, Any]:
         return {"ok": False, "transport": transport, "stage": stage, "reason": safe, "debug": debug}
 
 def _save_unifi2mqtt_settings(data: Any) -> dict[str, Any]:
-    status = _unifi2mqtt_settings_status()
-    if not status.get("installed") or not status.get("slug"):
+    # The full display status already reads Supervisor options, diagnostics,
+    # snapshots and pending restore state. Only the installed app identity and
+    # one fresh options response are needed before validating this save.
+    addon = _find_unifi2mqtt_addon(include_store=True)
+    installed = addon is not None and (
+        addon.get("_source") == "addons"
+        or addon.get("installed") not in (False, None, "", 0)
+    )
+    slug = str(addon.get("slug") or "").strip() if addon else ""
+    if not installed or not slug:
         raise RuntimeError("Switch Vision UniFi2MQTT is not installed.")
-    slug = str(status["slug"])
     info = _supervisor_json(f"/addons/{quote(slug, safe='')}/info")
     info_data = info.get("data") if isinstance(info.get("data"), dict) else info
     current = dict(UNIFI2MQTT_DEFAULT_OPTIONS)

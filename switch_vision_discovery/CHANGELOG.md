@@ -1,3 +1,7 @@
+## 3.0.91 — Avoid duplicate UniFi settings reads (Local)
+
+- UniFi2MQTT settings saves now resolve the installed app directly, read its complete current options once, and avoid preparing diagnostics, snapshot, pending-restore presentation state and a second identical Supervisor options request before writing. Preserve fail-closed missing/invalid options, existing secret retention, started/stopped lifecycle and fresh sanitized post-save status.
+
 ## 3.0.90 — Reuse installed-app list in Hub links (Local)
 
 - Reuse the Hub's installed-app list when resolving UniFi2MQTT links, eliminating a duplicate Supervisor request per successful links refresh while preserving standalone checks and retry behavior when the first request fails.
