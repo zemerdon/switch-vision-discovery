@@ -6517,6 +6517,15 @@ class SupportHandler(BaseHTTPRequestHandler):
             return
 
 
+    def _handle_ui_density_post(self, path: str) -> None:
+        if path == "/api/ui-density":
+            try:
+                data = self._read_json_request(4096, "Invalid UI density request size.")
+                self._json({"preferences": _set_discovery_ui_density(data.get("density"))})
+            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
     def do_POST(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():
             return
@@ -6553,11 +6562,7 @@ class SupportHandler(BaseHTTPRequestHandler):
             self._handle_hub_settings_post(path)
             return
         if path == "/api/ui-density":
-            try:
-                data = self._read_json_request(4096, "Invalid UI density request size.")
-                self._json({"preferences": _set_discovery_ui_density(data.get("density"))})
-            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            self._handle_ui_density_post(path)
             return
         if path in {
             "/api/unifi2mqtt/install",

@@ -1163,7 +1163,77 @@ def test_faceplate_upgrade_http_dispatch_contract() -> None:
             })]
 
 
+def test_ui_density_http_dispatch_contract() -> None:
+    """Exercise Supervisor-gated UI density POST and its original HA service boundary."""
+    import io
+    from types import SimpleNamespace
+
+    effects: list[tuple] = []
+
+    def service(domain, name, data):
+        effects.append(("service", domain, name, data))
+
+    def preferences():
+        effects.append(("preferences",))
+        return {"density": "comfortable", "text_size": 14}
+
+    def send(body: bytes = b'{"density":" COMPACT "}', *,
+             length: str | None = None, allowed: bool = True):
+        handler = hub.SupportHandler.__new__(hub.SupportHandler)
+        handler.path = "/api/ui-density/?from=fixture"
+        handler.headers = {"Content-Length": str(len(body)) if length is None else length}
+        handler.rfile = io.BytesIO(body)
+        handler.server = SimpleNamespace()
+        handler._allow_ingress_request = lambda: allowed
+        replies: list[tuple[int, object]] = []
+        handler._json = lambda response, status=200: replies.append((int(status), response))
+        hub.SupportHandler.do_POST(handler)
+        return replies
+
+    with patched(_home_assistant_service=service, _discovery_ui_preferences=preferences):
+        assert send() == [(200, {
+            "preferences": {"density": "compact", "text_size": 14}
+        })]
+        assert effects == [
+            ("service", "switch_vision", "set_ui_density", {"density": "compact"}),
+            ("preferences",),
+        ], effects
+        effects.clear()
+        assert send(b'{"density":"ultra_dense"}') == [(200, {
+            "preferences": {"density": "ultra_dense", "text_size": 14}
+        })]
+        assert effects[0][3] == {"density": "ultra_dense"}
+        effects.clear()
+
+        assert send(allowed=False) == []
+        assert effects == [], "Denied ingress must not read preferences or call Core"
+
+        invalid = (
+            (b"{}", "0"),
+            (b"{}", "-1"),
+            (b"{}", "4097"),
+            (b"{}", "not-a-number"),
+            (b"{broken", None),
+            (bytes([255]), None),
+            (b"{}", None),
+            (b'{"density":"nonsense"}', None),
+        )
+        for payload, length in invalid:
+            replies = send(payload, length=length)
+            assert len(replies) == 1 and replies[0][0] == 400, (payload, replies)
+            assert effects == [], "Invalid UI density must not call Core"
+
+    def unavailable(*_args):
+        raise RuntimeError("UI density service unavailable")
+
+    with patched(_home_assistant_service=unavailable, _discovery_ui_preferences=preferences):
+        assert send() == [(400, {"error": "UI density service unavailable"})]
+        assert effects == [], "Failed service must not read preferences"
+
+
 def main() -> int:
+    test_ui_density_http_dispatch_contract()
+    print("PASS: UI density ingress, normalized service dispatch, size and error boundaries")
     test_faceplate_upgrade_http_dispatch_contract()
     print("PASS: faceplate action ingress, payload-size, dispatch and HTTP error boundaries")
     test_hp_optics_http_dispatch_contract()
