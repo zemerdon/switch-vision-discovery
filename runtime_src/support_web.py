@@ -6526,6 +6526,42 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
+    def _handle_yaml_regeneration_post(self) -> None:
+        operation_name = "SNMP2MQTT YAML regeneration"
+        try:
+            _claim_operation(operation_name)
+        except OperationConflict as exc:
+            self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
+            return
+        _DISCOVERY_STOP_REQUESTED.clear()
+        _set_discovery_state(
+            running=True,
+            started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            finished_at=None,
+            success=None,
+            message="Preparing SNMP2MQTT YAML regeneration",
+            log_tail=[],
+            stage="Preparing SNMP2MQTT YAML regeneration",
+            switch="",
+            target="",
+            command="",
+            activity="Loading saved Discovery data and SNMP walks",
+            phase="preparing",
+            mode="regenerate_yaml",
+            snmp2mqtt={"status": "Waiting", "action": "none", "slug": None, "state": None, "message": "Waiting for YAML regeneration to complete"},
+        )
+        thread = threading.Thread(
+            target=_run_discovery,
+            args=(self.app.discovery_script, "regenerate_yaml"),
+            daemon=True,
+        )
+        try:
+            thread.start()
+        except Exception:
+            _release_operation(operation_name)
+            raise
+        self._json({"started": True, "mode": "regenerate_yaml"}, HTTPStatus.ACCEPTED)
+
     def do_POST(self) -> None:  # noqa: N802
         if not self._allow_ingress_request():
             return
@@ -6687,40 +6723,7 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if path == "/api/discovery/regenerate-yaml":
-            operation_name = "SNMP2MQTT YAML regeneration"
-            try:
-                _claim_operation(operation_name)
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-                return
-            _DISCOVERY_STOP_REQUESTED.clear()
-            _set_discovery_state(
-                running=True,
-                started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                finished_at=None,
-                success=None,
-                message="Preparing SNMP2MQTT YAML regeneration",
-                log_tail=[],
-                stage="Preparing SNMP2MQTT YAML regeneration",
-                switch="",
-                target="",
-                command="",
-                activity="Loading saved Discovery data and SNMP walks",
-                phase="preparing",
-                mode="regenerate_yaml",
-                snmp2mqtt={"status": "Waiting", "action": "none", "slug": None, "state": None, "message": "Waiting for YAML regeneration to complete"},
-            )
-            thread = threading.Thread(
-                target=_run_discovery,
-                args=(self.app.discovery_script, "regenerate_yaml"),
-                daemon=True,
-            )
-            try:
-                thread.start()
-            except Exception:
-                _release_operation(operation_name)
-                raise
-            self._json({"started": True, "mode": "regenerate_yaml"}, HTTPStatus.ACCEPTED)
+            self._handle_yaml_regeneration_post()
             return
         if path == "/api/discovery/regenerate-card":
             try:

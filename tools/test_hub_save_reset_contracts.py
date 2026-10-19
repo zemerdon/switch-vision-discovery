@@ -1231,7 +1231,89 @@ def test_ui_density_http_dispatch_contract() -> None:
         assert effects == [], "Failed service must not read preferences"
 
 
+def test_regenerate_yaml_http_dispatch_contract() -> None:
+    """Exercise real ingress-gated YAML regeneration with isolated operation/thread effects."""
+    import io
+    from types import SimpleNamespace
+
+    events: list[tuple] = []
+    script = Path("/unused/discovery.sh")
+    operation = "SNMP2MQTT YAML regeneration"
+
+    def claim(name):
+        events.append(("claim", name))
+
+    def release(name):
+        events.append(("release", name))
+
+    def state(**fields):
+        events.append(("state", fields))
+
+    def start():
+        events.append(("start",))
+
+    def make_thread(*, target, args, daemon):
+        assert target is hub._run_discovery
+        events.append(("thread", args, daemon))
+        return SimpleNamespace(start=start)
+
+    def send(*, allowed: bool = True, path: str = "/api/discovery/regenerate-yaml/?origin=test"):
+        handler = hub.SupportHandler.__new__(hub.SupportHandler)
+        handler.path = path
+        handler.headers = {"Content-Length": "0"}
+        handler.rfile = io.BytesIO()
+        handler.server = SimpleNamespace(discovery_script=script)
+        handler._allow_ingress_request = lambda: allowed
+        replies: list[tuple[int, object]] = []
+        handler._json = lambda data, status=200: replies.append((int(status), data))
+        hub.SupportHandler.do_POST(handler)
+        return replies
+
+    with patched(
+        _claim_operation=claim, _release_operation=release,
+        _DISCOVERY_STOP_REQUESTED=SimpleNamespace(clear=lambda: events.append(("clear",))),
+        _set_discovery_state=state,
+        threading=SimpleNamespace(Thread=make_thread),
+    ):
+        assert send(allowed=False) == []
+        assert events == [], "Rejected Supervisor ingress must not touch regeneration state"
+        assert send() == [(202, {"started": True, "mode": "regenerate_yaml"})]
+        assert [item[0] for item in events] == ["claim", "clear", "state", "thread", "start"]
+        assert events[0] == ("claim", operation)
+        fields = events[2][1]
+        assert fields["running"] is True and fields["mode"] == "regenerate_yaml"
+        assert fields["phase"] == "preparing" and fields["success"] is None
+        assert fields["snmp2mqtt"]["status"] == "Waiting"
+        assert events[3] == ("thread", (script, "regenerate_yaml"), True)
+        events.clear()
+
+        def conflict(_name):
+            raise hub.OperationConflict("Discovery is already running")
+
+        with patched(_claim_operation=conflict):
+            assert send() == [(409, {"error": "Discovery is already running"})]
+        assert events == [], "Busy operation must not clear stop/state or start a thread"
+
+        def failed_start():
+            events.append(("start-failed",))
+            raise RuntimeError("Thread could not start")
+
+        with patched(threading=SimpleNamespace(Thread=lambda **kw: SimpleNamespace(start=failed_start))):
+            try:
+                send()
+            except RuntimeError as exc:
+                assert str(exc) == "Thread could not start"
+            else:
+                raise AssertionError("Failed thread.start must preserve the original exception")
+        assert [item[0] for item in events] == [
+            "claim", "clear", "state", "start-failed", "release"
+        ], events
+        assert events[-1] == ("release", operation)
+
+
 def main() -> int:
+    test_regenerate_yaml_http_dispatch_contract()
+    print("PASS: YAML regeneration ingress, operation lock, state, thread and error contracts")
     test_ui_density_http_dispatch_contract()
     print("PASS: UI density ingress, normalized service dispatch, size and error boundaries")
     test_faceplate_upgrade_http_dispatch_contract()
