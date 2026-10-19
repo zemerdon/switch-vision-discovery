@@ -14,17 +14,24 @@ make_snapshot() {
   path=$1
   mode=${2:-good}
   python3 - "$path" "$mode" <<'PY'
-import json, sys
+import json, sys, time
 from pathlib import Path
 path=Path(sys.argv[1]); mode=sys.argv[2]
 def ports(n, connector='RJ45', start=1):
     return [{'idx':i,'connector':connector,'state':'UP'} for i in range(start,start+n)]
-good={'id':'ucg-good','model':'UCG Ultra','name':'UCG Good','ports':ports(5)}
+now=int(time.time())
+good={'id':'ucg-good','model':'UCG Ultra','name':'UCG Good','ports':ports(5),
+      'freshness': {'last_success_at': now, 'stale': False, 'reason': ''}}
 devices=[good]
 if mode=='conflict':
-    devices.append({'id':'ucg-bad','model':'USW Pro Max 24','name':'Conflict Switch','ports':ports(23)+ports(2,'SFPPLUS',24)})
+    devices.append({'id':'ucg-bad','model':'USW Pro Max 24','name':'Conflict Switch','ports':ports(23)+ports(2,'SFPPLUS',24),
+                    'freshness': {'last_success_at': now, 'stale': False, 'reason': ''}})
+if mode=='stale':
+    good['freshness']={'last_success_at':now-86400,'stale':True,'reason':'all_transports_failed'}
+if mode=='legacy':
+    good.pop('freshness')
 path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps({'devices':devices}), encoding='utf-8')
+path.write_text(json.dumps({'devices':devices,'generated_at':now,'stale_after_seconds':180}), encoding='utf-8')
 PY
 }
 
@@ -161,5 +168,28 @@ grep -Fq 'title: UCG Good' "$five/card.yaml" || { echo 'FAIL: conflicting UniFi 
 grep -Fq 'TOPOLOGY_CONFLICT' "$five/card.yaml" || { echo 'FAIL: conflicting UniFi topology did not fail closed visibly' >&2; cat "$five/card.yaml" >&2; exit 1; }
 if grep -Fq 'title: Conflict Switch' "$five/card.yaml"; then echo 'FAIL: conflicting UniFi topology emitted a card' >&2; cat "$five/card.yaml" >&2; exit 1; fi
 echo 'entrypoint source matrix: valid + conflicting UniFi PASS'
+
+# 6. Retained devices must never be reported as a clean *live* API success.
+# Cached presentation stays available and SNMP2MQTT YAML is not touched.
+for kind in stale legacy; do
+  stale_case="$TMP/unifi-$kind"; mkdir -p "$stale_case/share/unifi" "$stale_case/walks" "$stale_case/live"
+  make_snapshot "$stale_case/share/unifi/devices.json" "$kind"
+  write_options "$stale_case/options.json" "$stale_case"
+  printf 'retain-existing-mqtt-config\n' > "$stale_case/generated.yaml"
+  run_entrypoint "$stale_case" "$stale_case/options.json" > "$stale_case/stdout.txt" 2> "$stale_case/stderr.txt"
+  grep -Fq 'title: UCG Good' "$stale_case/card.yaml" || { echo "FAIL: $kind snapshot lost usable cached card" >&2; exit 1; }
+  grep -Fq 'Status: complete with warnings' "$stale_case/report.txt" || { echo "FAIL: $kind snapshot reported clean success" >&2; exit 1; }
+  grep -Fq 'UniFi live telemetry: unverified or stale' "$stale_case/report.txt" || { echo "FAIL: $kind snapshot hid freshness warning" >&2; exit 1; }
+  grep -Fq 'SV_RESULT|warnings=true|degraded=true|snmp2mqtt_required=false' "$stale_case/stdout.txt" || { echo "FAIL: $kind snapshot emitted an incorrect completion marker" >&2; exit 1; }
+  [ "$(cat "$stale_case/generated.yaml")" = 'retain-existing-mqtt-config' ] || { echo "FAIL: $kind snapshot overwrote SNMP2MQTT YAML" >&2; exit 1; }
+  grep -Fq 'Result: COMPLETE_WITH_WARNINGS' "$stale_case/summary.txt" || { echo "FAIL: $kind snapshot produced misleading last-run state" >&2; exit 1; }
+  echo "entrypoint source matrix: $kind cached UniFi presentation with warning PASS"
+done
+
+# A truly fresh, successful live poll still classifies as clean API-only success.
+grep -Fq 'SV_RESULT|warnings=false|degraded=false|snmp2mqtt_required=false' "$one/stdout.txt" ||
+  { echo 'FAIL: fresh UniFi poll did not retain clean API-only classification' >&2; exit 1; }
+grep -Fq 'UniFi live telemetry: fresh' "$one/report.txt" ||
+  { echo 'FAIL: fresh UniFi poll was not reported as fresh' >&2; exit 1; }
 
 echo 'Switch Vision UniFi/physical-contract full-entrypoint source matrix: PASS'

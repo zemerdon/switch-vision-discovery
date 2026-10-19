@@ -1,3 +1,7 @@
+## 3.0.92 — Report stale UniFi data without erasing cached cards (Local)
+
+- UniFi-only Discovery now requires a verified recent successful UniFi2MQTT device poll before reporting clean API-only success. When the snapshot is stale or lacks reliable freshness metadata, retain usable cached cards and existing SNMP2MQTT YAML unchanged while reporting warnings instead of claiming live API success.
+
 ## 3.0.91 — Avoid duplicate UniFi settings reads (Local)
 
 - UniFi2MQTT settings saves now resolve the installed app directly, read its complete current options once, and avoid preparing diagnostics, snapshot, pending-restore presentation state and a second identical Supervisor options request before writing. Preserve fail-closed missing/invalid options, existing secret retention, started/stopped lifecycle and fresh sanitized post-save status.

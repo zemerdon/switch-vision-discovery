@@ -59,7 +59,8 @@ originals = {}
 for name in (
     "LEGACY", "PREPARE", "REGISTRY", "DEFAULT_OPTIONS", "DEVICE_CONTROL_PATH",
     "_read_options", "_stage_live_collection", "_stage_options", "_publish_contracts",
-    "_append_unifi_dashboard_cards", "_append_display_fallbacks",
+    "_append_unifi_dashboard_cards", "_unifi_snapshot_has_fresh_telemetry",
+    "_append_display_fallbacks",
     "_project_generated_dashboard",
 ):
     originals[name] = getattr(authority, name)
@@ -104,6 +105,7 @@ try:
             return 1, 0
 
         authority._append_unifi_dashboard_cards = add_unifi
+        authority._unifi_snapshot_has_fresh_telemetry = lambda: True
         authority._append_display_fallbacks = lambda *_args, **_kwargs: (0, 0)
         authority._project_generated_dashboard = (
             lambda output, _options, fresh_path=None:

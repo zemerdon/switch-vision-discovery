@@ -908,6 +908,38 @@ def _project_generated_dashboard(
     return {"updated": True, "full_path": str(full_path), **refresh, **result}
 
 
+def _unifi_snapshot_has_fresh_telemetry() -> bool:
+    """True only for a recent, successful UniFi2MQTT device poll.
+
+    Generating a card from a retained snapshot proves presentation availability,
+    not that the controller API was reachable for the current data. Fail closed
+    for older snapshots without freshness metadata, without deleting cards.
+    """
+    try:
+        snapshot = json.loads(UNIFI_SNAPSHOT.read_text(encoding="utf-8"))
+        if not isinstance(snapshot, dict):
+            return False
+        devices = snapshot.get("devices")
+        if not isinstance(devices, list) or not devices:
+            return False
+        stale_after = snapshot.get("stale_after_seconds", 180)
+        if type(stale_after) is not int or stale_after <= 0:
+            return False
+        now = int(time.time())
+        for device in devices:
+            if not isinstance(device, dict):
+                return False
+            freshness = device.get("freshness")
+            if not isinstance(freshness, dict) or freshness.get("stale") is not False:
+                return False
+            last_success = freshness.get("last_success_at")
+            if type(last_success) is not int or not (now - stale_after <= last_success <= now + 60):
+                return False
+        return True
+    except (OSError, UnicodeError, ValueError):
+        return False
+
+
 def _append_unifi_dashboard_cards(path: Path) -> tuple[int, int]:
     """Append source-independent UniFi cards without touching SNMP telemetry.
 
@@ -1269,6 +1301,7 @@ def main() -> int:
             fresh_card = work / "fresh_dashboard.yaml"
             fresh_card.unlink(missing_ok=True)
             unifi_cards, unifi_issues = _append_unifi_dashboard_cards(fresh_card)
+            unifi_fresh = _unifi_snapshot_has_fresh_telemetry() if unifi_cards else False
             fallback_cards, card_notices = _append_display_fallbacks(
                 fresh_card, accepted_evidence, options
             )
@@ -1279,6 +1312,7 @@ def main() -> int:
                 not accepted_evidence
                 and not current_run
                 and unifi_cards > 0
+                and unifi_fresh
                 and unifi_issues == 0
                 and fallback_cards == 0
             )
@@ -1289,9 +1323,10 @@ def main() -> int:
                 "",
                 "Status: success" if clean_api_only else "Status: complete with warnings",
                 "SNMP telemetry contracts: none required for this run"
-                if clean_api_only
+                if unifi_cards and not accepted_evidence and not current_run
                 else "SNMP telemetry contracts: no exact contract available",
                 f"UniFi API dashboard cards emitted: {unifi_cards}; issues: {unifi_issues}.",
+                f"UniFi live telemetry: {'fresh' if unifi_fresh else 'unverified or stale' if unifi_cards else 'no UniFi cards emitted'}.",
                 f"Display-only SNMP fallback cards emitted: {fallback_cards}.",
             ]
             if not unifi_cards and not fallback_cards:
@@ -1315,12 +1350,15 @@ def main() -> int:
                 f"Discovery app loaded: {ENTRYPOINT_STARTED_ISO}",
                 f"Generated: {generated}",
                 f"Discovery runtime so far: {runtime_seconds}s",
-                "Mode: API/UniFi-only" if clean_api_only else "Mode: display/support fallback",
+                "Mode: API/UniFi-only" if clean_api_only
+                else "Mode: API/UniFi-only (cached snapshot)" if unifi_cards and not unifi_fresh and not fallback_cards
+                else "Mode: display/support fallback",
                 "SNMP2MQTT handoff: not required",
                 "Result: SUCCESS" if clean_api_only else "Result: COMPLETE_WITH_WARNINGS",
                 f"Report: {report}",
                 f"Generated dashboard card: {generated_card}",
                 f"UniFi API dashboard cards emitted: {unifi_cards}; issues: {unifi_issues}",
+                f"UniFi live telemetry: {'fresh' if unifi_fresh else 'unverified or stale' if unifi_cards else 'no UniFi cards emitted'}",
                 f"Display-only SNMP fallback cards emitted: {fallback_cards}",
             ]
             last_run.write_text("\n".join(last_lines) + "\n", encoding="utf-8")
@@ -1339,13 +1377,18 @@ def main() -> int:
                     "SV_RESULT|warnings=false|degraded=false|snmp2mqtt_required=false"
                 )
             else:
+                activity = (
+                    "UniFi cards were retained from cached telemetry; live freshness is unverified or stale"
+                    if unifi_cards and not unifi_fresh and unifi_issues == 0 and not fallback_cards
+                    else "No exact SNMP telemetry contract was available; independent UniFi cards and safe display fallbacks were preserved"
+                )
                 print(
                     "SV_STATUS|stage=Complete with warnings|switch=All configured switches|"
-                    "target=|command=Physical contract|"
-                    "activity=No exact SNMP telemetry contract was available; independent UniFi cards and safe display fallbacks were preserved"
+                    f"target=|command=Physical contract|activity={activity}"
                 )
                 print(
                     f"SV_DEBUG|Physical contract authority: unifi cards={unifi_cards}; unifi issues={unifi_issues}; "
+                    f"unifi live freshness={'fresh' if unifi_fresh else 'unverified_or_stale'}; "
                     f"display-only fallback cards={fallback_cards}; support notices={max(notices, card_notices)}"
                 )
                 print(
