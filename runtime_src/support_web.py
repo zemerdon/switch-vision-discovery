@@ -3645,10 +3645,16 @@ def _unifi2mqtt_score(addon: dict[str, Any]) -> int:
     return score
 
 
-def _find_unifi2mqtt_addon(*, include_store: bool = True) -> dict[str, Any] | None:
+def _find_unifi2mqtt_addon(
+    *, include_store: bool = True,
+    installed_addons: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
     candidates: list[tuple[int, dict[str, Any]]] = []
     try:
-        for addon in _addon_payload_list("/addons"):
+        for addon in (
+            installed_addons if installed_addons is not None
+            else _addon_payload_list("/addons")
+        ):
             score = _unifi2mqtt_score(addon)
             if score >= 0:
                 copy = dict(addon)
@@ -3888,8 +3894,14 @@ def _unifi_controller_browser_rows(options: dict[str, Any]) -> list[dict[str, An
     return safe
 
 
-def _unifi2mqtt_settings_status() -> dict[str, Any]:
-    addon = _find_unifi2mqtt_addon(include_store=True)
+def _unifi2mqtt_settings_status(
+    *, installed_addons: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    addon = (
+        _find_unifi2mqtt_addon(include_store=True)
+        if installed_addons is None
+        else _find_unifi2mqtt_addon(include_store=True, installed_addons=installed_addons)
+    )
     snapshot = _unifi2mqtt_snapshot_status()
     diagnostics = _unifi2mqtt_diagnostics_status()
     options = dict(UNIFI2MQTT_DEFAULT_OPTIONS)
@@ -4763,11 +4775,14 @@ def _installed_switch_vision_app_links() -> dict[str, Any]:
         "unifi2mqtt": {"found": False, "available": False, "slug": None, "config_url": None},
         "installer": {"found": False, "slug": None, "ingress_url": None},
     }
+    installed_addons: list[dict[str, Any]] | None = None
     try:
         payload = _supervisor_json("/addons")
         data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
         addons = data.get("addons", []) if isinstance(data, dict) else []
-        for addon in addons if isinstance(addons, list) else []:
+        if isinstance(data, dict) and isinstance(addons, list):
+            installed_addons = [row for row in addons if isinstance(row, dict)]
+        for addon in installed_addons or []:
             if not isinstance(addon, dict):
                 continue
             slug = str(addon.get("slug") or "").strip()
@@ -4806,7 +4821,11 @@ def _installed_switch_vision_app_links() -> dict[str, Any]:
     except RuntimeError as exc:
         links["error"] = str(exc)
     try:
-        unifi = _unifi2mqtt_settings_status()
+        unifi = (
+            _unifi2mqtt_settings_status()
+            if installed_addons is None
+            else _unifi2mqtt_settings_status(installed_addons=installed_addons)
+        )
         links["unifi2mqtt"] = {
             "found": bool(unifi.get("installed")),
             "available": bool(unifi.get("available")),

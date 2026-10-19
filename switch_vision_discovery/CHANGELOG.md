@@ -1,3 +1,7 @@
+## 3.0.90 — Reuse installed-app list in Hub links (Local)
+
+- Reuse the Hub's installed-app list when resolving UniFi2MQTT links, eliminating a duplicate Supervisor request per successful links refresh while preserving standalone checks and retry behavior when the first request fails.
+
 ## 3.0.89 — Consolidate Hub configuration snapshots (Local)
 
 - Use one private atomic snapshot writer and one stored-walk configuration path for Discovery, SNMP2MQTT regeneration, device-state application and dashboard regeneration; preserve the distinct workflow paths, permissions, error messages and no-live-walk safeguards.
