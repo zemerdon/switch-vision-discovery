@@ -1,3 +1,7 @@
+## 3.0.94 — Responsive Device Overview faceplate previews
+
+- Scale selected and alternative stock faceplate previews to their available Device Overview panel width on mobile and desktop, preserving the artwork's natural aspect ratio and keeping its revision caption beneath the image. Faceplate assets, physical port maps and saved Calibration are unchanged.
+
 ## 3.0.93 — More reliable UniFi status and streamlined Discovery Hub
 
 - Distinguish fresh UniFi device telemetry from retained cached cards. Stale or unverified API-only polling now reports degraded status without removing usable dashboards or altering SNMP2MQTT YAML.

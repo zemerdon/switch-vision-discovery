@@ -5,6 +5,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const hubHtml = fs.readFileSync(path.join(__dirname, "support_web.html"), "utf8");
+assert.match(hubHtml, /\.hub-faceplate-current\{[^}]*flex-direction:column;[^}]*align-items:stretch;/,
+  "current faceplate and revision label stack vertically at every viewport width");
+assert.match(hubHtml, /\.hub-faceplate-current img\{[^}]*width:100%;[^}]*height:auto;/,
+  "current stock preview fills its parent width with natural aspect ratio");
+assert.doesNotMatch(hubHtml, /\.hub-faceplate-current img\{[^}]*(?:width:190px|height:72px)/,
+  "current artwork must not regress to a fixed-size thumbnail");
+assert.match(hubHtml, /\.hub-faceplate-device-option img\{[^}]*width:100%;[^}]*height:auto;/,
+  "alternative revision previews also retain their aspect ratios");
+
 class Element {
   constructor() {
     this.value = "";
