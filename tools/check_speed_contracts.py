@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import urllib.request
 from pathlib import Path
 
@@ -18,7 +19,11 @@ def main() -> int:
     yaml_stage = Path("runtime_src/discovery_yaml_stage.sh").read_text(encoding="utf-8")
     discovery_source = job + "\n" + yaml_stage
     profiles = Path("runtime_src/profiles/switch-vision-profiles.yaml").read_text(encoding="utf-8")
-    snmp = fetch(SNMP_INTERFACE_URL)
+    local_engine_interface = os.environ.get("SWITCH_VISION_LOCAL_SNMP_INTERFACE", "").strip()
+    snmp = (
+        Path(local_engine_interface).read_text(encoding="utf-8")
+        if local_engine_interface else fetch(SNMP_INTERFACE_URL)
+    )
 
     required_discovery = [
         "function yaml_speed_sensor(model, idx, label, has_highspeed, has_ifspeed, cap_mbps)",

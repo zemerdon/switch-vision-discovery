@@ -347,6 +347,14 @@ def main() -> int:
         default=os.environ.get("SWITCH_VISION_CORE_SOURCE_SHA", ""),
         help="Exact Core commit SHA represented by --core-source-root.",
     )
+    parser.add_argument(
+        "--snmp-addon-source-root", default="",
+        help="Exact local SNMP2MQTT HA app source snapshot for generated YAML parity.",
+    )
+    parser.add_argument(
+        "--snmp-engine-source-root", default="",
+        help="Exact local SNMP2MQTT engine source snapshot for speed-contract parity.",
+    )
     args = parser.parse_args()
     if args.mode != "release":
         raise SystemExit("unsupported release-check mode")
@@ -376,6 +384,25 @@ def main() -> int:
         )
     elif core_source_sha:
         raise SystemExit("--core-source-sha requires --core-source-root")
+    else:
+        raise SystemExit("Discovery release check requires an exact local Core source")
+
+    if bool(args.snmp_addon_source_root) != bool(args.snmp_engine_source_root):
+        raise SystemExit("Discovery requires both coordinated local SNMP2MQTT source roots")
+    if not args.snmp_addon_source_root:
+        raise SystemExit("Discovery release check requires exact local SNMP2MQTT app and engine sources")
+    if args.snmp_addon_source_root:
+        addon_config = (
+            Path(args.snmp_addon_source_root).resolve()
+            / "switch-vision-snmp2mqtt/config.yaml"
+        )
+        engine_interface = Path(args.snmp_engine_source_root).resolve() / "src/interface.ts"
+        for source in (addon_config, engine_interface):
+            if not source.is_file():
+                raise SystemExit(f"Discovery coordinated SNMP2MQTT source unavailable: {source}")
+        os.environ["SWITCH_VISION_LOCAL_SNMP_ADDON_CONFIG"] = str(addon_config)
+        os.environ["SWITCH_VISION_LOCAL_SNMP_INTERFACE"] = str(engine_interface)
+        print("Discovery coordinated local SNMP2MQTT YAML and speed contracts: present")
 
     root = ROOT
     if core_source_root is not None:

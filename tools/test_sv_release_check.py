@@ -130,6 +130,16 @@ def main() -> int:
     ):
         assert marker in component_contracts, marker
 
+    for marker in (
+        '--snmp-addon-source-root',
+        '--snmp-engine-source-root',
+        'SWITCH_VISION_LOCAL_SNMP_ADDON_CONFIG',
+        'SWITCH_VISION_LOCAL_SNMP_INTERFACE',
+    ):
+        assert marker in source or marker in component_contracts or marker in (
+            ROOT / "tools/check_speed_contracts.py"
+        ).read_text(encoding="utf-8"), marker
+
     module = load_entrypoint()
     version = module.resolve_version(ROOT)
     module.validate_runtime_version_contract(ROOT, version)

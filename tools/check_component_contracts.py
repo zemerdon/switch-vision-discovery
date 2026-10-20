@@ -601,7 +601,11 @@ def main() -> int:
     discovery_yaml_path = str(
         ((discovery_config or {}).get("options") or {}).get("generated_yaml_path") or ""
     ).strip()
-    snmp_config = yaml.safe_load(fetch_text(args.snmp_addon_config_url)) or {}
+    local_snmp_config = os.environ.get("SWITCH_VISION_LOCAL_SNMP_ADDON_CONFIG", "").strip()
+    snmp_config = yaml.safe_load(
+        Path(local_snmp_config).read_text(encoding="utf-8")
+        if local_snmp_config else fetch_text(args.snmp_addon_config_url)
+    ) or {}
     snmp_yaml_path = str(
         (snmp_config.get("options") or {}).get("switch_vision_generated_yaml_path")
         or ""

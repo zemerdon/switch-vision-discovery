@@ -1,3 +1,7 @@
+## 3.0.93 — Validate SNMP2MQTT contracts from local source (Local)
+
+- Product-owned Discovery release validation now checks the coordinated SNMP2MQTT HA app generated-YAML path and engine ifHighSpeed sensor source from exact local source snapshots, avoiding unrelated public-network dependence while preserving both cross-component compatibility gates.
+
 ## 3.0.92 — Report stale UniFi data without erasing cached cards (Local)
 
 - UniFi-only Discovery now requires a verified recent successful UniFi2MQTT device poll before reporting clean API-only success. When the snapshot is stale or lacks reliable freshness metadata, retain usable cached cards and existing SNMP2MQTT YAML unchanged while reporting warnings instead of claiming live API success.
