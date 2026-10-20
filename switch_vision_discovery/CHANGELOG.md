@@ -1,57 +1,9 @@
-## 3.0.93 — Validate SNMP2MQTT contracts from local source (Local)
+## 3.0.93 — More reliable UniFi status and streamlined Discovery Hub
 
-- Product-owned Discovery release validation now checks the coordinated SNMP2MQTT HA app generated-YAML path and engine ifHighSpeed sensor source from exact local source snapshots, avoiding unrelated public-network dependence while preserving both cross-component compatibility gates.
-
-## 3.0.92 — Report stale UniFi data without erasing cached cards (Local)
-
-- UniFi-only Discovery now requires a verified recent successful UniFi2MQTT device poll before reporting clean API-only success. When the snapshot is stale or lacks reliable freshness metadata, retain usable cached cards and existing SNMP2MQTT YAML unchanged while reporting warnings instead of claiming live API success.
-
-## 3.0.91 — Avoid duplicate UniFi settings reads (Local)
-
-- UniFi2MQTT settings saves now resolve the installed app directly, read its complete current options once, and avoid preparing diagnostics, snapshot, pending-restore presentation state and a second identical Supervisor options request before writing. Preserve fail-closed missing/invalid options, existing secret retention, started/stopped lifecycle and fresh sanitized post-save status.
-
-## 3.0.90 — Reuse installed-app list in Hub links (Local)
-
-- Reuse the Hub's installed-app list when resolving UniFi2MQTT links, eliminating a duplicate Supervisor request per successful links refresh while preserving standalone checks and retry behavior when the first request fails.
-
-## 3.0.89 — Consolidate Hub configuration snapshots (Local)
-
-- Use one private atomic snapshot writer and one stored-walk configuration path for Discovery, SNMP2MQTT regeneration, device-state application and dashboard regeneration; preserve the distinct workflow paths, permissions, error messages and no-live-walk safeguards.
-
-## 3.0.85 — Isolate stock faceplate upgrade Hub POST action (Local)
-
-- Move the existing faceplate-upgrade action POST body into a dedicated Hub handler method without changing Supervisor ingress, request-size validation, Core reset handoff, or HTTP 400/503 error semantics. No second Calibration system.
-- Add isolated real-handler HTTP regressions for accepted action, denied ingress, malformed/oversized requests, invalid action and unavailable Core responses. No live Core or HAOS changes.
-
-## 3.0.84 — Isolate HP optics Hub POST routing (Local)
-
-- Extract the HP optics settings POST route into a dedicated Hub handler method without changing its validation, Supervisor ingress, credential bounds, Home Assistant request contract, or generic failure response.
-- Add in-memory HTTP tests for allowed/denied access, enabled/disabled and default community values, invalid lengths/JSON/types, credential limits and redacted backend errors. No live Home Assistant changes.
-
-## 3.0.83 — Isolate Hub settings POST routing (Local)
-
-- Extract the existing Core, SNMP2MQTT and Discovery settings-save POST routes into a single dedicated handler method, preserving Supervisor ingress, per-route payload limits, existing serialization, response and error semantics without modifying settings persistence.
-- Add in-memory HTTP regressions for each settings-save route, denied ingress, malformed/oversized requests, exclusive-operation conflicts and validation failures. No live HAOS/configuration changes.
-
-## 3.0.82 — Isolate AutoDiscover Hub HTTP dispatch (Local)
-
-- Extract the existing AutoDiscover scan and add POST request handling into one dedicated SupportHandler method, retaining the Supervisor ingress guard, distinct scan/add serialization, request limits, responses and errors without changing discovery or device mutations.
-- Add real in-memory handler regressions for successful scan/add dispatch, denied ingress, JSON/size rejection, conflicts, and scan/add failure handling. Tests do not contact physical switches or mutate HAOS.
-
-## 3.0.81 — Isolate UniFi2MQTT Hub POST routing (Local)
-
-- Move the three UniFi2MQTT Hub install, connection-test and settings routes to a dedicated existing-handler method, preserving Supervisor ingress authorization, operation serialization, request limits, response codes and connection-error redaction.
-- Add isolated in-memory HTTP route tests for successful calls, blocked ingress, invalid and oversized JSON, conflicting operations, installation failure and safe connection errors; no live controller, HAOS or MQTT changes.
-
-## 3.0.80 — Isolate configured-device Hub POST dispatch (Local)
-
-- Extract configured-device state, reorder and reset-order request dispatch into one existing Hub-handler method, preserving Supervisor ingress gating, serialized operation boundaries, responses, error codes and SNMP/UniFi refresh scheduling.
-- Expand in-memory HTTP handler regressions for state/order/reset success, operation-lock ordering, SNMP and UniFi refresh semantics, rejected ingress, malformed and oversized JSON, conflict and reset I/O failure. No live device or owner HAOS changes.
-
-## 3.0.79 — Simplify Calibration Profile POST dispatch (Local)
-
-- Move the existing Hub Calibration Profile get/save/delete POST handling into one SupportHandler method, reducing central POST dispatch coupling without changing Supervisor ingress, request size limits, Core WebSocket/service calls or HTTP errors.
-- Exercise real in-memory HTTP dispatch for success, malformed/oversized bodies and blocked ingress. No Calibration data, switch configuration or HAOS state is modified by the tests.
+- Distinguish fresh UniFi device telemetry from retained cached cards. Stale or unverified API-only polling now reports degraded status without removing usable dashboards or altering SNMP2MQTT YAML.
+- Streamline Hub configuration snapshots, stored-walk regeneration and installed-app status reuse while retaining existing secret protection, Supervisor error handling and workflow boundaries.
+- Keep Calibration, faceplate-upgrade, device control, YAML generation and UniFi settings actions isolated and covered by request/error regressions, without changing their established behavior.
+- Validate SNMP2MQTT YAML and interface-speed compatibility from exact coordinated local HA-app and engine source snapshots, avoiding a required external GitHub fetch during product validation.
 
 ## 3.0.78 — Exact Calibration backup restoration (Local)
 
