@@ -1,3 +1,8 @@
+## 3.0.97 — Align with per-port PoE LED Calibration
+
+- Bind the exact Switch Vision Core 2.8.10 faceplate catalog for the optional per-port PoE LED Calibration release.
+- Preserve existing switch discovery, generated SNMP PoE entities, API telemetry, model mappings, factory artwork and saved user Calibration. Core owns LED rendering and per-port SNMP/UniFi telemetry interpretation.
+
 ## 3.0.96 — Clear release history and component notes
 
 - Remove internal development-stage labels and outdated publication-status text from earlier release headings.
