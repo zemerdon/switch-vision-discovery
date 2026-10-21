@@ -1,8 +1,13 @@
-## 3.0.95 — Cisco 3560CG Compact default presentation (Local)
+## 3.0.96 — Clear release history and component notes
+
+- Remove internal development-stage labels and outdated publication-status text from earlier release headings.
+- Keep device discovery, native faceplate upgrades, saved Calibration, generated dashboards and telemetry unchanged.
+
+## 3.0.95 — Cisco 3560CG Compact default presentation
 
 - Make the exact Cisco WS-C3560CG-8PC-S registry recommend the new owner-supplied Core 2.8.8 Compact artwork and native-image factory geometry; retain the original Cisco faceplate and existing generic fallback as selectable choices.
 - Keep eight fixed copper ports, two logical dual-purpose copper/SFP uplinks, mapping profile, SNMP interface bindings, model support at Experimental and saved per-switch Native/Custom Calibration unchanged. Assign a dedicated Compact calibration profile, preserving the legacy profile used by Zyxel XS1930-10 and existing Cisco configurations. The SW1 / generic stock source-profile labels in the owner's geometry export are not imported as device identities.
-- Update the exact Core catalog pin after the Core local-main merge and regenerate the normal Discovery runtime archive. This is a local-only source change, not a public release, forum update or owner HAOS installation.
+- Bind the released Core 2.8.8 catalog identity and preserve the established Discovery runtime integration, without installing or resetting the owner Home Assistant.
 
 ## 3.0.94 — Responsive faceplates and more reliable Discovery Hub
 
@@ -12,117 +17,117 @@
 - Keep Calibration, faceplate-upgrade, device control, YAML generation and UniFi settings actions isolated and covered by request/error regressions, without changing their established behavior.
 - Validate SNMP2MQTT YAML and interface-speed compatibility from exact coordinated local HA-app and engine source snapshots, avoiding a required external GitHub fetch during product validation.
 
-## 3.0.78 — Exact Calibration backup restoration (Local)
+## 3.0.78 — Exact Calibration backup restoration
 
 - Restore Calibration through Core's reviewed administrator-only exact-backup path so missing stock-faceplate SHA metadata stays missing, and supplied stock SHA values remain subject to Core's installed-asset verification.
 
-## 3.0.77 — Cisco switch temperature selection (Local)
+## 3.0.77 — Cisco switch temperature selection
 
 - Correct the generic Cisco temperature entity to read ambient Inlet when available instead of the hotter HotSpot sensor; keep Inlet, Outlet, HotSpot and environmental alarm readings separately.
 - Preserve single-sensor/HotSpot-only fallback and stack-member isolation, with generated-YAML regression coverage. No switch writes or Core Calibration changes.
 
-## 3.0.76 — Consolidate bounded Hub JSON request parsing (Local)
+## 3.0.76 — Consolidate bounded Hub JSON request parsing
 
 - Reuse one existing-handler method for content-length validation, bounded UTF-8 decoding and JSON parsing across five Discovery Hub UI/AutoDiscover/device APIs.
 - Preserve every route's exact byte limit, invalid-size message, malformed-body response and operation boundaries; source regression checks success and invalid inputs. No changes to SNMP, UniFi, telemetry, cards, Calibration, device mutations or backups.
 
-## 3.0.75 — Reuse Hub attachment writer for YAML downloads (Local)
+## 3.0.75 — Reuse Hub attachment writer for YAML downloads
 
 - Reuse the existing attachment response writer in four dashboard/generated YAML downloads, removing repeated status/header/body-write code without adding another module.
 - Preserve exact output bytes, filenames, no-store headers, MIME type, missing-file 404 responses and failed-export 400 responses. Source-owned regressions verify those contracts. No model, port, SNMP, UniFi, MQTT, Calibration or backup behavior changes.
 
-## 3.0.74 — Consolidate Hub download response headers (Local)
+## 3.0.74 — Consolidate Hub download response headers
 
 - Share the exact HTTP attachment response writer across Discovery, switch-configuration, complete-backup and diagnostics downloads, removing four duplicate header/body-write blocks.
 - Preserve each payload, filename, content type, JSON formatting, 128 MiB complete-backup limit, existing error classification and no-store behavior. Add source-owned regression coverage for exact responses and rejected/error exports. No device or Calibration behavior changes.
 
-## 3.0.73 — Simplify Hub device dashboard refresh (Local)
+## 3.0.73 — Simplify Hub device dashboard refresh
 
 - Consolidate three identical immediate dashboard-refresh response paths used for device enable/disable, reorder and reset order into one existing-Hub helper. Preserve exact responses, warning truncation, serialized device mutation and coalesced SNMP state application.
 - Extend the device-ordering regression to check success, pending, error and all three endpoint contracts. No model, port, SNMP, UniFi, MQTT or Calibration behaviour changes.
 
-## 3.0.72 — Consolidate Hub/maintenance add-on selection (Local)
+## 3.0.72 — Consolidate Hub/maintenance add-on selection
 
 - Replace two copies of the SNMP2MQTT Supervisor add-on ranking logic with a single pure, local selector, retaining the same filtering, preference ranking, stable tie order, and independent Supervisor request/error handling.
 - Consolidate three identical strict Home Assistant entity-state sanitizers into one tested local helper, preserving the exact numeric/status allowlist and sensitive-value redaction across diagnostics, walk correlation and snapshot generation.
 - Add runtime/self-test regressions for malformed add-on lists, preferred selection, Hub/MQTT maintenance parity, strict state redaction and three-module equivalence. No options, MQTT topics, model capabilities, protected evidence or installed add-on state are changed.
 
-## 3.0.71 — Coordinate Native artwork reset with Core 2.8.2 (Local)
+## 3.0.71 — Coordinate Native artwork reset with Core 2.8.2
 
 - Bind Discovery Hub's existing Native-only Upgrade Faceplate workflow to the exact Core 2.8.2 source, which completes the successful factory Calibration save and artwork SHA refresh after a verified approval.
 - Preserve the existing Hub preview/approval UI, manual Custom artwork selection and single-switch authorization semantics. Installer handles normal updates without faceplate approval UI.
 
-## 3.0.70 — Cisco 3850 artwork coordination (Local)
+## 3.0.70 — Cisco 3850 artwork coordination
 
 - Align the exact Core dependency with 2.8.1 for the newly supplied 3850-12XS stock faceplate.
 - Retain Native-only Hub upgrade offers, manual Custom artwork selection and Calibration safeguards.
 
-## 3.0.69 — Native-only Hub faceplate upgrade (Local)
+## 3.0.69 — Native-only Hub faceplate upgrade
 
 - Restrict automatic New Faceplate Upgrade Available offers and approvals to the Native dashboard. Custom's separate saved artwork and Calibration never trigger another upgrade offer or change from that Hub workflow.
 - Keep manually selecting Custom artwork through the existing independent faceplate picker/Core Calibration controls. Strictly reject forged Custom requests to the automatic upgrade/keep/version-select actions; continue to verify Native model, prior SHA, selected revision and completed factory Calibration reset through Core.
 - Update the Hub explanation and confirmation to identify Native as the only automatic upgrade target. Add regressions for both-scopes outdated, Custom-only outdated, no follow-up Custom offer and the protected Custom manual picker.
 
-## 3.0.68 — Native-first faceplate upgrades (Local)
+## 3.0.68 — Native-first faceplate upgrades
 
 - When Native and Custom dashboards both have older verified stock artwork, Hub offers Native first, then Custom after Native approval.
 - The upgrade banner and confirmation identify the exact Native or Custom dashboard being updated.
 - Keep each existing Core artwork and Calibration transaction strictly one-scope-only, without resetting the other dashboard or guessing missing stock evidence.
 - Add dual-scope ordering and follow-up regressions.
 
-## 3.0.67 — Honor pending Native artwork when Custom is current (Local)
+## 3.0.67 — Honor pending Native artwork when Custom is current
 
 - Do not let an already-current Custom or Native artwork pin suppress a genuinely older selection in the other dashboard scope just because historical versions remain selectable.
 - Preserve explicit, per-switch approval and the independent Native/Custom Calibration scope; same-PNG changes with different verified factory geometry remain eligible.
 - Permanently regress a 3850-style latest Custom / older Native pin combination and the both-current case.
 
-## 3.0.66 — Recover unavailable old-artwork upgrade offers (Local)
+## 3.0.66 — Recover unavailable old-artwork upgrade offers
 
 - When a switch retains a verified old-artwork SHA but its historical preview has become unavailable, Hub still offers the model's verified latest factory artwork and geometry instead of silently hiding the upgrade.
 - Never substitute the new image as a false old preview; explicitly label the old preview unavailable and require the existing per-switch user approval before updating Core's selection and saved visual Calibration.
 - Retain normal Keep Current behavior and per-switch revision matching.
 
-## 3.0.65 — Current faceplate visible in Device Overview (Local)
+## 3.0.65 — Current faceplate visible in Device Overview
 
 - Always show a **Faceplates** section under each registered SNMP switch in Discovery → Device Overview, including its verified currently selected stock artwork even when no upgrade exists.
 - Only expand a version picker when a different verified compatible revision is available; keep the exact warned, per-switch Calibration-reset approval for changes.
 - Show a clear read-only unavailable status when Core cannot verify a current stock selection, without inventing artwork or mutating Calibration; cover single-choice, unresolved and multi-version cases with permanent regressions.
 
-## 3.0.64 — Shared stock to dedicated model upgrades (Local)
+## 3.0.64 — Shared stock to dedicated model upgrades
 
 - Offer a model-specific dedicated faceplate and paired factory geometry even when its PNG bytes match a shared generic faceplate.
 - Recognise verified Installer-managed SHA revision previews and use revision fingerprints rather than Core release numbers for new revisions.
 - Keep existing device artwork until explicit approval; new devices use the current reviewed model mapping, without modifying user Calibration.
 
-## 3.0.63 — Distinct revision selection and runtime identity (Local)
+## 3.0.63 — Distinct revision selection and runtime identity
 
 - Correct the packaged runtime version and compare both revision identity and PNG SHA when showing a selected historical faceplate.
 - Preview locally retained, exact-version older artwork without replacing user Calibration or model ports.
 
-## 3.0.62 — Versioned faceplate and geometry picker (Local)
+## 3.0.62 — Versioned faceplate and geometry picker
 
 - Let the owner expand and preview every verified Core-versioned faceplate for each configured switch and select any compatible revision.
 - Keep the model registry authoritative, use Core's exact image-and-factory-geometry revision identity, and preserve saved user Calibration.
 - Continue to tolerate older Core versions that do not yet expose the version catalog.
 
-## 3.0.61 — Direct-upgrade faceplate consent (Local)
+## 3.0.61 — Direct-upgrade faceplate consent
 
 - Coordinate Hub old/new artwork comparison against Core 2.7.92's Installer-recorded initial selection.
 - Preserve Keep Current / Upgrade Faceplate actions and unaffected Calibration settings.
 
-## 3.0.60 — Coordinate latest Cisco 3850 artwork and Core stock pin (Local)
+## 3.0.60 — Coordinate latest Cisco 3850 artwork and Core stock pin
 
 - Validate Hub's existing per-switch, exact-SHA faceplate approval workflow against Core 2.7.91 and the revised Cisco 3850-12XS stock image.
 - Continue to display the verified previous image when declined and offer the newly installed image without resetting Calibration or changing port geometry.
 - No independent device-discovery, registry or SNMP behavior changes.
 
-## 3.0.59 — Per-switch approved faceplate selection (Local)
+## 3.0.59 — Per-switch approved faceplate selection
 
 - Compare Core's verified per-switch stock artwork pins against current reviewed model defaults after restart.
 - Keep Current preserves the selected archived image, while Upgrade Faceplate asks Core to approve only the target artwork SHA, preserving Calibration and all unrelated switches.
 - Support unchanged stock filenames and archived historical preview; reject ambiguous or missing archived originals.
 
-## 3.0.58 — Version-aware same-filename faceplate upgrades (Local)
+## 3.0.58 — Version-aware same-filename faceplate upgrades
 
 - Compare verified saved stock artwork SHA-256 against current Core stock image even when both retain the canonical model filename.
 - Show retained historical pixels above the updated image, with cache-busted URLs and explicit descriptions for the same-name case; do not fabricate the old preview when history is absent or tampered.
@@ -175,99 +180,99 @@
 - Leave optional rear positions unbound when the module is absent; preserve the front 45–48 dual-personality mapping and avoid inventing ports or link states.
 - Coordinate with Core 2.7.83 so missing or unavailable rear status displays as unknown instead of incorrectly showing Down.
 
-## 3.0.49 — HP 3500yl-48G dedicated default artwork (Local)
+## 3.0.49 — HP 3500yl-48G dedicated default artwork
 
 - Select the exact owner-supplied HP 3500yl-48G faceplate and factory profile as this model’s default while preserving all 48 logical interfaces, four dual-personality RJ45/SFP interfaces and existing observed SNMP mappings.
 - Retain Experimental evidence confidence and existing telemetry claims; no new model or capability claims.
 
-## 3.0.48 — Cisco SG200-26 dedicated default faceplate (Local)
+## 3.0.48 — Cisco SG200-26 dedicated default faceplate
 
 - Assign Core 2.7.81's owner-supplied `cisco-sg200-26.png` and `cisco_sg200_26` as the sole SG200-26 default and recommended visual; no generic alternative is projected for that model.
 - Preserve exact reviewed hardware identity, 24 fixed copper plus two shared RJ45/SFP logical interfaces, interface bindings and evidence confidence without telemetry speculation.
 
-## 3.0.47 — Five-menu Calibration preview and theme compatibility (Local)
+## 3.0.47 — Five-menu Calibration preview and theme compatibility
 
 - Sync the read-only Calibration Theme preview to Core 2.7.80: two four-choice Status Box menus and eight choices each for RJ45, SFP and rSFP.
 - Preserve responsive dropdown/spacing, typography and open-menu sizing controls; preview the current source-derived Core CSS and menu labels, including rSFP naming.
 - Confirm the general management UI Theme already provides its field/accent and Calibration preview-highlight roles. No new saved theme settings are needed.
 
-## 3.0.46 — Compact Calibration quick-select dropdown preview (Local)
+## 3.0.46 — Compact Calibration quick-select dropdown preview
 
 - Regenerate Core 2.7.79's Calibration Theme preview: display the two Status Box dropdowns with all twelve options per box and the reordered rSFP Port manager controls.
 - Match the moved Card Height controls and removal of redundant hint text, while preserving theme saving and existing Calibration data contracts.
 
-## 3.0.45 — Restore pre-alignment Calibration Theme preview (Local)
+## 3.0.45 — Restore pre-alignment Calibration Theme preview
 
 - Revert the shared primary label-column experiment and match Core 2.7.78's restored 2.7.76 Calibration layout in the read-only theme preview.
 - Preserve the rSFP, closed-dropdown Auto sizing, quick-selection, LED shape, and theme-save improvements from prior releases.
 
-## 3.0.44 — Shared Calibration label-column preview (Local)
+## 3.0.44 — Shared Calibration label-column preview
 
 - Mirror Core 2.7.77's single first-column label width across the read-only Calibration Theme preview with responsive wrapping, keeping nested selection/LED actions compact and preserved.
 - Retain exact Core CSS/theme generation parity, existing save behaviour and previous Core 2.7.76 / Hub 3.0.43 Calibration layout improvements.
 
-## 3.0.43 — Calibration target Auto sizing and quick selection parity (Local)
+## 3.0.43 — Calibration target Auto sizing and quick selection parity
 
 - Refresh the read-only Calibration Theme preview from Core 2.7.76: remove the 185 px closed target-picker cap and reflect wrapping selected-value Auto dropdowns, with the arrow gutter preserved.
 - Mirror the side-by-side SFP/rSFP selector layout, Status Box 1/2 quick-action groups with aligned Odd/Even RJ45/SFP buttons, compact Port Label / Show spacing and single-line Link LED Shape and Activity LED Shape labels.
 - Keep theme-save workflows and saved settings unchanged; Core remains the Calibration data owner.
 
-## 3.0.42 — Content-aware Calibration Theme Auto width (Local)
+## 3.0.42 — Content-aware Calibration Theme Auto width
 
 - Update read-only Calibration Theme Closed Dropdown preview to the exact Core content-aware trigger layout and demonstrate long and short selected labels.
 - Clarify content-aware Auto for closed dropdowns (selected label), open dropdowns (menu options), and text/numeric inputs, while preserving Desktop/Mobile pixel overrides.
 - Highlight the exact affected text/control in every Calibration Theme preview (orange by default); add an editable highlight colour role under Custom Theme, with inherited legacy-theme default. Make the main Save changes button also save pending Calibration Theme edits through the existing Core-owned save path. Keep exact Core-derived preview/source parity and Status Box 1/2 Quick Select alignment.
 
-## 3.0.41 — Hint Text and combined LED preview alignment (Local)
+## 3.0.41 — Hint Text and combined LED preview alignment
 
 - Add a dedicated Desktop/Mobile Hint Text font size and Regular/Bold weight section, previewing the actual grey section summaries and helper text.
 - Track Core 2.7.74's selection layout, new Link+Activity quick controls, larger coordinate inputs and removed separators through Core-derived read-only preview assets.
 - Retain Core-owned settings persistence, existing saved profiles and Core/Hub preview parity; Local-only candidate.
 
-## 3.0.40 — Auto-sized Calibration Theme examples (Local)
+## 3.0.40 — Auto-sized Calibration Theme examples
 
 - Remove the arbitrary 310 px iframe preview cap and auto-size the read-only examples from their rendered Core-styled content. Minimum Row Height and Space Between Rows examples can now grow as controls wrap, without a nested iframe scrollbar.
 - For Maximum Menu Height only, generate enough representative RJ45 options for the real open menu to reach its selected 80–600 px maximum. The menu itself retains its expected internal scroll when options exceed that height; the outer preview grows to display the entire capped menu.
 - Keep the other open-dropdown examples compact and scripts prohibited in sandboxed frames. No Core runtime, saved Calibration profiles, public release, or personal HAOS change.
 
-## 3.0.39 — Per-control Calibration Theme examples and typography roles (Local)
+## 3.0.39 — Per-control Calibration Theme examples and typography roles
 
 - Replace the oversized Selection preview with compact source-styled, sandboxed, read-only live examples beneath each settings dropdown. Use several adjacent real Core-derived action buttons for button, padding and spacing settings.
 - Add independent Desktop/Mobile font size and Regular/Bold controls for Field Labels, Group Labels, Subsection Headings and Section Headings. The global typography control applies to button/input/select/menu text only.
 - Show real RJ45 Targets, Port manager, Quick selection and Selection samples. Open-dropdown menu settings display their menu locally without navigating a long button preview.
 - Preserve existing stored Calibration styling, per-switch calibration profiles and ordinary dashboard geometry; no public release or personal HAOS installation.
 
-## 3.0.38 — Full Selection preview and global Calibration sizing (Local)
+## 3.0.38 — Full Selection preview and global Calibration sizing
 
 - Add compact global Desktop/Mobile dropdowns for row height, button/input minimum height, line height, button width, row and label spacing, and text/number input widths; preserve options both below and above compact Core defaults.
 - Render every Selection action button in the sandboxed live preview using a manifest generated directly from the coordinated Core Selection markup (49 actions in this version). Keep original row classes and grouping labels, plus the matching real Calibration stylesheet, with exact source-parity checks.
 - No live switch interaction, saved Calibration-profile modification, personal HAOS update, or public release.
 
-## 3.0.37 — One global Calibration Theme panel (Local)
+## 3.0.37 — One global Calibration Theme panel
 
 - Replace repetitive per-section Calibration Theme editors with a single compact Desktop/Mobile settings panel: global text size, weight, all-side/axis padding and spacing, plus only closed/open dropdown-specific geometry controls.
 - Keep one real-Core-styled, sandboxed Selection preview with representative dense Assets, target selectors, port-management buttons, quick-selection and inputs. Every edit updates this same preview; the menu can be shown explicitly.
 - Retain pre-existing detailed theme preferences for backward compatibility while new global values take precedence. No saved per-switch Calibration geometry, ordinary dashboard or public release changes.
 
-## 3.0.36 — Exact-style Calibration Theme preview and padding axes (Local)
+## 3.0.36 — Exact-style Calibration Theme preview and padding axes
 
 - Add horizontal and vertical padding dropdowns to every applicable Calibration Theme section in both Desktop and Mobile; retain all-side padding fallback.
 - Replace the former decorative Hub preview with a sandboxed, read-only viewport showing the actual Core Calibration stylesheet, its original theme-rule generator and corresponding named Calibration fields. Simulated samples cannot mutate saved Calibration profiles, switch state, or real field values.
 - Require exact source parity between the bundled preview CSS/rules and the coordinated Core candidate during component validation; no public release or personal HAOS update.
 
-## 3.0.35 — Calibration Theme Hub editor (Local)
+## 3.0.35 — Calibration Theme Hub editor
 
 - Add Calibration Theme next to Custom Theme in Hub Settings, grouped by Workspace & Sections, Assets & Selection, Labels & Fields, Buttons & Inputs, and Dropdowns.
 - Independent Desktop and Mobile typography, weight, padding, spacing, closed dropdown and open-menu measurements with compact selectors, instant preview, and independently resettable sections.
 - Persist only the Calibration-editor appearance through the existing authoritative Core settings path. No faceplate geometry, calibration profile, ordinary dashboard, mail, or network-device mutation.
 
-## 3.0.34 — TP-Link JetStream system-identity MIB probe (Local)
+## 3.0.34 — TP-Link JetStream system-identity MIB probe
 
 - Add the official TP-Link `TPLINK-SYSINFO-MIB` read-only `tpSysInfoDescription` leaf (`1.3.6.1.4.1.11863.6.1.1.1`) to the bounded JetStream targeted walk; retain hardware/firmware, CPU, memory, PoE and optical diagnostic probes without broadening to the entire vendor tree.
 - Record the related vendor MIB modules and `TPLINK-PRODUCTS-MIB` OID-symbol references alongside the two reviewed JetStream candidate contracts. Keep precise hardware revisions and on-device confirmation pending; a model-OID resemblance alone remains insufficient.
 - Exclude serial-number and other identifying configuration fields; no SNMP SET, telemetry invention, public publication or support-state promotion.
 
-## 3.0.33 — HP 3500yl optical refresh controls (Local pilot)
+## 3.0.33 — HP 3500yl optical refresh controls
 
 - Remove the generic optional faceplate assignment from the Avaya ERS 3524GT-PWR+ exact-model registry; retain only the owner-calibrated Avaya PNG and native calibration, without changing existing saved user overrides.
 

@@ -118,6 +118,8 @@ def main() -> None:
     release_paths += list((ROOT / "switch_vision_discovery/release-fragments").glob("*.md"))
     for path in release_paths:
         text = path.read_text(encoding="utf-8", errors="ignore")
+        if re.search(r"(?mi)^#{1,4} [^\n]*\((?:Local|Local pilot)\)\s*$", text):
+            raise SystemExit(f"Development-stage label remains in customer release heading: {path}")
         if SUBMISSION_ID.search(text):
             raise SystemExit(f"Submission identifier remains in public release text: {path}")
         if PACKAGE_NAME.search(text):
