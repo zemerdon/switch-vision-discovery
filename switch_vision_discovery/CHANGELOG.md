@@ -1,3 +1,9 @@
+## 3.0.95 — Cisco 3560CG Compact default presentation (Local)
+
+- Make the exact Cisco WS-C3560CG-8PC-S registry recommend the new owner-supplied Core 2.8.8 Compact artwork and native-image factory geometry; retain the original Cisco faceplate and existing generic fallback as selectable choices.
+- Keep eight fixed copper ports, two logical dual-purpose copper/SFP uplinks, mapping profile, SNMP interface bindings, model support at Experimental and saved per-switch Native/Custom Calibration unchanged. Assign a dedicated Compact calibration profile, preserving the legacy profile used by Zyxel XS1930-10 and existing Cisco configurations. The SW1 / generic stock source-profile labels in the owner's geometry export are not imported as device identities.
+- Update the exact Core catalog pin after the Core local-main merge and regenerate the normal Discovery runtime archive. This is a local-only source change, not a public release, forum update or owner HAOS installation.
+
 ## 3.0.94 — Responsive faceplates and more reliable Discovery Hub
 
 - Scale selected and alternative stock faceplate previews to their available Device Overview panel width on mobile and desktop, preserving the artwork's natural aspect ratio and keeping its revision caption beneath the image. Faceplate assets, physical port maps and saved Calibration are unchanged.

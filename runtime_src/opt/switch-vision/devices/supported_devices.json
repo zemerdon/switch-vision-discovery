@@ -713,9 +713,10 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "cisco-3560cg-8pc-8p-2dual",
-      "calibration_profile": "cisco_3560cg_8pc",
-      "default_faceplate": "faceplates/c3560cg-8pc-s.png",
+      "calibration_profile": "cisco_3560cg_8pc_compact",
+      "default_faceplate": "faceplates/c3560cg-8pc-s-compact.png",
       "optional_faceplates": [
+        "faceplates/c3560cg-8pc-s.png",
         "faceplates/24rj45-2sfp.png"
       ],
       "tested_firmware": [],
@@ -743,14 +744,15 @@
       },
       "visuals": {
         "status": "confirmed",
-        "recommended_faceplate": "faceplates/c3560cg-8pc-s.png",
+        "recommended_faceplate": "faceplates/c3560cg-8pc-s-compact.png",
         "optional_faceplates": [
+          "faceplates/c3560cg-8pc-s.png",
           "faceplates/24rj45-2sfp.png"
         ],
-        "calibration_profile": "cisco_3560cg_8pc",
+        "calibration_profile": "cisco_3560cg_8pc_compact",
         "canvas": {
-          "width": 2048,
-          "height": 329
+          "width": 2680,
+          "height": 356
         }
       }
     },
