@@ -176,6 +176,7 @@ migration.LEGACY_IMPORT_BACKUP.write_text('{"snmp_community":"legacy-secret"}\n'
 
 store = {
     "show_card_header": True,
+    "autodiscover_networks": ["192.0.2.0/24"],
     "switches": [{
         "switch_name": "SW1",
         "switch_host": "192.0.2.1",
@@ -203,7 +204,7 @@ assert migration.main() == 0
 assert posts, "migration did not use Supervisor options POST"
 assert not migration.LEGACY_IMPORT_BACKUP.exists(), "legacy secret-bearing backup was not removed"
 assert "show_card_header" not in store
-assert store["autodiscover_networks"] == [], store
+assert "autodiscover_networks" not in store, store
 assert store["switches"][0]["enabled"] == "enabled"
 assert store["switches"][0]["snmp_community"] == "keep-secret"
 assert store["unrelated_secret"] == "also-keep-secret"

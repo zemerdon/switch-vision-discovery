@@ -231,6 +231,7 @@ def restore_complete_backup(
 
     switches = discovery_settings.pop("switches", [])
     stack_members = discovery_settings.pop("stack_member_prefixes", [])
+    discovery_settings.pop("autodiscover_networks", None)  # Legacy backup compatibility.
     discovery_settings.pop("support_contributor_value_configured", None)
 
     contributor_was_configured = bool(

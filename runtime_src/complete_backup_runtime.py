@@ -140,6 +140,12 @@ def export_complete_backup(
     configured_devices_snapshot(options_file)
     control = load_device_control(device_control_file)
 
+    discovery_settings = copy.deepcopy(discovery.get("settings"))
+    if isinstance(discovery_settings, dict):
+        # Do not re-export a retired scan-only option from older Supervisor
+        # installations; real configured switches and credentials are retained.
+        discovery_settings.pop("autodiscover_networks", None)
+
     payload = {
         "format": backup_format,
         "schema_version": schema_version,
@@ -155,7 +161,7 @@ def export_complete_backup(
         },
         "components": {
             "core": {"settings": copy.deepcopy(core.get("settings"))},
-            "discovery": {"settings": copy.deepcopy(discovery.get("settings"))},
+            "discovery": {"settings": discovery_settings},
             "snmp2mqtt": {
                 "installed": bool(snmp2mqtt.get("installed")),
                 "settings": copy.deepcopy(snmp2mqtt.get("settings")),

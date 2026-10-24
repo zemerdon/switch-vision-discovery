@@ -105,7 +105,7 @@ def main() -> int:
             switch_enabled_state=switch_enabled,
             effective_discovery_switch_row=effective_row,
             plain_text=plain_text,
-            discovery_options_with_required_defaults=defaults,
+            discovery_options_without_retired_keys=defaults,
             validate_inventory_identities=validate_inventory,
             create_pre_mutation_backup=lambda _options, *, reason: backups.append(reason),
             supervisor_json=supervisor,

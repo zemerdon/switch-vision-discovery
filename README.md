@@ -24,7 +24,7 @@ Switch Vision components are independently versioned. The main Switch Vision Cor
 
 ## Hub updates
 
-Discovery v3.0.0 introduces **Devices → AutoDiscover** with persistent multi-subnet scanning. Add up to 32 IPv4 CIDRs; each subnet is limited to 1024 usable addresses and each scan to 4096 unique addresses, with overlapping ranges deduplicated before probing. AutoDiscover uses only a one-time SNMPv2c community you enter or communities already saved on real configured switches, never guesses communities, and never returns secret values to the browser. The non-secret subnet list is remembered in normal Discovery configuration/export/backup state, existing UniFi API inventory is included automatically, every SNMP candidate is revalidated before **Add Device** or **Add All Ready Devices** saves it, and normal Discovery remains authoritative for exact model/topology detection and dashboard generation.
+Hub → Discovery retains **Run Discovery**, **Configure Devices** and **Device Overview**. Add SNMP switches manually and run Discovery to identify models, walk ports, generate SNMP2MQTT YAML and dashboards; UniFi inventory and existing saved configurations continue normally.
 
 Discovery v2.4.41 makes **Devices → Configure Devices** easier to scan by starting every previously saved switch row collapsed. A newly added switch still opens immediately so its fields are ready for entry without an extra click.
 

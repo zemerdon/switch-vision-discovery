@@ -1,3 +1,8 @@
+## 3.0.98 — Remove subnet AutoDiscover
+
+- Remove the unused AutoDiscover subnet scanner, discovery-candidate add workflow, Hub tab and scan-specific API/configuration. Keep manual Configure Devices, automatic model detection, SNMP/UniFi telemetry and generated dashboards unchanged.
+- Safely discard retired scan-only subnet settings during upgrade and legacy backup import/restore; preserve configured switches, SNMP credentials and existing Calibration.
+
 ## 3.0.97 — Align with per-port PoE LED Calibration
 
 - Bind the exact Switch Vision Core 2.8.10 faceplate catalog for the optional per-port PoE LED Calibration release.

@@ -133,7 +133,7 @@ try:
         assert backup["device_control"]["added_at"]["snmp:SW1"].startswith("2026-09-17")
         assert backup["calibrations"]["profiles"][0]["profile"] == "custom_lab"
         assert backup["assets"][0]["filename"] == "logo.png"
-        assert backup["components"]["discovery"]["settings"]["autodiscover_networks"] == ["192.168.10.0/24", "192.168.20.0/24"]
+        assert "autodiscover_networks" not in backup["components"]["discovery"]["settings"]
         for secret in SECRET_VALUES:
             assert secret not in encoded
         kinds = {(r["component"], r["kind"]) for r in backup["credential_requirements"]}
@@ -206,7 +206,7 @@ try:
         discovery_payload = next(value for name, value in calls if name == "discovery")
         assert "switches" not in discovery_payload["settings"]
         assert "stack_member_prefixes" not in discovery_payload["settings"]
-        assert discovery_payload["settings"]["autodiscover_networks"] == ["192.168.10.0/24", "192.168.20.0/24"]
+        assert "autodiscover_networks" not in discovery_payload["settings"]
         assert "support_contributor_value" not in discovery_payload["settings"]
         restored_control = device_control.load(web.DEFAULT_DEVICE_CONTROL)
         assert restored_control["added_at"] == backup["device_control"]["added_at"]
@@ -282,7 +282,7 @@ for marker in (
     'Configuration Import / Export',
     'id="calibrationProfilesRoot"',
     'id="hubDeviceConfiguration"',
-    'Configure / AutoDiscover Devices',
+    'Configure Devices',
 ):
     assert marker in source, marker
 

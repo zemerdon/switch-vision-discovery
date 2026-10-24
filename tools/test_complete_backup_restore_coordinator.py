@@ -177,6 +177,9 @@ def main() -> int:
     discovery_payload = next(value for name, value in calls if name == "discovery")
     assert "switches" not in discovery_payload["settings"]
     assert "stack_member_prefixes" not in discovery_payload["settings"]
+    # Pre-removal backups must restore normally without resurrecting retired
+    # subnet scanning, altering switch rows or dropping saved credentials.
+    assert "autodiscover_networks" not in discovery_payload["settings"]
     assert "support_contributor_type" not in discovery_payload["settings"]
     assert "support_contributor_value" not in discovery_payload["settings"]
 

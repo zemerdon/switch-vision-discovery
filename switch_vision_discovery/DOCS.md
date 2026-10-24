@@ -21,12 +21,6 @@ Discovery 3.0.4 carries the **Experimental Avaya Ethernet Routing Switch 3524GT-
 - Use targeted mode for known switches
 - Use full mode when investigating new hardware
 
-### Devices AutoDiscover
-
-**Switch Vision Hub → Devices → AutoDiscover** can scan one or more routed IPv4 CIDRs for SNMP-managed switches and include the current UniFi API device inventory. Up to 32 CIDRs may be saved; each subnet is limited to 1024 usable addresses and a scan is limited to 4096 unique addresses across all ranges. Duplicate CIDRs are canonicalized, overlapping address space is deduplicated, and all SNMP probes share one bounded worker pool.
-
-SNMP probing uses only communities explicitly entered for the scan or already saved on real configured switches. Communities are never guessed and are never returned by the Hub API. The non-secret subnet list is persisted with normal Discovery configuration and therefore follows its export/backup/restore path. **Add Device** and **Add All Ready Devices** revalidate SNMP access immediately before saving; an Add All batch is atomic, so a stale candidate prevents the batch from being persisted. Newly added SNMP rows keep **Switch Model = Auto** because normal Discovery remains authoritative for exact model, topology, mapping/profile selection, and dashboard generation.
-
 Discovery v2.1.10 hardens **full-walk** handling. On Juniper EX devices, full mode walks the standard MIB and Juniper enterprise tree independently so a timeout in one branch cannot hide the other. A partial full walk is marked **warning**, never pass.
 
 ## User-first Discovery behavior

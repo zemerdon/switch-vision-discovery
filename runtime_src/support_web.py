@@ -61,14 +61,12 @@ from discovery_history import (
 )
 import device_control as device_control_state
 import dashboard_device_order
-import autodiscover
 import complete_backup
 import complete_backup_runtime
 import complete_backup_restore
 import hub_component_settings
 import hub_device_control
 import hub_diagnostics
-import hub_autodiscover
 import faceplate_upgrade_offers as faceplate_offers
 
 SUPPORT_ADDRESS = "switch-vision@zemerdon.com"
@@ -170,22 +168,10 @@ UNIFI2MQTT_SECRET_FIELDS = {
     "mqtt_password",
 }
 
-DISCOVERY_REQUIRED_OPTION_DEFAULTS = {
-    "autodiscover_networks": [],
-}
-
-
-def _discovery_options_with_required_defaults(options: dict[str, Any]) -> dict[str, Any]:
-    """Return a Supervisor-save-safe Discovery options object.
-
-    Home Assistant retains pre-upgrade option objects verbatim. New required
-    root keys therefore have to be added before any whole-options POST, even
-    when the operator is changing an unrelated setting.
-    """
+def _discovery_options_without_retired_keys(options: dict[str, Any]) -> dict[str, Any]:
+    """Preserve configured devices and secrets but omit retired scan settings."""
     updated = dict(options)
-    for key, value in DISCOVERY_REQUIRED_OPTION_DEFAULTS.items():
-        if key not in updated:
-            updated[key] = copy.deepcopy(value)
+    updated.pop("autodiscover_networks", None)
     return updated
 
 
@@ -206,7 +192,6 @@ DISCOVERY_RESET_OPTIONS = {
         "card_header_title": "",
     }],
     "stack_member_prefixes": [],
-    "autodiscover_networks": [],
     "parse_all_walks": "false",
     "generate_snmp2mqtt": "true",
     "clean_output_before_walk": "false",
@@ -357,7 +342,7 @@ DISCOVERY_IMPORT_FORMATS = {
 }
 DISCOVERY_CONFIG_KEYS = {
     "input_path", "snmpwalks_dir", "report_path", "run_snmp_walks",
-    "enable_switch_list", "switches", "stack_member_prefixes", "autodiscover_networks",
+    "enable_switch_list", "switches", "stack_member_prefixes",
     "parse_all_walks", "generate_snmp2mqtt", "clean_output_before_walk",
     "targets_csv", "last_run_summary_path", "generated_yaml_path",
     "generated_card_path", "snmp_timeout", "snmp_retries",
@@ -938,11 +923,14 @@ def _validate_discovery_import(data: Any) -> dict[str, Any]:
     configuration = data.get("configuration")
     if not isinstance(configuration, dict):
         raise ValueError("The export does not contain a configuration object.")
-    unknown = sorted(set(configuration) - DISCOVERY_CONFIG_KEYS)
+    unknown = sorted(set(configuration) - DISCOVERY_CONFIG_KEYS - {"autodiscover_networks"})
     if unknown:
         raise ValueError(f"Unsupported configuration field: {unknown[0]}")
 
+    # Old configuration exports may carry scan-only subnet ranges. Silently
+    # discard that retired field, retaining every real configured switch.
     validated = dict(configuration)
+    validated.pop("autodiscover_networks", None)
     path_fields = {
         "input_path", "snmpwalks_dir", "report_path", "targets_csv", "last_run_summary_path",
         "generated_yaml_path", "generated_card_path", "snmp_log_path",
@@ -976,9 +964,6 @@ def _validate_discovery_import(data: Any) -> dict[str, Any]:
         raise ValueError("The configuration contains too many switches.")
     validated["switches"] = [_validate_switch_row(item, index) for index, item in enumerate(switches, start=1)]
 
-    if "autodiscover_networks" in validated:
-        validated["autodiscover_networks"] = _validated_autodiscover_networks(validated["autodiscover_networks"])
-
     stack = validated.get("stack_member_prefixes", [])
     if not isinstance(stack, list):
         raise ValueError("stack_member_prefixes must be a list.")
@@ -1009,7 +994,7 @@ def _import_discovery_options(imported: dict[str, Any]) -> None:
     """Persist imported Discovery configuration through Supervisor only."""
     with _OPTIONS_UPDATE_LOCK:
         current = _self_addon_options()
-        merged = _discovery_options_with_required_defaults(current)
+        merged = _discovery_options_without_retired_keys(current)
         merged.update(imported)
         _validate_inventory_identities(merged)
         create_pre_mutation_backup(current, reason="configuration_import")
@@ -2290,7 +2275,7 @@ def _hub_device_control_runtime() -> hub_device_control.HubDeviceControlRuntime:
         switch_enabled_state=_switch_enabled_state,
         effective_discovery_switch_row=_effective_discovery_switch_row,
         plain_text=_plain_text,
-        discovery_options_with_required_defaults=_discovery_options_with_required_defaults,
+        discovery_options_without_retired_keys=_discovery_options_without_retired_keys,
         validate_inventory_identities=_validate_inventory_identities,
         create_pre_mutation_backup=create_pre_mutation_backup,
         supervisor_json=_supervisor_json,
@@ -2890,7 +2875,7 @@ def _discovery_settings_status() -> dict[str, Any]:
     options = _effective_discovery_options(_self_addon_options())
     defaults = {
         "input_path": "/share/switch_vision/snmpwalk.txt", "snmpwalks_dir": "/share/switch_vision/snmpwalks", "report_path": "/share/switch_vision/discovery-report.txt",
-        "run_snmp_walks": "true", "enable_switch_list": "true", "switches": [], "stack_member_prefixes": [], "autodiscover_networks": [], "parse_all_walks": "false", "generate_snmp2mqtt": "true", "clean_output_before_walk": "false",
+        "run_snmp_walks": "true", "enable_switch_list": "true", "switches": [], "stack_member_prefixes": [], "parse_all_walks": "false", "generate_snmp2mqtt": "true", "clean_output_before_walk": "false",
         "targets_csv": "/share/switch_vision/discovery-targets.csv", "last_run_summary_path": "/share/switch_vision/last-discovery-run.txt", "generated_yaml_path": "/share/switch_vision/generated-snmp2mqtt.yaml", "generated_card_path": "/share/switch_vision/generated-dashboard-card.yaml",
         "snmp_timeout": "3", "snmp_retries": "1", "snmp_log_path": "/share/switch_vision/snmpwalk.log", "minimum_valid_walk_lines": "100", "backup_retention_enabled": "true", "backup_retention_count": 5,
         "generate_support_my_switch_bundle": "true", "support_mask_management_ips": "true", "support_mask_mac_addresses": "true", "support_mask_hostnames": "true", "support_mask_vlan_names": "true", "support_mask_interface_descriptions": "true",
@@ -3021,7 +3006,7 @@ def _save_discovery_settings(data: Any) -> dict[str, Any]:
     with _OPTIONS_UPDATE_LOCK:
         current = _self_addon_options()
         current_effective = _effective_discovery_options(current)
-        updated = _discovery_options_with_required_defaults(current)
+        updated = _discovery_options_without_retired_keys(current)
         for key in _DISCOVERY_HUB_PATH_KEYS:
             if key in requested:
                 updated[key] = _share_path(requested[key], key)
@@ -3057,10 +3042,6 @@ def _save_discovery_settings(data: Any) -> dict[str, Any]:
                 updated["support_contributor_value"] = current_value
             else:
                 raise ValueError("Enter the name or username for the selected recognition type.")
-        if "autodiscover_networks" in requested:
-            updated["autodiscover_networks"] = _validated_autodiscover_networks(
-                requested["autodiscover_networks"]
-            )
         if "switches" in requested:
             rows = requested["switches"]
             if not isinstance(rows, list) or len(rows) > 256:
@@ -5808,62 +5789,6 @@ _PAGE = HUB_PAGE_PATH.read_text(encoding="utf-8")
 
 
 
-def _autodiscover_registry() -> dict[str, Any]:
-    return hub_autodiscover.load_registry(_read_json, DEFAULT_REGISTRY_FILE)
-
-
-def _autodiscover_unifi_snapshot() -> dict[str, Any]:
-    return hub_autodiscover.load_unifi_snapshot(_read_json, DEFAULT_UNIFI_SNAPSHOT)
-
-
-def _validated_autodiscover_networks(value: Any) -> list[str]:
-    return hub_autodiscover.validated_networks(value)
-
-
-def _hub_autodiscover_runtime() -> hub_autodiscover.HubAutoDiscoverRuntime:
-    return hub_autodiscover.HubAutoDiscoverRuntime(
-        self_addon_options=_self_addon_options,
-        effective_discovery_options=_effective_discovery_options,
-        plain_text=_plain_text,
-        validate_switch_row=_validate_switch_row,
-        save_discovery_settings=_save_discovery_settings,
-        registry_loader=_autodiscover_registry,
-        unifi_snapshot_loader=_autodiscover_unifi_snapshot,
-    )
-
-
-def _autodiscover_suggested_network(
-    options: dict[str, Any],
-    unifi_snapshot: dict[str, Any],
-) -> str:
-    return hub_autodiscover.suggested_network(options, unifi_snapshot)
-
-
-def _autodiscover_status() -> dict[str, Any]:
-    return hub_autodiscover.status(runtime=_hub_autodiscover_runtime())
-
-
-def _autodiscover_request(data: Any) -> tuple[list[str], bool, str]:
-    return hub_autodiscover.parse_request(
-        data,
-        runtime=_hub_autodiscover_runtime(),
-    )
-
-
-def _autodiscover_scan(data: Any) -> dict[str, Any]:
-    return hub_autodiscover.scan(
-        data,
-        runtime=_hub_autodiscover_runtime(),
-    )
-
-
-def _autodiscover_add(data: Any) -> dict[str, Any]:
-    return hub_autodiscover.add(
-        data,
-        runtime=_hub_autodiscover_runtime(),
-    )
-
-
 class SupportHandler(BaseHTTPRequestHandler):
     server_version = "SwitchVisionSupport/1.0"
 
@@ -6097,11 +6022,6 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json(_unifi2mqtt_settings_status())
             except RuntimeError as exc:
                 self._json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
-        elif path == "/api/autodiscover/status":
-            try:
-                self._json(_autodiscover_status())
-            except (ValueError, RuntimeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         elif path == "/api/faceplate-upgrades":
             try:
                 with _FACEPLATE_UPGRADE_LOCK:
@@ -6429,28 +6349,6 @@ class SupportHandler(BaseHTTPRequestHandler):
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
-    def _handle_autodiscover_post(self, path: str) -> None:
-        if path == "/api/autodiscover/scan":
-            try:
-                with _exclusive_operation("AutoDiscover scan"):
-                    data = self._read_json_request(16384, "Invalid AutoDiscover scan request size.")
-                    self._json(_autodiscover_scan(data))
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except (ValueError, RuntimeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-            return
-        if path == "/api/autodiscover/add":
-            try:
-                with _device_configuration_update("AutoDiscover add devices"):
-                    data = self._read_json_request(65536, "Invalid AutoDiscover add request size.")
-                    self._json(_autodiscover_add(data))
-            except OperationConflict as exc:
-                self._json({"error": str(exc)}, HTTPStatus.CONFLICT)
-            except (ValueError, RuntimeError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-            return
-
     def _handle_hub_settings_post(self, path: str) -> None:
         if path in {"/api/settings/core", "/api/settings/snmp2mqtt", "/api/settings/discovery"}:
             try:
@@ -6640,9 +6538,6 @@ class SupportHandler(BaseHTTPRequestHandler):
             "/api/unifi2mqtt/settings",
         }:
             self._handle_unifi2mqtt_post(path)
-            return
-        if path in {"/api/autodiscover/scan", "/api/autodiscover/add"}:
-            self._handle_autodiscover_post(path)
             return
         if path in {
             "/api/configured-devices/state",

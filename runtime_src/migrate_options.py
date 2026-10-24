@@ -75,13 +75,11 @@ def main() -> int:
         migrated.pop("show_card_header", None)
         changes.append("removed show_card_header")
 
-    # New persistent root options must be backfilled before the first
-    # Supervisor options write after an upgrade. Older installations do not
-    # contain AutoDiscover's non-secret saved-network list, while the 3.x
-    # schema requires the key to exist.
-    if "autodiscover_networks" not in migrated:
-        migrated["autodiscover_networks"] = []
-        changes.append("added autodiscover_networks default")
+    # Drop only the retired scan-only subnet list. Configured switches,
+    # SNMP credentials and all other Supervisor options remain untouched.
+    if "autodiscover_networks" in migrated:
+        migrated.pop("autodiscover_networks")
+        changes.append("removed retired autodiscover_networks")
 
     for key in ("switches", "multi_switch_walks"):
         rows = migrated.get(key)

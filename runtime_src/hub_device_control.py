@@ -25,7 +25,7 @@ class HubDeviceControlRuntime:
     switch_enabled_state: Callable[[Any, str], str]
     effective_discovery_switch_row: Callable[[Any, int], dict[str, Any]]
     plain_text: Callable[..., str]
-    discovery_options_with_required_defaults: Callable[[dict[str, Any]], dict[str, Any]]
+    discovery_options_without_retired_keys: Callable[[dict[str, Any]], dict[str, Any]]
     validate_inventory_identities: Callable[[dict[str, Any]], None]
     create_pre_mutation_backup: Callable[..., Any]
     supervisor_json: Callable[..., dict[str, Any]]
@@ -238,7 +238,7 @@ def set_configured_device_state(
         updated_row = dict(current)
         updated_row["enabled"] = desired
         updated_rows[raw_index] = updated_row
-        updated_options = runtime.discovery_options_with_required_defaults(options)
+        updated_options = runtime.discovery_options_without_retired_keys(options)
         updated_options["switches"] = updated_rows
         runtime.validate_inventory_identities(updated_options)
         runtime.create_pre_mutation_backup(options, reason="device_state_update")
@@ -339,7 +339,7 @@ def move_configured_device(
                 updated_rows[destination_index],
                 updated_rows[source_index],
             )
-            updated_options = runtime.discovery_options_with_required_defaults(options)
+            updated_options = runtime.discovery_options_without_retired_keys(options)
             updated_options["switches"] = updated_rows
             runtime.validate_inventory_identities(updated_options)
             runtime.create_pre_mutation_backup(
@@ -417,7 +417,7 @@ def reset_configured_device_order(
         )
 
         if updated_rows != rows:
-            updated_options = runtime.discovery_options_with_required_defaults(options)
+            updated_options = runtime.discovery_options_without_retired_keys(options)
             updated_options["switches"] = updated_rows
             runtime.validate_inventory_identities(updated_options)
             runtime.create_pre_mutation_backup(

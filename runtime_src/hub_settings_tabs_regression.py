@@ -111,12 +111,10 @@ for marker in (
     'id="devicesTab-run" class="hub-settings-tab is-active"',
     'data-devices-tab="run">Run Discovery</button>',
     'data-devices-tab="configure">Configure Devices</button>',
-    'data-devices-tab="autodiscover">AutoDiscover</button>',
     'id="devicesTab-overview" class="hub-settings-tab"',
-    'id="devicesPanel-autodiscover"',
     'id="hubDeviceConfiguration"',
     "function selectDevicesTab(which='run',focus=false)",
-    "const ids=['run','configure','autodiscover','overview']",
+    "const ids=['run','configure','overview']",
     "selectDevicesTab('run')",
 ):
     assert marker in SOURCE, marker
@@ -216,7 +214,7 @@ for removed_mapping in (
 
 # Hub navigation reflects the consolidated architecture.
 for marker in (
-    'Configure / AutoDiscover Devices',
+    'Configure Devices',
     'Device Overview &amp; Status',
     '<span>Custom Theming</span>',
     '<b>Maintenance</b>',
@@ -232,8 +230,8 @@ assert '<span>Add / Remove Switches</span>' not in SOURCE
 
 # Discovery is one card: Run Discovery is first/default, followed by all
 # formerly separate Devices surfaces.
-assert SOURCE.index('id="devicesTab-run"') < SOURCE.index('id="devicesTab-configure"') < SOURCE.index('id="devicesTab-autodiscover"') < SOURCE.index('id="devicesTab-overview"')
-assert SOURCE.index('id="devicesPanel-run"') < SOURCE.index('id="devicesPanel-configure"') < SOURCE.index('id="devicesPanel-autodiscover"') < SOURCE.index('id="devicesPanel-overview"')
+assert SOURCE.index('id="devicesTab-run"') < SOURCE.index('id="devicesTab-configure"') < SOURCE.index('id="devicesTab-overview"')
+assert SOURCE.index('id="devicesPanel-run"') < SOURCE.index('id="devicesPanel-configure"') < SOURCE.index('id="devicesPanel-overview"')
 assert "window.SwitchVisionHubSettings?.selectDevicesTab?.('run')" in SOURCE
 assert "window.SwitchVisionHubSettings?.selectDevicesTab?.('overview')" in SOURCE
 assert 'id="openDevicesButton"' not in SOURCE

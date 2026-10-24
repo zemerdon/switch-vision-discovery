@@ -15,7 +15,7 @@ rm -f "$SV_DEVICE_CONTROL_PATH"
 rm -rf "$SV_SELF_TEST_TMP_DIR"
 mkdir -p "$SV_SELF_TEST_TMP_DIR"
 SV_HUB_SOURCE="$SV_SELF_TEST_TMP_DIR/support-web-contract-source.txt"
-cat "$BASE_DIR/support_web.py" "$BASE_DIR/hub_component_settings.py" "$BASE_DIR/hub_device_control.py" "$BASE_DIR/hub_diagnostics.py" "$BASE_DIR/hub_autodiscover.py" "$BASE_DIR/support_web.html" > "$SV_HUB_SOURCE"
+cat "$BASE_DIR/support_web.py" "$BASE_DIR/hub_component_settings.py" "$BASE_DIR/hub_device_control.py" "$BASE_DIR/hub_diagnostics.py" "$BASE_DIR/support_web.html" > "$SV_HUB_SOURCE"
 sv_self_test_cleanup() {
     rm -f "$SV_DEVICE_CONTROL_PATH"
     rm -rf "$SV_SELF_TEST_TMP_DIR"
@@ -51,7 +51,6 @@ python3 "$BASE_DIR/unifi_snapshot_freshness_regression.py"
 python3 "$BASE_DIR/calibration_manager_regression.py"
 python3 "$BASE_DIR/hub_settings_tabs_regression.py"
 python3 "$BASE_DIR/calibration_theme_regression.py"
-python3 "$BASE_DIR/autodiscover_regression.py"
 python3 "$BASE_DIR/unifi_only_collection_regression.py"
 python3 "$BASE_DIR/hub_tooltips_regression.py"
 python3 "$BASE_DIR/hub_activity_led_sampler_regression.py"
@@ -419,8 +418,6 @@ import support_web as hub
 
 cases = (
     ("/api/ui-density", 4096, "Invalid UI density request size."),
-    ("/api/autodiscover/scan", 16384, "Invalid AutoDiscover scan request size."),
-    ("/api/autodiscover/add", 65536, "Invalid AutoDiscover add request size."),
     ("/api/configured-devices/state", 8192, "Invalid device state request size."),
     ("/api/configured-devices/order", 8192, "Invalid device order request size."),
 )
@@ -442,8 +439,6 @@ with (
     patch.object(hub, "_set_discovery_ui_density", side_effect=lambda value: {"density": value}),
     patch.object(hub, "_exclusive_operation", side_effect=lambda name: nullcontext()),
     patch.object(hub, "_device_configuration_update", side_effect=lambda name: nullcontext()),
-    patch.object(hub, "_autodiscover_scan", side_effect=lambda data: {"received": data}),
-    patch.object(hub, "_autodiscover_add", side_effect=lambda data: {"received": data}),
     patch.object(hub, "_set_configured_device_state", side_effect=lambda opts, data: {"received": data}),
     patch.object(hub, "_move_configured_device", side_effect=lambda opts, data: {"received": data}),
     patch.object(hub, "_record_device_dashboard_refresh"),
@@ -2398,8 +2393,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.97"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.97"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.98"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.0.98"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"

@@ -46,7 +46,7 @@ PERMANENT_CHECKS = (
     "tools/test_hub_component_settings.py",
     "tools/test_hub_device_control.py",
     "tools/test_hub_diagnostics.py",
-    "tools/test_hub_autodiscover.py",
+    "tools/test_autodiscover_retirement.py",
     "tools/test_core_registry_projection.py",
     "tools/test_complete_backup_restore_adapters.py",
     "tools/test_complete_backup_restore_coordinator.py",
