@@ -15,7 +15,7 @@ HEADER = """# Switch Vision Discovery self-test configuration/operation hardenin
 # Keep this as an exact behavioral extraction; production logic is not duplicated here.
 
 """
-EXTRACTED_BODY_SHA256 = "3bf505a1d35b6e0c683083fc4d8da885c79bff4624ed2bc006cd96e690d79535"
+EXTRACTED_BODY_SHA256 = "ce343356ea0ae67e861a5a9b3f0ca10519912aafa7522fb3f5c8002dc9fbe818"
 START_MARKER = "# v2.1.14 configuration/operation hardening regressions."
 NEXT_MARKER = "# v2.1.19 community-validation UniFi profile regression."
 
