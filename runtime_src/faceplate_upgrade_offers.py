@@ -297,6 +297,133 @@ def offers_from_choices(
     return offers
 
 
+def eligible_legacy_faceplates(registry: Any) -> dict[str, set[str]]:
+    """Only reviewed optional stock art can explain an older model layout."""
+    result: dict[str, set[str]] = {}
+    rows = registry.get("devices") if isinstance(registry, dict) else None
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict) or not row.get("dashboard_support"):
+            continue
+        model = str(row.get("model") or "").strip()
+        current = filename(row.get("default_faceplate"))
+        optional = row.get("optional_faceplates")
+        if not model or not current or not isinstance(optional, list):
+            continue
+        result[model] = {
+            name for entry in optional[:32]
+            if (name := filename(entry)) and name != current
+        }
+    return result
+
+
+def legacy_calibration_offers(
+    inventory: list[dict[str, str]],
+    defaults: dict[str, str],
+    assets: dict[str, str],
+    choices: Any,
+    profiles: Any,
+    revisions: Any,
+    eligible: dict[str, set[str]],
+    collapsed: dict[str, str] | None = None,
+    existing_offers: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Offer an explicit reset when legacy Native geometry survived new art.
+
+    The first post-upgrade Core read can pin the *new* model default before an
+    old saved Calibration is reviewed. This must not silently discard the
+    saved profile or suppress a user-approved matching factory reset.
+
+    Only accept one active Native profile bound to verified, model-eligible
+    older stock art, plus a Core-verified latest image/geometry pair. A stale,
+    ambiguous, Custom-only or unverified state never authorizes an offer.
+    """
+    if (not isinstance(choices, dict) or not isinstance(profiles, list)
+            or not isinstance(revisions, dict)):
+        return []
+    collapsed = collapsed or {}
+    excluded = {(str(row.get("device_key") or ""),
+                 str(row.get("base_profile") or ""))
+                for row in (existing_offers or []) if isinstance(row, dict)}
+    found: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def latest_pair(name: str) -> dict[str, str]:
+        rows = revisions.get(name)
+        if not isinstance(rows, list):
+            return {}
+        digest = assets.get(name)
+        for row in rows[:64]:
+            if (isinstance(row, dict)
+                    and row.get("filename") == name
+                    and row.get("path") == "faceplates/" + name
+                    and row.get("sha256") == digest
+                    and _SHA.fullmatch(str(row.get("geometry_sha256") or ""))
+                    and isinstance(row.get("version"), str)
+                    and bool(row["version"])):
+                return row
+        return {}
+
+    for device in inventory[:256]:
+        key = str(device.get("device_key") or "")
+        name = str(device.get("switch_name") or "")
+        model = str(device.get("resolved_model") or "")
+        if not _KEY.fullmatch(key) or not name or key in seen:
+            continue
+        seen.add(key)
+        target = defaults.get(model, "")
+        base_names = sorted(item for item in _profile_base(name)
+                            if item.startswith("native_"))
+        if (not target or not base_names
+                or not eligible.get(model) or target not in assets):
+            continue
+        base = base_names[0]
+        if (key, base) in excluded:
+            continue
+        current = choices.get(base)
+        if not isinstance(current, dict) or current.get("unavailable"):
+            continue
+        latest = latest_pair(target)
+        if (not latest or current.get("filename") != target
+                or current.get("sha256") != latest["sha256"]
+                or current.get("path") != latest["path"]
+                or (current.get("version") and current["version"] != latest["version"])
+                or (current.get("geometry_sha256")
+                    and current["geometry_sha256"] != latest["geometry_sha256"])):
+            continue
+        active = [row for row in profiles
+                  if isinstance(row, dict) and row.get("active") is True
+                  and row.get("base_profile") == base]
+        if len(active) != 1 or active[0].get("scope") != "native":
+            continue
+        old_name = filename(active[0].get("saved_calibration_image"))
+        if old_name not in eligible[model]:
+            continue
+        old_pair = latest_pair(old_name)
+        if not old_pair:
+            continue
+        found.append({
+            "device_key": key, "switch_name": name,
+            "display_name": str(device.get("display_name") or "")[:120],
+            "model": model, "base_profile": base,
+            "migration_kind": "legacy_saved_calibration",
+            "legacy_calibration_file": old_name,
+            "legacy_calibration_sha256": old_pair["sha256"],
+            "legacy_calibration_geometry_sha256": old_pair["geometry_sha256"],
+            # The Core pin is already the new artwork; the old calibration
+            # image is for comparison only, never a forged approval identity.
+            "current_file": target, "current_sha256": latest["sha256"],
+            "current_version": latest["version"],
+            "current_preview": "", "same_filename": True,
+            "available_file": target, "available_sha256": latest["sha256"],
+            "available_version": latest["version"],
+            "available_geometry_sha256": latest["geometry_sha256"],
+            "versions": [],
+            "collapsed": collapsed.get(f"{key}@{base}") ==
+                         latest["geometry_sha256"],
+        })
+    return found
+
+
 def selectable_for_devices(
     inventory: list[dict[str, str]],
     defaults: dict[str, str],

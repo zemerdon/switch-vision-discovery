@@ -231,19 +231,34 @@
     const label = offer.display_name || offer.switch_name || "Switch";
     const scopeName = "Native dashboard";
     get("faceplateUpgradeDevice").textContent = label + " · " + offer.model + " · " + scopeName;
+    const legacy = offer.migration_kind === "legacy_saved_calibration";
+    get("faceplateUpgradeHeading").textContent = legacy
+      ? "Faceplate Calibration Upgrade Available" : "New Faceplate Upgrade Available";
+    get("faceplateUpgradeOldTitle").textContent = legacy
+      ? "Saved Calibration Artwork" : "Current Faceplate";
     const oldPreview = get("faceplateUpgradeOldImage");
-    oldPreview.hidden = offer.old_preview_unavailable === true;
-    oldPreview.src = offer.old_preview_unavailable ? "" : imageUrl(offer.current_file, offer.current_sha256, offer.current_preview || "");
+    oldPreview.hidden = !legacy && offer.old_preview_unavailable === true;
+    oldPreview.src = oldPreview.hidden ? "" : imageUrl(
+      legacy ? offer.legacy_calibration_file : offer.current_file,
+      legacy ? offer.legacy_calibration_sha256 : offer.current_sha256,
+      legacy ? "" : (offer.current_preview || ""));
     get("faceplateUpgradeNewImage").src = imageUrl(offer.available_file, offer.available_sha256);
-    get("faceplateUpgradeOldDescription").textContent = offer.current_file +
-      (offer.same_filename ? " · previous SHA " + offer.current_sha256.slice(0, 12) : "") +
-      (offer.old_preview_unavailable ? " · historical preview unavailable" : "");
-    get("faceplateUpgradeNewDescription").textContent = offer.available_file +
-      (offer.same_filename ? " · updated SHA " + offer.available_sha256.slice(0, 12) : "");
-    get("faceplateUpgradeExplanation").textContent =
-      "The existing image stays selected until you approve the updated stock artwork. Keep Current retains the verified earlier image and Calibration. " +
-      "Upgrade Faceplate resets only this " + scopeName + "'s saved visual Calibration to the selected faceplate's verified factory geometry. " +
-      "Hub upgrades are Native-only. Custom artwork and Calibration are never changed by this action.";
+    get("faceplateUpgradeOldDescription").textContent = legacy
+      ? offer.legacy_calibration_file + " · older saved layout"
+      : offer.current_file +
+        (offer.same_filename ? " · previous SHA " + offer.current_sha256.slice(0, 12) : "") +
+        (offer.old_preview_unavailable ? " · historical preview unavailable" : "");
+    get("faceplateUpgradeNewDescription").textContent = legacy
+      ? offer.available_file + " · current verified factory layout"
+      : offer.available_file +
+        (offer.same_filename ? " · updated SHA " + offer.available_sha256.slice(0, 12) : "");
+    get("faceplateUpgradeExplanation").textContent = legacy
+      ? "The new stock faceplate is already selected, but this Native dashboard still has saved Calibration from the older faceplate. " +
+        "Keep Current leaves that Calibration untouched. Upgrade Faceplate will replace only this switch's saved Native visual Calibration with the verified matching factory geometry. " +
+        "Other switches and Custom dashboards are not changed."
+      : "The existing image stays selected until you approve the updated stock artwork. Keep Current retains the verified earlier image and Calibration. " +
+        "Upgrade Faceplate resets only this " + scopeName + "'s saved visual Calibration to the selected faceplate's verified factory geometry. " +
+        "Hub upgrades are Native-only. Custom artwork and Calibration are never changed by this action.";
     if (versionList) {
       versionList.replaceChildren(...(Array.isArray(offer.versions) ? offer.versions : []).map(item => {
         const section = document.createElement("details");

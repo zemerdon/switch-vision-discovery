@@ -162,5 +162,117 @@ def test() -> None:
     print("FACEPLATE_UPGRADE_HUB_INTEGRATION_PASS")
 
 
+def test_legacy_saved_calibration_upgrade() -> None:
+    """A new Core artwork pin must not hide one old saved Native layout."""
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        old_registry = hub.DEFAULT_REGISTRY_FILE
+        old_generated = hub.DEFAULT_GENERATED_CARD
+        old_ws = hub._home_assistant_ws
+        old_service = hub._home_assistant_service
+        old_inventory = hub._configured_devices_snapshot
+        old_preference = hub.faceplate_offers.DEFAULT_PATH
+        old_sha, new_sha = "a" * 64, "b" * 64
+        old_geometry, new_geometry = "c" * 64, "d" * 64
+        registry = root / "models.json"
+        registry.write_text(json.dumps({"devices": [{
+            "model": "WS-C3560CG-8PC-S", "dashboard_support": True,
+            "default_faceplate": "faceplates/new.png",
+            "optional_faceplates": ["faceplates/old.png"],
+        }]}))
+        inventory = {"devices": [{
+            "device_key": "snmp:SW3", "switch_name": "SW3",
+            "switch_model": "WS-C3560CG-8PC-S",
+        }]}
+        choices = {
+            "native_SW3": {"filename": "new.png", "sha256": new_sha,
+                           "path": "faceplates/new.png", "version": "2.8.16"},
+            "custom_SW3": {"filename": "old.png", "sha256": old_sha,
+                           "path": "faceplates/old.png"},
+        }
+        saved = [{"active": True, "scope": "native", "base_profile": "native_SW3",
+                  "saved_calibration_image": "old.png"}]
+        revisions = {}
+        for filename, digest, geometry in [
+            ("old.png", old_sha, old_geometry),
+            ("new.png", new_sha, new_geometry),
+        ]:
+            revisions[filename] = [{"filename": filename, "sha256": digest,
+                                   "geometry_sha256": geometry, "version": "2.8.16",
+                                   "path": "faceplates/" + filename}]
+        calls = []
+        fail_approval = False
+
+        def websocket(payload):
+            if payload["type"] == "switch_vision/list_assets":
+                return {"core_version": "2.8.16",
+                        "faceplate_fingerprints": {
+                            "old.png": {"sha256": old_sha},
+                            "new.png": {"sha256": new_sha}},
+                        "faceplate_revisions": revisions}
+            if payload["type"] == "switch_vision/get_calibration":
+                assert payload["profile"] == "native_SW3"
+                assert payload["stock_faceplate"] == "new.png"
+                return {"exists": True}
+            if payload["type"] == "switch_vision/list_calibrations":
+                return {"stock_artwork_choices": choices, "items": list(saved)}
+            if payload["type"] == "switch_vision/approve_stock_artwork":
+                calls.append(dict(payload))
+                assert payload["base_profile"] == "native_SW3"
+                assert payload["previous_filename"] == "new.png"
+                assert payload["filename"] == "new.png"
+                assert payload["expected_sha256"] == new_sha
+                assert payload["approved_sha256"] == new_sha
+                assert payload["reset_switch_calibration"] is True
+                if fail_approval:
+                    raise RuntimeError("Core approval failed")
+                saved.clear()
+                return {"ok": True, "sha256": new_sha, "calibration_reset": True}
+            raise AssertionError(payload)
+
+        hub.DEFAULT_REGISTRY_FILE = registry
+        hub.DEFAULT_GENERATED_CARD = root / "no-generated-card.yaml"
+        hub._home_assistant_ws = websocket
+        hub._home_assistant_service = lambda *_: (_ for _ in ()).throw(
+            AssertionError("Must use atomic Core approval"))
+        hub._configured_devices_snapshot = lambda _options: inventory
+        hub.faceplate_offers.DEFAULT_PATH = root / "preferences.json"
+        try:
+            snapshot = hub._faceplate_upgrade_snapshot(root / "options.json")
+            assert snapshot["count"] == 1, snapshot
+            offer = snapshot["offers"][0]
+            assert offer["migration_kind"] == "legacy_saved_calibration"
+            assert offer["legacy_calibration_file"] == "old.png"
+            assert offer["current_file"] == offer["available_file"] == "new.png"
+            assert offer["current_sha256"] == offer["available_sha256"] == new_sha
+            request = {"action": "keep", "device_key": "snmp:SW3",
+                       "base_profile": "native_SW3", "available_sha256": new_sha}
+            assert hub._faceplate_upgrade_action(root, request)["action"] == "kept"
+            assert not calls and saved and choices["custom_SW3"]["sha256"] == old_sha
+            request["action"] = "upgrade"
+            fail_approval = True
+            try:
+                hub._faceplate_upgrade_action(root, request)
+            except RuntimeError as err:
+                assert "Core approval failed" in str(err)
+            else:
+                raise AssertionError("Failed approval was accepted")
+            assert hub._faceplate_upgrade_snapshot(root)["count"] == 1
+            fail_approval = False
+            assert hub._faceplate_upgrade_action(root, request)["action"] == "upgraded"
+            assert len(calls) == 2 and saved == []
+            assert hub._faceplate_upgrade_snapshot(root)["count"] == 0
+            assert choices["custom_SW3"]["sha256"] == old_sha
+        finally:
+            hub.DEFAULT_REGISTRY_FILE = old_registry
+            hub.DEFAULT_GENERATED_CARD = old_generated
+            hub._home_assistant_ws = old_ws
+            hub._home_assistant_service = old_service
+            hub._configured_devices_snapshot = old_inventory
+            hub.faceplate_offers.DEFAULT_PATH = old_preference
+    print("FACEPLATE_UPGRADE_LEGACY_HUB_INTEGRATION_PASS")
+
+
 if __name__ == "__main__":
     test()
+    test_legacy_saved_calibration_upgrade()

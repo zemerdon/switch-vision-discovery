@@ -46,6 +46,7 @@ async function run() {
     "faceplateUpgradeSection", "faceplateUpgradeExpanded", "faceplateUpgradeSwitchSelect",
     "faceplateUpgradeCollapsedButton", "faceplateUpgradeKeepButton", "faceplateUpgradeApplyButton",
     "faceplateUpgradeMessage", "faceplateUpgradeDevice", "faceplateUpgradeOldImage",
+    "faceplateUpgradeHeading", "faceplateUpgradeOldTitle",
     "faceplateUpgradeNewImage", "faceplateUpgradeOldDescription",
     "faceplateUpgradeNewDescription", "faceplateUpgradeExplanation", "faceplateRevisionList",
   ];
@@ -204,6 +205,29 @@ async function run() {
   assert.ok(get("faceplateUpgradeOldImage").src.includes("faceplate-history/revisions/2.7.70/same.png"));
   assert.equal(get("faceplateRevisionList").options[0].options[2].disabled, true);
   assert.equal(get("faceplateRevisionList").options[1].options[2].disabled, false);
+  offers = [{
+    device_key: "snmp:SW3", base_profile: "native_SW3", switch_name: "SW3", model: "Model A",
+    migration_kind: "legacy_saved_calibration", collapsed: false,
+    legacy_calibration_file: "old-a.png", legacy_calibration_sha256: "a".repeat(64),
+    current_file: "new-a.png", available_file: "new-a.png",
+    current_sha256: "b".repeat(64), available_sha256: "b".repeat(64),
+    current_version: "2.8.16", available_version: "2.8.16", versions: [],
+  }];
+  timer();
+  await drain();
+  assert.equal(get("faceplateUpgradeHeading").textContent, "Faceplate Calibration Upgrade Available");
+  assert.equal(get("faceplateUpgradeOldTitle").textContent, "Saved Calibration Artwork");
+  assert.match(get("faceplateUpgradeOldImage").src, /faceplates\/old-a\.png\?v=/);
+  assert.match(get("faceplateUpgradeNewImage").src, /faceplates\/new-a\.png\?v=/);
+  assert.match(get("faceplateUpgradeExplanation").textContent, /saved Calibration from the older faceplate/);
+  get("faceplateUpgradeKeepButton").trigger("click");
+  await drain();
+  assert.equal(resets, 2, "keeping legacy saved Calibration cannot reset");
+  get("faceplateUpgradeCollapsedButton").trigger("click");
+  get("faceplateUpgradeApplyButton").trigger("click");
+  await drain();
+  assert.equal(resets, 3, "same-art approval must still reset obsolete Native Calibration");
+  assert.equal(offers.length, 0);
   offers = [];
   timer();
   await drain();

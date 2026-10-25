@@ -1,3 +1,9 @@
+## 3.1.0 — Recover older saved Native faceplate Calibration upgrades
+
+- Detect a previously saved Native visual Calibration based on reviewed older artwork even after Core has already pinned the latest model-default image. Require verified old/new stock SHA and geometry evidence before making an offer.
+- Present both the saved older faceplate and current verified layout in Discovery Hub's Faceplate Calibration Upgrade section. Keep Current preserves the existing saved Calibration; explicit Upgrade Faceplate confirmation invokes the existing per-switch atomic Core approval/reset, including when the selected artwork SHA is unchanged.
+- Preserve Custom dashboards, other switches, existing revision selection, and fail-closed behaviour for missing or ambiguous evidence. Include regression coverage for the no-offer failure mode, Hub rendering, consent, failed approval and same-image reset.
+
 ## 3.0.99 — Simplify Discovery setup and align Calibration preview
 
 - Remove the retired subnet AutoDiscover scanner, candidate-add workflow, Hub tab and scan-only API/settings. Manual Configure Devices, automatic model identification, SNMP/UniFi telemetry and generated dashboards remain available.

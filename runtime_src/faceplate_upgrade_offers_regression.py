@@ -208,6 +208,76 @@ def test():
     selected = {"native_SW3":{"filename":"new.png","sha256":new_hash,"version":"2.7.92","path":"faceplates-old/2.7.92/new.png"}}
     offer = f.offers_from_choices(inventory, recommended, {"new.png":new_hash}, selected, revisions={"new.png":versions})
     assert len(offer) == 1 and not offer[0]["collapsed"] and len(offer[0]["versions"]) == 2
+
+    # Cisco 3560CG: Core's first post-upgrade read already pinned Compact,
+    # but one active Native Calibration still contains the old model artwork.
+    cisco = "WS-C3560CG-8PC-S"
+    compact = "c3560cg-8pc-s-compact.png"
+    generic = "c3560cg-8pc-s.png"
+    registered = {"devices": [{
+        "model": cisco, "dashboard_support": True,
+        "default_faceplate": "faceplates/" + compact,
+        "optional_faceplates": ["faceplates/" + generic],
+    }]}
+    legacy = f.eligible_legacy_faceplates(registered)
+    assert legacy == {cisco: {generic}}
+    switch = [{"device_key": "snmp:cisco3560", "switch_name": "cisco3560",
+               "resolved_model": cisco}]
+    image_shas = {compact: new_hash, generic: old_hash}
+    complete = {
+        name: [{"filename": name, "sha256": digest,
+                "geometry_sha256": ("e" if name == compact else "f") * 64,
+                "version": "sha-" + ("e" if name == compact else "f") * 20,
+                "path": "faceplates/" + name}]
+        for name, digest in image_shas.items()
+    }
+    current = {"native_cisco3560": {
+        **complete[compact][0],
+    }}
+    active_legacy = [{
+        "active": True, "base_profile": "native_cisco3560",
+        "scope": "native", "saved_calibration_image": generic,
+    }]
+    def migration(**overrides):
+        args = dict(inventory=switch, defaults={cisco: compact},
+                    assets=image_shas, choices=current,
+                    profiles=active_legacy, revisions=complete,
+                    eligible=legacy)
+        args.update(overrides)
+        return f.legacy_calibration_offers(**args)
+    repaired = migration()
+    assert len(repaired) == 1
+    assert repaired[0]["migration_kind"] == "legacy_saved_calibration"
+    assert repaired[0]["legacy_calibration_file"] == generic
+    assert repaired[0]["legacy_calibration_sha256"] == old_hash
+    assert repaired[0]["current_file"] == repaired[0]["available_file"] == compact
+    assert repaired[0]["current_sha256"] == repaired[0]["available_sha256"] == new_hash
+    assert repaired[0]["versions"] == []
+    assert migration(collapsed={"snmp:cisco3560@native_cisco3560": "e" * 64})[0]["collapsed"]
+    assert not repaired[0]["collapsed"]
+    # Only exact, currently verified stock image/geometry pairs are eligible.
+    assert migration(profiles=[]) == []
+    assert migration(profiles=[{**active_legacy[0],
+                                "saved_calibration_image": compact}]) == []
+    assert migration(profiles=[{**active_legacy[0],
+                                "scope": "custom"}]) == []
+    assert migration(profiles=[{**active_legacy[0],
+                                "base_profile": "custom_cisco3560"}]) == []
+    assert migration(profiles=active_legacy * 2) == []
+    assert migration(eligible={cisco: set()}) == []
+    assert migration(revisions={compact: complete[compact]}) == []
+    assert migration(revisions={**complete, generic: [{**complete[generic][0],
+                              "geometry_sha256": ""}]}) == []
+    assert migration(choices={"native_cisco3560": {**current["native_cisco3560"],
+                               "unavailable": True}}) == []
+    assert migration(choices={"native_cisco3560": {**current["native_cisco3560"],
+                               "sha256": old_hash}}) == []
+    assert migration(existing_offers=[{"device_key": "snmp:cisco3560",
+                                        "base_profile": "native_cisco3560"}]) == []
+    assert migration(inventory=[{"device_key": "snmp:other",
+                                 "switch_name": "other", "resolved_model": cisco}]) == []
+    assert current["native_cisco3560"]["sha256"] == new_hash
+    assert active_legacy[0]["saved_calibration_image"] == generic
     print("FACEPLATE_UPGRADE_OFFERS_PASS")
 
 

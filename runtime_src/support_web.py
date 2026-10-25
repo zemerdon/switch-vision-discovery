@@ -2581,6 +2581,7 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
         raise RuntimeError("Core faceplate fingerprints are not available.")
     registry = json.loads(DEFAULT_REGISTRY_FILE.read_text(encoding="utf-8"))
     defaults = faceplate_offers.registry_defaults(registry)
+    legacy_artwork = faceplate_offers.eligible_legacy_faceplates(registry)
     if not defaults:
         raise RuntimeError("Reviewed Discovery model defaults are unavailable.")
 
@@ -2647,11 +2648,17 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
         devices, defaults, assets, profiles_result["stock_artwork_choices"],
         revisions,
     )
+    collapsed = faceplate_offers.load()
     offers = faceplate_offers.offers_from_choices(
         devices, defaults, assets,
-        profiles_result["stock_artwork_choices"], faceplate_offers.load(),
+        profiles_result["stock_artwork_choices"], collapsed,
         revisions,
     )
+    offers.extend(faceplate_offers.legacy_calibration_offers(
+        devices, defaults, assets, profiles_result["stock_artwork_choices"],
+        profiles_result.get("items"), revisions, legacy_artwork,
+        collapsed=collapsed, existing_offers=offers,
+    ))
     return {"ok": True, "core_version": str(core_assets["core_version"]),
             "offers": offers, "count": len(offers),
             "selections": selections, "devices_checked": len(devices)}
@@ -2699,7 +2706,8 @@ def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
               or offered_sha != offer["current_sha256"]):
             raise ValueError("The switch selection changed; refresh Hub.")
         if (target_file == offer["current_file"] and selected_sha == offer["current_sha256"]
-              and selected_version == offer.get("current_version")):
+              and selected_version == offer.get("current_version")
+              and offer.get("migration_kind") != "legacy_saved_calibration"):
             return {"ok": True, "action": "unchanged", "device_key": key}
         result = _home_assistant_ws({
             "type": "switch_vision/approve_stock_artwork",
