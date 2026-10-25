@@ -1,7 +1,8 @@
-## 3.0.98 — Remove subnet AutoDiscover
+## 3.0.99 — Simplify Discovery setup and align Calibration preview
 
-- Remove the unused AutoDiscover subnet scanner, discovery-candidate add workflow, Hub tab and scan-specific API/configuration. Keep manual Configure Devices, automatic model detection, SNMP/UniFi telemetry and generated dashboards unchanged.
-- Safely discard retired scan-only subnet settings during upgrade and legacy backup import/restore; preserve configured switches, SNMP credentials and existing Calibration.
+- Remove the retired subnet AutoDiscover scanner, candidate-add workflow, Hub tab and scan-only API/settings. Manual Configure Devices, automatic model identification, SNMP/UniFi telemetry and generated dashboards remain available.
+- Safely discard legacy scan-only subnet settings during upgrade or backup restore, preserving configured switches, credentials and saved Calibration.
+- Align the generated Calibration preview styling with current Core without changing saved per-switch calibration or port mappings.
 
 ## 3.0.97 — Align with per-port PoE LED Calibration
 
