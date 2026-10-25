@@ -1,7 +1,8 @@
-## 3.1.1 — Match compact Core Calibration editor styling
+## 3.1.1 — Simpler device setup, Native faceplate upgrades and Calibration preview
 
-- Refresh the Core-derived Calibration Theme stylesheet used by Discovery's read-only Hub preview to match Core 2.8.18's compact labels, adjacent output groups and responsive LED outline/shape row.
-- Preserve device discovery, saved settings, faceplate revision offers and runtime behaviour; no public publication.
+- Remove the retired subnet AutoDiscover scanner and related Hub settings; retain manually configured switches, automatic model identification, SNMP/UniFi discovery, generated dashboards, credentials and saved Calibration. Safely discard obsolete scan-only settings.
+- Restore Native Faceplate Calibration Upgrade offers for switches with an older saved visual layout even when Core has pinned the latest default artwork. Compare verified old and current factory artwork/geometry; Keep Current preserves saved Calibration, while an explicitly confirmed Upgrade resets only that switch's Native visual Calibration. Custom dashboards and other switches remain untouched.
+- Refresh the Hub's read-only Calibration Theme preview to match Core's compact Status Box controls, adjacent Port Status Output groups and responsive port LED shaping; preserve discovery telemetry, settings and device contracts.
 
 ## 3.1.0 — Recover older saved Native faceplate Calibration upgrades
 
