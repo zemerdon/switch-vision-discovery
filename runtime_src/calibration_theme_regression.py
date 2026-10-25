@@ -89,7 +89,9 @@ assert 'const statusMenus=buttonRow("cv-cal-status-quick-row",4);' in JS
 cal_css = (ROOT / "calibration_theme_core.css").read_text(encoding="utf-8")
 assert "max-width: min(100%, 185px);" not in cal_css
 assert ".cv-cal-port-targets-row > label" in cal_css
-assert ".cv-cal-port-presentation-row > .cv-cal-led-shape-label" in cal_css
+assert ".cv-cal-led-outline-row > .cv-cal-led-shape-label" in cal_css
+assert ".cv-cal-port-label-style > .cv-cal-port-label-target" in cal_css
+assert "flex:0 1 auto;" in cal_css
 for button_name in ("Remove All RJ45 Ports", "Remove All SFP Ports", "Add rSFP", "Remove All rSFP Ports", "Reset name", "All Link LEDs", "Activity LEDs", "Select"):
     assert button_name in selection_inventory
 assert "cal-theme-all-settings" in JS

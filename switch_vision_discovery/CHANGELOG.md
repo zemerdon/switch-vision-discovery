@@ -1,3 +1,8 @@
+## 3.1.1 — Match compact Core Calibration editor styling
+
+- Refresh the Core-derived Calibration Theme stylesheet used by Discovery's read-only Hub preview to match Core 2.8.18's compact labels, adjacent output groups and responsive LED outline/shape row.
+- Preserve device discovery, saved settings, faceplate revision offers and runtime behaviour; no public publication.
+
 ## 3.1.0 — Recover older saved Native faceplate Calibration upgrades
 
 - Detect a previously saved Native visual Calibration based on reviewed older artwork even after Core has already pinned the latest model-default image. Require verified old/new stock SHA and geometry evidence before making an offer.
