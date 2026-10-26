@@ -42,6 +42,7 @@ def main() -> int:
     ):
         assert page.index(f'id="{control}"') > existing
     assert ".generated-yaml-export-controls{display:flex" in page
+    assert "#downloadGeneratedDashboardYamlButton{display:inline-flex;align-items:center;justify-content:center}" in page
     assert "@media(max-width:640px){.generated-yaml-export-format" in page
     assert "changeGeneratedCardsLeadingSpaces(-1)" in page
     assert "changeGeneratedCardsLeadingSpaces(1)" in page

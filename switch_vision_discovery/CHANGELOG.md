@@ -1,3 +1,7 @@
+## 3.1.3 — Centre Dashboard YAML download text
+
+- Centre the Download YAML label to match the adjacent Preview and Copy controls without changing button sizing, export content or download behavior.
+
 ## 3.1.2 — Clearer dashboard exports and Cards Only indentation
 
 - Group complete-dashboard and existing-dashboard YAML actions into compact, responsive controls with clearer labels and feedback.
