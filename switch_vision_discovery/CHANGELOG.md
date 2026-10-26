@@ -1,3 +1,8 @@
+## 3.1.2 — Clearer dashboard exports and Cards Only indentation
+
+- Group complete-dashboard and existing-dashboard YAML actions into compact, responsive controls with clearer labels and feedback.
+- Add a one-space-at-a-time Cards Only indentation adjustment (0–12 spaces). Preview and Copy use exactly the selected indentation while preserving the generated card structure, full-dashboard formats and Native dashboard source.
+
 ## 3.1.1 — Simpler device setup, Native faceplate upgrades and Calibration preview
 
 - Remove the retired subnet AutoDiscover scanner and related Hub settings; retain manually configured switches, automatic model identification, SNMP/UniFi discovery, generated dashboards, credentials and saved Calibration. Safely discard obsolete scan-only settings.

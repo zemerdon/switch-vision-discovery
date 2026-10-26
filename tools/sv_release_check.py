@@ -32,6 +32,7 @@ PERMANENT_CHECKS = (
     "tools/test_dell_n4032f.py",
     "tools/test_dell_n2128px_optics.py",
     "tools/test_hp_j9774a_2530_8g_poep.py",
+    "tools/test_dashboard_export_ui.py",
     "tools/test_sv_release_check.py",
     "tools/test_hub_settings_save_behavior.py",
     "tools/test_local_model_identity.py",

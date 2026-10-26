@@ -75,17 +75,10 @@ Per-switch walks are stored under a stable folder based on **Switch Name (Used i
 
 When Switch Vision UniFi2MQTT is installed, **Switch Vision Hub → UniFi2MQTT Settings** exposes its controller/MQTT configuration, install/running state, snapshot availability, and normalized device count. API keys and MQTT passwords are never read back into the browser; blank secret fields preserve the stored values. Home Assistant App configuration remains available as a fallback.
 
-The Discovery Web UI presents **Generated Dashboard YAML** above **Generated SNMP2MQTT YAML**. Discovery keeps `/share/switch_vision/generated-dashboard-card.yaml` as the Native dashboard source and validates it before any manual export. For a new dashboard, choose the **New dashboard format** first:
+The Discovery Web UI presents **Generated Dashboard YAML** above **Generated SNMP2MQTT YAML**. Discovery keeps `/share/switch_vision/generated-dashboard-card.yaml` as the Native dashboard source and validates it before any manual export. Manual exports are grouped by destination:
 
-- **Custom dashboard (preserve vertical layout)** — the default; preserves the generated `custom:vertical-layout` view and `layout:` settings, so Layout Card is required;
-- **Standard dashboard (no Layout Card)** — removes the generated custom view wrapper and `layout:` metadata for a dependency-free Home Assistant dashboard.
-
-The visible export actions are:
-
-- **Preview Dashboard YAML** — preview the selected complete new-dashboard format;
-- **Copy Dashboard YAML** — copy the selected complete dashboard for a new dashboard's **Raw configuration editor**;
-- **Copy Cards Only** — copy only the generated card list for pasting beneath an existing view's `cards:` key; this is independent of the new-dashboard format selector;
-- **Download Dashboard YAML** — download the selected complete dashboard format.
+- **New dashboard:** choose **Custom (vertical layout)** (the default, which preserves `custom:vertical-layout` and requires Layout Card) or **Standard (no Layout Card)** (which removes the custom view wrapper and layout metadata). **Preview YAML**, **Copy YAML**, and **Download YAML** all use that format. Paste the copied complete dashboard into Home Assistant's **Raw configuration editor**.
+- **Existing dashboard · Cards Only:** use the **− / + Leading spaces** control (0–12 spaces, one per click), then **Preview cards** or **Copy cards**. Both show/copy the same indented list for pasting beneath an existing view's `cards:` key. The relative nested YAML indentation stays unchanged, and zero spaces preserves the previous Cards Only output. This option does not affect New dashboard exports.
 
 Neither full-dashboard export alters the Native generated source. Manual exports are snapshots: later Discovery runs refresh the Native source, not YAML already pasted into another Home Assistant dashboard. Unknown custom view dependencies are rejected instead of copied blindly. The legacy raw generated-file download remains available for compatibility, and no manual export is installed automatically.
 
