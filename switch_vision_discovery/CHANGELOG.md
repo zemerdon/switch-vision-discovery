@@ -1,11 +1,8 @@
-## 3.1.3 — Centre Dashboard YAML download text
+## 3.1.4 — Clearer Dashboard YAML exports and current Core Calibration preview
 
-- Centre the Download YAML label to match the adjacent Preview and Copy controls without changing button sizing, export content or download behavior.
-
-## 3.1.2 — Clearer dashboard exports and Cards Only indentation
-
-- Group complete-dashboard and existing-dashboard YAML actions into compact, responsive controls with clearer labels and feedback.
-- Add a one-space-at-a-time Cards Only indentation adjustment (0–12 spaces). Preview and Copy use exactly the selected indentation while preserving the generated card structure, full-dashboard formats and Native dashboard source.
+- Group Dashboard YAML Preview, Copy and Download controls with clearer responsive layout and centred Download text.
+- Add adjustable 0–12-space indentation to Cards Only Preview and Copy while preserving nested YAML, full-dashboard formats and Native source.
+- Synchronize the read-only Calibration Theme preview with Core 2.8.22 so the updated Status Box colour picker styling matches the shipped card. Preserve saved Calibration, faceplate geometry, discovery and device settings.
 
 ## 3.1.1 — Simpler device setup, Native faceplate upgrades and Calibration preview
 
