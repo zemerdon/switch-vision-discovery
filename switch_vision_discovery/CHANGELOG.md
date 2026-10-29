@@ -1,3 +1,8 @@
+## 3.1.6 — Reliable Native faceplate upgrade delivery
+
+- Preserve the reviewed faceplate-upgrade confirmation with Geometry export and the verified generated-dashboard Native switch identity, so a confirmation resets only the intended switch's factory artwork and Calibration.
+- Keep temporary Discovery device-contract test outputs inside their isolated writable fixture, preventing release-check permission failures without changing production device behavior.
+
 ## 3.1.5 — Safe Native faceplate upgrade with Geometry export
 
 - Before a faceplate upgrade, offer Export Geometry, Cancel, or Confirm Upgrade. Export the selected Native switch's existing saved Calibration as a local JSON file without changing it.
