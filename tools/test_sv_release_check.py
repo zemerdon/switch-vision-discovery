@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import io
 import re
 import subprocess
 import sys
@@ -76,6 +78,25 @@ def main() -> int:
     assert 'f"safe.directory={root}"' in source
 
     release_check = load_entrypoint()
+    # Every release test runs with a disposable writable share directory.
+    # Never require /share or privilege on the isolated validation host.
+    observed = []
+    real_run = release_check.run
+    try:
+        def inspect(args, cwd, *, env=None):
+            share = (env or {}).get("SWITCH_VISION_SHARE_DIR", "")
+            assert share and share != "/share/switch_vision"
+            assert Path(share).is_dir()
+            observed.append(share)
+            return ""
+        release_check.run = inspect
+        with contextlib.redirect_stdout(io.StringIO()):
+            release_check.run_permanent_checks(ROOT)
+    finally:
+        release_check.run = real_run
+    assert len(observed) == len(release_check.PERMANENT_CHECKS) + len(release_check.SHELL_CHECKS)
+    assert len(set(observed)) == 1
+    assert not Path(observed[0]).exists(), "release-test share must be cleaned up"
     # Immutable audit snapshots are exact Git archives, not live checkouts.
     # Exercise status semantics in a disposable real Git repository instead.
     with tempfile.TemporaryDirectory(prefix="sv-release-check-test-") as directory:

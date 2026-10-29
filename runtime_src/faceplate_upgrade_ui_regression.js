@@ -128,9 +128,10 @@ async function run() {
     } else throw Error("unexpected action");
     return {ok: true, json: async () => ({ok: true, calibration_reset: body.action !== "keep"})};
   };
+  let exportedBlob = null;
   const script = fs.readFileSync(path.join(__dirname, "faceplate_upgrades.js"), "utf8");
   vm.runInNewContext(script, {document, window, fetch, Blob, URL: {
-    createObjectURL: () => "blob:fixture", revokeObjectURL: () => {},
+    createObjectURL: blob => {exportedBlob = blob;return "blob:fixture";}, revokeObjectURL: () => {},
   }, endpoint: x => x});
   const drain = () => new Promise(resolve => setImmediate(resolve));
   await drain();
@@ -174,6 +175,10 @@ async function run() {
   dialog.children[4].children[0].trigger("click");
   await drain();
   assert.match(dialog.children[3].textContent, /Geometry export started/);
+  assert.ok(exportedBlob, "browser download must contain real Geometry bytes");
+  assert.deepEqual(JSON.parse(await exportedBlob.text()), {
+    schema: "switch-vision-interactive-calibration-v1", ports: {"1": {center: [12,24]}},
+  }, "exported file must be valid JSON and include current Geometry");
   assert.equal(resets, 0, "export must never approve or reset");
   dialog.children[4].children[1].trigger("click");
   await drain();

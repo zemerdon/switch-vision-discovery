@@ -278,12 +278,18 @@ def validate_packaged_runtime(root: Path, archive_path: Path) -> None:
 
 
 def run_permanent_checks(root: Path) -> None:
-    for relative in PERMANENT_CHECKS:
-        print(f"=== {relative} ===")
-        run([sys.executable, relative], root)
-    for relative in SHELL_CHECKS:
-        print(f"=== {relative} ===")
-        run(["sh", relative], root)
+    # Tests run without root on an isolated release-check source checkout.
+    # Discovery's runtime defaults to /share on HAOS, which must never be a
+    # test prerequisite or a mutation target in the unprivileged runner.
+    with tempfile.TemporaryDirectory(prefix="sv-discovery-check-share-") as share:
+        env = release_env()
+        env["SWITCH_VISION_SHARE_DIR"] = share
+        for relative in PERMANENT_CHECKS:
+            print(f"=== {relative} ===")
+            run([sys.executable, relative], root, env=env)
+        for relative in SHELL_CHECKS:
+            print(f"=== {relative} ===")
+            run(["sh", relative], root, env=env)
     print(
         "Discovery permanent regression/audit suite: PASS "
         f"({len(PERMANENT_CHECKS)} Python checks, {len(SHELL_CHECKS)} shell checks)"

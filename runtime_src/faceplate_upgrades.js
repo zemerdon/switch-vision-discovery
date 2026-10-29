@@ -361,7 +361,7 @@
               data.base_profile !== offer.base_profile) {
             throw new Error(data.error || "Saved Geometry could not be exported");
           }
-          const blob = new Blob([JSON.stringify(data.geometry, null, 2) + "\\n"],
+          const blob = new Blob([JSON.stringify(data.geometry, null, 2) + "\n"],
                                 {type: "application/json"});
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
