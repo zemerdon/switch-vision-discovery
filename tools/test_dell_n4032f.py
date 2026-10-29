@@ -164,6 +164,9 @@ with tempfile.TemporaryDirectory(prefix="sv-dell-n4032f-") as td:
         "SWITCH_VISION_REGISTRY_LOOKUP": str(RUNTIME / "registry_lookup.py"),
         "SWITCH_VISION_RUNTIME_DIR": str(RUNTIME),
         "SWITCH_VISION_SHARE_DIR": str(work / "share"),
+        # Release workers may carry a relative dashboard-full override. All
+        # test outputs must remain under our own writable temporary root.
+        "SWITCH_VISION_GENERATED_CARD_FULL_PATH": str(work / "card.full.yaml"),
     })
     legacy_run = run([str(LEGACY)], env=legacy_env, cwd=work)
     generated_path = work / "generated.yaml"
