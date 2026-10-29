@@ -831,7 +831,7 @@ def _best_generic_profile(rj45: int, uplinks: int) -> tuple[str, str, int, int] 
     candidates = (
         (24, 2, "stock_24rj45_2sfp", "24 RJ45 + 2 uplink"),
         (24, 4, "stock_24rj45_4sfp", "24 RJ45 + 4 uplink"),
-        (48, 2, "stock_48rj45_2sfp", "48 RJ45 + 2 uplink"),
+        (48, 2, "stock_48rj45_2sfp_compact", "48 RJ45 + 2 uplink"),
         (48, 4, "stock_48rj45_4sfp", "48 RJ45 + 4 uplink"),
     )
     fits = [row for row in candidates if rj45 <= row[0] and uplinks <= row[1]]

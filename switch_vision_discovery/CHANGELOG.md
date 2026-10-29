@@ -1,3 +1,7 @@
+## 3.1.7 — Preserve original and promote compact 48 RJ45 / 2 SFP defaults
+
+- Select the distinct compact 48 RJ45 / 2 SFP artwork and paired Calibration for compatible exact-model and generic dashboards, while retaining the original as a manual option. Keep real interface mappings and user-saved Calibration untouched until upgrade approval.
+
 ## 3.1.6 — Reliable Native faceplate upgrade delivery
 
 - Preserve the reviewed faceplate-upgrade confirmation with Geometry export and the verified generated-dashboard Native switch identity, so a confirmation resets only the intended switch's factory artwork and Calibration.

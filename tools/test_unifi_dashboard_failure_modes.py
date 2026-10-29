@@ -121,8 +121,8 @@ def main() -> int:
         write_json(snapshot, {"schema_version": 1, "devices": [device("pending-48", "USW Pending 48", 48, 2)]})
         pending = run(snapshot, registry)
         assert pending.returncode == 0, pending
-        assert "calibration_profile: stock_48rj45_2sfp" in pending.stdout
-        assert "faceplate_file: 48rj45-2sfp.png" in pending.stdout
+        assert "calibration_profile: stock_48rj45_2sfp_compact" in pending.stdout
+        assert "faceplate_file: 48rj45-2sfp-compact.png" in pending.stdout
         assert "generic_faceplate: true" in pending.stdout
 
         snapshot.write_text("{not-json", encoding="utf-8")

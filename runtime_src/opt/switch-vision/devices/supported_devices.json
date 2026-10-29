@@ -436,9 +436,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "cisco-2960x-48fpd-48p-2x10g",
-      "calibration_profile": "cisco_2960s_48p",
-      "default_faceplate": "faceplates/48rj45-2sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_48rj45_2sfp_compact",
+      "default_faceplate": "faceplates/48rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-2sfp.png"
+      ],
       "tested_firmware": [
         "15.2(7)E14"
       ],
@@ -461,9 +463,11 @@
       },
       "visuals": {
         "status": "confirmed",
-        "recommended_faceplate": "faceplates/48rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "cisco_2960s_48p",
+        "recommended_faceplate": "faceplates/48rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_48rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -658,9 +662,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "cisco-2960s-48fpd-48p-2x10g",
-      "calibration_profile": "cisco_2960s_48p",
-      "default_faceplate": "faceplates/48rj45-2sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_48rj45_2sfp_compact",
+      "default_faceplate": "faceplates/48rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-2sfp.png"
+      ],
       "tested_firmware": [
         "15.2(2)E9"
       ],
@@ -684,9 +690,11 @@
       },
       "visuals": {
         "status": "confirmed",
-        "recommended_faceplate": "faceplates/48rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "cisco_2960s_48p",
+        "recommended_faceplate": "faceplates/48rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_48rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -3443,9 +3451,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "dell-powerconnect-5548p-48p-2x10g",
-      "calibration_profile": "stock_48rj45_2sfp",
-      "default_faceplate": "faceplates/48rj45-2sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_48rj45_2sfp_compact",
+      "default_faceplate": "faceplates/48rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-2sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -3466,9 +3476,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_48rj45_2sfp",
+        "recommended_faceplate": "faceplates/48rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_48rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
