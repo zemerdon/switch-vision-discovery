@@ -163,6 +163,7 @@ with tempfile.TemporaryDirectory(prefix="sv-dell-n4032f-") as td:
         "SWITCH_VISION_DEVICE_REGISTRY": str(REGISTRY),
         "SWITCH_VISION_REGISTRY_LOOKUP": str(RUNTIME / "registry_lookup.py"),
         "SWITCH_VISION_RUNTIME_DIR": str(RUNTIME),
+        "SWITCH_VISION_SHARE_DIR": str(work / "share"),
     })
     legacy_run = run([str(LEGACY)], env=legacy_env)
     generated_path = work / "generated.yaml"
