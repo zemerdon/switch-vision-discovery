@@ -62,7 +62,15 @@ def test() -> None:
 
         try:
             hub.DEFAULT_REGISTRY_FILE = registry
-            hub.DEFAULT_GENERATED_CARD = root / "no-generated.yaml"
+            hub.DEFAULT_GENERATED_CARD = root / "generated.yaml"
+            hub.DEFAULT_GENERATED_CARD.write_text("""views:
+  - cards:
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: SW3
+        selected_switch: SW3
+        member: SW3
+        switch_model: TL-SG2008P
+""")
             hub._home_assistant_ws = websocket
             hub._configured_devices_snapshot = lambda _: {
                 "devices": [{"device_key": "snmp:SW3", "switch_name": "SW3",

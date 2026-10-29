@@ -90,6 +90,34 @@ def test():
     assert f.registry_defaults({"devices": [{"model": "TL-SG2008P",
         "dashboard_support": True, "default_faceplate": "faceplates/new.png"}]}) == recommended
 
+    # The generated Native switch key, not Hub's internal device name, owns
+    # the Calibration that Reset Current Switch would replace.
+    mapped_doc = {"views": [{"cards": [{"type": "custom:switch-vision-3650",
+        "discovery_selected_switch": "3650-server", "selected_switch": "SW1",
+        "member": "SW1", "switch_model": "TL-SG2008P"}]}]}
+    mapping = f.generated_native_targets(mapped_doc, set(recommended))
+    assert mapping == {"3650-server": {
+        "native_switch_key": "SW1", "model": "TL-SG2008P"}}
+    mapped = [{**inventory[0], "switch_name": "3650-server",
+               "native_switch_key": "SW1"}]
+    mapped_pins = {
+        "native_SW1": {"filename": "new.png", "sha256": old_hash,
+                       "path": f"faceplate-history/{old_hash}/new.png"},
+        "native_3650-server": {"filename": "new.png", "sha256": old_hash,
+                       "path": f"faceplate-history/{old_hash}/new.png"},
+    }
+    mapped_offers = f.offers_from_choices(mapped, recommended,
+                                           {"new.png": new_hash}, mapped_pins)
+    assert len(mapped_offers) == 1
+    assert mapped_offers[0]["base_profile"] == "native_SW1"
+    assert f.offers_from_choices(mapped, recommended, {"new.png": new_hash},
+                                 {"native_3650-server": mapped_pins["native_3650-server"]}) == []
+    mapped_doc["views"][0]["cards"].append({
+        "type": "custom:switch-vision-3650",
+        "discovery_selected_switch": "different-device",
+        "selected_switch": "SW1", "switch_model": "TL-SG2008P"})
+    assert f.generated_native_targets(mapped_doc, set(recommended)) == {}
+
     doc = {"views": [{"cards": [{"type": "custom:switch-vision-3650",
         "discovery_selected_switch": "SW3", "switch_model": "TL-SG2008P"}]}]}
     assert f.generated_exact_models(doc, set(recommended)) == {"SW3": "TL-SG2008P"}

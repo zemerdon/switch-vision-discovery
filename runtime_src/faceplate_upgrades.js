@@ -303,13 +303,95 @@
     }
   }
 
+  function confirmUpgradeWithExport(offer) {
+    return new Promise(resolve => {
+      const dialog = document.createElement("dialog");
+      dialog.className = "hub-faceplate-upgrade-confirm";
+      dialog.style.cssText = "max-width:min(94vw,540px);padding:22px;border-radius:12px;border:1px solid var(--border,#888);background:var(--card-bg,#222);color:var(--text,#fff);";
+      const heading = document.createElement("h3");
+      heading.textContent = "Confirm Faceplate Upgrade";
+      const description = document.createElement("p");
+      description.textContent = "Replace the faceplate and reset the saved Native Calibration for " +
+        (offer.display_name || offer.switch_name || "this switch") +
+        " to the new verified factory geometry. Other switches and Custom Calibration stay unchanged.";
+      const backupText = document.createElement("p");
+      backupText.textContent = "You can export your current Geometry before you confirm.";
+      const feedback = document.createElement("p");
+      feedback.setAttribute("role", "status");
+      const buttons = document.createElement("div");
+      buttons.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px";
+      const exportButton = document.createElement("button");
+      exportButton.type = "button";
+      exportButton.textContent = "Export Geometry";
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.textContent = "Cancel";
+      const confirmButton = document.createElement("button");
+      confirmButton.type = "button";
+      confirmButton.textContent = "Confirm Upgrade";
+      let finished = false;
+      function finish(approved) {
+        if (finished) return;
+        finished = true;
+        dialog.close();
+        dialog.remove();
+        resolve(approved);
+      }
+      dialog.addEventListener("cancel", event => {
+        event.preventDefault();
+        finish(false);
+      });
+      cancelButton.addEventListener("click", () => finish(false));
+      confirmButton.addEventListener("click", () => finish(true));
+      exportButton.addEventListener("click", async () => {
+        exportButton.disabled = true;
+        feedback.textContent = "Exporting saved Geometry…";
+        try {
+          const reply = await fetch(endpoint("api/faceplate-upgrades/action"), {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+              action: "export", device_key: offer.device_key,
+              base_profile: offer.base_profile,
+              available_sha256: offer.available_sha256,
+            }),
+          });
+          const data = await reply.json();
+          if (!reply.ok || !data.ok || !data.geometry ||
+              data.base_profile !== offer.base_profile) {
+            throw new Error(data.error || "Saved Geometry could not be exported");
+          }
+          const blob = new Blob([JSON.stringify(data.geometry, null, 2) + "\\n"],
+                                {type: "application/json"});
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "switch-vision-" +
+            String(offer.base_profile).replace(/[^A-Za-z0-9_-]/g, "_") +
+            "-geometry.json";
+          document.body.append(link);
+          link.click();
+          link.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+          feedback.textContent = "Geometry export started. Save the JSON file before confirming.";
+        } catch (err) {
+          feedback.textContent = "Export failed: " + (err.message || err);
+        } finally {
+          if (!finished) exportButton.disabled = false;
+        }
+      });
+      buttons.append(exportButton, cancelButton, confirmButton);
+      dialog.append(heading, description, backupText, feedback, buttons);
+      document.body.append(dialog);
+      dialog.showModal();
+    });
+  }
+
   async function act(action, selectedSha = "", selectedVersion = "") {
     const offer = currentOffer;
     if (!offer || updating) return;
-    if ((action === "upgrade" || action === "select") && !window.confirm(
-      "Upgrade the Native dashboard stock faceplate for " + (offer.display_name || offer.switch_name) +
-      "?\n\nThis will replace this switch's saved visual Calibration with the selected faceplate's matching factory geometry. Other switches and physical equipment are unchanged."
-    )) return;
+    if ((action === "upgrade" || action === "select") &&
+        !(await confirmUpgradeWithExport(offer))) return;
     updating = true;
     keepButton.disabled = true;
     applyButton.disabled = true;

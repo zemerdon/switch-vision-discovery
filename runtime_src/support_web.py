@@ -2589,24 +2589,35 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
     # Saved generated YAML contains the last authoritative exact model for
     # automatic-detection switches. No fresh discovery walk is necessary.
     detected_models = {}
+    native_targets = {}
     if DEFAULT_GENERATED_CARD.is_file():
         try:
             if DEFAULT_GENERATED_CARD.stat().st_size <= 3 * 1024 * 1024:
                 generated = list(yaml.safe_load_all(DEFAULT_GENERATED_CARD.read_text(encoding="utf-8")))
                 detected_models = faceplate_offers.generated_exact_models(generated, set(defaults))
+                native_targets = faceplate_offers.generated_native_targets(generated, set(defaults))
         except (OSError, UnicodeDecodeError, yaml.YAMLError):
             detected_models = {}
+            native_targets = {}
     devices = []
     for row in inventory.get("devices", []):
         if not isinstance(row, dict):
             continue
         name = str(row.get("switch_name") or "")
+        target = native_targets.get(name)
+        if not isinstance(target, dict):
+            # Do not approve a reset for an identity that is not actually
+            # bound to a generated Native dashboard.
+            continue
         model = str(row.get("switch_model") or "")
         if model not in defaults:
             model = detected_models.get(name, "")
+        if model != target["model"]:
+            continue
         key = str(row.get("device_key") or "")
         if key.startswith("snmp:") and name:
             devices.append({"device_key": key, "switch_name": name,
+                            "native_switch_key": target["native_switch_key"],
                             "display_name": str(row.get("display_name") or ""),
                             "resolved_model": model})
 
@@ -2631,7 +2642,7 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
     for device in devices:
         if device["resolved_model"] not in defaults:
             continue
-        name = str(device["switch_name"])
+        name = str(device["native_switch_key"])
         base = re.sub(r"[^A-Za-z0-9_-]+", "_", name.strip()).strip("_")[:96]
         if not base:
             continue
@@ -2669,7 +2680,7 @@ def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
     if not isinstance(body, dict):
         raise ValueError("Faceplate request must be an object.")
     action = str(body.get("action") or "")
-    if action not in {"keep", "upgrade", "select", "pick"}:
+    if action not in {"keep", "upgrade", "select", "pick", "export"}:
         raise ValueError("Unknown faceplate action.")
     key = _plain_text(body.get("device_key"), "device_key", max_length=320, allow_empty=False)
     offered_sha = str(body.get("available_sha256") or "").strip().lower()
@@ -2688,6 +2699,25 @@ def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
         if len(matched) != 1:
             raise ValueError("The faceplate offer changed. Refresh Hub and try again.")
         offer = matched[0]
+        if action == "export":
+            saved = _home_assistant_ws({
+                "type": "switch_vision/get_calibration",
+                "profile": requested_base,
+            })
+            if (not isinstance(saved, dict)
+                    or saved.get("exists") is not True
+                    or saved.get("invalid") is True
+                    or not isinstance(saved.get("calibration"), dict)):
+                raise ValueError("No valid saved Geometry is available for this switch.")
+            resolved = str(saved.get("profile") or "")
+            if resolved != requested_base and not resolved.startswith(requested_base + "__faceplate__"):
+                raise ValueError("Saved Geometry belongs to a different switch.")
+            return {
+                "ok": True, "action": "exported", "device_key": key,
+                "base_profile": requested_base,
+                "profile": resolved,
+                "geometry": saved["calibration"],
+            }
         if action == "keep":
             faceplate_offers.keep_current(f"{key}@{requested_base}", offer.get("available_geometry_sha256") or offered_sha)
             return {"ok": True, "action": "kept", "device_key": key}

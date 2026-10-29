@@ -44,6 +44,9 @@ def test() -> None:
                 }}
             if action == "switch_vision/get_calibration":
                 assert payload["profile"] == "native_SW3"
+                if "stock_faceplate" not in payload:
+                    return {"exists": True, "invalid": False,
+                            "profile": "native_SW3", "calibration": saved_calibration}
                 assert payload["stock_faceplate"] == stock_name
                 return {"exists": False}
             if action == "switch_vision/list_calibrations":
@@ -65,7 +68,16 @@ def test() -> None:
             raise AssertionError(payload)
 
         hub.DEFAULT_REGISTRY_FILE = registry
-        hub.DEFAULT_GENERATED_CARD = root / "no-generated-card.yaml"
+        generated_card = root / "generated-card.yaml"
+        generated_card.write_text("""views:
+  - cards:
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: SW3
+        selected_switch: SW3
+        member: SW3
+        switch_model: TL-SG2008P
+""")
+        hub.DEFAULT_GENERATED_CARD = generated_card
         hub._home_assistant_ws = websocket
         hub._home_assistant_service = lambda *_: (_ for _ in ()).throw(
             AssertionError("Use Core's single atomic artwork + Calibration reset transaction")
@@ -107,6 +119,12 @@ def test() -> None:
             assert hub._faceplate_upgrade_action(root, body)["action"] == "kept"
             assert hub._faceplate_upgrade_snapshot(root)["offers"][0]["collapsed"] is True
             assert choices["native_SW3"]["sha256"] == old_sha
+            body["action"] = "export"
+            exported = hub._faceplate_upgrade_action(root, body)
+            assert exported["action"] == "exported"
+            assert exported["base_profile"] == "native_SW3"
+            assert exported["geometry"] == saved_calibration
+            assert not operations
             body["action"] = "upgrade"
             fail_approval = True
             try:
@@ -139,6 +157,8 @@ def test() -> None:
   - cards:
       - type: custom:switch-vision-3650
         discovery_selected_switch: SW3
+        selected_switch: SW3
+        member: SW3
         switch_model: TL-SG2008P
 """)
             hub.DEFAULT_GENERATED_CARD = saved_card
@@ -231,7 +251,16 @@ def test_legacy_saved_calibration_upgrade() -> None:
             raise AssertionError(payload)
 
         hub.DEFAULT_REGISTRY_FILE = registry
-        hub.DEFAULT_GENERATED_CARD = root / "no-generated-card.yaml"
+        generated_card = root / "generated-card.yaml"
+        generated_card.write_text("""views:
+  - cards:
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: SW3
+        selected_switch: SW3
+        member: SW3
+        switch_model: WS-C3560CG-8PC-S
+""")
+        hub.DEFAULT_GENERATED_CARD = generated_card
         hub._home_assistant_ws = websocket
         hub._home_assistant_service = lambda *_: (_ for _ in ()).throw(
             AssertionError("Must use atomic Core approval"))

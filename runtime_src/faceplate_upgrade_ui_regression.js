@@ -16,7 +16,8 @@ assert.match(hubHtml, /\.hub-faceplate-device-option img\{[^}]*width:100%;[^}]*h
   "alternative revision previews also retain their aspect ratios");
 
 class Element {
-  constructor() {
+  constructor(tag = "div") {
+    this.tag = tag;
     this.value = "";
     this.children = [];
     this.dataset = {};
@@ -36,6 +37,11 @@ class Element {
     };
   }
   addEventListener(name, fn) { this.listeners[name] = fn; }
+  setAttribute(name, value) { this[name] = value; }
+  close() { this.open = false; }
+  showModal() { this.open = true; }
+  remove() { this.removed = true; }
+  click() { if (this.listeners.click) return this.trigger("click"); this.clicked = true; }
   replaceChildren(...items) { this.options = items; this.children = items; }
   append(...items) { this.children.push(...items); }
   trigger(name) { assert.ok(this.listeners[name], name); return this.listeners[name](); }
@@ -87,7 +93,8 @@ async function run() {
   const document = {
     hidden: false,
     getElementById: id => nodes[id],
-    createElement: () => new Element(),
+    createElement: tag => new Element(tag),
+    body: new Element("body"),
     querySelectorAll: selector => selector === ".hub-device-faceplates[data-switch-key]" ? hosts : [],
     addEventListener: (name, fn) => { docEvents[name] = fn; },
   };
@@ -95,6 +102,7 @@ async function run() {
     confirm: () => true,
     addEventListener: (name, fn) => { winEvents[name] = fn; },
     setInterval: (fn, delay) => { assert.equal(delay, 300000); timer = fn; },
+    setTimeout: fn => fn(),
   };
   const fetch = async (_url, request) => {
     if (!request || !request.method || request.method === "GET") {
@@ -106,6 +114,12 @@ async function run() {
       item.available_sha256 === body.available_sha256);
     assert.ok(offer, "exact per-switch offer");
     assert.equal(body.base_profile, offer.base_profile, "exact artwork scope");
+    if (body.action === "export") {
+      return {ok: true, json: async () => ({
+        ok: true, action: "exported", base_profile: offer.base_profile,
+        geometry: {schema: "switch-vision-interactive-calibration-v1", ports: {"1": {center: [12,24]}}},
+      })};
+    }
     if (body.action === "keep") offer.collapsed = true;
     else if (body.action === "upgrade") {
       resets++;
@@ -115,7 +129,9 @@ async function run() {
     return {ok: true, json: async () => ({ok: true, calibration_reset: body.action !== "keep"})};
   };
   const script = fs.readFileSync(path.join(__dirname, "faceplate_upgrades.js"), "utf8");
-  vm.runInNewContext(script, {document, window, fetch, endpoint: x => x});
+  vm.runInNewContext(script, {document, window, fetch, Blob, URL: {
+    createObjectURL: () => "blob:fixture", revokeObjectURL: () => {},
+  }, endpoint: x => x});
   const drain = () => new Promise(resolve => setImmediate(resolve));
   await drain();
   const get = id => nodes[id];
@@ -146,14 +162,36 @@ async function run() {
   get("faceplateUpgradeCollapsedButton").trigger("click");
   assert.ok(!get("faceplateUpgradeExpanded").hidden, "red button only reopens");
   assert.equal(resets, 0);
+  const currentDialog = () => document.body.children.filter(
+    item => item.tag === "dialog" && !item.removed).at(-1);
+  get("faceplateUpgradeApplyButton").trigger("click");
+  await drain();
+  let dialog = currentDialog();
+  assert.ok(dialog?.open, "upgrade opens a real three-choice popup");
+  assert.equal(dialog.children[4].children[0].textContent, "Export Geometry");
+  assert.equal(dialog.children[4].children[1].textContent, "Cancel");
+  assert.equal(dialog.children[4].children[2].textContent, "Confirm Upgrade");
+  dialog.children[4].children[0].trigger("click");
+  await drain();
+  assert.match(dialog.children[3].textContent, /Geometry export started/);
+  assert.equal(resets, 0, "export must never approve or reset");
+  dialog.children[4].children[1].trigger("click");
+  await drain();
+  assert.equal(resets, 0, "cancel cannot reset a switch");
   failReset = true;
   get("faceplateUpgradeApplyButton").trigger("click");
+  await drain();
+  dialog = currentDialog();
+  dialog.children[4].children[2].trigger("click");
   await drain();
   assert.equal(resets, 1);
   assert.match(get("faceplateUpgradeMessage").textContent, /Core artwork approval failed/);
   assert.equal(offers.length, 2, "failed action retains the offer");
   failReset = false;
   get("faceplateUpgradeApplyButton").trigger("click");
+  await drain();
+  dialog = currentDialog();
+  dialog.children[4].children[2].trigger("click");
   await drain();
   assert.equal(resets, 2);
   assert.equal(offers.length, 1);
@@ -225,6 +263,8 @@ async function run() {
   assert.equal(resets, 2, "keeping legacy saved Calibration cannot reset");
   get("faceplateUpgradeCollapsedButton").trigger("click");
   get("faceplateUpgradeApplyButton").trigger("click");
+  await drain();
+  currentDialog().children[4].children[2].trigger("click");
   await drain();
   assert.equal(resets, 3, "same-art approval must still reset obsolete Native Calibration");
   assert.equal(offers.length, 0);

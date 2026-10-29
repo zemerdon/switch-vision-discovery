@@ -80,6 +80,53 @@ def generated_exact_models(documents: Any, models: set[str]) -> dict[str, str]:
     return matches
 
 
+def generated_native_targets(documents: Any, models: set[str]) -> dict[str, dict[str, str]]:
+    """Resolve a Discovery device to the switch identity actually used by Native.
+
+    The generated dashboard can show 'SW1' while Discovery calls it
+    '3650-server'. Never reset a profile by guessing from the Discovery name.
+    Reject conflicting cards or shared Native identities.
+    """
+    found: dict[str, dict[str, str]] = {}
+    ambiguous: set[str] = set()
+
+    def walk(node: Any, depth: int = 0) -> None:
+        if depth > 16:
+            return
+        if isinstance(node, list):
+            for entry in node[:1024]:
+                walk(entry, depth + 1)
+        elif isinstance(node, dict):
+            if node.get("type") == "custom:switch-vision-3650":
+                discovery = str(node.get("discovery_selected_switch") or
+                                node.get("selected_switch") or "").strip()
+                native = str(node.get("selected_switch") or node.get("member") or "").strip()
+                model = str(node.get("switch_model") or "").strip()
+                if (discovery and native and model in models
+                        and len(discovery) <= 120 and len(native) <= 96
+                        and re.fullmatch(r"[A-Za-z0-9_-]+", native)):
+                    target = {"native_switch_key": native, "model": model}
+                    if discovery in found and found[discovery] != target:
+                        ambiguous.add(discovery)
+                    else:
+                        found[discovery] = target
+            for child in node.values():
+                if isinstance(child, (list, dict)):
+                    walk(child, depth + 1)
+
+    walk(documents)
+    for discovery in ambiguous:
+        found.pop(discovery, None)
+    owners: dict[str, list[str]] = {}
+    for discovery, row in found.items():
+        owners.setdefault(row["native_switch_key"], []).append(discovery)
+    for same_native in owners.values():
+        if len(same_native) > 1:
+            for discovery in same_native:
+                found.pop(discovery, None)
+    return found
+
+
 def _profile_base(switch_name: str) -> set[str]:
     key = re.sub(r"[^A-Za-z0-9_-]+", "_", switch_name.strip()).strip("_")[:96]
     return {f"native_{key}", f"custom_{key}"} if key else set()
@@ -114,7 +161,7 @@ def offers_from_saved(
         if not new_hash:
             continue
         matching = [item for item in profiles if isinstance(item, dict) and
-                    item.get("active") and item.get("base_profile") in _profile_base(name)]
+                    item.get("active") and item.get("base_profile") in _profile_base(str(device.get("native_switch_key") or name))]
         if len(matching) != 1:
             continue
         active = matching[0]
@@ -228,7 +275,7 @@ def offers_from_choices(
         # Custom artwork selection remains in the existing picker and Core.
         scope_choices = [
             (base, choices.get(base))
-            for base in sorted(_profile_base(name))
+            for base in sorted(_profile_base(str(device.get("native_switch_key") or name)))
             if base.startswith("native_") and isinstance(choices.get(base), dict)
         ]
         for base, current in scope_choices:
@@ -371,7 +418,7 @@ def legacy_calibration_offers(
             continue
         seen.add(key)
         target = defaults.get(model, "")
-        base_names = sorted(item for item in _profile_base(name)
+        base_names = sorted(item for item in _profile_base(str(device.get("native_switch_key") or name))
                             if item.startswith("native_"))
         if (not target or not base_names
                 or not eligible.get(model) or target not in assets):
@@ -452,7 +499,7 @@ def selectable_for_devices(
         if recommended not in assets:
             recommended = ""
         found_current = False
-        for base in sorted(_profile_base(name)):
+        for base in sorted(_profile_base(str(device.get("native_switch_key") or name))):
             current = choices.get(base)
             if not isinstance(current, dict):
                 continue

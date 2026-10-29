@@ -79,7 +79,20 @@ def test() -> None:
                     hub.faceplate_offers.DEFAULT_PATH)
         try:
             hub.DEFAULT_REGISTRY_FILE = registry
-            hub.DEFAULT_GENERATED_CARD = base / "no-generated.yaml"
+            hub.DEFAULT_GENERATED_CARD = base / "generated.yaml"
+            hub.DEFAULT_GENERATED_CARD.write_text("""views:
+  - cards:
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: SW3
+        selected_switch: SW3
+        member: SW3
+        switch_model: SG200-26
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: SW4
+        selected_switch: SW4
+        member: SW4
+        switch_model: OTHER
+""")
             hub._home_assistant_ws = websocket
             hub._configured_devices_snapshot = lambda _: inventory
             hub.faceplate_offers.DEFAULT_PATH = base / "offer-preferences.json"

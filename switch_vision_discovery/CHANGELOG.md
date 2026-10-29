@@ -1,3 +1,9 @@
+## 3.1.5 — Safe Native faceplate upgrade with Geometry export
+
+- Before a faceplate upgrade, offer Export Geometry, Cancel, or Confirm Upgrade. Export the selected Native switch's existing saved Calibration as a local JSON file without changing it.
+- Resolve the actual Native dashboard switch identity from generated dashboard configuration. After approval, atomically replace only that switch's old artwork and Calibration with the verified new factory artwork and Geometry, using the same selected-switch reset contract as Core Calibration.
+- Reject missing or ambiguous mappings rather than resetting a different switch; preserve Custom profiles and unrelated switches. Add identity, export, cancellation and confirmation regressions.
+
 ## 3.1.4 — Clearer Dashboard YAML exports and current Core Calibration preview
 
 - Group Dashboard YAML Preview, Copy and Download controls with clearer responsive layout and centred Download text.
