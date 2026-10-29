@@ -16,10 +16,10 @@ PROFILE = RUNTIME / "profiles/switch-vision-profiles.yaml"
 LEGACY = RUNTIME / "discovery_job.sh"
 
 
-def run(args, *, env=None):
+def run(args, *, env=None, cwd=ROOT):
     proc = subprocess.run(
         args,
-        cwd=ROOT,
+        cwd=cwd,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -165,7 +165,7 @@ with tempfile.TemporaryDirectory(prefix="sv-dell-n4032f-") as td:
         "SWITCH_VISION_RUNTIME_DIR": str(RUNTIME),
         "SWITCH_VISION_SHARE_DIR": str(work / "share"),
     })
-    legacy_run = run([str(LEGACY)], env=legacy_env)
+    legacy_run = run([str(LEGACY)], env=legacy_env, cwd=work)
     generated_path = work / "generated.yaml"
     assert generated_path.is_file(), legacy_run.stdout + "\n" + legacy_run.stderr
     generated = generated_path.read_text(encoding="utf-8")
@@ -197,7 +197,7 @@ with tempfile.TemporaryDirectory(prefix="sv-dell-n4032f-") as td:
     staged_walk.write_text(base_only, encoding="utf-8")
     for output in (work / "generated.yaml", work / "card.yaml"):
         output.unlink(missing_ok=True)
-    base_run = run([str(LEGACY)], env=legacy_env)
+    base_run = run([str(LEGACY)], env=legacy_env, cwd=work)
     base_card = (work / "card.yaml").read_text(encoding="utf-8")
     assert "type: custom:switch-vision-3650" in base_card, base_run.stdout + "\n" + base_run.stderr
     assert 'switch_model: "N4032F"' in base_card, base_card
