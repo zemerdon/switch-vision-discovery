@@ -309,5 +309,109 @@ def test():
     print("FACEPLATE_UPGRADE_OFFERS_PASS")
 
 
+def test_verified_legacy_geometry_upgrade() -> None:
+    """Three old 6000x1325 Native layouts, two current 2960s untouched."""
+    sha = "a" * 64
+    geo = "b" * 64
+    stock = "48rj45-4sfp.png"
+    factory = {
+        "model": "stock-48rj45-4sfp",
+        "profile": "stock_48rj45_4sfp",
+        "image": {"file": "faceplates/" + stock, "width": 6000, "height": 900},
+    }
+    latest = {"filename": stock, "sha256": sha, "geometry_sha256": geo,
+              "version": "sha-" + "c" * 20, "path": "faceplates/" + stock}
+    rows = [
+        {"device_key": "snmp:" + name, "switch_name": name,
+         "native_switch_key": name, "resolved_model": model}
+        for name, model in (
+            ("SW5", "WS-C3650-48PD-E"),
+            ("SW6", "WS-C3650-48PD-L"),
+            ("SW7", "WS-C2960X-48FPD-L"),
+            ("SW9", "WS-C2960S-48FPD-L"),
+            ("SW10", "EX3300-48P"),
+        )
+    ]
+    defaults = {
+        "WS-C3650-48PD-E": stock, "WS-C3650-48PD-L": stock,
+        "EX3300-48P": stock,
+        "WS-C2960X-48FPD-L": "48rj45-2sfp-compact.png",
+        "WS-C2960S-48FPD-L": "48rj45-2sfp-compact.png",
+    }
+    profiles = [
+        {"base_profile": "native_" + name, "scope": "native",
+         "active": True, "saved_calibration_image": stock}
+        for name in ("SW5", "SW6", "SW10")
+    ]
+    choices = {"native_" + name: dict(latest) for name in ("SW5", "SW6", "SW10")}
+    saved = {"native_" + name: {
+        "exists": True, "invalid": False, "profile": "native_" + name,
+        "stock_artwork": {**latest, "geometry": factory},
+        "calibration": {
+            "profile": "default_cisco_48_port",
+            "model": "stock-48rj45-4sfp", "user_topology_authoritative": True,
+            "image": {"file": "faceplates/" + stock, "width": 6000, "height": 1325},
+        },
+    } for name in ("SW5", "SW6", "SW10")}
+    params = dict(inventory=rows, defaults=defaults,
+                  assets={stock: sha}, choices=choices, profiles=profiles,
+                  revisions={stock: [latest]}, saved_by_base=saved)
+    offers = f.legacy_same_artwork_geometry_offers(**params)
+    assert {x["switch_name"] for x in offers} == {"SW5", "SW6", "SW10"}
+    assert all(x["migration_kind"] == "legacy_saved_geometry" for x in offers)
+    assert all(x["saved_geometry_height"] == 1325 and
+               x["latest_geometry_height"] == 900 and
+               x["same_filename"] for x in offers)
+    assert not any(x["switch_name"] in {"SW7", "SW9"} for x in offers)
+    assert f.legacy_same_artwork_geometry_offers(
+        **{**params, "collapsed": {"snmp:SW5@native_SW5": geo}})[0]["collapsed"]
+    assert len(f.legacy_same_artwork_geometry_offers(
+        **{**params, "existing_offers": [{"device_key": "snmp:SW5",
+                                         "base_profile": "native_SW5"}]})) == 2
+
+    for field, value in (
+        ("profile", "user_saved_profile"),
+        ("model", "unknown"),
+        ("image", {"file": "faceplates/" + stock,
+                   "width": 6000, "height": 900}),
+    ):
+        modified = {**saved["native_SW5"]["calibration"], field: value}
+        broken = {**saved, "native_SW5": {
+            **saved["native_SW5"], "calibration": modified}}
+        assert {x["switch_name"] for x in f.legacy_same_artwork_geometry_offers(
+            **{**params, "saved_by_base": broken})} == {"SW6", "SW10"}
+    for broken in (
+        {**saved["native_SW5"], "invalid": True},
+        {**saved["native_SW5"], "profile": "native_OTHER"},
+        {**saved["native_SW5"], "stock_artwork": {
+            **saved["native_SW5"]["stock_artwork"], "geometry_sha256": "f" * 64}},
+        {**saved["native_SW5"], "stock_artwork": {
+            **saved["native_SW5"]["stock_artwork"], "geometry": None}},
+    ):
+        changed = {**saved, "native_SW5": broken}
+        assert len(f.legacy_same_artwork_geometry_offers(
+            **{**params, "saved_by_base": changed})) == 2
+    assert len(f.legacy_same_artwork_geometry_offers(
+        **{**params, "choices": {**choices, "native_SW5": {
+            **choices["native_SW5"], "sha256": "f" * 64}}})) == 2
+    assert len(f.legacy_same_artwork_geometry_offers(
+        **{**params, "profiles": profiles + [dict(profiles[0])]})) == 2
+    assert len(f.legacy_same_artwork_geometry_offers(
+        **{**params, "profiles": [{**x, "scope": "custom"}
+                                  if x["base_profile"] == "native_SW5" else x
+                                  for x in profiles]})) == 2
+    # After the one-switch consented reset, the profile is factory-current.
+    repaired = {**saved, "native_SW5": {
+        **saved["native_SW5"], "calibration": {
+            **saved["native_SW5"]["calibration"],
+            "profile": "stock_48rj45_4sfp",
+            "image": dict(factory["image"]),
+        }}}
+    assert len(f.legacy_same_artwork_geometry_offers(
+        **{**params, "saved_by_base": repaired})) == 2
+    print("FACEPLATE_LEGACY_SAME_ARTWORK_GEOMETRY_PASS")
+
+
 if __name__ == "__main__":
     test()
+    test_verified_legacy_geometry_upgrade()

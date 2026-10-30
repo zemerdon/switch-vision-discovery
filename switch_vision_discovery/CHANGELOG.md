@@ -1,3 +1,8 @@
+## 3.1.8 — Restore missing Native Geometry upgrade offers
+
+- Detect a verified older 6000 × 1325 Cisco 48-port saved factory Geometry on otherwise-current 6000 × 900 stock artwork, including affected 3650 and EX3300 Native dashboards. Offer Export Geometry, Keep Current, and a clearly warned per-switch upgrade to the matching Core-verified factory Geometry. Do not reset any switch or Custom Calibration without explicit approval.
+- Leave already-current compact 2960 faceplates and unrelated models unchanged; require exact Native identity, a Core-verified stock image/Geometry pair, known legacy factory-profile evidence and valid saved Calibration before showing an offer.
+
 ## 3.1.7 — Preserve original and promote compact 48 RJ45 / 2 SFP defaults
 
 - Select the distinct compact 48 RJ45 / 2 SFP artwork and paired Calibration for compatible exact-model and generic dashboards, while retaining the original as a manual option. Keep real interface mappings and user-saved Calibration untouched until upgrade approval.

@@ -273,6 +273,42 @@ async function run() {
   await drain();
   assert.equal(resets, 3, "same-art approval must still reset obsolete Native Calibration");
   assert.equal(offers.length, 0);
+  // Same artwork can still have a verified obsolete saved factory Geometry.
+  // The popup describes the Geometry difference, without faking old pixels.
+  offers = [{
+    device_key: "snmp:SW3", base_profile: "native_SW3",
+    switch_name: "SW3", model: "WS-C3650-48PD-E",
+    migration_kind: "legacy_saved_geometry", collapsed: false,
+    saved_geometry_width: 6000, saved_geometry_height: 1325,
+    latest_geometry_width: 6000, latest_geometry_height: 900,
+    current_file: "48rj45-4sfp.png", available_file: "48rj45-4sfp.png",
+    current_sha256: "a".repeat(64), available_sha256: "a".repeat(64),
+    current_version: "sha-" + "b".repeat(20),
+    available_version: "sha-" + "b".repeat(20), versions: [],
+  }];
+  timer();
+  await drain();
+  assert.equal(get("faceplateUpgradeHeading").textContent,
+    "Saved Geometry Upgrade Available");
+  assert.equal(get("faceplateUpgradeOldImage").hidden, true,
+    "never pretend the current stock PNG is the old saved Geometry preview");
+  assert.match(get("faceplateUpgradeOldDescription").textContent, /6000 × 1325/);
+  assert.match(get("faceplateUpgradeNewDescription").textContent, /6000 × 900/);
+  assert.match(get("faceplateUpgradeExplanation").textContent, /Export Geometry first/);
+  const beforeGeometryReset = resets;
+  get("faceplateUpgradeApplyButton").trigger("click");
+  await drain();
+  dialog = currentDialog();
+  assert.ok(dialog.open, "stale Geometry requires the same explicit confirmation");
+  dialog.children[4].children[1].trigger("click");
+  await drain();
+  assert.equal(resets, beforeGeometryReset, "cancel preserves legacy saved Geometry");
+  get("faceplateUpgradeApplyButton").trigger("click");
+  await drain();
+  dialog = currentDialog();
+  dialog.children[4].children[2].trigger("click");
+  await drain();
+  assert.equal(resets, beforeGeometryReset + 1, "one confirmed per-switch visual reset");
   offers = [];
   timer();
   await drain();

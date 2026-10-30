@@ -232,28 +232,37 @@
     const scopeName = "Native dashboard";
     get("faceplateUpgradeDevice").textContent = label + " · " + offer.model + " · " + scopeName;
     const legacy = offer.migration_kind === "legacy_saved_calibration";
-    get("faceplateUpgradeHeading").textContent = legacy
-      ? "Faceplate Calibration Upgrade Available" : "New Faceplate Upgrade Available";
-    get("faceplateUpgradeOldTitle").textContent = legacy
-      ? "Saved Calibration Artwork" : "Current Faceplate";
+    const staleGeometry = offer.migration_kind === "legacy_saved_geometry";
+    get("faceplateUpgradeHeading").textContent = staleGeometry
+      ? "Saved Geometry Upgrade Available" :
+      legacy ? "Faceplate Calibration Upgrade Available" : "New Faceplate Upgrade Available";
+    get("faceplateUpgradeOldTitle").textContent = staleGeometry
+      ? "Existing Saved Geometry" : legacy ? "Saved Calibration Artwork" : "Current Faceplate";
     const oldPreview = get("faceplateUpgradeOldImage");
-    oldPreview.hidden = !legacy && offer.old_preview_unavailable === true;
+    oldPreview.hidden = staleGeometry || (!legacy && offer.old_preview_unavailable === true);
     oldPreview.src = oldPreview.hidden ? "" : imageUrl(
       legacy ? offer.legacy_calibration_file : offer.current_file,
       legacy ? offer.legacy_calibration_sha256 : offer.current_sha256,
       legacy ? "" : (offer.current_preview || ""));
     get("faceplateUpgradeNewImage").src = imageUrl(offer.available_file, offer.available_sha256);
-    get("faceplateUpgradeOldDescription").textContent = legacy
-      ? offer.legacy_calibration_file + " · older saved layout"
+    get("faceplateUpgradeOldDescription").textContent = staleGeometry
+      ? "Saved " + offer.saved_geometry_width + " × " + offer.saved_geometry_height +
+        " Geometry on " + offer.current_file
+      : legacy ? offer.legacy_calibration_file + " · older saved layout"
       : offer.current_file +
         (offer.same_filename ? " · previous SHA " + offer.current_sha256.slice(0, 12) : "") +
         (offer.old_preview_unavailable ? " · historical preview unavailable" : "");
-    get("faceplateUpgradeNewDescription").textContent = legacy
-      ? offer.available_file + " · current verified factory layout"
+    get("faceplateUpgradeNewDescription").textContent = staleGeometry
+      ? offer.available_file + " · verified factory " +
+        offer.latest_geometry_width + " × " + offer.latest_geometry_height
+      : legacy ? offer.available_file + " · current verified factory layout"
       : offer.available_file +
         (offer.same_filename ? " · updated SHA " + offer.available_sha256.slice(0, 12) : "");
-    get("faceplateUpgradeExplanation").textContent = legacy
-      ? "The new stock faceplate is already selected, but this Native dashboard still has saved Calibration from the older faceplate. " +
+    get("faceplateUpgradeExplanation").textContent = staleGeometry
+      ? "The correct stock artwork is already selected, but this Native dashboard still uses older saved factory Geometry. " +
+        "Keep Current preserves every saved position. Upgrade Faceplate will replace only this switch's saved visual Calibration with Core's verified current factory Geometry. " +
+        "Export Geometry first if you want to keep your adjustments. Other switches, Custom dashboards and physical devices stay unchanged."
+      : legacy ? "The new stock faceplate is already selected, but this Native dashboard still has saved Calibration from the older faceplate. " +
         "Keep Current leaves that Calibration untouched. Upgrade Faceplate will replace only this switch's saved Native visual Calibration with the verified matching factory geometry. " +
         "Other switches and Custom dashboards are not changed."
       : "The existing image stays selected until you approve the updated stock artwork. Keep Current retains the verified earlier image and Calibration. " +

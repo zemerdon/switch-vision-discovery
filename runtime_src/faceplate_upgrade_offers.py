@@ -344,6 +344,119 @@ def offers_from_choices(
     return offers
 
 
+def legacy_same_artwork_geometry_offers(
+    inventory: list[dict[str, str]],
+    defaults: dict[str, str],
+    assets: dict[str, str],
+    choices: Any,
+    profiles: Any,
+    revisions: Any,
+    saved_by_base: dict[str, Any],
+    collapsed: dict[str, str] | None = None,
+    existing_offers: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Offer a consented factory reset for a verified legacy tall-layout pin.
+
+    This is not a generic 'custom calibration differs' reset. Core's own
+    verified stock pair supplies the expected factory image dimensions and
+    saved Core Geometry; only the known legacy baked Cisco 48-port profile
+    under the same stock image may be offered. Other intentional user edits
+    do not become automatic approval or an unverified image preview.
+    """
+    if not (isinstance(choices, dict) and isinstance(profiles, list)
+            and isinstance(revisions, dict) and isinstance(saved_by_base, dict)):
+        return []
+    collapsed = collapsed or {}
+    excluded = {(str(x.get("device_key") or ""), str(x.get("base_profile") or ""))
+                for x in (existing_offers or []) if isinstance(x, dict)}
+    found: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for device in inventory[:256]:
+        key = str(device.get("device_key") or "")
+        model = str(device.get("resolved_model") or "")
+        name = str(device.get("switch_name") or "")
+        native = str(device.get("native_switch_key") or name)
+        if not _KEY.fullmatch(key) or key in seen:
+            continue
+        seen.add(key)
+        base_names = sorted(x for x in _profile_base(native) if x.startswith("native_"))
+        target = defaults.get(model, "")
+        if not base_names or not target or not assets.get(target):
+            continue
+        base = base_names[0]
+        if (key, base) in excluded:
+            continue
+        latest = next((
+            row for row in (revisions.get(target) or [])[:64]
+            if isinstance(row, dict) and row.get("filename") == target
+            and row.get("path") == "faceplates/" + target
+            and row.get("sha256") == assets[target]
+            and _SHA.fullmatch(str(row.get("geometry_sha256") or ""))
+            and str(row.get("version") or "").startswith("sha-")
+        ), None)
+        current = choices.get(base)
+        saved = saved_by_base.get(base)
+        if not (isinstance(latest, dict) and isinstance(current, dict)
+                and isinstance(saved, dict) and saved.get("exists") is True
+                and saved.get("invalid") is not True
+                and saved.get("profile") == base):
+            continue
+        if (current.get("filename") != target or
+                current.get("sha256") != latest["sha256"] or
+                current.get("path") != latest["path"] or
+                (current.get("version") and current["version"] != latest["version"]) or
+                (current.get("geometry_sha256") and
+                 current["geometry_sha256"] != latest["geometry_sha256"])):
+            continue
+        active = [x for x in profiles if isinstance(x, dict)
+                  and x.get("active") is True
+                  and x.get("scope") == "native"
+                  and x.get("base_profile") == base]
+        if len(active) != 1 or active[0].get("saved_calibration_image") != target:
+            continue
+        old = saved.get("calibration")
+        stock = saved.get("stock_artwork")
+        factory = stock.get("geometry") if isinstance(stock, dict) else None
+        if not (isinstance(old, dict) and isinstance(factory, dict)
+                and stock.get("filename") == target
+                and stock.get("sha256") == latest["sha256"]
+                and stock.get("geometry_sha256") == latest["geometry_sha256"]
+                and stock.get("path") == latest["path"]
+                and old.get("profile") == "default_cisco_48_port"
+                and old.get("model") == factory.get("model") == "stock-48rj45-4sfp"):
+            continue
+        older_image = old.get("image")
+        factory_image = factory.get("image")
+        if not (isinstance(older_image, dict) and isinstance(factory_image, dict)
+                and older_image.get("file") == factory_image.get("file") ==
+                    "faceplates/" + target):
+            continue
+        dims = (older_image.get("width"), older_image.get("height"))
+        latest_dims = (factory_image.get("width"), factory_image.get("height"))
+        if (not all(type(v) is int and 0 < v <= 10000 for v in (*dims, *latest_dims))
+                or dims == latest_dims):
+            continue
+        found.append({
+            "device_key": key, "switch_name": name,
+            "display_name": str(device.get("display_name") or "")[:120],
+            "model": model, "base_profile": base,
+            "migration_kind": "legacy_saved_geometry",
+            "saved_geometry_width": dims[0],
+            "saved_geometry_height": dims[1],
+            "latest_geometry_width": latest_dims[0],
+            "latest_geometry_height": latest_dims[1],
+            "current_file": target, "current_sha256": latest["sha256"],
+            "current_version": latest["version"],
+            "current_preview": "", "same_filename": True,
+            "available_file": target, "available_sha256": latest["sha256"],
+            "available_version": latest["version"],
+            "available_geometry_sha256": latest["geometry_sha256"],
+            "versions": [],
+            "collapsed": collapsed.get(f"{key}@{base}") == latest["geometry_sha256"],
+        })
+    return found
+
+
 def eligible_legacy_faceplates(registry: Any) -> dict[str, set[str]]:
     """Only reviewed optional stock art can explain an older model layout."""
     result: dict[str, set[str]] = {}

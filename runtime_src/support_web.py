@@ -2639,6 +2639,7 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
     # First read on a new install records a per-switch approved stock SHA,
     # without creating or resetting Calibration. Subsequent Core upgrades
     # retain that pin and Hub can compare the outgoing image with new art.
+    saved_geometry_by_base = {}
     for device in devices:
         if device["resolved_model"] not in defaults:
             continue
@@ -2646,7 +2647,7 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
         base = re.sub(r"[^A-Za-z0-9_-]+", "_", name.strip()).strip("_")[:96]
         if not base:
             continue
-        _home_assistant_ws({
+        saved_geometry_by_base["native_" + base] = _home_assistant_ws({
             "type": "switch_vision/get_calibration",
             "profile": "native_" + base,
             "stock_faceplate": defaults[device["resolved_model"]],
@@ -2668,6 +2669,11 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
     offers.extend(faceplate_offers.legacy_calibration_offers(
         devices, defaults, assets, profiles_result["stock_artwork_choices"],
         profiles_result.get("items"), revisions, legacy_artwork,
+        collapsed=collapsed, existing_offers=offers,
+    ))
+    offers.extend(faceplate_offers.legacy_same_artwork_geometry_offers(
+        devices, defaults, assets, profiles_result["stock_artwork_choices"],
+        profiles_result.get("items"), revisions, saved_geometry_by_base,
         collapsed=collapsed, existing_offers=offers,
     ))
     return {"ok": True, "core_version": str(core_assets["core_version"]),
@@ -2737,7 +2743,7 @@ def _faceplate_upgrade_action(options_file: Path, body: Any) -> dict[str, Any]:
             raise ValueError("The switch selection changed; refresh Hub.")
         if (target_file == offer["current_file"] and selected_sha == offer["current_sha256"]
               and selected_version == offer.get("current_version")
-              and offer.get("migration_kind") != "legacy_saved_calibration"):
+              and offer.get("migration_kind") not in {"legacy_saved_calibration", "legacy_saved_geometry"}):
             return {"ok": True, "action": "unchanged", "device_key": key}
         result = _home_assistant_ws({
             "type": "switch_vision/approve_stock_artwork",
