@@ -24,14 +24,31 @@ SUPERVISOR_CONFIG = ROOT / "switch_vision_discovery/config.yaml"
 
 @contextmanager
 def patched(**values):
-    original = {name: getattr(hub, name) for name in values}
-    try:
-        for name, value in values.items():
-            setattr(hub, name, value)
-        yield
-    finally:
-        for name, value in original.items():
-            setattr(hub, name, value)
+    # Hub saves reconcile durable device timestamps. Keep that real save path
+    # exercised while preventing any test from writing to the add-on's /share.
+    with tempfile.TemporaryDirectory(prefix="sv-hub-device-control-test-") as temp:
+        values.setdefault("DEFAULT_DEVICE_CONTROL", Path(temp) / "device-control.json")
+        original = {name: getattr(hub, name) for name in values}
+        try:
+            for name, value in values.items():
+                setattr(hub, name, value)
+            yield
+        finally:
+            for name, value in original.items():
+                setattr(hub, name, value)
+
+
+def test_patched_device_control_is_disposable_and_restored() -> None:
+    saved_path = hub.DEFAULT_DEVICE_CONTROL
+    with patched():
+        temporary = hub.DEFAULT_DEVICE_CONTROL
+        assert temporary != saved_path
+        assert temporary.parent.is_dir()
+        assert "/share/switch_vision" not in str(temporary)
+        temporary.write_text('{"test":true}\n', encoding="utf-8")
+    assert hub.DEFAULT_DEVICE_CONTROL == saved_path
+    assert not temporary.exists()
+    assert not temporary.parent.exists()
 
 
 def expect_value_error(fn, contains: str) -> None:
