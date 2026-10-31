@@ -320,12 +320,24 @@ def test_same_artwork_legacy_geometry_upgrade() -> None:
         factory = {"profile": "stock_48rj45_4sfp",
                    "model": "stock-48rj45-4sfp",
                    "image": {"file": "faceplates/" + image_name,
-                             "width": 6000, "height": 900}}
+                             "width": 6000, "height": 900},
+                   "ports": {
+                       "1": {"center": [558.147321429, 422.879464286]},
+                       "2": {"center": [558.171428571, 662.914285714]},
+                       "47": {"center": [4706.785714286, 422.879464286]},
+                       "48": {"center": [4714.821428571, 662.946428571]},
+                   }}
         saved = {
             "profile": "default_cisco_48_port",
             "model": "stock-48rj45-4sfp",
             "image": {"file": "faceplates/" + image_name,
                       "width": 6000, "height": 1325},
+            "ports": {
+                "1": {"center": [515.625, 724.0234375]},
+                "2": {"center": [518.5546875, 996.484375]},
+                "47": {"center": [4669.921875, 724.0234375]},
+                "48": {"center": [4675.78125, 993.5546875]},
+            },
             "user_topology_authoritative": True,
         }
         before = dict(saved)
@@ -410,7 +422,155 @@ def test_same_artwork_legacy_geometry_upgrade() -> None:
     print("FACEPLATE_SAME_ARTWORK_LEGACY_GEOMETRY_HUB_PASS")
 
 
+def test_real_dashboard_stack_identity_offer_pipeline() -> None:
+    """Hub must emit all three saved Native offers from the captured card shape."""
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        prior = (hub.DEFAULT_REGISTRY_FILE, hub.DEFAULT_GENERATED_CARD,
+                 hub._home_assistant_ws, hub._configured_devices_snapshot,
+                 hub.faceplate_offers.DEFAULT_PATH)
+        stock = "48rj45-4sfp.png"
+        compact = "48rj45-2sfp-compact.png"
+        image_sha, geometry_sha = "a" * 64, "b" * 64
+        revision = {"filename": stock, "sha256": image_sha,
+                    "geometry_sha256": geometry_sha,
+                    "version": "sha-" + "c" * 20,
+                    "path": "faceplates/" + stock}
+        factory = {
+            "profile": "stock_48rj45_4sfp", "model": "stock-48rj45-4sfp",
+            "image": {"file": "faceplates/" + stock, "width": 6000, "height": 900},
+            "ports": {"1": {"center": [558.147321429, 422.879464286]},
+                      "2": {"center": [558.171428571, 662.914285714]},
+                      "47": {"center": [4706.785714286, 422.879464286]},
+                      "48": {"center": [4714.821428571, 662.946428571]}},
+        }
+        legacy = {
+            "profile": "default_cisco_48_port", "model": "stock-48rj45-4sfp",
+            "user_topology_authoritative": True,
+            "ports": {"1": {"center": [515.625, 724.0234375]},
+                      "2": {"center": [518.5546875, 996.484375]},
+                      "47": {"center": [4669.921875, 724.0234375]},
+                      "48": {"center": [4675.78125, 993.5546875]}},
+        }
+        saved = {n: dict(legacy) for n in ("SW5", "SW6", "SW10")}
+        calls = []
+        models = [
+            ("WS-C3650-48PD-E", stock),
+            ("EX3300-48P", stock),
+            ("WS-C2960X-48FPD-L", compact),
+            ("WS-C2960S-48FPD-L", compact),
+        ]
+        registry = root / "models.json"
+        registry.write_text(json.dumps({"devices": [
+            {"model": model, "dashboard_support": True,
+             "default_faceplate": "faceplates/" + filename,
+             "optional_faceplates": []} for model, filename in models]}))
+        generated = root / "generated.yaml"
+        generated.write_text("""views:
+  - cards:
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: 3650-stack
+        selected_switch: SW5
+        switch_model: WS-C3650-48PD-E
+        stack_enabled: true
+        stack_member_number: 1
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: 3650-stack
+        selected_switch: SW6
+        switch_model: WS-C3650-48PD-E
+        stack_enabled: true
+        stack_member_number: 2
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: ex3300-48p
+        selected_switch: SW10
+        switch_model: Juniper EX3300-48P
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: 2960x-48p
+        selected_switch: SW7
+        switch_model: WS-C2960X-48FPD-L
+      - type: custom:switch-vision-3650
+        discovery_selected_switch: 2960S-48p
+        selected_switch: SW9
+        switch_model: WS-C2960S-48FPD-L
+""")
+        inventory = {"devices": [
+            {"device_key": "snmp:stack", "switch_name": "3650-stack",
+             "switch_model": "WS-C3650-48PD-E"},
+            {"device_key": "snmp:juniper", "switch_name": "ex3300-48p",
+             "switch_model": "Juniper EX3300-48P"},
+            {"device_key": "snmp:2960x", "switch_name": "2960x-48p",
+             "switch_model": "WS-C2960X-48FPD-L"},
+            {"device_key": "snmp:2960s", "switch_name": "2960S-48p",
+             "switch_model": "WS-C2960S-48FPD-L"},
+        ]}
+        profiles = [
+            {"active": True, "scope": "native", "base_profile": "native_" + n,
+             "saved_calibration_image": None}
+            for n in ("SW5", "SW6", "SW10")
+        ]
+        choices = {"native_" + n: dict(revision) for n in ("SW5", "SW6", "SW10")}
+        def ws(payload):
+            action = payload["type"]
+            if action == "switch_vision/list_assets":
+                return {"core_version": "2.8.30",
+                        "faceplate_fingerprints": {
+                            stock: {"sha256": image_sha},
+                            compact: {"sha256": "e" * 64}},
+                        "faceplate_revisions": {stock: [revision]}}
+            if action == "switch_vision/list_calibrations":
+                return {"stock_artwork_choices": choices, "items": profiles}
+            if action == "switch_vision/get_calibration":
+                n = payload["profile"].replace("native_", "")
+                if n not in saved:
+                    return {"exists": False, "invalid": False,
+                            "profile": payload["profile"], "stock_artwork": {}}
+                return {"exists": True, "invalid": False,
+                        "profile": payload["profile"], "calibration": saved[n],
+                        "stock_artwork": {**revision, "geometry": factory}}
+            if action == "switch_vision/approve_stock_artwork":
+                calls.append(dict(payload))
+                assert payload["base_profile"] == "native_SW6"
+                assert payload["filename"] == payload["previous_filename"] == stock
+                assert payload["approved_sha256"] == payload["expected_sha256"] == image_sha
+                assert payload["reset_switch_calibration"] is True
+                saved["SW6"] = dict(factory)
+                return {"ok": True, "sha256": image_sha,
+                        "calibration_reset": True}
+            raise AssertionError(action)
+
+        hub.DEFAULT_REGISTRY_FILE = registry
+        hub.DEFAULT_GENERATED_CARD = generated
+        hub._home_assistant_ws = ws
+        hub._configured_devices_snapshot = lambda _: inventory
+        hub.faceplate_offers.DEFAULT_PATH = root / "collapsed.json"
+        try:
+            snapshot = hub._faceplate_upgrade_snapshot(root / "options.json")
+            assert snapshot["devices_checked"] == 5, snapshot
+            assert snapshot["count"] == 3, snapshot
+            assert {x["base_profile"] for x in snapshot["offers"]} == {
+                "native_SW5", "native_SW6", "native_SW10"}
+            assert len({x["device_key"] for x in snapshot["offers"]}) == 2
+            assert len([x for x in snapshot["offers"]
+                        if x["device_key"] == "snmp:stack"]) == 2
+            body = {"device_key": "snmp:stack", "base_profile": "native_SW6",
+                    "available_sha256": image_sha}
+            exported = hub._faceplate_upgrade_action(root, {**body, "action": "export"})
+            assert exported["base_profile"] == "native_SW6"
+            assert exported["geometry"] == legacy and not calls
+            accepted = hub._faceplate_upgrade_action(root, {**body, "action": "upgrade"})
+            assert accepted["action"] == "upgraded" and accepted["calibration_reset"]
+            assert len(calls) == 1
+            remaining = hub._faceplate_upgrade_snapshot(root)["offers"]
+            assert {x["base_profile"] for x in remaining} == {"native_SW5", "native_SW10"}
+        finally:
+            (hub.DEFAULT_REGISTRY_FILE, hub.DEFAULT_GENERATED_CARD,
+             hub._home_assistant_ws, hub._configured_devices_snapshot,
+             hub.faceplate_offers.DEFAULT_PATH) = prior
+    print("FACEPLATE_REAL_DASHBOARD_STACK_PIPELINE_PASS")
+
+
 if __name__ == "__main__":
     test()
     test_legacy_saved_calibration_upgrade()
     test_same_artwork_legacy_geometry_upgrade()
+    test_real_dashboard_stack_identity_offer_pipeline()

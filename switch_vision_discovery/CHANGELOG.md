@@ -1,3 +1,8 @@
+## 3.1.9 — Correct stacked Native Geometry upgrade detection
+
+- Detect separately saved Native Geometry for individual switch-stack members even when they share one Discovery device identity; retain exact per-member selection, Geometry export, cancellation and confirmation without modifying another member.
+- Resolve the reviewed Juniper EX3300-48P generated-card model alias, and recognize the older verified stock 48-port layout by its actual saved port positions even when legacy image dimensions are not recorded. Keep unmatched and custom profiles unchanged.
+
 ## 3.1.8 — Restore missing Native Geometry upgrade offers
 
 - Detect a verified older 6000 × 1325 Cisco 48-port saved factory Geometry on otherwise-current 6000 × 900 stock artwork, including affected 3650 and EX3300 Native dashboards. Offer Export Geometry, Keep Current, and a clearly warned per-switch upgrade to the matching Core-verified factory Geometry. Do not reset any switch or Custom Calibration without explicit approval.

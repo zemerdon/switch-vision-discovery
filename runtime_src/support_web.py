@@ -2604,22 +2604,23 @@ def _faceplate_upgrade_snapshot(options_file: Path) -> dict[str, Any]:
         if not isinstance(row, dict):
             continue
         name = str(row.get("switch_name") or "")
-        target = native_targets.get(name)
-        if not isinstance(target, dict):
-            # Do not approve a reset for an identity that is not actually
-            # bound to a generated Native dashboard.
+        targets = native_targets.get(name)
+        if not isinstance(targets, list):
+            # Never guess a Native switch identity when no actual generated
+            # card uniquely binds it to this configured Discovery device.
             continue
-        model = str(row.get("switch_model") or "")
-        if model not in defaults:
+        model = faceplate_offers.canonical_model(row.get("switch_model"), set(defaults))
+        if not model:
             model = detected_models.get(name, "")
-        if model != target["model"]:
-            continue
         key = str(row.get("device_key") or "")
         if key.startswith("snmp:") and name:
-            devices.append({"device_key": key, "switch_name": name,
-                            "native_switch_key": target["native_switch_key"],
-                            "display_name": str(row.get("display_name") or ""),
-                            "resolved_model": model})
+            for target in targets:
+                if model != target["model"]:
+                    continue
+                devices.append({"device_key": key, "switch_name": name,
+                                "native_switch_key": target["native_switch_key"],
+                                "display_name": str(row.get("display_name") or ""),
+                                "resolved_model": model})
 
     # Calibration base keys normalise spaces/punctuation. Never permit two
     # configured devices that collapse to one key to reset each other.

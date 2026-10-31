@@ -96,8 +96,8 @@ def test():
         "discovery_selected_switch": "3650-server", "selected_switch": "SW1",
         "member": "SW1", "switch_model": "TL-SG2008P"}]}]}
     mapping = f.generated_native_targets(mapped_doc, set(recommended))
-    assert mapping == {"3650-server": {
-        "native_switch_key": "SW1", "model": "TL-SG2008P"}}
+    assert mapping == {"3650-server": [{
+        "native_switch_key": "SW1", "model": "TL-SG2008P"}]}
     mapped = [{**inventory[0], "switch_name": "3650-server",
                "native_switch_key": "SW1"}]
     mapped_pins = {
@@ -318,6 +318,12 @@ def test_verified_legacy_geometry_upgrade() -> None:
         "model": "stock-48rj45-4sfp",
         "profile": "stock_48rj45_4sfp",
         "image": {"file": "faceplates/" + stock, "width": 6000, "height": 900},
+        "ports": {
+            "1": {"center": [558.147321429, 422.879464286]},
+            "2": {"center": [558.171428571, 662.914285714]},
+            "47": {"center": [4706.785714286, 422.879464286]},
+            "48": {"center": [4714.821428571, 662.946428571]},
+        },
     }
     latest = {"filename": stock, "sha256": sha, "geometry_sha256": geo,
               "version": "sha-" + "c" * 20, "path": "faceplates/" + stock}
@@ -351,6 +357,12 @@ def test_verified_legacy_geometry_upgrade() -> None:
             "profile": "default_cisco_48_port",
             "model": "stock-48rj45-4sfp", "user_topology_authoritative": True,
             "image": {"file": "faceplates/" + stock, "width": 6000, "height": 1325},
+            "ports": {
+                "1": {"center": [515.625, 724.0234375]},
+                "2": {"center": [518.5546875, 996.484375]},
+                "47": {"center": [4669.921875, 724.0234375]},
+                "48": {"center": [4675.78125, 993.5546875]},
+            },
         },
     } for name in ("SW5", "SW6", "SW10")}
     params = dict(inventory=rows, defaults=defaults,
@@ -372,8 +384,7 @@ def test_verified_legacy_geometry_upgrade() -> None:
     for field, value in (
         ("profile", "user_saved_profile"),
         ("model", "unknown"),
-        ("image", {"file": "faceplates/" + stock,
-                   "width": 6000, "height": 900}),
+        ("ports", dict(factory["ports"])),
     ):
         modified = {**saved["native_SW5"]["calibration"], field: value}
         broken = {**saved, "native_SW5": {
@@ -412,6 +423,104 @@ def test_verified_legacy_geometry_upgrade() -> None:
     print("FACEPLATE_LEGACY_SAME_ARTWORK_GEOMETRY_PASS")
 
 
+def test_owner_dashboard_stack_and_juniper_geometry_offers() -> None:
+    """Reproduce the saved dashboard's SW5/SW6 shared stack and SW10 alias."""
+    stock = "48rj45-4sfp.png"
+    compact = "48rj45-2sfp-compact.png"
+    image_sha, geometry_sha = "a" * 64, "b" * 64
+    latest = {"filename": stock, "sha256": image_sha,
+              "geometry_sha256": geometry_sha,
+              "path": "faceplates/" + stock, "version": "sha-" + "c" * 20}
+    models = {"WS-C3650-48PD-E", "EX3300-48P",
+              "WS-C2960X-48FPD-L", "WS-C2960S-48FPD-L"}
+    # These are the actual distinct identity relationships from the captured
+    # generated dashboard, with management addresses and metadata omitted.
+    cards = [
+        {"type": "custom:switch-vision-3650",
+         "discovery_selected_switch": "3650-stack", "selected_switch": "SW5",
+         "switch_model": "WS-C3650-48PD-E", "stack_enabled": True,
+         "stack_member_number": 1},
+        {"type": "custom:switch-vision-3650",
+         "discovery_selected_switch": "3650-stack", "selected_switch": "SW6",
+         "switch_model": "WS-C3650-48PD-E", "stack_enabled": True,
+         "stack_member_number": 2},
+        {"type": "custom:switch-vision-3650",
+         "discovery_selected_switch": "ex3300-48p", "selected_switch": "SW10",
+         "switch_model": "Juniper EX3300-48P"},
+        {"type": "custom:switch-vision-3650",
+         "discovery_selected_switch": "2960x-48p", "selected_switch": "SW7",
+         "switch_model": "WS-C2960X-48FPD-L"},
+        {"type": "custom:switch-vision-3650",
+         "discovery_selected_switch": "2960S-48p", "selected_switch": "SW9",
+         "switch_model": "WS-C2960S-48FPD-L"},
+    ]
+    targets = f.generated_native_targets({"views": [{"cards": cards}]}, models)
+    assert [x["native_switch_key"] for x in targets["3650-stack"]] == ["SW5", "SW6"]
+    assert targets["ex3300-48p"] == [{"native_switch_key": "SW10", "model": "EX3300-48P"}]
+    assert f.generated_exact_models({"views": [{"cards": cards}]}, models)["ex3300-48p"] == "EX3300-48P"
+    assert f.canonical_model("Unreviewed EX3300-48P", models) == ""
+    invalid = [dict(cards[0]), {**cards[1], "stack_member_number": 1}]
+    assert "3650-stack" not in f.generated_native_targets({"cards": invalid}, models)
+    invalid = [dict(cards[0]), {**cards[1], "stack_enabled": False}]
+    assert "3650-stack" not in f.generated_native_targets({"cards": invalid}, models)
+
+    devices = [
+        {"device_key": "snmp:stack", "switch_name": "3650-stack",
+         "native_switch_key": "SW5", "resolved_model": "WS-C3650-48PD-E"},
+        {"device_key": "snmp:stack", "switch_name": "3650-stack",
+         "native_switch_key": "SW6", "resolved_model": "WS-C3650-48PD-E"},
+        {"device_key": "snmp:juniper", "switch_name": "ex3300-48p",
+         "native_switch_key": "SW10", "resolved_model": "EX3300-48P"},
+        {"device_key": "snmp:2960x", "switch_name": "2960x-48p",
+         "native_switch_key": "SW7", "resolved_model": "WS-C2960X-48FPD-L"},
+        {"device_key": "snmp:2960s", "switch_name": "2960S-48p",
+         "native_switch_key": "SW9", "resolved_model": "WS-C2960S-48FPD-L"},
+    ]
+    defaults = {"WS-C3650-48PD-E": stock, "EX3300-48P": stock,
+                "WS-C2960X-48FPD-L": compact,
+                "WS-C2960S-48FPD-L": compact}
+    factory = {
+        "model": "stock-48rj45-4sfp", "profile": "stock_48rj45_4sfp",
+        "image": {"file": "faceplates/" + stock, "width": 6000, "height": 900},
+        "ports": {"1": {"center": [558.147321429, 422.879464286]},
+                  "2": {"center": [558.171428571, 662.914285714]},
+                  "47": {"center": [4706.785714286, 422.879464286]},
+                  "48": {"center": [4714.821428571, 662.946428571]}},
+    }
+    legacy = {
+        "model": "stock-48rj45-4sfp", "profile": "default_cisco_48_port",
+        "user_topology_authoritative": True,
+        "ports": {"1": {"center": [515.625, 724.0234375]},
+                  "2": {"center": [518.5546875, 996.484375]},
+                  "47": {"center": [4669.921875, 724.0234375]},
+                  "48": {"center": [4675.78125, 993.5546875]}},
+    }
+    saved = {"native_" + name: {
+        "exists": True, "invalid": False, "profile": "native_" + name,
+        "calibration": dict(legacy),
+        "stock_artwork": {**latest, "geometry": factory},
+    } for name in ("SW5", "SW6", "SW10")}
+    profiles = [{"base_profile": "native_" + name, "scope": "native",
+                 "active": True, "saved_calibration_image": None}
+                for name in ("SW5", "SW6", "SW10")]
+    choices = {"native_" + name: dict(latest) for name in ("SW5", "SW6", "SW10")}
+    offers = f.legacy_same_artwork_geometry_offers(
+        devices, defaults, {stock: image_sha}, choices, profiles,
+        {stock: [latest]}, saved)
+    assert {x["base_profile"] for x in offers} == {
+        "native_SW5", "native_SW6", "native_SW10"}, offers
+    assert all(x["migration_kind"] == "legacy_saved_geometry" for x in offers)
+    assert all(x["saved_geometry_height"] is None for x in offers)
+    # Missing/modified legacy anchors must not authorize an offer.
+    changed = {**saved, "native_SW5": {**saved["native_SW5"],
+               "calibration": {**legacy, "ports": dict(factory["ports"])}}}
+    assert {x["base_profile"] for x in f.legacy_same_artwork_geometry_offers(
+        devices, defaults, {stock: image_sha}, choices, profiles,
+        {stock: [latest]}, changed)} == {"native_SW6", "native_SW10"}
+    print("FACEPLATE_REAL_STACK_AND_JUNIPER_SHAPE_PASS")
+
+
 if __name__ == "__main__":
     test()
     test_verified_legacy_geometry_upgrade()
+    test_owner_dashboard_stack_and_juniper_geometry_offers()

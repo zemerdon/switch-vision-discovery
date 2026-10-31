@@ -8,6 +8,7 @@ persists only per-offer "Keep Current" collapse preferences.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -51,6 +52,16 @@ def registry_defaults(registry: Any) -> dict[str, str]:
     return result
 
 
+def canonical_model(value: Any, models: set[str]) -> str:
+    """Resolve only an exact registry model or an explicitly reviewed alias."""
+    name = str(value or "").strip()
+    if name in models:
+        return name
+    aliases = {"Juniper EX3300-48P": "EX3300-48P"}
+    resolved = aliases.get(name, "")
+    return resolved if resolved in models else ""
+
+
 def generated_exact_models(documents: Any, models: set[str]) -> dict[str, str]:
     """Only associate a registered switch with an unambiguous exact-model card."""
     matches: dict[str, str] = {}
@@ -65,8 +76,8 @@ def generated_exact_models(documents: Any, models: set[str]) -> dict[str, str]:
         elif isinstance(node, dict):
             if node.get("type") == "custom:switch-vision-3650":
                 key = str(node.get("discovery_selected_switch") or node.get("selected_switch") or "").strip()
-                model = str(node.get("switch_model") or "").strip()
-                if 0 < len(key) <= 120 and model in models:
+                model = canonical_model(node.get("switch_model"), models)
+                if 0 < len(key) <= 120 and model:
                     if key in matches and matches[key] != model:
                         invalid.add(key)
                     else:
@@ -80,15 +91,17 @@ def generated_exact_models(documents: Any, models: set[str]) -> dict[str, str]:
     return matches
 
 
-def generated_native_targets(documents: Any, models: set[str]) -> dict[str, dict[str, str]]:
-    """Resolve a Discovery device to the switch identity actually used by Native.
+def generated_native_targets(
+    documents: Any, models: set[str]
+) -> dict[str, list[dict[str, str]]]:
+    """Resolve each actual Native switch card, including stack members.
 
-    The generated dashboard can show 'SW1' while Discovery calls it
-    '3650-server'. Never reset a profile by guessing from the Discovery name.
-    Reject conflicting cards or shared Native identities.
+    Multiple cards may deliberately share one Discovery target for one stack.
+    Their selected Native identities, models, and positive member numbers must
+    remain distinct. Ambiguous/duplicate mappings fail closed.
     """
-    found: dict[str, dict[str, str]] = {}
-    ambiguous: set[str] = set()
+    grouped: dict[str, list[dict[str, str]]] = {}
+    invalid: set[str] = set()
 
     def walk(node: Any, depth: int = 0) -> None:
         if depth > 16:
@@ -101,30 +114,45 @@ def generated_native_targets(documents: Any, models: set[str]) -> dict[str, dict
                 discovery = str(node.get("discovery_selected_switch") or
                                 node.get("selected_switch") or "").strip()
                 native = str(node.get("selected_switch") or node.get("member") or "").strip()
-                model = str(node.get("switch_model") or "").strip()
-                if (discovery and native and model in models
-                        and len(discovery) <= 120 and len(native) <= 96
+                model = canonical_model(node.get("switch_model"), models)
+                member = node.get("stack_member_number")
+                stacked = node.get("stack_enabled") is True
+                if (discovery and native and model and len(discovery) <= 120
+                        and len(native) <= 96
                         and re.fullmatch(r"[A-Za-z0-9_-]+", native)):
-                    target = {"native_switch_key": native, "model": model}
-                    if discovery in found and found[discovery] != target:
-                        ambiguous.add(discovery)
-                    else:
-                        found[discovery] = target
+                    row = {"native_switch_key": native, "model": model}
+                    if stacked and type(member) is int and 1 <= member <= 16:
+                        row["stack_member_number"] = str(member)
+                    if discovery in grouped and (
+                            not stacked or "stack_member_number" not in row):
+                        invalid.add(discovery)
+                    grouped.setdefault(discovery, []).append(row)
             for child in node.values():
                 if isinstance(child, (list, dict)):
                     walk(child, depth + 1)
 
     walk(documents)
-    for discovery in ambiguous:
-        found.pop(discovery, None)
-    owners: dict[str, list[str]] = {}
-    for discovery, row in found.items():
-        owners.setdefault(row["native_switch_key"], []).append(discovery)
-    for same_native in owners.values():
-        if len(same_native) > 1:
-            for discovery in same_native:
-                found.pop(discovery, None)
-    return found
+    for discovery, targets in list(grouped.items()):
+        if discovery in invalid:
+            grouped.pop(discovery, None)
+            continue
+        if len(targets) > 1:
+            native_keys = {x["native_switch_key"] for x in targets}
+            members = {x.get("stack_member_number") for x in targets}
+            models_seen = {x["model"] for x in targets}
+            if (len(native_keys) != len(targets)
+                    or len(members) != len(targets)
+                    or None in members or len(models_seen) != 1):
+                grouped.pop(discovery, None)
+    native_owners: dict[str, set[str]] = {}
+    for discovery, targets in grouped.items():
+        for row in targets:
+            native_owners.setdefault(row["native_switch_key"], set()).add(discovery)
+    collisions = {n for n, owners in native_owners.items() if len(owners) > 1}
+    for discovery, targets in list(grouped.items()):
+        if any(x["native_switch_key"] in collisions for x in targets):
+            grouped.pop(discovery, None)
+    return grouped
 
 
 def _profile_base(switch_name: str) -> set[str]:
@@ -153,9 +181,10 @@ def offers_from_saved(
         key = str(device.get("device_key") or "")
         name = str(device.get("switch_name") or "")
         model = str(device.get("resolved_model") or "")
-        if not _KEY.fullmatch(key) or not name or model not in defaults or key in seen:
+        identity = (key, str(device.get("native_switch_key") or name))
+        if not _KEY.fullmatch(key) or not name or model not in defaults or identity in seen:
             continue
-        seen.add(key)
+        seen.add(identity)
         new_file = defaults[model]
         new_hash = assets.get(new_file)
         if not new_hash:
@@ -258,14 +287,15 @@ def offers_from_choices(
     collapsed = collapsed or {}
     revisions = revisions or {}
     offers: list[dict[str, str]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for device in inventory:
         key = str(device.get("device_key") or "")
         name = str(device.get("switch_name") or "")
         model = str(device.get("resolved_model") or "")
-        if not _KEY.fullmatch(key) or not name or model not in defaults or key in seen:
+        identity = (key, str(device.get("native_switch_key") or name))
+        if not _KEY.fullmatch(key) or not name or model not in defaults or identity in seen:
             continue
-        seen.add(key)
+        seen.add(identity)
         target_file = defaults[model]
         target_sha = assets.get(target_file)
         if not target_sha:
@@ -370,15 +400,16 @@ def legacy_same_artwork_geometry_offers(
     excluded = {(str(x.get("device_key") or ""), str(x.get("base_profile") or ""))
                 for x in (existing_offers or []) if isinstance(x, dict)}
     found: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for device in inventory[:256]:
         key = str(device.get("device_key") or "")
         model = str(device.get("resolved_model") or "")
         name = str(device.get("switch_name") or "")
         native = str(device.get("native_switch_key") or name)
-        if not _KEY.fullmatch(key) or key in seen:
+        identity = (key, native)
+        if not _KEY.fullmatch(key) or identity in seen:
             continue
-        seen.add(key)
+        seen.add(identity)
         base_names = sorted(x for x in _profile_base(native) if x.startswith("native_"))
         target = defaults.get(model, "")
         if not base_names or not target or not assets.get(target):
@@ -412,11 +443,19 @@ def legacy_same_artwork_geometry_offers(
                   and x.get("active") is True
                   and x.get("scope") == "native"
                   and x.get("base_profile") == base]
-        if len(active) != 1 or active[0].get("saved_calibration_image") != target:
+        if len(active) != 1:
+            continue
+        saved_image = active[0].get("saved_calibration_image")
+        if saved_image and saved_image != target:
             continue
         old = saved.get("calibration")
         stock = saved.get("stock_artwork")
         factory = stock.get("geometry") if isinstance(stock, dict) else None
+        visual_ui = old.get("ui") if isinstance(old, dict) else None
+        visual_faceplate = visual_ui.get("faceplate") if isinstance(visual_ui, dict) else None
+        if (isinstance(visual_faceplate, dict) and
+                visual_faceplate.get("source") not in (None, "", "default", "stock")):
+            continue
         if not (isinstance(old, dict) and isinstance(factory, dict)
                 and stock.get("filename") == target
                 and stock.get("sha256") == latest["sha256"]
@@ -427,15 +466,42 @@ def legacy_same_artwork_geometry_offers(
             continue
         older_image = old.get("image")
         factory_image = factory.get("image")
-        if not (isinstance(older_image, dict) and isinstance(factory_image, dict)
-                and older_image.get("file") == factory_image.get("file") ==
-                    "faceplates/" + target):
+        if not (isinstance(factory_image, dict) and
+                factory_image.get("file") == "faceplates/" + target):
             continue
-        dims = (older_image.get("width"), older_image.get("height"))
+        if isinstance(older_image, dict) and (
+                older_image.get("file") != "faceplates/" + target):
+            continue
         latest_dims = (factory_image.get("width"), factory_image.get("height"))
-        if (not all(type(v) is int and 0 < v <= 10000 for v in (*dims, *latest_dims))
-                or dims == latest_dims):
+        if not all(type(v) is int and 0 < v <= 10000 for v in latest_dims):
             continue
+        # Existing Calibration can preserve an older factory layout even
+        # when its image metadata is absent or already migrated. Compare the
+        # actual saved port positions with Core's verified factory Geometry,
+        # rather than trusting width/height fields alone.
+        older_ports = old.get("ports")
+        factory_ports = factory.get("ports")
+        if not (isinstance(older_ports, dict) and isinstance(factory_ports, dict)):
+            continue
+        differences = []
+        for port in ("1", "2", "47", "48"):
+            first = older_ports.get(port)
+            second = factory_ports.get(port)
+            if not (isinstance(first, dict) and isinstance(second, dict)):
+                continue
+            left = first.get("center")
+            right = second.get("center")
+            if (not isinstance(left, (list, tuple)) or
+                    not isinstance(right, (list, tuple)) or
+                    len(left) != 2 or len(right) != 2 or
+                    not all(type(v) in (int, float) and math.isfinite(v) for v in (*left, *right))):
+                continue
+            differences.append(max(abs(left[0] - right[0]), abs(left[1] - right[1])))
+        if len(differences) < 2 or max(differences) < 40:
+            continue
+        dims = (older_image.get("width"), older_image.get("height")) if isinstance(older_image, dict) else (None, None)
+        if not all(type(v) is int and 0 < v <= 10000 for v in dims):
+            dims = (None, None)
         found.append({
             "device_key": key, "switch_name": name,
             "display_name": str(device.get("display_name") or "")[:120],
@@ -505,7 +571,7 @@ def legacy_calibration_offers(
                  str(row.get("base_profile") or ""))
                 for row in (existing_offers or []) if isinstance(row, dict)}
     found: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
 
     def latest_pair(name: str) -> dict[str, str]:
         rows = revisions.get(name)
@@ -527,9 +593,10 @@ def legacy_calibration_offers(
         key = str(device.get("device_key") or "")
         name = str(device.get("switch_name") or "")
         model = str(device.get("resolved_model") or "")
-        if not _KEY.fullmatch(key) or not name or key in seen:
+        identity = (key, str(device.get("native_switch_key") or name))
+        if not _KEY.fullmatch(key) or not name or identity in seen:
             continue
-        seen.add(key)
+        seen.add(identity)
         target = defaults.get(model, "")
         base_names = sorted(item for item in _profile_base(str(device.get("native_switch_key") or name))
                             if item.startswith("native_"))
@@ -605,9 +672,10 @@ def selectable_for_devices(
         key = str(device.get("device_key") or "")
         name = str(device.get("switch_name") or "")
         model = str(device.get("resolved_model") or "")
-        if not _KEY.fullmatch(key) or not name or key in seen:
+        identity = (key, str(device.get("native_switch_key") or name))
+        if not _KEY.fullmatch(key) or not name or identity in seen:
             continue
-        seen.add(key)
+        seen.add(identity)
         recommended = defaults.get(model, "")
         if recommended not in assets:
             recommended = ""

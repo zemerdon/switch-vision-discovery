@@ -206,17 +206,28 @@
     message.style.color = error ? "var(--bad)" : "";
   }
 
+  function offerIdentity(offer) {
+    return String(offer.device_key || "") + "@" + String(offer.base_profile || "");
+  }
+
+  function offerLabel(offer) {
+    const native = String(offer.base_profile || "").replace(/^native_/, "");
+    const label = offer.display_name || offer.switch_name || "Switch";
+    return (native && native !== offer.switch_name ? label + " · " + native : label) +
+      " · " + offer.model;
+  }
+
   function render(offers) {
     latestOffers = Array.isArray(offers) ? offers : [];
-    const offer = latestOffers.find(item => item.device_key === selectedKey) ||
+    const offer = latestOffers.find(item => offerIdentity(item) === selectedKey) ||
                   latestOffers.find(item => !item.collapsed) || latestOffers[0] || null;
     currentOffer = offer;
-    selectedKey = offer ? offer.device_key : '';
+    selectedKey = offer ? offerIdentity(offer) : '';
     selector.classList.toggle("hidden", latestOffers.length < 2);
     selector.replaceChildren(...latestOffers.map(item => {
       const option = document.createElement("option");
-      option.value = item.device_key;
-      option.textContent = (item.display_name || item.switch_name || "Switch") + " · " + item.model;
+      option.value = offerIdentity(item);
+      option.textContent = offerLabel(item);
       return option;
     }));
     selector.value = selectedKey;
@@ -225,12 +236,12 @@
       status("");
       return;
     }
-    const shouldCollapse = Boolean(offer.collapsed) && manuallyExpandedKey !== offer.device_key;
+    const shouldCollapse = Boolean(offer.collapsed) && manuallyExpandedKey !== offerIdentity(offer);
     expanded.hidden = shouldCollapse;
     collapsedButton.classList.toggle("hidden", !shouldCollapse);
     const label = offer.display_name || offer.switch_name || "Switch";
     const scopeName = "Native dashboard";
-    get("faceplateUpgradeDevice").textContent = label + " · " + offer.model + " · " + scopeName;
+    get("faceplateUpgradeDevice").textContent = offerLabel(offer) + " · " + scopeName;
     const legacy = offer.migration_kind === "legacy_saved_calibration";
     const staleGeometry = offer.migration_kind === "legacy_saved_geometry";
     get("faceplateUpgradeHeading").textContent = staleGeometry
@@ -246,8 +257,9 @@
       legacy ? "" : (offer.current_preview || ""));
     get("faceplateUpgradeNewImage").src = imageUrl(offer.available_file, offer.available_sha256);
     get("faceplateUpgradeOldDescription").textContent = staleGeometry
-      ? "Saved " + offer.saved_geometry_width + " × " + offer.saved_geometry_height +
-        " Geometry on " + offer.current_file
+      ? (Number.isInteger(offer.saved_geometry_width) && Number.isInteger(offer.saved_geometry_height)
+          ? "Saved " + offer.saved_geometry_width + " × " + offer.saved_geometry_height + " Geometry"
+          : "Saved legacy port Geometry") + " on " + offer.current_file
       : legacy ? offer.legacy_calibration_file + " · older saved layout"
       : offer.current_file +
         (offer.same_filename ? " · previous SHA " + offer.current_sha256.slice(0, 12) : "") +
@@ -321,7 +333,7 @@
       heading.textContent = "Confirm Faceplate Upgrade";
       const description = document.createElement("p");
       description.textContent = "Replace the faceplate and reset the saved Native Calibration for " +
-        (offer.display_name || offer.switch_name || "this switch") +
+        offerLabel(offer) +
         " to the new verified factory geometry. Other switches and Custom Calibration stay unchanged.";
       const backupText = document.createElement("p");
       backupText.textContent = "You can export your current Geometry before you confirm.";
@@ -444,7 +456,7 @@
   });
   collapsedButton.addEventListener("click", () => {
     // Red button only reopens the offer; it never applies silently.
-    manuallyExpandedKey = currentOffer?.device_key || "";
+    manuallyExpandedKey = currentOffer ? offerIdentity(currentOffer) : "";
     expanded.hidden = false;
     collapsedButton.classList.add("hidden");
   });

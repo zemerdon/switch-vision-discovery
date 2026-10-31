@@ -111,6 +111,7 @@ async function run() {
     }
     const body = JSON.parse(request.body);
     const offer = offers.find(item => item.device_key === body.device_key &&
+      item.base_profile === body.base_profile &&
       item.available_sha256 === body.available_sha256);
     assert.ok(offer, "exact per-switch offer");
     assert.equal(body.base_profile, offer.base_profile, "exact artwork scope");
@@ -153,7 +154,7 @@ async function run() {
   assert.equal(get("faceplateUpgradeDevice").textContent, "SW3 · Model A · Native dashboard");
   assert.match(get("faceplateUpgradeOldImage").src, /old-a\.png\?v=/);
   assert.ok(!get("faceplateUpgradeSection").classList.contains("hidden"));
-  get("faceplateUpgradeSwitchSelect").value = "snmp:SW4";
+  get("faceplateUpgradeSwitchSelect").value = "snmp:SW4@native_SW4";
   get("faceplateUpgradeSwitchSelect").trigger("change");
   assert.equal(get("faceplateUpgradeDevice").textContent, "SW4 · Model B · Native dashboard");
   get("faceplateUpgradeKeepButton").trigger("click");
@@ -309,6 +310,52 @@ async function run() {
   dialog.children[4].children[2].trigger("click");
   await drain();
   assert.equal(resets, beforeGeometryReset + 1, "one confirmed per-switch visual reset");
+  // SW5 and SW6 are Native members of the SAME SNMP stack. Their selector
+  // and reset actions must use the unique Native base, not only the stack key.
+  const stackBase = {
+    device_key: "snmp:stack", switch_name: "3650-stack",
+    display_name: "3650 Stack", model: "WS-C3650-48PD-E",
+    migration_kind: "legacy_saved_geometry", collapsed: false,
+    saved_geometry_width: null, saved_geometry_height: null,
+    latest_geometry_width: 6000, latest_geometry_height: 900,
+    current_file: "48rj45-4sfp.png", available_file: "48rj45-4sfp.png",
+    current_sha256: "a".repeat(64), available_sha256: "a".repeat(64),
+    current_version: "sha-" + "b".repeat(20),
+    available_version: "sha-" + "b".repeat(20), versions: [],
+  };
+  offers = [
+    {...stackBase, base_profile: "native_SW5"},
+    {...stackBase, base_profile: "native_SW6"},
+  ];
+  timer();
+  await drain();
+  const options = get("faceplateUpgradeSwitchSelect").options;
+  assert.equal(options.length, 2, "two same-device Native members are separately selectable");
+  assert.equal(options[0].value, "snmp:stack@native_SW5");
+  assert.equal(options[1].value, "snmp:stack@native_SW6");
+  assert.match(options[0].textContent, /SW5/);
+  assert.match(options[1].textContent, /SW6/);
+  assert.match(get("faceplateUpgradeOldDescription").textContent,
+    /Saved legacy port Geometry/, "missing saved image dimensions must not be invented");
+  get("faceplateUpgradeSwitchSelect").value = options[1].value;
+  get("faceplateUpgradeSwitchSelect").trigger("change");
+  assert.match(get("faceplateUpgradeDevice").textContent, /SW6/);
+  const beforeStackReset = resets;
+  get("faceplateUpgradeApplyButton").trigger("click");
+  await drain();
+  dialog = currentDialog();
+  assert.match(dialog.children[1].textContent, /SW6/, "confirmation names exact member");
+  dialog.children[4].children[1].trigger("click");
+  await drain();
+  assert.equal(resets, beforeStackReset, "stack member cancellation is no-op");
+  get("faceplateUpgradeApplyButton").trigger("click");
+  await drain();
+  dialog = currentDialog();
+  dialog.children[4].children[2].trigger("click");
+  await drain();
+  assert.equal(resets, beforeStackReset + 1, "only confirmed stack member resets");
+  assert.deepEqual(offers.map(item => item.base_profile), ["native_SW5"],
+    "SW5 remains untouched after SW6 upgrade");
   offers = [];
   timer();
   await drain();
