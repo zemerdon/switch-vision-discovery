@@ -25,7 +25,7 @@ GENERIC_VISUALS: tuple[tuple[int, int, str, str], ...] = (
     (24, 2, "stock_24rj45_2sfp", "faceplates/24rj45-2sfp.png"),
     (24, 4, "stock_24rj45_4sfp", "faceplates/24rj45-4sfp.png"),
     (48, 2, "stock_48rj45_2sfp_compact", "faceplates/48rj45-2sfp-compact.png"),
-    (48, 4, "stock_48rj45_4sfp", "faceplates/48rj45-4sfp.png"),
+    (48, 4, "stock_48rj45_4sfp_compact", "faceplates/48rj45-4sfp-compact.png"),
 )
 OPTICAL_CONNECTORS = {"SFP", "SFPPLUS", "SFP+", "SFP28"}
 

@@ -325,8 +325,10 @@
       "discovery_support": true,
       "dashboard_support": true,
       "calibration_profile": "default_cisco_48_port",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
-      "optional_faceplates": [],
+      "default_faceplate": "faceplates/48rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-4sfp.png"
+      ],
       "tested_firmware": [
         "16.12.14"
       ],
@@ -352,8 +354,10 @@
       },
       "visuals": {
         "status": "confirmed",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
-        "optional_faceplates": [],
+        "recommended_faceplate": "faceplates/48rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-4sfp.png"
+        ],
         "calibration_profile": "default_cisco_48_port",
         "canvas": {
           "width": 2048,
@@ -380,8 +384,10 @@
       "discovery_support": true,
       "dashboard_support": true,
       "calibration_profile": "default_cisco_48_port",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
-      "optional_faceplates": [],
+      "default_faceplate": "faceplates/48rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-4sfp.png"
+      ],
       "tested_firmware": [
         "16.12.14"
       ],
@@ -407,8 +413,10 @@
       },
       "visuals": {
         "status": "confirmed",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
-        "optional_faceplates": [],
+        "recommended_faceplate": "faceplates/48rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-4sfp.png"
+        ],
         "calibration_profile": "default_cisco_48_port",
         "canvas": {
           "width": 2048,
@@ -607,8 +615,10 @@
       "dashboard_support": true,
       "mapping_profile": "cisco-2960xr-48lps-48p-4sfp",
       "calibration_profile": "default_cisco_48_port",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
-      "optional_faceplates": [],
+      "default_faceplate": "faceplates/48rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-4sfp.png"
+      ],
       "tested_firmware": [
         "15.2(7)E14"
       ],
@@ -633,8 +643,10 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
-        "optional_faceplates": [],
+        "recommended_faceplate": "faceplates/48rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-4sfp.png"
+        ],
         "calibration_profile": "default_cisco_48_port",
         "canvas": {
           "width": 2048,
@@ -844,8 +856,10 @@
       "dashboard_support": true,
       "mapping_profile": "juniper-ex3300-48p",
       "calibration_profile": "default_cisco_48_port",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
-      "optional_faceplates": [],
+      "default_faceplate": "faceplates/48rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-4sfp.png"
+      ],
       "tested_firmware": [
         "JUNOS 15.1R7.9"
       ],
@@ -871,8 +885,10 @@
       },
       "visuals": {
         "status": "confirmed",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
-        "optional_faceplates": [],
+        "recommended_faceplate": "faceplates/48rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-4sfp.png"
+        ],
         "calibration_profile": "default_cisco_48_port",
         "canvas": {
           "width": 2048,
@@ -1613,9 +1629,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-us-48-poe-500w-api",
-      "calibration_profile": "stock_48rj45_4sfp",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_48rj45_4sfp_compact",
+      "default_faceplate": "faceplates/48rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-4sfp.png"
+      ],
       "tested_firmware": [
         "7.4.1"
       ],
@@ -1663,9 +1681,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_48rj45_4sfp",
+        "recommended_faceplate": "faceplates/48rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-4sfp.png"
+        ],
+        "calibration_profile": "stock_48rj45_4sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -1692,9 +1712,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-us-48-api",
-      "calibration_profile": "stock_48rj45_4sfp",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_48rj45_4sfp_compact",
+      "default_faceplate": "faceplates/48rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-4sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -1736,9 +1758,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_48rj45_4sfp",
+        "recommended_faceplate": "faceplates/48rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-4sfp.png"
+        ],
+        "calibration_profile": "stock_48rj45_4sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -3175,8 +3199,10 @@
       "dashboard_support": true,
       "mapping_profile": "cisco-3750-48p-48fe-4sfp",
       "calibration_profile": "default_cisco_48_port",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
-      "optional_faceplates": [],
+      "default_faceplate": "faceplates/48rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-4sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "Community contributor",
@@ -3199,8 +3225,10 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
-        "optional_faceplates": [],
+        "recommended_faceplate": "faceplates/48rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-4sfp.png"
+        ],
         "calibration_profile": "default_cisco_48_port",
         "canvas": {
           "width": 2048,
@@ -3591,8 +3619,10 @@
       "dashboard_support": true,
       "mapping_profile": "cisco-3750x-48p-c3kx",
       "calibration_profile": "default_cisco_48_port",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
-      "optional_faceplates": [],
+      "default_faceplate": "faceplates/48rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-4sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -3613,8 +3643,10 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
-        "optional_faceplates": [],
+        "recommended_faceplate": "faceplates/48rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-4sfp.png"
+        ],
         "calibration_profile": "default_cisco_48_port",
         "canvas": {
           "width": 2048,
@@ -3658,8 +3690,10 @@
       "dashboard_support": true,
       "mapping_profile": "cisco-3750x-48p-c3kx",
       "calibration_profile": "default_cisco_48_port",
-      "default_faceplate": "faceplates/48rj45-4sfp.png",
-      "optional_faceplates": [],
+      "default_faceplate": "faceplates/48rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-4sfp.png"
+      ],
       "tested_firmware": [
         "15.2(4)E10"
       ],
@@ -3683,8 +3717,10 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/48rj45-4sfp.png",
-        "optional_faceplates": [],
+        "recommended_faceplate": "faceplates/48rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-4sfp.png"
+        ],
         "calibration_profile": "default_cisco_48_port",
         "canvas": {
           "width": 2048,

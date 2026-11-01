@@ -37,6 +37,21 @@ models = {
     if isinstance(row, dict) and row.get("model")
 }
 
+compact_48x4_models = {
+    "WS-C3650-48PD-E", "WS-C3650-48PD-L", "WS-C2960XR-48LPS-I",
+    "EX3300-48P", "US 48 PoE 500W", "US 48", "WS-C3750-48P",
+    "WS-C3750X-48P", "WS-C3750X-48P-S",
+}
+for name in compact_48x4_models:
+    row = models[name]
+    assert row["default_faceplate"] == "faceplates/48rj45-4sfp-compact.png", name
+    assert row["optional_faceplates"] == ["faceplates/48rj45-4sfp.png"], name
+    assert row["visuals"]["recommended_faceplate"] == "faceplates/48rj45-4sfp-compact.png", name
+    assert row["visuals"]["optional_faceplates"] == ["faceplates/48rj45-4sfp.png"], name
+    if name.startswith("US 48"):
+        assert row["calibration_profile"] == "stock_48rj45_4sfp_compact", name
+        assert row["visuals"]["calibration_profile"] == "stock_48rj45_4sfp_compact", name
+
 xr = models["WS-C2960XR-48LPS-I"]
 assert xr["status"] == "experimental"
 assert xr["dashboard_support"] is True
@@ -46,7 +61,7 @@ assert xr["ports"]["uplinks"] == 4
 assert xr["ports"]["gigabit_sfp"] == 4
 assert xr["ports"]["ten_gigabit_sfp_plus"] == 0
 assert xr["calibration_profile"] == "default_cisco_48_port"
-assert xr["default_faceplate"] == "faceplates/48rj45-4sfp.png"
+assert xr["default_faceplate"] == "faceplates/48rj45-4sfp-compact.png"
 pxr = profiles[xr["mapping_profile"]]
 assert pxr["status"] == "experimental"
 assert pxr["layout"] == {

@@ -1,3 +1,8 @@
+## 3.1.10 — Keep original and compact 48 RJ45 / 4 SFP faceplates separate
+
+- Match Core's separate original and compact 48/4 stock artwork and factory Geometry: recommend compact for the affected exact models and generic 48/4 dashboards, retaining the original as a selectable alternative.
+- Preserve existing saved artwork and Calibration; allow the already-reviewed, explicit per-switch Hub upgrade preview and approval when an older stock filename is replaced by the compact filename. No automatic reset or physical-switch change.
+
 ## 3.1.9 — Correct stacked Native Geometry upgrade detection
 
 - Detect separately saved Native Geometry for individual switch-stack members even when they share one Discovery device identity; retain exact per-member selection, Geometry export, cancellation and confirmation without modifying another member.

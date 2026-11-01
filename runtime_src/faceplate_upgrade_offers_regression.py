@@ -32,6 +32,31 @@ def test():
     assert {entry["device_key"] for entry in both} == {"snmp:SW3", "snmp:SW4"}
     assert next(entry for entry in both if entry["device_key"] == "snmp:SW4")["model"] == "Model B"
 
+    # When the formerly overwritten 48x4 stock file is restored, the old
+    # stock identity must offer the independently named compact revision.
+    old_name, compact_name = "48rj45-4sfp.png", "48rj45-4sfp-compact.png"
+    model = "WS-C3650-48PD-E"
+    original_sha = "7" * 64
+    compact_sha = "b" * 64
+    native = [{"device_key": "snmp:3650-server", "switch_name": "3650-server",
+               "native_switch_key": "SW1", "resolved_model": model}]
+    pins = {"native_SW1": {"filename": old_name, "sha256": original_sha,
+                          "path": f"faceplates/{old_name}"}}
+    candidates = f.offers_from_choices(
+        native, {model: compact_name},
+        {old_name: original_sha, compact_name: compact_sha}, pins)
+    assert len(candidates) == 1, candidates
+    assert candidates[0]["current_file"] == old_name
+    assert candidates[0]["available_file"] == compact_name
+    assert candidates[0]["same_filename"] is False
+    assert candidates[0]["available_sha256"] == compact_sha
+    # Keep Current must not change a pin or trigger an unrequested reset.
+    assert f.offers_from_choices(
+        native, {model: compact_name},
+        {old_name: original_sha, compact_name: compact_sha},
+        {"native_SW1": {"filename": compact_name, "sha256": compact_sha,
+                        "path": f"faceplates/{compact_name}"}}) == []
+
     with TemporaryDirectory() as directory:
         state = Path(directory) / "offers.json"
         f.keep_current("snmp:SW3", new_hash, state)

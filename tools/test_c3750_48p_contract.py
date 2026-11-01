@@ -9,7 +9,7 @@ assert device["status"] == "experimental"
 assert device["ports"]["rj45"] == 48 and device["ports"]["poe"] is True
 assert device["ports"]["gigabit_sfp"] == 4 and device["ports"]["ten_gigabit_sfp_plus"] == 0
 assert device["mapping_profile"] == "cisco-3750-48p-48fe-4sfp"
-assert device["default_faceplate"] == "faceplates/48rj45-4sfp.png"
+assert device["default_faceplate"] == "faceplates/48rj45-4sfp-compact.png"
 assert device["calibration_profile"] == "default_cisco_48_port"
 assert device["contributor"] == {"display_name": "Community contributor", "public_credit": False}
 assert "SV-2026-" not in json.dumps(device)

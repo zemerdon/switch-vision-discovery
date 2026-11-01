@@ -1670,14 +1670,14 @@ json.dump({"schema_version": 1, "devices": [
 json.dump({"devices": [
     {"model": "USW-Pro-24-PoE", "status": "experimental", "dashboard_support": True, "calibration_profile": "cisco_2960x_24p", "default_faceplate": "faceplates/24rj45-2sfp.png"},
     {"model": "USW Lite 16 PoE", "status": "experimental", "dashboard_support": True, "calibration_profile": "cisco_2960x_24p", "default_faceplate": "faceplates/24rj45-4sfp.png"},
-    {"model": "US 48 PoE 500W", "status": "experimental", "dashboard_support": True, "calibration_profile": "default_cisco_48_port", "default_faceplate": "faceplates/48rj45-4sfp.png"},
+    {"model": "US 48 PoE 500W", "status": "experimental", "dashboard_support": True, "calibration_profile": "default_cisco_48_port", "default_faceplate": "faceplates/48rj45-4sfp-compact.png"},
 ]}, open(registry, "w"))
 PYTEST
 python3 "$BASE_DIR/unifi_dashboard_cards.py" --snapshot "$unifi_snapshot" --registry "$unifi_registry" --indent 0 > "$tmp_dir/unifi-cards.yaml"
 grep -q 'data_source: unifi_api' "$tmp_dir/unifi-cards.yaml"
 grep -q 'switch_model: USW Pro 24 PoE' "$tmp_dir/unifi-cards.yaml"
 grep -q 'switch_model: USW Lite 16 PoE' "$tmp_dir/unifi-cards.yaml"
-grep -q 'faceplate_file: 48rj45-4sfp.png' "$tmp_dir/unifi-cards.yaml"
+grep -q 'faceplate_file: 48rj45-4sfp-compact.png' "$tmp_dir/unifi-cards.yaml"
 grep -q 'port_count: 16' "$tmp_dir/unifi-cards.yaml"
 grep -q 'switch_model: US 48 PoE 500W' "$tmp_dir/unifi-cards.yaml"
 grep -q 'port_count: 48' "$tmp_dir/unifi-cards.yaml"
@@ -2393,8 +2393,8 @@ grep -Fq 'write_walk_section() {' "$REPORT_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml_for_walk() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_yaml() {' "$YAML_STAGE_SOURCE"
 grep -Fq 'write_generated_dashboard_card() {' "$DASHBOARD_STAGE_SOURCE"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.1.9"' "$BASE_DIR/discovery_job.sh"
-grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.1.9"' "$BASE_DIR/run.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.1.10"' "$BASE_DIR/discovery_job.sh"
+grep -q 'SWITCH_VISION_DISCOVERY_VERSION="3.1.10"' "$BASE_DIR/run.sh"
 
 # v2.3.46 Hub ownership / Auto-width regression.
 ! grep -Fq '_PUBLIC_RELEASE_CACHE' "$SV_HUB_SOURCE"
