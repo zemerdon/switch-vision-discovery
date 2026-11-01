@@ -1,3 +1,7 @@
+## 3.1.11 — Keep Native compact faceplate release alignment
+
+- Bind the already-reviewed compact 48 RJ45 / 4 SFP recommendations and explicit per-switch Geometry upgrade workflow to Core 2.8.34, which corrects fresh Native factory status-LED presentation. Existing Calibration is preserved.
+
 ## 3.1.10 — Keep original and compact 48 RJ45 / 4 SFP faceplates separate
 
 - Match Core's separate original and compact 48/4 stock artwork and factory Geometry: recommend compact for the affected exact models and generic 48/4 dashboards, retaining the original as a selectable alternative.
