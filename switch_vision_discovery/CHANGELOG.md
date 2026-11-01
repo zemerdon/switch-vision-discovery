@@ -1,3 +1,7 @@
+## 3.1.12 — Match faceplate-driven Native status LED rendering
+
+- Bind Discovery's existing stock/compact model recommendations to Core 2.8.35, which draws status LEDs from the faceplate actually displayed instead of inheriting a different saved Geometry. The per-switch artwork approval and saved Calibration contracts remain unchanged.
+
 ## 3.1.11 — Keep Native compact faceplate release alignment
 
 - Bind the already-reviewed compact 48 RJ45 / 4 SFP recommendations and explicit per-switch Geometry upgrade workflow to Core 2.8.34, which corrects fresh Native factory status-LED presentation. Existing Calibration is preserved.
