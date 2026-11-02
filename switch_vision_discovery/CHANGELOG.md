@@ -1,3 +1,7 @@
+## 3.1.14 — Recover cleanly when Hub ingress returns a non-JSON status
+
+- Correct Hub status API URL construction for ingress links with query strings or fragments. Handle temporarily unavailable, non-JSON or malformed status responses with a clear reconnecting message instead of exposing a raw JavaScript JSON SyntaxError. Keep normal polling and runtime settings unchanged.
+
 ## 3.1.13 — Recommend separate compact 24-port stock faceplates
 
 - Recommend the distinct 24 RJ45 / 2 SFP and 24 RJ45 / 4 SFP Compact artwork and matching factory Calibration for applicable exact models and generic fallback dashboards, retaining original stock faceplates as selectable alternatives.
