@@ -274,6 +274,10 @@ write_generated_yaml_for_walk() {
       print "  - oid: " oid
       print "    name: " name
     }
+    function yaml_traffic_sensor(oid, name) {
+      yaml_sensor(oid, name)
+      print "    unit_of_measurement: \"B\""
+    }
     function yaml_sensor_meta(oid, name, transform, unit, device_class, state_class, icon) {
       yaml_sensor(oid, name)
       if (transform != "") print "    transform: " transform
@@ -324,7 +328,7 @@ write_generated_yaml_for_walk() {
         else if (cap_mbps > 0) print "    template: \"{{ [value | int, " (cap_mbps * 1000000) "] | min }}\""
       }
     }
-    function yaml_interface_sensor(primary, secondary, name, attribute, icon) {
+    function yaml_interface_sensor(primary, secondary, name, attribute, icon, unit) {
       print "  - name: " name
       print "    source: interface"
       print "    interfaces:"
@@ -332,6 +336,7 @@ write_generated_yaml_for_walk() {
       print "      - " secondary
       print "    attribute: " attribute
       if (icon != "") print "    icon: " icon
+      if (unit != "") print "    unit_of_measurement: \"" unit "\""
     }
     function yaml_juniper_vlan_sensor(interface_name, name, attribute, icon) {
       print "  - name: " name
@@ -899,11 +904,11 @@ write_generated_yaml_for_walk() {
           for (i=start; i<=stop; i++) {
             idx=phys_idx[i]
             label=phys_label[i]
-            if (idx in hc_in_idx) yaml_sensor("1.3.6.1.2.1.31.1.1.1.6." idx, label " RX Bytes")
-            else if (idx in legacy_in_idx) { yaml_sensor("1.3.6.1.2.1.2.2.1.10." idx, label " RX Bytes"); legacy_counter_fallbacks++ }
+            if (idx in hc_in_idx) yaml_traffic_sensor("1.3.6.1.2.1.31.1.1.1.6." idx, label " RX Bytes")
+            else if (idx in legacy_in_idx) { yaml_traffic_sensor("1.3.6.1.2.1.2.2.1.10." idx, label " RX Bytes"); legacy_counter_fallbacks++ }
             else skipped_hc++
-            if (idx in hc_out_idx) yaml_sensor("1.3.6.1.2.1.31.1.1.1.10." idx, label " TX Bytes")
-            else if (idx in legacy_out_idx) { yaml_sensor("1.3.6.1.2.1.2.2.1.16." idx, label " TX Bytes"); legacy_counter_fallbacks++ }
+            if (idx in hc_out_idx) yaml_traffic_sensor("1.3.6.1.2.1.31.1.1.1.10." idx, label " TX Bytes")
+            else if (idx in legacy_out_idx) { yaml_traffic_sensor("1.3.6.1.2.1.2.2.1.16." idx, label " TX Bytes"); legacy_counter_fallbacks++ }
             else skipped_hc++
           }
         } else {
@@ -934,8 +939,8 @@ write_generated_yaml_for_walk() {
           label=prefix " SFP 10G " (cage + 1)
           primary="xe-0/1/" cage
           secondary="ge-0/1/" cage
-          yaml_interface_sensor(primary, secondary, label " RX Bytes", "rx_bytes", "")
-          yaml_interface_sensor(primary, secondary, label " TX Bytes", "tx_bytes", "")
+          yaml_interface_sensor(primary, secondary, label " RX Bytes", "rx_bytes", "", "B")
+          yaml_interface_sensor(primary, secondary, label " TX Bytes", "tx_bytes", "", "B")
         }
       }
 

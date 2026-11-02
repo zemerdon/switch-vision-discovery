@@ -1,3 +1,7 @@
+## 3.1.15 — Reduce Home Assistant Activity noise from traffic counters
+
+- Supply byte (`B`) units on generated SNMP RX/TX counters, including Counter64, legacy Counter32 fallback and Juniper SFP uplinks, so Home Assistant treats them as numeric telemetry rather than routine Logbook activity. Preserve the same sensor names, IDs, values, OIDs and 10-second traffic polling for live status and activity LEDs. Existing Recorder history remains available; no historical entries are deleted.
+
 ## 3.1.14 — Recover cleanly when Hub ingress returns a non-JSON status
 
 - Correct Hub status API URL construction for ingress links with query strings or fragments. Handle temporarily unavailable, non-JSON or malformed status responses with a clear reconnecting message instead of exposing a raw JavaScript JSON SyntaxError. Keep normal polling and runtime settings unchanged.
