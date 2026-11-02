@@ -1,3 +1,8 @@
+## 3.1.13 — Recommend separate compact 24-port stock faceplates
+
+- Recommend the distinct 24 RJ45 / 2 SFP and 24 RJ45 / 4 SFP Compact artwork and matching factory Calibration for applicable exact models and generic fallback dashboards, retaining original stock faceplates as selectable alternatives.
+- Preserve the existing switch-scoped Calibration and per-switch faceplate upgrade approval flow; make no physical-port, evidence-confidence or telemetry changes.
+
 ## 3.1.12 — Match faceplate-driven Native status LED rendering
 
 - Bind Discovery's existing stock/compact model recommendations to Core 2.8.35, which draws status LEDs from the faceplate actually displayed instead of inheriting a different saved Geometry. The per-switch artwork approval and saved Calibration contracts remain unchanged.

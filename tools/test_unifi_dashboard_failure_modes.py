@@ -103,7 +103,7 @@ def main() -> int:
         assert community.stdout.count("calibration_profile: stock_24rj45_2sfp") == 2
         assert community.stdout.count("calibration_profile: unifi_16_rj45_2sfp") == 1
         assert community.stdout.count("calibration_profile: unifi_24p_rj45_2sfp") == 1
-        assert community.stdout.count("faceplate_file: 24rj45-2sfp.png") == 2
+        assert community.stdout.count("faceplate_file: 24rj45-2sfp-compact.png") == 2
         assert community.stdout.count("faceplate_file: unifi-16rj45-2sfp.png") == 1
         assert community.stdout.count("faceplate_file: unifi-24p-rj45-2sfp.png") == 1
         assert community.stdout.count("generic_faceplate: true") == 2

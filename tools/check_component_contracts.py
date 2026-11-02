@@ -584,8 +584,8 @@ def main() -> int:
                     + ", ".join(changed_visuals)
                 )
 
-    expected_huawei_profile = "stock_24rj45_4sfp"
-    expected_huawei_faceplate = "faceplates/24rj45-4sfp.png"
+    expected_huawei_profile = "stock_24rj45_4sfp_compact"
+    expected_huawei_faceplate = "faceplates/24rj45-4sfp-compact.png"
     for model in ("S5720-12TP-LI-AC", "S5735-L8P4X-A1"):
         discovery = discovery_models.get(model) or {}
         visuals = discovery.get("visuals") if isinstance(discovery.get("visuals"), dict) else {}

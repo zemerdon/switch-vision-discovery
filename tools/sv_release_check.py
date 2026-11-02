@@ -57,6 +57,7 @@ PERMANENT_CHECKS = (
     "tools/test_visual_contract_policy.py",
     "tools/test_dashboard_first_promotions.py",
     "tools/test_faceplate_catalog_contract.py",
+    "tools/test_stock_24_compact_defaults.py",
     "tools/test_cisco_3560cg_compact_default.py",
     "tools/test_faceplate_matrix_2419.py",
     "tools/test_unifi_activity_refresh_contract.py",

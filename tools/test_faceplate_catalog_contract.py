@@ -26,15 +26,15 @@ import json,sys
 registry=json.loads((r/"runtime_src/opt/switch-vision/devices/supported_devices.json").read_text(encoding="utf-8"))
 rows={x["model"]:x for x in registry["devices"] if isinstance(x,dict) and x.get("model")}
 expected={
-"GS1900-8":("faceplates/24rj45-2sfp.png","stock_24rj45_2sfp",8,0),
-"SR-S25G3420F":("faceplates/24rj45-4sfp.png","stock_24rj45_4sfp",16,4),
+"GS1900-8":("faceplates/24rj45-2sfp-compact.png","stock_24rj45_2sfp_compact",8,0),
+"SR-S25G3420F":("faceplates/24rj45-4sfp-compact.png","stock_24rj45_4sfp_compact",16,4),
 "USW-16-PoE":("faceplates/unifi-16rj45-2sfp.png","unifi_16_rj45_2sfp",16,2),
 "US 16 PoE 150W":("faceplates/unifi-16rj45-2sfp.png","unifi_16_rj45_2sfp",16,2),
 "UDM Pro":("faceplates/unifi-9rj45-2sfp.png","unifi_9_rj45_2sfp",9,2),
 "UniFi Dream Machine PRO SE":("faceplates/unifi-9rj45-2sfp.png","unifi_9_rj45_2sfp",9,2),
 "UDM Pro Max":("faceplates/unifi-9rj45-2sfp.png","unifi_9_rj45_2sfp",9,2),
-"GS1900-24E":("faceplates/24rj45-2sfp.png","stock_24rj45_2sfp",24,0),
-"SG350-20":("faceplates/24rj45-4sfp.png","stock_24rj45_4sfp",16,4),
+"GS1900-24E":("faceplates/24rj45-2sfp-compact.png","stock_24rj45_2sfp_compact",24,0),
+"SG350-20":("faceplates/24rj45-4sfp-compact.png","stock_24rj45_4sfp_compact",16,4),
 "SG200-26":("faceplates/cisco-sg200-26.png","cisco_sg200_26",24,2),
 "USW-24-G2":("faceplates/unifi-24-rj45-2sfp-inline.png","unifi_24_rj45_2sfp_inline",24,2),
 "HP J8693A Switch 3500yl-48G":("faceplates/hp-3500yl-48g.png","hp_3500yl_48g",44,4),
@@ -49,7 +49,7 @@ assert rows["USW Aggregation"]["unifi_api_port_map"]=={"rj45":[],"sfp":list(rang
 assert rows["USW Pro Aggregation"]["unifi_api_port_map"]=={"rj45":[],"sfp":list(range(1,33))}
 assert rows["USW WAN"]["unifi_api_port_map"]=={"rj45":[4],"sfp":[1,2,3]}
 u_spec=importlib.util.spec_from_file_location("sv_unifi_cards",r/"runtime_src/unifi_dashboard_cards.py");u=importlib.util.module_from_spec(u_spec);sys.modules[u_spec.name]=u;u_spec.loader.exec_module(u)
-assert u.visual_geometry_matches("faceplates/24rj45-2sfp.png",8,0) and u.visual_geometry_matches("faceplates/24rj45-2sfp.png",16,2);assert not u.visual_geometry_matches("faceplates/24rj45-2sfp.png",24,4);assert u.generic_visual(8,0)[:2]==("stock_24rj45_2sfp","faceplates/24rj45-2sfp.png")
+assert u.visual_geometry_matches("faceplates/24rj45-2sfp.png",8,0) and u.visual_geometry_matches("faceplates/24rj45-2sfp.png",16,2);assert not u.visual_geometry_matches("faceplates/24rj45-2sfp.png",24,4);assert u.generic_visual(8,0)[:2]==("stock_24rj45_2sfp_compact","faceplates/24rj45-2sfp-compact.png")
 def ports(rj,sfp): return [{"idx":i,"connector":"RJ45"} for i in rj]+[{"idx":i,"connector":"SFP28" if i>=29 else "SFPPLUS"} for i in sfp]
 for model,payload,rj,sfp,face in [
 ("USW Aggregation",ports([],range(1,9)),0,8,"unifi-32sfp.png"),

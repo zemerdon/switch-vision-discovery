@@ -31,9 +31,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "hp-1810-24g-24p-2sfp",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_2sfp_compact",
+      "default_faceplate": "faceplates/24rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-2sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -54,9 +56,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "recommended_faceplate": "faceplates/24rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -88,9 +92,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "hp-2530-8g-poep-8p-2dual",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_2sfp_compact",
+      "default_faceplate": "faceplates/24rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-2sfp.png"
+      ],
       "tested_firmware": [
         "YA.16.11.0031"
       ],
@@ -114,9 +120,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "recommended_faceplate": "faceplates/24rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -222,9 +230,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "zyxel-gs1900-8",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_2sfp_compact",
+      "default_faceplate": "faceplates/24rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-2sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -245,9 +255,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "recommended_faceplate": "faceplates/24rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -274,9 +286,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "sirivision-sr-s25g3420f",
-      "calibration_profile": "stock_24rj45_4sfp",
-      "default_faceplate": "faceplates/24rj45-4sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_4sfp_compact",
+      "default_faceplate": "faceplates/24rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-4sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -297,9 +311,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_4sfp",
+        "recommended_faceplate": "faceplates/24rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-4sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_4sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -503,8 +519,10 @@
       "dashboard_support": true,
       "mapping_profile": "cisco-2960x-24ps-24p-4sfp",
       "calibration_profile": "cisco_2960x_24p",
-      "default_faceplate": "faceplates/24rj45-4sfp.png",
-      "optional_faceplates": [],
+      "default_faceplate": "faceplates/24rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-4sfp.png"
+      ],
       "tested_firmware": [
         "15.2(7)E14"
       ],
@@ -531,8 +549,10 @@
       },
       "visuals": {
         "status": "community_validated",
-        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
-        "optional_faceplates": [],
+        "recommended_faceplate": "faceplates/24rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-4sfp.png"
+        ],
         "calibration_profile": "cisco_2960x_24p",
         "canvas": {
           "width": 2048,
@@ -561,8 +581,10 @@
       "dashboard_support": true,
       "mapping_profile": "cisco-2960x-24ts-24p-4sfp",
       "calibration_profile": "cisco_2960x_24p",
-      "default_faceplate": "faceplates/24rj45-4sfp.png",
-      "optional_faceplates": [],
+      "default_faceplate": "faceplates/24rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-4sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -585,8 +607,10 @@
       },
       "visuals": {
         "status": "confirmed",
-        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
-        "optional_faceplates": [],
+        "recommended_faceplate": "faceplates/24rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-4sfp.png"
+        ],
         "calibration_profile": "cisco_2960x_24p",
         "canvas": {
           "width": 2048,
@@ -917,8 +941,10 @@
       "dashboard_support": true,
       "mapping_profile": "cisco-sg500x-24-24p-4x10g",
       "calibration_profile": "cisco_2960x_24p",
-      "default_faceplate": "faceplates/24rj45-4sfp.png",
-      "optional_faceplates": [],
+      "default_faceplate": "faceplates/24rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-4sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -944,8 +970,10 @@
       },
       "visuals": {
         "status": "community_validated",
-        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
-        "optional_faceplates": [],
+        "recommended_faceplate": "faceplates/24rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-4sfp.png"
+        ],
         "calibration_profile": "cisco_2960x_24p",
         "canvas": {
           "width": 2048,
@@ -973,9 +1001,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "huawei-s5720-12tp-li-ac",
-      "calibration_profile": "stock_24rj45_4sfp",
-      "default_faceplate": "faceplates/24rj45-4sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_4sfp_compact",
+      "default_faceplate": "faceplates/24rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-4sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -1003,9 +1033,11 @@
       },
       "visuals": {
         "status": "community_validated",
-        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_4sfp",
+        "recommended_faceplate": "faceplates/24rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-4sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_4sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -1235,9 +1267,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_2sfp_compact",
+      "default_faceplate": "faceplates/24rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-2sfp.png"
+      ],
       "tested_firmware": [
         "7.4.1"
       ],
@@ -1266,9 +1300,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "recommended_faceplate": "faceplates/24rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -1370,9 +1406,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "huawei-s5735-l8p4x-a1",
-      "calibration_profile": "stock_24rj45_4sfp",
-      "default_faceplate": "faceplates/24rj45-4sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_4sfp_compact",
+      "default_faceplate": "faceplates/24rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-4sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -1398,9 +1436,11 @@
       },
       "visuals": {
         "status": "community_validated",
-        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_4sfp",
+        "recommended_faceplate": "faceplates/24rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-4sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_4sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -2244,9 +2284,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "ubiquiti-usw-flex-2p5g-8-poe-api",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_2sfp_compact",
+      "default_faceplate": "faceplates/24rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-2sfp.png"
+      ],
       "tested_firmware": [
         "2.1.8"
       ],
@@ -2275,9 +2317,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "recommended_faceplate": "faceplates/24rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -3422,9 +3466,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "mikrotik-crs328-24p-4splus",
-      "calibration_profile": "stock_24rj45_4sfp",
-      "default_faceplate": "faceplates/24rj45-4sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_4sfp_compact",
+      "default_faceplate": "faceplates/24rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-4sfp.png"
+      ],
       "tested_firmware": [
         "RouterOS 7.21.5"
       ],
@@ -3450,9 +3496,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_4sfp",
+        "recommended_faceplate": "faceplates/24rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-4sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_4sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -3551,9 +3599,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "zyxel-gs1900-24e",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_2sfp_compact",
+      "default_faceplate": "faceplates/24rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-2sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -3574,9 +3624,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "recommended_faceplate": "faceplates/24rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -3768,9 +3820,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "cisco-sg350-20-16p-2dual-2sfp",
-      "calibration_profile": "stock_24rj45_4sfp",
-      "default_faceplate": "faceplates/24rj45-4sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_4sfp_compact",
+      "default_faceplate": "faceplates/24rj45-4sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-4sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -3791,9 +3845,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_4sfp",
+        "recommended_faceplate": "faceplates/24rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-4sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_4sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -4406,9 +4462,11 @@
       "discovery_support": true,
       "dashboard_support": true,
       "mapping_profile": "zyxel-gs1915-24ep",
-      "calibration_profile": "stock_24rj45_2sfp",
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
-      "optional_faceplates": [],
+      "calibration_profile": "stock_24rj45_2sfp_compact",
+      "default_faceplate": "faceplates/24rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/24rj45-2sfp.png"
+      ],
       "tested_firmware": [],
       "contributor": {
         "display_name": "community contributor",
@@ -4430,9 +4488,11 @@
       },
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "recommended_faceplate": "faceplates/24rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -4547,8 +4607,8 @@
         "gigabit_sfp": 4,
         "ten_gigabit_sfp_plus": 0
       },
-      "default_faceplate": "faceplates/24rj45-4sfp.png",
-      "calibration_profile": "stock_24rj45_4sfp",
+      "default_faceplate": "faceplates/24rj45-4sfp-compact.png",
+      "calibration_profile": "stock_24rj45_4sfp_compact",
       "mapping_profile": "tplink-tl-sg2428p-24rj45-4sfp",
       "validation": {
         "exact_model_detection": "curated_sysobjectid_and_full_sysdescr_plus_manufacturer_product_family_identification_hardware_revision_pending",
@@ -4567,9 +4627,11 @@
       ],
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-4sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_4sfp",
+        "recommended_faceplate": "faceplates/24rj45-4sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-4sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_4sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -4582,7 +4644,9 @@
       "last_validated_version": "3.0.32",
       "stack_support": false,
       "discovery_support": true,
-      "optional_faceplates": []
+      "optional_faceplates": [
+        "faceplates/24rj45-4sfp.png"
+      ]
     },
     {
       "vendor": "TP-Link",
@@ -4599,8 +4663,8 @@
         "gigabit_sfp": 0,
         "ten_gigabit_sfp_plus": 0
       },
-      "default_faceplate": "faceplates/24rj45-2sfp.png",
-      "calibration_profile": "stock_24rj45_2sfp",
+      "default_faceplate": "faceplates/24rj45-2sfp-compact.png",
+      "calibration_profile": "stock_24rj45_2sfp_compact",
       "mapping_profile": "tplink-tl-sg2008p-8rj45-0sfp",
       "validation": {
         "exact_model_detection": "curated_sysobjectid_and_full_sysdescr_plus_manufacturer_product_family_identification_hardware_revision_pending",
@@ -4619,9 +4683,11 @@
       ],
       "visuals": {
         "status": "experimental",
-        "recommended_faceplate": "faceplates/24rj45-2sfp.png",
-        "optional_faceplates": [],
-        "calibration_profile": "stock_24rj45_2sfp",
+        "recommended_faceplate": "faceplates/24rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/24rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_24rj45_2sfp_compact",
         "canvas": {
           "width": 2048,
           "height": 448
@@ -4634,7 +4700,9 @@
       "last_validated_version": "3.0.32",
       "stack_support": false,
       "discovery_support": true,
-      "optional_faceplates": []
+      "optional_faceplates": [
+        "faceplates/24rj45-2sfp.png"
+      ]
     }
   ]
 }

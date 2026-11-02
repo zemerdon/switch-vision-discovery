@@ -45,8 +45,8 @@ ports = device["ports"]
 assert device["status"] == "experimental"
 assert device["mapping_profile"] == "hp-2530-8g-poep-8p-2dual"
 assert device["dashboard_support"] is True
-assert device["calibration_profile"] == "stock_24rj45_2sfp"
-assert device["default_faceplate"] == "faceplates/24rj45-2sfp.png"
+assert device["calibration_profile"] == "stock_24rj45_2sfp_compact"
+assert device["default_faceplate"] == "faceplates/24rj45-2sfp-compact.png"
 assert ports["rj45"] == 8
 assert ports["combo_ports"] == 2
 assert ports["combo_logical_ports"] == [9, 10]
@@ -208,7 +208,7 @@ with tempfile.TemporaryDirectory(prefix="sv-hp-j9774a-") as td:
     assert "        port_count: 10" in card
     assert "        sfp_port_count: 2" in card
     assert "sfp_logical_port_map:[9,10]" in card.replace(" ", ""), card
-    assert 'calibration_profile: "stock_24rj45_2sfp"' in card
+    assert 'calibration_profile: "stock_24rj45_2sfp_compact"' in card
 
 profiles = PROFILE.read_text(encoding="utf-8")
 assert "hp-2530-8g-poep-8p-2dual:" in profiles
