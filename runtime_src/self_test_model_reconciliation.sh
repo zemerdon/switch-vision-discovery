@@ -9,7 +9,8 @@ grep -q 'model == "XS1930-10" && if_total > 0 && rj45 == 8 && ten == 2' "$REPORT
 grep -q 'RJ45 swp00-swp07 ports' "$REPORT_STAGE_SOURCE"
 grep -q '10G SFP+ swp08-swp09 uplinks' "$REPORT_STAGE_SOURCE"
 grep -q '1.3.6.1.4.1.890.1.15.3.2.4.0' "$YAML_STAGE_SOURCE"
-grep -q '1.3.6.1.4.1.890.1.15.3.2.4.3' "$YAML_STAGE_SOURCE"
+grep -Fq '1.3.6.1.4.1.890.1.15.3.2.5.0' "$YAML_STAGE_SOURCE"
+! grep -Fq '1.3.6.1.4.1.890.1.15.3.2.4.3' "$YAML_STAGE_SOURCE"
 grep -q 'Q-BRIDGE-MIB PVID' "$REPORT_STAGE_SOURCE"
 
 awk '

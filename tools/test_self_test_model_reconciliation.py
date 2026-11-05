@@ -15,7 +15,7 @@ HEADER = """# Switch Vision Discovery self-test model-reconciliation module.
 # Keep this as an exact behavioral extraction; production logic is not duplicated here.
 
 """
-EXTRACTED_BODY_SHA256 = "275022988472ab4ba88a08a54577c7f9cc0b2b2c2d9019a6ebf4cb8932a01eb2"
+EXTRACTED_BODY_SHA256 = "f9ae0cd827ba5d56cfe16fbb1e016ed7fffa53bb79eec5c2f94170aad45a7ea5"
 START_MARKER = "# Zyxel XS1930-10 contribution / registry / generator reconciliation regression."
 END_MARKER = "# v2.1.18 placeholder and UniFi diagnostics regressions."
 
