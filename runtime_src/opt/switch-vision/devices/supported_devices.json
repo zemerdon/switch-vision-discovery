@@ -17,14 +17,14 @@
       "model": "HP J8697A Switch 5406zl",
       "status": "experimental",
       "confirmed_since": "3.1.16",
-      "last_validated_version": "3.1.16",
+      "last_validated_version": "3.1.17",
       "evidence": "privacy_processed_full_snmp_walk_entity_mib_module_and_ifindex_aliases",
       "port_topology_mode": "entity_mib_modules",
       "ports": {
         "rj45": 72,
-        "poe": false,
+        "poe": true,
         "uplinks": 4,
-        "uplink_type": "4 x 10G optical in observed J8707A module",
+        "uplink_type": "4 x 10G X2 transceivers in observed J8707A module (SFP+ compatibility category)",
         "gigabit_sfp": 0,
         "ten_gigabit_sfp_plus": 4
       },
@@ -44,15 +44,15 @@
         "The HP J8697A 5406zl is a modular chassis, not a fixed 72-port appliance. Counts describe the verified first physical contribution and are not imposed on other module populations.",
         "Verified ENTITY-MIB entPhysicalClass ports and entAliasMappingIdentifier joins establish 76 actual physical IF-MIB bindings: J8702A 24-port copper cards in slots A, B and E, and a J8707A four-port 10G optical card in slot D.",
         "Slot C exposes 24 IF-MIB placeholder names without an installed module; slot F is unpopulated. Only recognized installed module children with ENTITY-MIB aliases generate live connectors.",
-        "Optical module identities were observed for four D ports, but PoE, chassis sensors, arbitrary other module SKUs and front-panel artwork alignment are not claimed.",
-        "A neutral 48 RJ45 / 4 SFP stock image is an incomplete interim visual fallback; entity and physical-port contracts are derived from the populated module inventory, not from that artwork."
+        "J8702A modules in populated slots A, B and E expose 72 PoE PSE rows with module budgets; a 28°C chassis temperature and two fan sensor-status rows are observed. Empty-slot C PSE placeholders, unverified other module SKUs and exact front-panel geometry are not claimed.",
+        "Four D-module optics use physical X2 transceivers (three SR and one LR); the internal SFP+ class is a 10G compatibility representation, not the physical socket type. Neutral 48 RJ45 / 4 SFP stock artwork remains a provisional incomplete fallback."
       ],
       "validation": {
         "exact_model_detection": "sysobjectid_and_local_sysdescr_confirmed",
         "rj45_mapping": "entity_mib_72_alias_joined_ports_in_installed_A_B_E_J8702A_modules",
-        "poe": "pending_unknown_for_other_modules",
-        "system_sensors": "pending",
-        "uplinks": "entity_mib_four_10g_optical_D_J8707A_aliases_confirmed",
+        "poe": "observed_J8702A_72_port_PSE_status_and_three_module_budgets;_other_module_SKUs_pending",
+        "system_sensors": "ENTITY_SENSOR_28C_chassis_temperature_and_two_fan_sensor_status_codes;_fan_RPM_unknown",
+        "uplinks": "entity_mib_four_10g_X2_D_J8707A_aliases_confirmed",
         "stack": "not_applicable",
         "visual_alignment": "pending_modular_faceplate"
       },

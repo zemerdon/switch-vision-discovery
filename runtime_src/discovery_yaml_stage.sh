@@ -646,6 +646,14 @@ write_generated_yaml_for_walk() {
         idx=oid_index(line); ent_name[idx]=val
       }
 
+      # Standard ENTITY-SENSOR-MIB. Validate type, scale, precision and
+      # operational status before labeling a physical chassis measurement.
+      if (line ~ /\.3\.6\.1\.2\.1\.99\.1\.1\.1\.1\.[0-9]+ = /) { idx=oid_index(line); ent_sensor_type[idx]=val+0 }
+      if (line ~ /\.3\.6\.1\.2\.1\.99\.1\.1\.1\.2\.[0-9]+ = /) { idx=oid_index(line); ent_sensor_scale[idx]=val+0 }
+      if (line ~ /\.3\.6\.1\.2\.1\.99\.1\.1\.1\.3\.[0-9]+ = /) { idx=oid_index(line); ent_sensor_precision[idx]=val+0 }
+      if (line ~ /\.3\.6\.1\.2\.1\.99\.1\.1\.1\.4\.[0-9]+ = /) { idx=oid_index(line); ent_sensor_value[idx]=1 }
+      if (line ~ /\.3\.6\.1\.2\.1\.99\.1\.1\.1\.5\.[0-9]+ = /) { idx=oid_index(line); ent_sensor_status[idx]=val+0; ent_sensor_status_seen[idx]=1 }
+
       # Identity evidence is walk-aware. Only emit OIDs that were actually
       # returned by the switch so generated SNMP2MQTT YAML never references a
       # missing ENTITY-MIB row.
@@ -827,6 +835,23 @@ write_generated_yaml_for_walk() {
         }
       }
 
+      # The modular HP 5406zl exposes PSE rows as slot-group.global-ifIndex.
+      # Only attach a group row to an already accepted J8702A physical RJ45
+      # interface; the empty C-slot PSE placeholders have no physical join.
+      if (model == "HP J8697A Switch 5406zl") {
+        for (i=1; i<=phys_n; i++) {
+          idx=phys_idx[i] + 0
+          if (ifname[idx] !~ /^Gi1\/0\/[0-9]+$/ || phys_label[i] !~ / Port [0-9]+$/) continue
+          group=int((idx - 1) / 24) + 1
+          if (group < 1 || group > 6) continue
+          key=group "." idx
+          if ((key in std_poe_port_admin) && (key in std_poe_port_detect) && (key in std_poe_port_class)) {
+            poe_key_for_phys[i]=key
+            hp_5406zl_pse_group[group]=1
+          }
+        }
+      }
+
       status_chunk_size = 12
       traffic_chunk_size = 8
       vlan_chunk_size = 8
@@ -872,7 +897,7 @@ write_generated_yaml_for_walk() {
             key=poe_key_for_phys[i]
             if (key == "" || key == "AMBIGUOUS") continue
             label=phys_label[i]
-            if (model == "GS1915-24EP" && (key in std_poe_port_admin)) yaml_sensor("1.3.6.1.2.1.105.1.1.1.3." key, label " PoE Admin Code")
+            if ((model == "GS1915-24EP" || model == "HP J8697A Switch 5406zl") && (key in std_poe_port_admin)) yaml_sensor("1.3.6.1.2.1.105.1.1.1.3." key, label " PoE Admin Code")
             if (key in std_poe_port_detect) yaml_sensor("1.3.6.1.2.1.105.1.1.1.6." key, label " PoE Status Code")
             if (key in std_poe_port_class) yaml_sensor("1.3.6.1.2.1.105.1.1.1.10." key, label " PoE Class Code")
             if (key in cisco_poe_power) yaml_sensor_meta("1.3.6.1.4.1.9.9.402.1.2.1.9." key, label " PoE Power", "value / 1000", "W", "power", "measurement", "mdi:flash")
@@ -1271,10 +1296,42 @@ write_generated_yaml_for_walk() {
       for (idx in poe_used_idx) ext_used_present=1
       for (idx in poe_budget_idx) ext_budget_present=1
       for (idx=1; idx<=maxstdpoe; idx++) {
+        if (model == "HP J8697A Switch 5406zl" && !(idx in hp_5406zl_pse_group)) continue
         label=member_label(idx)
-        if (!ext_used_present && (idx in std_poe_used_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.4." idx, label " PoE Used W")
-        if (!ext_budget_present && (idx in std_poe_budget_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.2." idx, label " PoE Budget W")
+        if (model == "HP J8697A Switch 5406zl") {
+          # Slot-indexed PSE groups. Keep the actual installed slot identity;
+          # the empty C group must not create phantom budget/consumption.
+          label=prefix " PoE Module " substr("ABCDEF", idx, 1)
+        }
+        if (model == "HP J8697A Switch 5406zl") {
+          if (!ext_used_present && (idx in std_poe_used_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.4." idx, label " Used W")
+          if (!ext_budget_present && (idx in std_poe_budget_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.2." idx, label " Budget W")
+        } else {
+          if (!ext_used_present && (idx in std_poe_used_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.4." idx, label " PoE Used W")
+          if (!ext_budget_present && (idx in std_poe_budget_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.2." idx, label " PoE Budget W")
+        }
       }
+      # HP 5406zl chassis sensors are ENTITY-MIB-joined, not guessed from
+      # port labels or unsupported manufacturer-private tables.
+      if (model == "HP J8697A Switch 5406zl") {
+        hp_health_count=0
+        for (idx in ent_sensor_value) {
+          if (!(idx in ent_sensor_status_seen) || ent_sensor_status[idx] != 1) continue
+          if (ent_sensor_type[idx] == 8 && ent_sensor_scale[idx] == 9 && ent_sensor_precision[idx] == 0 && tolower(ent_name[idx]) ~ /chassis temperature/) hp_health_count++
+          else if (ent_sensor_type[idx] == 1 && ent_name[idx] ~ /^Fan [0-9]+$/) hp_health_count++
+        }
+        if (hp_health_count > 0) {
+          yaml_target_header("Switch Vision " prefix " Chassis Health", 30)
+          for (idx in ent_sensor_value) {
+            if (!(idx in ent_sensor_status_seen) || ent_sensor_status[idx] != 1) continue
+            if (ent_sensor_type[idx] == 8 && ent_sensor_scale[idx] == 9 && ent_sensor_precision[idx] == 0 && tolower(ent_name[idx]) ~ /chassis temperature/)
+              yaml_sensor_meta("1.3.6.1.2.1.99.1.1.1.4." idx, prefix " Chassis Temperature", "", "°C", "temperature", "measurement", "mdi:thermometer")
+            else if (ent_sensor_type[idx] == 1 && ent_name[idx] ~ /^Fan [0-9]+$/)
+              yaml_sensor("1.3.6.1.2.1.99.1.1.1.5." idx, prefix " " ent_name[idx] " Sensor Status Code")
+          }
+        }
+      }
+
       # The main card temperature is the ambient inlet reading, not the
       # hotter internal HotSpot. Keep each named sensor and the HotSpot alarm;
       # models without an inlet retain their existing primary fallback.

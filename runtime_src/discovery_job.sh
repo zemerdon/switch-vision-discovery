@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.1.16"
+SWITCH_VISION_DISCOVERY_VERSION="3.1.17"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1213,6 +1213,14 @@ $full_vendor_root
 1.3.6.1.4.1.9.9.402.1.2.1
 1.3.6.1.4.1.9.9.402.1.3.1
 "
+
+    # ENTITY-MIB alias joins are required for the modular HP 5406zl.
+    # Avoid querying this additional table on unrelated models that may
+    # not support it; their targeted discovery must remain unchanged.
+    if grep -Eqi 'J8697A.*5406zl|5406zl.*J8697A' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+      LIVE_OIDS="$LIVE_OIDS
+1.3.6.1.2.1.47.1.3.2.1.2"
+    fi
 
     for oid in $LIVE_OIDS; do
       total=$((total + 1))

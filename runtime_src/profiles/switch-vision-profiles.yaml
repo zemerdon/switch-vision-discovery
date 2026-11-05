@@ -21,8 +21,8 @@ profiles:
     notes:
     - Modular chassis; layout counts describe the one verified A/B/E copper and D optical population, not a hardcoded chassis port inventory.
     - Only ENTITY-MIB physical port alias bindings beneath recognized J8702A or J8707A modules become connector sources.
-    - Empty slot C interface placeholders are non-physical, and unfamiliar module hardware stays pending rather than producing invented connectors.
-    - The neutral 48/4 stock artwork is provisional and does not reproduce all 72 observed copper connectors.
+    - Empty slot C interface/PoE placeholders are non-physical; exact accepted J8702A ports alone receive PSE status and module power sensors. Unknown module hardware stays pending.
+    - Four physical X2 transceivers are carried through the generic 10G/SFP+ software class. Chassis temperature and fan sensor-status codes are read-only; neutral 48/4 artwork is provisional and incomplete.
   cisco-3850-12xs-12x10g:
     status: experimental
     vendor: Cisco

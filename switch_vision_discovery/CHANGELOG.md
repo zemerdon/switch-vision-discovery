@@ -1,3 +1,10 @@
+## 3.1.17 — Modular HP 5406zl telemetry and targeted discovery
+
+- Collect standard ENTITY-MIB alias bindings during targeted SNMP walks so modular physical ports remain resolvable without a full scan.
+- Expose only module-backed J8702A PoE port status, class, administrative state and per-installed-slot power budgets/consumption. Empty slots cannot create sensors.
+- Publish evidenced chassis temperature and fan sensor-status codes from standard ENTITY-SENSOR-MIB, without inferring fan RPM or unsupported hardware.
+- Identify J8707A optics as physical 10GbE X2 transceivers while preserving existing 10G connector/telemetry compatibility and provisional stock artwork.
+
 ## 3.1.16 — Recognize modular HP 5406zl switches
 
 - Register the HP J8697A 5406zl as Experimental from verified full SNMP/ENTITY-MIB evidence, including installed J8702A copper and J8707A 10G optical modules. Resolve actual physical ports from module inventory and exact ENTITY-MIB-to-IF-MIB aliases, excluding unpopulated-slot placeholder interfaces and unrelated logical ports.
