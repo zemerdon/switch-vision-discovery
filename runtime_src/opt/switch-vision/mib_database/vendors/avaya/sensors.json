@@ -4,6 +4,17 @@
   "enterprise_oids": [
     "1.3.6.1.4.1.45"
   ],
+  "known_oids": [
+    {
+      "oid_prefix": "1.3.6.1.4.1.45.1.6.3.7.1.1.5",
+      "category": "temperature",
+      "label": "S5-CHASSIS-MIB Chassis Temperature (raw half-degrees Celsius)",
+      "unit": "0.5 °C",
+      "scale_to_celsius": 0.5,
+      "confidence": "high",
+      "notes": "Read-only s5ChasTmpSnrTmpValue; indexed signed Integer32. Actual emitted HA sensor divides by two. Do not use deprecated unsigned column 4 or infer unavailable chassis sensors."
+    }
+  ],
   "symbolic_name_patterns": {
     "temperature": [
       "temp(?:erature)?",

@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.1.19"
+SWITCH_VISION_DISCOVERY_VERSION="3.1.20"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1290,6 +1290,22 @@ $full_vendor_root
       echo "OK HP 1810-24G identity: $oid" >> "$LIVE_LOG_PATH"
     else
       echo "INFO: HP 1810-24G optional identity unavailable: $oid" >> "$LIVE_LOG_PATH"
+    fi
+  done
+
+  # ERS 3524GT-PWR+ exposes S5-CHASSIS-MIB temperature in half-degrees.
+  # The read-only table is evidence-backed for this exact model. Query the
+  # table only during targeted scans; the full walk already includes it.
+  AVAYA_CHASSIS_TEMP_OIDS=""
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ] && grep -Eqi '3524GT-PWR\+([^A-Za-z0-9]|$)' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+    AVAYA_CHASSIS_TEMP_OIDS="1.3.6.1.4.1.45.1.6.3.7.1.1.5"
+  fi
+  for oid in $AVAYA_CHASSIS_TEMP_OIDS; do
+    echo "# --- Avaya 3524GT-PWR+ chassis temperature: $oid ---" >> "$LIVE_OUTPUT_PATH"
+    if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+      echo "OK Avaya chassis temperature: $oid" >> "$LIVE_LOG_PATH"
+    else
+      echo "INFO: Optional Avaya temperature unavailable: $oid" >> "$LIVE_LOG_PATH"
     fi
   done
 

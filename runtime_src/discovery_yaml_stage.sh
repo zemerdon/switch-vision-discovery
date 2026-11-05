@@ -609,6 +609,17 @@ write_generated_yaml_for_walk() {
       if (line ~ /\.3\.6\.1\.2\.1\.105\.1\.3\.1\.1\.4\.[0-9]+ = /) { idx=oid_index(line); std_poe_used_idx[idx]=1; if(idx>maxstdpoe) maxstdpoe=idx }
       if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.13\.1\.3\.1\.2\.[0-9]+ = STRING:/) { idx=oid_index(line); temp_name[idx]=val; temp_idx[idx]=1; if(idx>maxtemp) maxtemp=idx }
 
+      # Avaya ERS 3524GT-PWR+ S5-CHASSIS-MIB temperature values are
+      # signed half-degree Celsius integers. Accept only observed readable
+      # rows with plausible engineering values, never a missing/wrong sensor.
+      if (line ~ /\.3\.6\.1\.4\.1\.45\.1\.6\.3\.7\.1\.1\.5\.[0-9]+\.[0-9]+\.[0-9]+ = INTEGER:/ && val ~ /^-?[0-9]+$/ && (val+0) >= -100 && (val+0) <= 220) {
+        suffix=line
+        sub(/[[:space:]]*=.*/, "", suffix)
+        sub(/^.*\.45\.1\.6\.3\.7\.1\.1\.5\./, "", suffix)
+        avaya_chassis_temp_idx[suffix]=1
+        avaya_chassis_temp_n++
+      }
+
       # HP 1810-24G v2 J9803A exposes SEMI-MIB software and boot-ROM
       # versions on some firmware. Require actual readable STRING rows;
       # adjacent serial/asset/contact objects are not accepted as evidence.
@@ -1328,6 +1339,18 @@ write_generated_yaml_for_walk() {
           if (!ext_budget_present && (idx in std_poe_budget_idx)) yaml_poe_aggregate_sensor("1.3.6.1.2.1.105.1.3.1.1.2." idx, label " PoE Budget W")
         }
       }
+      # Avaya S5-CHASSIS-MIB reports signed temperature in half-degrees
+      # Celsius. Generate only validated exact-model rows from the walk.
+      if (model == "3524GT-PWR+" && avaya_chassis_temp_n > 0) {
+        yaml_target_header("Switch Vision " prefix " Chassis Temperature", 30)
+        for (suffix in avaya_chassis_temp_idx) {
+          label=prefix " Chassis Temperature"
+          if (avaya_chassis_temp_n > 1) label=label " " suffix
+          yaml_sensor_meta("1.3.6.1.4.1.45.1.6.3.7.1.1.5." suffix, label, "", "°C", "temperature", "measurement", "mdi:thermometer")
+          print "    template: \"{{ (value | float / 2) | round(1) }}\""
+        }
+      }
+
       # HP 5406zl chassis sensors are ENTITY-MIB-joined, not guessed from
       # port labels or unsupported manufacturer-private tables.
       if (model == "HP J8697A Switch 5406zl") {

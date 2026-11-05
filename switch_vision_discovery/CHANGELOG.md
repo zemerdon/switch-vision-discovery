@@ -1,3 +1,8 @@
+## 3.1.20 — Avaya chassis temperature telemetry
+
+- Add model-specific targeted SNMP temperature collection for ERS 3524GT-PWR+, backed by six independent full-walk captures.
+- Generate temperature in Celsius using the S5-CHASSIS-MIB half-degree conversion, with no sensor created when the source row is absent. Add reviewed numeric definitions to the bundled Avaya catalogue.
+
 ## 3.1.19 — HP 1810-24G firmware and ROM identity
 
 - Recognize the J9803A HP 1810-24G v2 in generated switch telemetry using exact chassis sysObjectID plus local model description.
