@@ -9,6 +9,15 @@
 cv_interface_class_for_name() {
   name="$1"
 
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "HP J8697A Switch 5406zl" ]; then
+    media=""
+    if [ -n "${CV_CAP_HP5406_MEDIA_FILE:-}" ] && [ -f "$CV_CAP_HP5406_MEDIA_FILE" ]; then
+      media=$(awk -v idx="${CV_CAP_IF_INDEX:-0}" '$1 == idx {print $2; exit}' "$CV_CAP_HP5406_MEDIA_FILE")
+    fi
+    printf '%s' "${media:-other}"
+    return 0
+  fi
+
   # TP-Link JetStream field captures: port names and ifIndex bind exactly
   # gigabitEthernet 1/0/1..28 or 1..8. The 28-port unit has 24 fixed
   # copper sockets and four independent SFP cages per TP-Link's published

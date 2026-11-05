@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.1.15"
+SWITCH_VISION_DISCOVERY_VERSION="3.1.16"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1820,7 +1820,7 @@ walk_model_for_generated_card() {
     if command -v cv_cap_extract_model_text >/dev/null 2>&1; then
       cv_cap_extract_model_text "$walk_file"
     else
-      grep -Eio 'N4032F|N2128PX-ON|3524GT-PWR\+|HP J9774A 2530-8G-PoEP|J9774A|HP J8693A Switch 3500yl-48G' "$walk_file" 2>/dev/null | head -n 1 || true
+      grep -Eio 'N4032F|N2128PX-ON|3524GT-PWR\+|HP J9774A 2530-8G-PoEP|J9774A|HP J8693A Switch 3500yl-48G|HP J8697A Switch 5406zl' "$walk_file" 2>/dev/null | head -n 1 || true
     fi
     rm -f "$tmp_walks"
     return 0

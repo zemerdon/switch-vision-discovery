@@ -13,6 +13,62 @@
   "devices": [
     {
       "vendor": "HP",
+      "family": "5400zl",
+      "model": "HP J8697A Switch 5406zl",
+      "status": "experimental",
+      "confirmed_since": "3.1.16",
+      "last_validated_version": "3.1.16",
+      "evidence": "privacy_processed_full_snmp_walk_entity_mib_module_and_ifindex_aliases",
+      "port_topology_mode": "entity_mib_modules",
+      "ports": {
+        "rj45": 72,
+        "poe": false,
+        "uplinks": 4,
+        "uplink_type": "4 x 10G optical in observed J8707A module",
+        "gigabit_sfp": 0,
+        "ten_gigabit_sfp_plus": 4
+      },
+      "stack_support": false,
+      "discovery_support": true,
+      "dashboard_support": true,
+      "mapping_profile": "hp-5406zl-entity-module-ports",
+      "calibration_profile": "stock_48rj45_4sfp_compact",
+      "default_faceplate": "faceplates/48rj45-4sfp-compact.png",
+      "optional_faceplates": [],
+      "tested_firmware": [],
+      "contributor": {
+        "display_name": "community contributor",
+        "public_credit": false
+      },
+      "notes": [
+        "The HP J8697A 5406zl is a modular chassis, not a fixed 72-port appliance. Counts describe the verified first physical contribution and are not imposed on other module populations.",
+        "Verified ENTITY-MIB entPhysicalClass ports and entAliasMappingIdentifier joins establish 76 actual physical IF-MIB bindings: J8702A 24-port copper cards in slots A, B and E, and a J8707A four-port 10G optical card in slot D.",
+        "Slot C exposes 24 IF-MIB placeholder names without an installed module; slot F is unpopulated. Only recognized installed module children with ENTITY-MIB aliases generate live connectors.",
+        "Optical module identities were observed for four D ports, but PoE, chassis sensors, arbitrary other module SKUs and front-panel artwork alignment are not claimed.",
+        "A neutral 48 RJ45 / 4 SFP stock image is an incomplete interim visual fallback; entity and physical-port contracts are derived from the populated module inventory, not from that artwork."
+      ],
+      "validation": {
+        "exact_model_detection": "sysobjectid_and_local_sysdescr_confirmed",
+        "rj45_mapping": "entity_mib_72_alias_joined_ports_in_installed_A_B_E_J8702A_modules",
+        "poe": "pending_unknown_for_other_modules",
+        "system_sensors": "pending",
+        "uplinks": "entity_mib_four_10g_optical_D_J8707A_aliases_confirmed",
+        "stack": "not_applicable",
+        "visual_alignment": "pending_modular_faceplate"
+      },
+      "visuals": {
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/48rj45-4sfp-compact.png",
+        "optional_faceplates": [],
+        "calibration_profile": "stock_48rj45_4sfp_compact",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
+    },
+    {
+      "vendor": "HP",
       "family": "1810",
       "model": "HP 1810-24G",
       "status": "experimental",

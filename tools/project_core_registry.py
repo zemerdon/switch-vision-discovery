@@ -27,6 +27,7 @@ CORE_DEVICE_FIELDS = (
     "confirmed_since",
     "last_validated_version",
     "ports",
+    "port_topology_mode",
     "stack_support",
     "discovery_support",
     "dashboard_support",

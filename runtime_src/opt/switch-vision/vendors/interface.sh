@@ -2,6 +2,11 @@
 
 cv_cap_extract_model_text() {
   walk_file="$1"
+  if [ "${CV_ID_SYS_OBJECT_ID:-}" = "1.3.6.1.4.1.11.2.3.7.11.50" ]; then
+    case "${CV_ID_SYS_DESCR:-}" in
+      *J8697A*5406zl*) printf 'HP J8697A Switch 5406zl'; return 0 ;;
+    esac
+  fi
   # ENTITY-MIB model names are more precise than sysDescr for 24/48-port
   # variants. Fall back to sysDescr/family when no explicit model is present.
   model=$(grep -Eio 'WS-C[0-9A-Za-z][0-9A-Za-z._-]*|SG500X-24|S5735-L8P4X-A1|S5720-12TP-LI-AC|XS1930-10|N4032F|N2128PX-ON|3524GT-PWR\+|ex3300-48p' "$walk_file" 2>/dev/null | head -n 1 || true)
@@ -121,6 +126,11 @@ cv_cap_set_front_panel_profile() {
       CV_CAP_PLATFORM="hp_2530_8g_poep"
       CV_CAP_RJ45_LIMIT="8"
       ;;
+    *J8697A*5406zl*)
+      CV_CAP_FRONT_PANEL_AWARE="true"
+      CV_CAP_PLATFORM="hp_5406zl"
+      CV_CAP_RJ45_LIMIT="72"
+      ;;
     *J8693A*3500yl-48G*|*J8693A*3500YL-48G*|*3500yl-48G*J8693A*|*3500YL-48G*J8693A*)
       # Exact HP 3500yl-48G hardware: 44 fixed copper logical ports and
       # four dual-personality copper/mini-GBIC logical ports.
@@ -153,6 +163,7 @@ cv_cap_set_front_panel_profile() {
 
 cv_interface_class_for_name() {
   name="$1"
+
 
   # HP J9774A / 2530-8G-PoEP exposes its physical logical ports as
   # numeric ifName values. Keep this exact-model exception ahead of the
@@ -374,6 +385,14 @@ cv_write_capabilities_json() {
 
   cv_detect_vendor_identity "$walk_file"
   cv_cap_set_front_panel_profile "$walk_file"
+  CV_CAP_HP5406_MEDIA_FILE=""
+  if [ "${CV_CAP_PLATFORM:-generic}" = "hp_5406zl" ]; then
+    CV_CAP_HP5406_MEDIA_FILE=$(mktemp)
+    if ! python3 "$CV_VENDOR_DIR/hp_5406zl_module_ports.py" "$walk_file" > "$CV_CAP_HP5406_MEDIA_FILE"; then
+      rm -f "$CV_CAP_HP5406_MEDIA_FILE"
+      return 1
+    fi
+  fi
   CV_CAP_DEVICE_MAC=$(cv_cap_extract_bridge_mac "$walk_file")
 
   tmp_ports=$(mktemp)
@@ -446,5 +465,6 @@ cv_write_capabilities_json() {
 
   if [ -n "${latest_path:-}" ]; then cp "$output_path" "$latest_path"; fi
   rm -f "$tmp_ports" "$CV_CAP_IFNAME_LIST" "$CV_CAP_IFNAME_LIST.raw"
+  [ -z "${CV_CAP_HP5406_MEDIA_FILE:-}" ] || rm -f "$CV_CAP_HP5406_MEDIA_FILE"
   CV_CAPABILITIES_PATH="$output_path"
 }

@@ -44,6 +44,7 @@ def main() -> int:
                     "confirmed_since": "1.0.0",
                     "last_validated_version": "1.0.0",
                     "ports": {"rj45": 24, "poe": False, "uplinks": 2},
+                    "port_topology_mode": "entity_mib_modules",
                     "stack_support": False,
                     "discovery_support": True,
                     "dashboard_support": True,
@@ -91,6 +92,7 @@ def main() -> int:
         ):
             assert field not in projected["devices"][0], field
         assert projected["devices"][0]["model"] == "TEST-24"
+        assert projected["devices"][0]["port_topology_mode"] == "entity_mib_modules"
 
         projection.validate_core_faceplates(projected, core_root)
 

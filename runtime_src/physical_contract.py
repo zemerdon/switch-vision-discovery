@@ -162,6 +162,7 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
     registry_ports = registry_device.get("ports") if registry_device and isinstance(registry_device.get("ports"), dict) else {}
     combo_ports_per_member = int(registry_ports.get("combo_ports") or 0)
     c3850_12xs_no_module = registry_model == "ws-c3850-12xs-e"
+    hp_5406zl_modular = bool(registry_device and registry_device.get("port_topology_mode") == "entity_mib_modules")
     interfaces = [row for row in capabilities.get("interfaces", []) if isinstance(row, dict)]
 
     physical_rows = [row for row in interfaces if row.get("physical") is True and str(row.get("media", "")) in {"rj45", "sfp", "sfp_plus", "sfp28", "uplink"}]
@@ -274,6 +275,15 @@ def resolve(capabilities: dict[str, Any], registry: dict[str, Any]) -> dict[str,
         registry_ports = registry_device.get("ports") if isinstance(registry_device.get("ports"), dict) else {}
         expected_rj45_per_member = int(registry_ports.get("rj45") or 0)
         expected_uplinks_per_member = int(registry_ports.get("uplinks") or ((registry_ports.get("gigabit_sfp") or 0) + (registry_ports.get("ten_gigabit_sfp_plus") or 0) + (registry_ports.get("twenty_five_gigabit_sfp28") or 0)))
+        if hp_5406zl_modular:
+            # The 5406zl is a chassis, not a fixed-port switch. Verified
+            # ENTITY-MIB module/port alias bindings determine this unit's
+            # current inventory; registry quantities describe a reference
+            # capture, never required slots on another chassis.
+            expected_rj45_per_member = base_observed["rj45"]
+            expected_uplinks_per_member = base_observed["uplinks"]
+            if base_observed["physical"] == 0:
+                errors.append("no supported populated ENTITY-MIB modules/physical port aliases")
         stack_allowed = bool(registry_device.get("stack_support"))
         expected_members = member_count if stack_allowed else 1
         expected = {

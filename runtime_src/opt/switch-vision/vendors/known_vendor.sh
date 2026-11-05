@@ -53,6 +53,14 @@ cv_known_vendor_identity() {
         CV_ID_PRODUCT_MATCH="j9774a-2530-8g-poep-local-sysdescr"
         CV_ID_SUPPORT_STATUS="experimental"
         ;;
+      *J8697A*5406zl*)
+        if [ "${CV_ID_SYS_OBJECT_ID:-}" = "1.3.6.1.4.1.11.2.3.7.11.50" ]; then
+          CV_ID_FAMILY="5400zl"
+          CV_ID_MODEL_HINT="HP J8697A Switch 5406zl"
+          CV_ID_PRODUCT_MATCH="j8697a-5406zl-oid-and-local-sysdescr"
+          CV_ID_SUPPORT_STATUS="experimental"
+        fi
+        ;;
       *J8693A*|*j8693a*|*3500yl-48G*|*3500YL-48G*)
         CV_ID_FAMILY="3500yl"
         CV_ID_MODEL_HINT="HP J8693A Switch 3500yl-48G"

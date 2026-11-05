@@ -1,3 +1,8 @@
+## 3.1.16 — Recognize modular HP 5406zl switches
+
+- Register the HP J8697A 5406zl as Experimental from verified full SNMP/ENTITY-MIB evidence, including installed J8702A copper and J8707A 10G optical modules. Resolve actual physical ports from module inventory and exact ENTITY-MIB-to-IF-MIB aliases, excluding unpopulated-slot placeholder interfaces and unrelated logical ports.
+- Generate port and telemetry bindings for the populated module configuration without imposing one fixed chassis layout on other 5406zl units. Use a neutral provisional stock visual until a full modular faceplate is reviewed; do not claim unsupported modules, PoE or sensors.
+
 ## 3.1.15 — Reduce Home Assistant Activity noise from traffic counters
 
 - Supply byte (`B`) units on generated SNMP RX/TX counters, including Counter64, legacy Counter32 fallback and Juniper SFP uplinks, so Home Assistant treats them as numeric telemetry rather than routine Logbook activity. Preserve the same sensor names, IDs, values, OIDs and 10-second traffic polling for live status and activity LEDs. Existing Recorder history remains available; no historical entries are deleted.
