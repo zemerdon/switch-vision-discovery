@@ -17,5 +17,14 @@
   "capabilities": [
     "identity",
     "vendor_sensor_candidates"
-  ]
+  ],
+  "reviewed_exact_model_identity": {
+    "HP 1810-24G (J9803A)": {
+      "sys_object_id": "1.3.6.1.4.1.11.2.3.7.11.151",
+      "source_mib": "SEMI-MIB / HP-httpManageable-MIB",
+      "firmware_version_oid": "1.3.6.1.4.1.11.2.36.1.1.2.6.0",
+      "boot_rom_version_oid": "1.3.6.1.4.1.11.2.36.1.1.2.8.0",
+      "notes": "Only emit STRING rows observed in the current capture. Serial and hardware revision are unproven on contributed firmware."
+    }
+  }
 }

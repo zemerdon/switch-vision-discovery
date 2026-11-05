@@ -417,6 +417,8 @@ write_generated_yaml_for_walk() {
       else if ((line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = / || line ~ /\.1\.3\.6\.1\.4\.1\.890\.1\.15\.3\.1\.11\.0 = /) && line ~ /GS1900-8/) zyxel_model="GS1900-8"
       if (line !~ /\.1\.0\.8802\./ && line ~ /SR-S25G3420F/) sirivision_model="SR-S25G3420F"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model="CRS328-24P-4S+"
+      if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = / && tolower(line) ~ /1810-24g/) hp_1810_24g_descr=1
+      if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.2\.0 = / && line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.151([^0-9]|$)/) hp_1810_24g_oid=1
       if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = / && tolower(line) ~ /j8697a/ && tolower(line) ~ /5406zl/) hp_5406zl_model="HP J8697A Switch 5406zl"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.138/) || (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && (tolower(line) ~ /j9774a/ || tolower(line) ~ /2530-8g-poep/))) hp_2530_model="HP J9774A 2530-8G-PoEP"
@@ -607,6 +609,12 @@ write_generated_yaml_for_walk() {
       if (line ~ /\.3\.6\.1\.2\.1\.105\.1\.3\.1\.1\.4\.[0-9]+ = /) { idx=oid_index(line); std_poe_used_idx[idx]=1; if(idx>maxstdpoe) maxstdpoe=idx }
       if (line ~ /\.3\.6\.1\.4\.1\.9\.9\.13\.1\.3\.1\.2\.[0-9]+ = STRING:/) { idx=oid_index(line); temp_name[idx]=val; temp_idx[idx]=1; if(idx>maxtemp) maxtemp=idx }
 
+      # HP 1810-24G v2 J9803A exposes SEMI-MIB software and boot-ROM
+      # versions on some firmware. Require actual readable STRING rows;
+      # adjacent serial/asset/contact objects are not accepted as evidence.
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.11\.2\.36\.1\.1\.2\.6\.0 = STRING:/ && val != "") hp_1810_firmware_present=1
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.11\.2\.36\.1\.1\.2\.8\.0 = STRING:/ && val != "") hp_1810_rom_present=1
+
       # Zyxel XS1930-10 contribution-proven identity and health OIDs.
       # Emit only exact rows present in the current walk; enterprise-tree
       # proximity alone is never treated as proof of a sensor.
@@ -735,6 +743,10 @@ write_generated_yaml_for_walk() {
       }
       else if (hp_1810g_model != "") {
         model = hp_1810g_model
+        manufacturer = "HP"
+      }
+      else if (hp_1810_24g_descr && hp_1810_24g_oid) {
+        model = "HP 1810-24G"
         manufacturer = "HP"
       }
       else if (hp_5406zl_model != "") {
@@ -1144,6 +1156,11 @@ write_generated_yaml_for_walk() {
       for (label in serial_identity_index) {
         idx=serial_identity_index[label]
         yaml_sensor("1.3.6.1.2.1.47.1.1.1.1.11." idx, label " Serial")
+      }
+
+      if (model == "HP 1810-24G" && hp_1810_24g_oid) {
+        if (hp_1810_firmware_present) yaml_sensor("1.3.6.1.4.1.11.2.36.1.1.2.6.0", prefix " Firmware")
+        if (hp_1810_rom_present) yaml_sensor("1.3.6.1.4.1.11.2.36.1.1.2.8.0", prefix " Boot ROM")
       }
 
       if (model == "XS1930-10" || model == "GS1915-24EP") {

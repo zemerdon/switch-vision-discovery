@@ -1,3 +1,8 @@
+## 3.1.19 — HP 1810-24G firmware and ROM identity
+
+- Recognize the J9803A HP 1810-24G v2 in generated switch telemetry using exact chassis sysObjectID plus local model description.
+- Query only the two evidence-backed SEMI-MIB firmware and boot-ROM objects in targeted scans, and emit their read-only entities only when the current walk returns valid strings. Do not infer hardware revision or serial number from unsupported responses.
+
 ## 3.1.18 — Broader contribution-backed targeted discovery
 
 - Collect verified Zyxel GS1900-8 system and environmental OID subtrees, plus current Q-BRIDGE egress membership when exposed, without changing unrelated models' targeted scans.

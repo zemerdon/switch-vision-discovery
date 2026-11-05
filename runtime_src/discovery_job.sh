@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.1.18"
+SWITCH_VISION_DISCOVERY_VERSION="3.1.19"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1272,6 +1272,24 @@ $full_vendor_root
       echo "OK exact-model supplemental: $oid" >> "$LIVE_LOG_PATH"
     else
       echo "INFO: Optional exact-model telemetry unavailable: $oid" >> "$LIVE_LOG_PATH"
+    fi
+  done
+
+  # HP 1810-24G v2 (J9803A) has proven SEMI-MIB software and ROM versions.
+  # Only query these two scalar objects; do not fetch the nearby serial or
+  # contact entries that the captured firmware did not return as readable.
+  HP_1810_VERSION_OIDS=""
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ] && grep -Eqi '1810-24G([[:space:],"]|$)' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+    HP_1810_VERSION_OIDS="
+1.3.6.1.4.1.11.2.36.1.1.2.6
+1.3.6.1.4.1.11.2.36.1.1.2.8"
+  fi
+  for oid in $HP_1810_VERSION_OIDS; do
+    echo "# --- HP 1810-24G SEMI-MIB: $oid ---" >> "$LIVE_OUTPUT_PATH"
+    if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+      echo "OK HP 1810-24G identity: $oid" >> "$LIVE_LOG_PATH"
+    else
+      echo "INFO: HP 1810-24G optional identity unavailable: $oid" >> "$LIVE_LOG_PATH"
     fi
   done
 
