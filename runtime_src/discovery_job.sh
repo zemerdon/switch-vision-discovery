@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.1.20"
+SWITCH_VISION_DISCOVERY_VERSION="3.1.21"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1249,17 +1249,27 @@ $full_vendor_root
     done
   fi
 
-  # The verified GS1900-8 full captures contain these private system,
-  # temperature/fan, and standard current-Q-BRIDGE tables. Earlier targeted
-  # captures omitted them even where the current generator consumes them.
-  # Query only this exact model; firmware-dependent branches stay non-fatal.
+  # Zyxel 890.1.15 is shared by multiple real models. The 21 full
+  # captures split into GS1900-8 (10), GS1915-24EP (8), and XS1930-10 (3).
+  # Poll bounded exact-model private tables only, not the whole enterprise.
+  # The fan/temperature tree occurs on XS1930-10, not the other two models.
   MODEL_SUPPLEMENTAL_OIDS=""
-  if [ "$LIVE_SNMPWALK_MODE" != "full" ] && grep -Eqi 'GS1900-8([^A-Za-z0-9]|$)' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
-    MODEL_SUPPLEMENTAL_OIDS="
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ]; then
+    if grep -Eqi 'GS1900-8([[:space:],"]|$)' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+      MODEL_SUPPLEMENTAL_OIDS="
 1.3.6.1.4.1.890.1.15.3.1
 1.3.6.1.4.1.890.1.15.3.2
-1.3.6.1.4.1.890.1.15.3.26
 1.3.6.1.2.1.17.7.1.4.2.1.4"
+    elif grep -Eqi 'GS1915-24EP([[:space:],"]|$)' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+      MODEL_SUPPLEMENTAL_OIDS="
+1.3.6.1.4.1.890.1.15.3.1
+1.3.6.1.4.1.890.1.15.3.2"
+    elif grep -Eqi 'XS1930-10([[:space:],"]|$)' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+      MODEL_SUPPLEMENTAL_OIDS="
+1.3.6.1.4.1.890.1.15.3.1
+1.3.6.1.4.1.890.1.15.3.2
+1.3.6.1.4.1.890.1.15.3.26"
+    fi
   fi
   for oid in $MODEL_SUPPLEMENTAL_OIDS; do
     current_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP $oid"

@@ -1,3 +1,9 @@
+## 3.1.21 — HP 3500yl chassis health and Zyxel model-specific telemetry
+
+- Generate the verified HP J8693A 3500yl chassis temperature from standard ENTITY-SENSOR-MIB only when its type, unit, precision, name and operational state agree. Preserve existing PoE aggregate behavior and do not invent fan speed.
+- Separate three Zyxel models sharing the same enterprise sysObjectID: GS1900-8, GS1915-24EP and XS1930-10. Bind GS1900-8 firmware, serial, CPU and memory and GS1915 CPU/memory only from actual returned, valid scalars.
+- Collect private environment tables on the XS1930-10 where they are evidenced, rather than the fanless GS1900-8; preserve GS1900 Q-BRIDGE collection and the existing XS1930 sensor generation. Correct XS1930 memory to the reviewed vendor MIB object.
+
 ## 3.1.20 — Avaya chassis temperature telemetry
 
 - Add model-specific targeted SNMP temperature collection for ERS 3524GT-PWR+, backed by six independent full-walk captures.

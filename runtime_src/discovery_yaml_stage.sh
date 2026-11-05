@@ -412,9 +412,9 @@ write_generated_yaml_for_walk() {
       if (line ~ /SG200-26/ || line ~ /1\.3\.6\.1\.4\.1\.9\.6\.1\.88\.26\.1/) sg200_model="SG200-26"
       if (line ~ /S5735-L8P4X-A1/) huawei_s5735_model="S5735-L8P4X-A1"
       if (line ~ /S5720-12TP-LI-AC/) huawei_s5720_model="S5720-12TP-LI-AC"
-      if (line ~ /XS1930-10/) zyxel_model="XS1930-10"
-      else if (line ~ /GS1915-24EP/) zyxel_model="GS1915-24EP"
-      else if ((line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = / || line ~ /\.1\.3\.6\.1\.4\.1\.890\.1\.15\.3\.1\.11\.0 = /) && line ~ /GS1900-8/) zyxel_model="GS1900-8"
+      if ((line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = / || line ~ /\.1\.3\.6\.1\.4\.1\.890\.1\.15\.3\.1\.11\.0 = /) && line ~ /XS1930-10([[:space:],"]|$)/) zyxel_model="XS1930-10"
+      else if ((line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = / || line ~ /\.1\.3\.6\.1\.4\.1\.890\.1\.15\.3\.1\.11\.0 = /) && line ~ /GS1915-24EP([[:space:],"]|$)/) zyxel_model="GS1915-24EP"
+      else if ((line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = / || line ~ /\.1\.3\.6\.1\.4\.1\.890\.1\.15\.3\.1\.11\.0 = /) && line ~ /GS1900-8([[:space:],"]|$)/) zyxel_model="GS1900-8"
       if (line !~ /\.1\.0\.8802\./ && line ~ /SR-S25G3420F/) sirivision_model="SR-S25G3420F"
       if (line ~ /CRS328-24P-4S\+/) mikrotik_model="CRS328-24P-4S+"
       if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = / && tolower(line) ~ /1810-24g/) hp_1810_24g_descr=1
@@ -643,6 +643,19 @@ write_generated_yaml_for_walk() {
       if (line ~ /\.3\.6\.1\.4\.1\.890\.1\.15\.3\.26\.1\.2\.1\.2\.[0-9]+ = /) { idx=oid_index(line); zyxel_temp_descr[idx]=val; zyxel_temp_idx[idx]=1 }
       if (line ~ /\.3\.6\.1\.4\.1\.890\.1\.15\.3\.26\.1\.2\.1\.3\.[0-9]+ = /) { idx=oid_index(line); zyxel_temp_current[idx]=1; zyxel_temp_idx[idx]=1 }
       if (line ~ /\.3\.6\.1\.4\.1\.890\.1\.15\.3\.26\.1\.2\.1\.7\.[0-9]+ = /) { idx=oid_index(line); zyxel_temp_status[idx]=1; zyxel_temp_idx[idx]=1 }
+
+      # GS1900-8 private scalars are present in verified contributed walks.
+      # Require actual readable values and valid percentages before emitting.
+      if (line ~ /\.3\.6\.1\.4\.1\.890\.1\.15\.3\.1\.11\.0 = STRING:/ && val != "") zyxel_19xx_model_seen=1
+      if (line ~ /\.3\.6\.1\.4\.1\.890\.1\.15\.3\.1\.6\.0 = STRING:/ && val != "") zyxel_19xx_firmware_seen=1
+      if (line ~ /\.3\.6\.1\.4\.1\.890\.1\.15\.3\.1\.12\.0 = STRING:/ && val != "" && tolower(val) !~ /^(unknown|n\/a|na)$/) zyxel_19xx_serial_seen=1
+      if (line ~ /\.3\.6\.1\.4\.1\.890\.1\.15\.3\.2\.(4|5|7|8|9)\.0 = (INTEGER|Gauge32):/ && val ~ /^[0-9]+$/ && (val+0) <= 100) {
+        if (line ~ /\.3\.2\.4\.0 = /) zyxel_19xx_cpu_current_seen=1
+        if (line ~ /\.3\.2\.5\.0 = /) zyxel_19xx_memory_seen=1
+        if (line ~ /\.3\.2\.7\.0 = /) zyxel_19xx_cpu_5sec_seen=1
+        if (line ~ /\.3\.2\.8\.0 = /) zyxel_19xx_cpu_1min_seen=1
+        if (line ~ /\.3\.2\.9\.0 = /) zyxel_19xx_cpu_5min_seen=1
+      }
 
       # Juniper chassis operating table. The four-part suffix identifies the
       # same physical subject across description, state, temperature, CPU,
@@ -1174,6 +1187,12 @@ write_generated_yaml_for_walk() {
         if (hp_1810_rom_present) yaml_sensor("1.3.6.1.4.1.11.2.36.1.1.2.8.0", prefix " Boot ROM")
       }
 
+      if (model == "GS1900-8") {
+        if (zyxel_19xx_model_seen) yaml_sensor("1.3.6.1.4.1.890.1.15.3.1.11.0", prefix " Model")
+        if (zyxel_19xx_firmware_seen) yaml_sensor("1.3.6.1.4.1.890.1.15.3.1.6.0", prefix " Firmware")
+        if (zyxel_19xx_serial_seen) yaml_sensor("1.3.6.1.4.1.890.1.15.3.1.12.0", prefix " Serial")
+      }
+
       if (model == "XS1930-10" || model == "GS1915-24EP") {
         if (zyxel_model_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.1.11.0", prefix " Model")
         if (zyxel_firmware_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.1.6.0", prefix " Firmware")
@@ -1257,12 +1276,21 @@ write_generated_yaml_for_walk() {
         }
       }
 
+      if ((model == "GS1900-8" || model == "GS1915-24EP") && (zyxel_19xx_cpu_current_seen || zyxel_19xx_cpu_5sec_seen || zyxel_19xx_cpu_1min_seen || zyxel_19xx_cpu_5min_seen || zyxel_19xx_memory_seen)) {
+        yaml_target_header("Switch Vision " prefix " CPU and Memory", 30)
+        if (zyxel_19xx_cpu_current_seen) yaml_sensor_meta("1.3.6.1.4.1.890.1.15.3.2.4.0", prefix " CPU", "", "%", "", "measurement", "mdi:cpu-64-bit")
+        if (zyxel_19xx_cpu_5sec_seen) yaml_sensor_meta("1.3.6.1.4.1.890.1.15.3.2.7.0", prefix " CPU 5sec", "", "%", "", "measurement", "mdi:cpu-64-bit")
+        if (zyxel_19xx_cpu_1min_seen) yaml_sensor_meta("1.3.6.1.4.1.890.1.15.3.2.8.0", prefix " CPU 1min", "", "%", "", "measurement", "mdi:cpu-64-bit")
+        if (zyxel_19xx_cpu_5min_seen) yaml_sensor_meta("1.3.6.1.4.1.890.1.15.3.2.9.0", prefix " CPU 5min", "", "%", "", "measurement", "mdi:cpu-64-bit")
+        if (zyxel_19xx_memory_seen) yaml_sensor_meta("1.3.6.1.4.1.890.1.15.3.2.5.0", prefix " Memory Utilization", "", "%", "", "measurement", "mdi:memory")
+      }
+
       if (model == "XS1930-10") {
         if (zyxel_cpu_current_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.2.4.0", prefix " CPU")
         if (zyxel_cpu_5sec_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.2.7.0", prefix " CPU 5sec")
         if (zyxel_cpu_1min_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.2.8.0", prefix " CPU 1min")
         if (zyxel_cpu_5min_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.2.9.0", prefix " CPU 5min")
-        if (zyxel_memory_present) yaml_sensor("1.3.6.1.4.1.890.1.15.3.2.4.3", prefix " Memory Utilization")
+        if (zyxel_memory_present) yaml_sensor_meta("1.3.6.1.4.1.890.1.15.3.2.5.0", prefix " Memory Utilization", "", "%", "", "measurement", "mdi:memory")
         fan_status_primary=0
         for (idx in zyxel_fan_idx) {
           if (idx in zyxel_fan_rpm) yaml_sensor("1.3.6.1.4.1.890.1.15.3.26.1.1.1.3." idx, prefix " Fan " idx " RPM")
@@ -1369,6 +1397,21 @@ write_generated_yaml_for_walk() {
             else if (ent_sensor_type[idx] == 1 && ent_name[idx] ~ /^Fan [0-9]+$/)
               yaml_sensor("1.3.6.1.2.1.99.1.1.1.5." idx, prefix " " ent_name[idx] " Sensor Status Code")
           }
+        }
+      }
+
+      # HP J8693A 3500yl: standard chassis temperature, validated by ENTITY-SENSOR.
+      if (model == "HP J8693A Switch 3500yl-48G") {
+        hp3500_temperature_idx=0
+        for (idx in ent_sensor_value) {
+          if (!(idx in ent_sensor_status_seen) || ent_sensor_status[idx] != 1) continue
+          if (ent_sensor_type[idx] != 8 || ent_sensor_scale[idx] != 9 || ent_sensor_precision[idx] != 0) continue
+          if (tolower(ent_name[idx]) !~ /chassis temperature/) continue
+          if (!hp3500_temperature_idx || (idx + 0) < hp3500_temperature_idx) hp3500_temperature_idx=idx+0
+        }
+        if (hp3500_temperature_idx > 0) {
+          yaml_target_header("Switch Vision " prefix " Chassis Temperature", 30)
+          yaml_sensor_meta("1.3.6.1.2.1.99.1.1.1.4." hp3500_temperature_idx, prefix " Chassis Temperature", "", "°C", "temperature", "measurement", "mdi:thermometer")
         }
       }
 

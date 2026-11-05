@@ -36,12 +36,22 @@ def test_bounded_exact_model_selection():
     script = SCRIPT.read_text()
     assert "Running Dell N2128PX-ON optical supplemental walks" in script
     assert DELL + ".18" in script and DELL + ".19" in script
+    # A shared sysObjectID does not imply shared hardware telemetry.
     assert targeted_extras("Zyxel GS1900-8") == [
-        ZYXEL + ".1", ZYXEL + ".2", ZYXEL + ".26",
+        ZYXEL + ".1", ZYXEL + ".2",
         "1.3.6.1.2.1.17.7.1.4.2.1.4",
     ]
-    assert targeted_extras("Zyxel GS1900-8HP") == []
-    assert targeted_extras("Zyxel GS1900-8", mode="full") == []
+    assert targeted_extras("Zyxel GS1915-24EP") == [
+        ZYXEL + ".1", ZYXEL + ".2",
+    ]
+    assert targeted_extras("Zyxel XS1930-10") == [
+        ZYXEL + ".1", ZYXEL + ".2", ZYXEL + ".26",
+    ]
+    for identity in ("Zyxel GS1900-8HP", "Zyxel GS1915-24EP-PLUS",
+                     "Zyxel XS1930-10HP", "Zyxel GS1900-16", "Zyxel GS1900-24E"):
+        assert targeted_extras(identity) == [], identity
+    for model in ("GS1900-8", "GS1915-24EP", "XS1930-10"):
+        assert targeted_extras("Zyxel " + model, mode="full") == []
     for identity in ("Cisco C3650", "Dell N4032F", "HP J8697A Switch 5406zl",
                      "MikroTik CRS328-24P-4S+", "Juniper EX3300"):
         assert targeted_extras(identity) == [], identity

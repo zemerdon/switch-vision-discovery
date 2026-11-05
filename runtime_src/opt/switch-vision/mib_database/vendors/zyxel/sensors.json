@@ -103,7 +103,7 @@
       "IPADDRESS"
     ],
     "maximum_candidates": 120,
-    "notes": "Curated XS1930-10 health OIDs are high-confidence; remaining enterprise numeric values stay review-only."
+    "notes": "Curated XS1930-10 and GS1900-8 CPU/memory OIDs are verified by captured hardware values; other numeric enterprise objects remain review-only."
   },
   "standards_first": [
     "IF-MIB",
