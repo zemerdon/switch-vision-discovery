@@ -1,3 +1,9 @@
+## 3.1.18 — Broader contribution-backed targeted discovery
+
+- Collect verified Zyxel GS1900-8 system and environmental OID subtrees, plus current Q-BRIDGE egress membership when exposed, without changing unrelated models' targeted scans.
+- Enrich the bundled reviewed Dell optical-sensor MIB definitions while preserving its already-supported exact-model targeted collection; no duplicate walks.
+- Keep optional/firmware-dependent MIB queries non-fatal; no new hardware capabilities or port identities are inferred.
+
 ## 3.1.17 — Modular HP 5406zl telemetry and targeted discovery
 
 - Collect standard ENTITY-MIB alias bindings during targeted SNMP walks so modular physical ports remain resolvable without a full scan.

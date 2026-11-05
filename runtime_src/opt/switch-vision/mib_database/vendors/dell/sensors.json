@@ -4,6 +4,14 @@
   "enterprise_oids": [
     "1.3.6.1.4.1.674"
   ],
+  "known_oids": [
+    {"oid_prefix": "1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.2", "category": "temperature", "label": "Optic Temperature (tenths °C)", "unit": "0.1 °C", "confidence": "high"},
+    {"oid_prefix": "1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.3", "category": "power", "label": "Optic Voltage (millivolts)", "unit": "mV", "confidence": "high"},
+    {"oid_prefix": "1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.4", "category": "power", "label": "Optic Current (tenths mA)", "unit": "0.1 mA", "confidence": "high"},
+    {"oid_prefix": "1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.5", "category": "environment", "label": "Optic TX Optical Power (milli-dBm)", "unit": "0.001 dBm", "confidence": "high"},
+    {"oid_prefix": "1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.6", "category": "environment", "label": "Optic RX Optical Power (milli-dBm)", "unit": "0.001 dBm", "confidence": "high"},
+    {"oid_prefix": "1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18.1.9", "category": "environment", "label": "Optic Status", "unit": "state", "confidence": "high"}
+  ],
   "symbolic_name_patterns": {
     "temperature": [
       "temp(?:erature)?",

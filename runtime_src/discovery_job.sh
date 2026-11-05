@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.1.17"
+SWITCH_VISION_DISCOVERY_VERSION="3.1.18"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1248,6 +1248,32 @@ $full_vendor_root
       fi
     done
   fi
+
+  # The verified GS1900-8 full captures contain these private system,
+  # temperature/fan, and standard current-Q-BRIDGE tables. Earlier targeted
+  # captures omitted them even where the current generator consumes them.
+  # Query only this exact model; firmware-dependent branches stay non-fatal.
+  MODEL_SUPPLEMENTAL_OIDS=""
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ] && grep -Eqi 'GS1900-8([^A-Za-z0-9]|$)' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+    MODEL_SUPPLEMENTAL_OIDS="
+1.3.6.1.4.1.890.1.15.3.1
+1.3.6.1.4.1.890.1.15.3.2
+1.3.6.1.4.1.890.1.15.3.26
+1.3.6.1.2.1.17.7.1.4.2.1.4"
+  fi
+  for oid in $MODEL_SUPPLEMENTAL_OIDS; do
+    current_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP $oid"
+    echo "Running exact-model supplemental: $current_command" >> "$LIVE_LOG_PATH"
+    {
+      echo ""
+      echo "# --- exact-model supplemental: $oid ---"
+    } >> "$LIVE_OUTPUT_PATH"
+    if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+      echo "OK exact-model supplemental: $oid" >> "$LIVE_LOG_PATH"
+    else
+      echo "INFO: Optional exact-model telemetry unavailable: $oid" >> "$LIVE_LOG_PATH"
+    fi
+  done
 
   # Juniper full walks can omit the enterprise branch when the agent's
   # lexicographic root walk skips or filters private MIBs. Query the supported
