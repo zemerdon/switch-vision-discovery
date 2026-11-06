@@ -1,3 +1,8 @@
+## 3.1.25 — Q-BRIDGE current VLAN membership collection
+
+- Collect only the two RFC 4363 read-only current VLAN membership columns (egress and untagged) during targeted SNMP scans, using the already reviewed diagnostics/parser contract. Historical full/targeted evidence establishes missing live VLAN membership on multiple hardware families. Devices without Q-BRIDGE support remain fail-soft.
+- Preserve the GS1900-8 exact-model egress query without repeating it; no VLAN data changes physical-port assignments, model identity, status or configured hardware capabilities. Add focused optional-query and VLAN correlation regressions.
+
 ## 3.1.24 — HP 3500yl and 5406zl CPU telemetry
 
 - Collect the evidence-backed HP STATISTICS-MIB CPU-utilisation scalar on exact J8693A 3500yl and J8697A 5406zl chassis, and generate percent telemetry only when a valid current integer reading and matching chassis identity are returned.

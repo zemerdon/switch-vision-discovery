@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.1.24"
+SWITCH_VISION_DISCOVERY_VERSION="3.1.25"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1248,6 +1248,37 @@ $full_vendor_root
       fi
     done
   fi
+
+  # Q-BRIDGE-MIB (RFC 4363) current VLAN database: read-only egress
+  # and untagged bridge-port bitmaps, indexed by TimeMark and VLAN ID.
+  # These actual membership rows support current-vs-static VLAN diagnostics;
+  # they do NOT establish physical port identities or change saved mappings.
+  # Multiple verified full captures expose this table when historical targets
+  # do not. Query only these two bounded standard columns, fail-soft for
+  # equipment without Q-BRIDGE support. GS1900-8 already fetches egress.
+  QBRIDGE_CURRENT_OIDS=""
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ]; then
+    if grep -Eqi 'GS1900-8([[:space:],"]|$)' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+      QBRIDGE_CURRENT_OIDS="1.3.6.1.2.1.17.7.1.4.2.1.5"
+    else
+      QBRIDGE_CURRENT_OIDS="
+1.3.6.1.2.1.17.7.1.4.2.1.4
+1.3.6.1.2.1.17.7.1.4.2.1.5"
+    fi
+  fi
+  for oid in $QBRIDGE_CURRENT_OIDS; do
+    current_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP $oid"
+    echo "Running optional Q-BRIDGE current VLAN: $current_command" >> "$LIVE_LOG_PATH"
+    {
+      echo ""
+      echo "# --- current VLAN membership supplemental: $oid ---"
+    } >> "$LIVE_OUTPUT_PATH"
+    if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+      echo "OK optional Q-BRIDGE current VLAN: $oid" >> "$LIVE_LOG_PATH"
+    else
+      echo "INFO: Current VLAN table unavailable: $oid" >> "$LIVE_LOG_PATH"
+    fi
+  done
 
   # Zyxel 890.1.15 is shared by multiple real models. The 21 full
   # captures split into GS1900-8 (10), GS1915-24EP (8), and XS1930-10 (3).

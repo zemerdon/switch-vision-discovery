@@ -35,6 +35,7 @@ PERMANENT_CHECKS = (
     "tools/test_dell_n2128px_dnos_health.py",
     "tools/test_dell_n4032f_dnos_health.py",
     "tools/test_targeted_evidence_supplements.py",
+    "tools/test_current_vlan_targeted_collection.py",
     "tools/test_hp3500yl_gs1900_health.py",
     "tools/test_hp3500yl_5406zl_cpu_health.py",
     "tools/test_hp1810_semi_mib_identity.py",
