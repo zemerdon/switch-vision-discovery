@@ -5,6 +5,17 @@
     "1.3.6.1.4.1.11",
     "1.3.6.1.4.1.14823"
   ],
+  "known_oids": [
+    {
+      "oid_prefix": "1.3.6.1.4.1.11.2.14.11.5.1.9.6.1",
+      "category": "cpu",
+      "label": "HP Switch CPU Utilization",
+      "unit": "%",
+      "confidence": "high",
+      "source_mib": "STATISTICS-MIB",
+      "notes": "hpSwitchCpuStat.0 is a read-only INTEGER (0..100) CPU percentage; optional exact-model targeted collection is restricted to verified J8693A 3500yl and J8697A 5406zl."
+    }
+  ],
   "symbolic_name_patterns": {
     "temperature": [
       "temp(?:erature)?",

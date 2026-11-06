@@ -36,6 +36,7 @@ PERMANENT_CHECKS = (
     "tools/test_dell_n4032f_dnos_health.py",
     "tools/test_targeted_evidence_supplements.py",
     "tools/test_hp3500yl_gs1900_health.py",
+    "tools/test_hp3500yl_5406zl_cpu_health.py",
     "tools/test_hp1810_semi_mib_identity.py",
     "tools/test_hp_j9774a_2530_8g_poep.py",
     "tools/test_hp_5406zl_modular_registration.py",

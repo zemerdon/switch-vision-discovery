@@ -1,3 +1,8 @@
+## 3.1.24 — HP 3500yl and 5406zl CPU telemetry
+
+- Collect the evidence-backed HP STATISTICS-MIB CPU-utilisation scalar on exact J8693A 3500yl and J8697A 5406zl chassis, and generate percent telemetry only when a valid current integer reading and matching chassis identity are returned.
+- Preserve existing chassis temperature, modular PoE/optic and physical-port handling. Keep optional private-MIB polling bounded and independent of unverified related HP models.
+
 ## 3.1.23 — Dell N4032F chassis telemetry
 
 - Collect and generate verified DNOS system-health telemetry for the Dell N4032F: CPU utilization, free/available memory, fan speed and state, power-supply state, and individual chassis temperature/status rows. Preserve its 24 SFP+ ports and only present optional 40G QSFP module ports.

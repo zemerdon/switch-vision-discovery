@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.1.23"
+SWITCH_VISION_DISCOVERY_VERSION="3.1.24"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1284,6 +1284,25 @@ $full_vendor_root
       echo "INFO: Optional exact-model telemetry unavailable: $oid" >> "$LIVE_LOG_PATH"
     fi
   done
+
+  # HP STATISTICS-MIB hpSwitchCpuStat is a read-only 0..100 percent
+  # scalar. Verified 24 independent J8693A 3500yl and one J8697A 5406zl
+  # full captures expose it. Query only these exact chassis identities.
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ] &&
+     grep -Eqi 'J8693A.*3500yl-48G|3500yl-48G.*J8693A|J8697A.*5406zl|5406zl.*J8697A' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+    hp_cpu_oid="1.3.6.1.4.1.11.2.14.11.5.1.9.6.1"
+    current_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP $hp_cpu_oid"
+    echo "Running exact HP J8693A/J8697A CPU supplemental: $current_command" >> "$LIVE_LOG_PATH"
+    {
+      echo ""
+      echo "# --- exact HP chassis CPU supplemental: $hp_cpu_oid ---"
+    } >> "$LIVE_OUTPUT_PATH"
+    if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$hp_cpu_oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+      echo "OK HP chassis CPU supplemental: $hp_cpu_oid" >> "$LIVE_LOG_PATH"
+    else
+      echo "INFO: Optional HP chassis CPU scalar unavailable: $hp_cpu_oid" >> "$LIVE_LOG_PATH"
+    fi
+  fi
 
   # HP 1810-24G v2 (J9803A) has proven SEMI-MIB software and ROM versions.
   # Only query these two scalar objects; do not fetch the nearby serial or

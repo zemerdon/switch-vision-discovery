@@ -421,6 +421,16 @@ write_generated_yaml_for_walk() {
       if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.2\.0 = / && line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.151([^0-9]|$)/) hp_1810_24g_oid=1
       if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = / && tolower(line) ~ /j8697a/ && tolower(line) ~ /5406zl/) hp_5406zl_model="HP J8697A Switch 5406zl"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
+      # CPU telemetry additionally requires exact local sysDescr and
+      # sysObjectID agreement; arbitrary vendor strings are not sufficient.
+      if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = /) {
+        if (tolower(line) ~ /j8693a([^a-z0-9_-]|$)/ && tolower(line) ~ /3500yl-48g([^a-z0-9_-]|$)/) hp_cpu_3500_descr=1
+        if (tolower(line) ~ /j8697a([^a-z0-9_-]|$)/ && tolower(line) ~ /5406zl([^a-z0-9_-]|$)/) hp_cpu_5406_descr=1
+      }
+      if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.2\.0 = /) {
+        if (line ~ /\.11\.2\.3\.7\.11\.59([^0-9]|$)/) hp_cpu_3500_oid=1
+        if (line ~ /\.11\.2\.3\.7\.11\.50([^0-9]|$)/) hp_cpu_5406_oid=1
+      }
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.138/) || (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && (tolower(line) ~ /j9774a/ || tolower(line) ~ /2530-8g-poep/))) hp_2530_model="HP J9774A 2530-8G-PoEP"
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.104/) || (line !~ /\.1\.0\.8802\./ && tolower(line) ~ /procurve 1810g[[:space:]]*-[[:space:]]*24/)) hp_1810g_model="HP ProCurve 1810G-24"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N4032F([^[:alnum:]_-]|$)/) dell_n4032f_model="N4032F"
@@ -619,6 +629,10 @@ write_generated_yaml_for_walk() {
         avaya_chassis_temp_idx[suffix]=1
         avaya_chassis_temp_n++
       }
+
+      # HP STATISTICS-MIB hpSwitchCpuStat.0 (INTEGER 0..100), returned by
+      # both evidenced HP chassis families. Never infer absent or invalid data.
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.11\.2\.14\.11\.5\.1\.9\.6\.1\.0 = INTEGER:/ && val ~ /^[0-9]+$/ && (val+0)<=100) hp_cpu_scalar_seen=1
 
       # HP 1810-24G v2 J9803A exposes SEMI-MIB software and boot-ROM
       # versions on some firmware. Require actual readable STRING rows;
@@ -1474,6 +1488,14 @@ write_generated_yaml_for_walk() {
               yaml_sensor("1.3.6.1.2.1.99.1.1.1.5." idx, prefix " " ent_name[idx] " Sensor Status Code")
           }
         }
+      }
+
+      # HP J8693A 3500yl / J8697A 5406zl verified STATISTICS-MIB CPU.
+      # Require local sysDescr, exact sysObjectID and returned INTEGER 0..100.
+      hp_cpu_exact=((model == "HP J8693A Switch 3500yl-48G" && hp_cpu_3500_descr && hp_cpu_3500_oid) || (model == "HP J8697A Switch 5406zl" && hp_cpu_5406_descr && hp_cpu_5406_oid))
+      if (hp_cpu_exact && hp_cpu_scalar_seen) {
+        yaml_target_header("Switch Vision " prefix " Chassis CPU", 30)
+        yaml_sensor_meta("1.3.6.1.4.1.11.2.14.11.5.1.9.6.1.0", prefix " CPU Utilization", "", "%", "", "measurement", "mdi:cpu-64-bit")
       }
 
       # HP J8693A 3500yl: standard chassis temperature, validated by ENTITY-SENSOR.
