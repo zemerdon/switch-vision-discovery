@@ -154,7 +154,10 @@ cv_write_capabilities_json "$1" "$2" ""
     yaml_stage = (ROOT / "runtime_src/discovery_yaml_stage.sh").read_text(encoding="utf-8")
     identity_sources = source + "\n" + report_stage + "\n" + yaml_stage
     assert identity_sources.count("line !~ /\\.1\\.0\\.8802\\./ && line !~ /\\.3\\.6\\.1\\.4\\.1\\.9\\.9\\.23\\./ && tolower(line) ~ /j8693a/") == 2
-    assert identity_sources.count("line !~ /\\.1\\.0\\.8802\\./ && line !~ /\\.3\\.6\\.1\\.4\\.1\\.9\\.9\\.23\\./ && line ~ /N2128PX-ON/") == 2
+    assert identity_sources.count("line !~ /\\.1\\.0\\.8802\\./ && line !~ /\\.3\\.6\\.1\\.4\\.1\\.9\\.9\\.23\\./ && line ~ /N2128PX-ON([^[:alnum:]_-]|$)/") == 2
+    assert identity_sources.count("line !~ /\\.1\\.0\\.8802\\./ && line !~ /\\.3\\.6\\.1\\.4\\.1\\.9\\.9\\.23\\./ && line ~ /N4032F([^[:alnum:]_-]|$)/") == 2
+    assert "line ~ /N2128PX-ON/) dell_model" not in identity_sources
+    assert "line ~ /N4032F/) dell_n4032f_model" not in identity_sources
     assert 'if (tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/)' not in identity_sources
     assert 'if (line ~ /N2128PX-ON/) dell_model' not in identity_sources
 

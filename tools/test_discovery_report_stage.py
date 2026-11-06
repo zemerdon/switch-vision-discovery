@@ -12,7 +12,7 @@ JOB = ROOT / "runtime_src/discovery_job.sh"
 STAGE = ROOT / "runtime_src/discovery_report_stage.sh"
 DOCKERFILE = ROOT / "runtime_src/Dockerfile"
 
-EXTRACTED_BODY_SHA256 = "fc1e5505ab65f723be1c4e5573c4e6aaec7c267b517d90c83a0b8f1ebe5ea03a"
+EXTRACTED_BODY_SHA256 = "987c1c2cea1db51ca0c912713babda1cf01ba704fe2a3d7aa191fce90a5f96b1"
 HEADER = """# Switch Vision Discovery report-stage module.
 # Sourced by discovery_job.sh after shared walk/CSV helpers are defined.
 # Keep report/parser behavior shell-native; this module is an extraction boundary.
