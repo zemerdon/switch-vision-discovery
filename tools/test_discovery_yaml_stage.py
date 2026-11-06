@@ -11,7 +11,7 @@ JOB = ROOT / "runtime_src/discovery_job.sh"
 STAGE = ROOT / "runtime_src/discovery_yaml_stage.sh"
 DOCKERFILE = ROOT / "runtime_src/Dockerfile"
 
-EXTRACTED_BODY_SHA256 = "3e80d592eba83199301a991ecf2547c5f9e65f6635e71148ca664e31f938c74a"
+EXTRACTED_BODY_SHA256 = "2e323e7027593b564e9a951c6284dc27727d8aefab36386b934d0b4ba4ea479c"
 HEADER = """# Switch Vision Discovery generated-YAML stage module.
 # Sourced by discovery_job.sh after shared walk/target helpers are defined.
 # Keep generated-YAML behavior shell-native; this module is an extraction boundary.

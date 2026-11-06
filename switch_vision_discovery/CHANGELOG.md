@@ -1,3 +1,9 @@
+## 3.1.22 — Dell N2128PX-ON evidence-backed DNOS chassis telemetry
+
+- Add exact-model, bounded targeted DNOS-SWITCHING-MIB CPU (5/60/300 second) and KByte memory objects plus DNOS-BOXSERVICES-PRIVATE-MIB fan speed/status, PSU presence/state, and chassis temperature/state when confirmed by the current walk.
+- Refuse absent/unpaired temperature and absent fan/PSU rows; leave health state enums as numeric codes without inventing binary device-health semantics. Preserve previously reviewed optical DDMI, physical-port, PoE and VLAN behavior.
+- Add permanent exact-model, wrong-model, invalid/missing-value and optional collection regressions; keep derived capture evidence private and all originals immutable.
+
 ## 3.1.21 — HP 3500yl chassis health and Zyxel model-specific telemetry
 
 - Generate the verified HP J8693A 3500yl chassis temperature from standard ENTITY-SENSOR-MIB only when its type, unit, precision, name and operational state agree. Preserve existing PoE aggregate behavior and do not invent fan speed.

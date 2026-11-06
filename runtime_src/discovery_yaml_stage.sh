@@ -727,6 +727,36 @@ write_generated_yaml_for_walk() {
       if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.19\.1\.2\.[0-9]+ = /) { idx=oid_index(line); dell_optic_vendor_idx[idx]=1 }
       if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.19\.1\.6\.[0-9]+ = /) { idx=oid_index(line); dell_optic_part_idx[idx]=1 }
       if (line ~ /\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.19\.1\.9\.[0-9]+ = /) { idx=oid_index(line); dell_optic_type_idx[idx]=1 }
+
+      # Dell DNOS-SWITCHING-MIB scalar CPU and memory objects. The checked
+      # N2128PX-ON source captures contain genuine percentage and KByte rows.
+      # Keep all other models isolated at generation and reject bad readings.
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.1\.1\.4\.10\.0 = Gauge32:/ && val ~ /^[0-9]+$/ && (val+0) <= 100) { dnos_cpu5=1; dnos_health_rows++ }
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.1\.1\.4\.11\.0 = Gauge32:/ && val ~ /^[0-9]+$/ && (val+0) <= 100) { dnos_cpu60=1; dnos_health_rows++ }
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.1\.1\.4\.12\.0 = Gauge32:/ && val ~ /^[0-9]+$/ && (val+0) <= 100) { dnos_cpu300=1; dnos_health_rows++ }
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.1\.1\.4\.1\.0 = INTEGER:/ && val ~ /^[0-9]+$/ && (val+0) <= 2147483647) { dnos_memfree=1; dnos_health_rows++ }
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.1\.1\.4\.2\.0 = INTEGER:/ && val ~ /^[0-9]+$/ && (val+0) <= 2147483647) { dnos_memavail=1; dnos_health_rows++ }
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.674\.10895\.3000\.1\.2\.110\.1\.0 = INTEGER:/ && val ~ /^[0-9]+$/ && (val+0) >= 2 && (val+0) <= 5) { dnos_globalhealth=1; dnos_health_rows++ }
+
+      # DNOS-BOXSERVICES-PRIVATE-MIB index suffixes are taken from real
+      # returned table rows. A notpresent(1) PSU/fan is not an installed unit.
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.6\.1\.[34]\.[0-9]+(\.[0-9]+)? = INTEGER:/ && val ~ /^[0-9]+$/) {
+        suffix=line;sub(/[[:space:]]*=.*/, "", suffix);sub(/^.*\.43\.1\.6\.1\.[34]\./, "", suffix)
+        if (!(suffix in dnos_fan_seen) && dnos_fan_n < 32) { dnos_fan_seen[suffix]=1;dnos_fan_key[++dnos_fan_n]=suffix }
+        if (line ~ /\.43\.1\.6\.1\.3\./ && (val+0)>=2 && (val+0)<=7) { dnos_fan_state[suffix]=1;dnos_health_rows++ }
+        if (line ~ /\.43\.1\.6\.1\.4\./ && (val+0)>=1 && (val+0)<=30000) { dnos_fan_rpm[suffix]=1;dnos_health_rows++ }
+      }
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.7\.1\.3\.[0-9]+(\.[0-9]+)? = INTEGER:/ && val ~ /^[0-9]+$/ && (val+0)>=2 && (val+0)<=7) {
+        suffix=line;sub(/[[:space:]]*=.*/, "", suffix);sub(/^.*\.43\.1\.7\.1\.3\./, "", suffix)
+        if (!(suffix in dnos_psu_seen) && dnos_psu_n < 32) { dnos_psu_seen[suffix]=1;dnos_psu_key[++dnos_psu_n]=suffix }
+        dnos_psu_state[suffix]=1;dnos_health_rows++
+      }
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.674\.10895\.5000\.2\.6132\.1\.1\.43\.1\.8\.1\.[45]\.[0-9]+(\.[0-9]+)? = INTEGER:/ && val ~ /^-?[0-9]+$/) {
+        suffix=line;sub(/[[:space:]]*=.*/, "", suffix);sub(/^.*\.43\.1\.8\.1\.[45]\./, "", suffix)
+        if (!(suffix in dnos_temp_seen) && dnos_temp_n < 32) { dnos_temp_seen[suffix]=1;dnos_temp_key[++dnos_temp_n]=suffix }
+        if (line ~ /\.43\.1\.8\.1\.4\./ && (val+0)>=1 && (val+0)<=4) { dnos_temp_state[suffix]=1;dnos_health_rows++ }
+        if (line ~ /\.43\.1\.8\.1\.5\./ && (val+0)>=-40 && (val+0)<=125) { dnos_temp_value[suffix]=1;dnos_health_rows++ }
+      }
     }
     END {
       if (mikrotik_model != "") {
@@ -982,6 +1012,39 @@ write_generated_yaml_for_walk() {
         }
       }
       print "# Walk-aware traffic counters: " skipped_hc " missing counter OID(s) skipped; " (legacy_counter_fallbacks + 0) " legacy 32-bit counter fallback(s) used"
+
+      # Verified Dell N2128PX-ON DNOS chassis/system health. This is
+      # independent of optic DDMI, has no fixed physical-unit count and only
+      # emits individually returned, type/range-validated MIB objects.
+      dnos_emit_ready=(dnos_cpu5 || dnos_cpu60 || dnos_cpu300 || dnos_memfree || dnos_memavail || dnos_globalhealth)
+      for (i=1; i<=dnos_fan_n; i++) if (dnos_fan_key[i] in dnos_fan_state) dnos_emit_ready=1
+      for (i=1; i<=dnos_psu_n; i++) if (dnos_psu_key[i] in dnos_psu_state) dnos_emit_ready=1
+      for (i=1; i<=dnos_temp_n; i++) if ((dnos_temp_key[i] in dnos_temp_value) && (dnos_temp_key[i] in dnos_temp_state)) dnos_emit_ready=1
+      if (model == "N2128PX-ON" && dnos_emit_ready) {
+        yaml_target_header("Switch Vision " prefix " DNOS System Health", 30)
+        dnos_switchcpu="1.3.6.1.4.1.674.10895.5000.2.6132.1.1.1.1.4."
+        dnos_box="1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1."
+        if (dnos_cpu5) yaml_sensor_meta(dnos_switchcpu "10.0", prefix " CPU 5s", "", "%", "", "measurement", "mdi:cpu-64-bit")
+        if (dnos_cpu60) yaml_sensor_meta(dnos_switchcpu "11.0", prefix " CPU 60s", "", "%", "", "measurement", "mdi:cpu-64-bit")
+        if (dnos_cpu300) yaml_sensor_meta(dnos_switchcpu "12.0", prefix " CPU 300s", "", "%", "", "measurement", "mdi:cpu-64-bit")
+        if (dnos_memfree) yaml_sensor_meta(dnos_switchcpu "1.0", prefix " Memory Free", "value / 1024", "MiB", "", "measurement", "mdi:memory")
+        if (dnos_memavail) yaml_sensor_meta(dnos_switchcpu "2.0", prefix " Memory Available", "value / 1024", "MiB", "", "measurement", "mdi:memory")
+        if (dnos_globalhealth) yaml_sensor("1.3.6.1.4.1.674.10895.3000.1.2.110.1.0", prefix " Overall Health Code")
+        for (i=1; i<=dnos_fan_n; i++) {
+          suffix=dnos_fan_key[i]
+          if (suffix in dnos_fan_state) yaml_sensor(dnos_box "6.1.3." suffix, prefix " Fan " suffix " State Code")
+          if ((suffix in dnos_fan_rpm) && (suffix in dnos_fan_state)) yaml_sensor_meta(dnos_box "6.1.4." suffix, prefix " Fan " suffix " RPM", "", "rpm", "", "measurement", "mdi:fan")
+        }
+        for (i=1; i<=dnos_psu_n; i++) {
+          suffix=dnos_psu_key[i]
+          if (suffix in dnos_psu_state) yaml_sensor(dnos_box "7.1.3." suffix, prefix " PSU Entry " suffix " State Code")
+        }
+        for (i=1; i<=dnos_temp_n; i++) {
+          suffix=dnos_temp_key[i]
+          if ((suffix in dnos_temp_value) && (suffix in dnos_temp_state)) yaml_sensor_meta(dnos_box "8.1.5." suffix, prefix " Chassis Temperature " suffix, "", "°C", "temperature", "measurement", "mdi:thermometer")
+          if ((suffix in dnos_temp_value) && (suffix in dnos_temp_state)) yaml_sensor(dnos_box "8.1.4." suffix, prefix " Temperature " suffix " State Code")
+        }
+      }
 
       if (model == "N2128PX-ON" && dell_optic_max_row > 0) {
         yaml_target_header("Switch Vision " prefix " Optical diagnostics", 30)
