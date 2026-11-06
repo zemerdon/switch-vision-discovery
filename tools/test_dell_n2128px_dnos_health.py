@@ -114,8 +114,8 @@ def test_absent_and_unpaired_hardware_are_suppressed():
 
 def test_bounded_targeted_collection():
     script=(RUNTIME/"discovery_job.sh").read_text()
-    start=script.index('DELL_N2128_DNOS_HEALTH_OIDS="')
-    end=script.index('"\n    echo "Running Dell N2128PX-ON DNOS health supplemental walks"',start)
+    start=script.index('DELL_DNOS_HEALTH_OIDS="')
+    end=script.index('"\n    echo "Running Dell exact-model DNOS health supplemental walks"',start)
     names=[x for x in script[start:end].splitlines()[1:] if x.strip()]
     assert len(names)==9, names
     assert len(set(names))==len(names)
@@ -124,7 +124,7 @@ def test_bounded_targeted_collection():
                x == "1.3.6.1.4.1.674.10895.3000.1.2.110.1" for x in names)
     assert not any(x in {"1.3.6.1.4.1.674",
                           "1.3.6.1.4.1.674.10895.5000"} for x in names)
-    assert 'grep -Eqi \'N2128PX-ON\'' in script
+    assert "N2128PX-ON([^[:alnum:]_-]|$)|N4032F([^[:alnum:]_-]|$)" in script
     assert 'Dell N2128PX-ON optical supplemental walks' in script
 
 if __name__=="__main__":

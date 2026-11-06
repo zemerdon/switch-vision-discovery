@@ -423,8 +423,8 @@ write_generated_yaml_for_walk() {
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && tolower(line) ~ /j8693a/ && tolower(line) ~ /3500yl-48g/) hp_3500yl_model="HP J8693A Switch 3500yl-48G"
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.138/) || (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && (tolower(line) ~ /j9774a/ || tolower(line) ~ /2530-8g-poep/))) hp_2530_model="HP J9774A 2530-8G-PoEP"
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.104/) || (line !~ /\.1\.0\.8802\./ && tolower(line) ~ /procurve 1810g[[:space:]]*-[[:space:]]*24/)) hp_1810g_model="HP ProCurve 1810G-24"
-      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N4032F/) dell_n4032f_model="N4032F"
-      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON/) dell_model="N2128PX-ON"
+      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N4032F([^[:alnum:]_-]|$)/) dell_n4032f_model="N4032F"
+      if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON([^[:alnum:]_-]|$)/) dell_model="N2128PX-ON"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /3524GT-PWR\+/) avaya_model="3524GT-PWR+"
       if (line ~ /WS-C3850-12XS/) c3850_model="WS-C3850-12XS"
       if (line ~ /WS-C3750-48P/) c3750_model="WS-C3750-48P"
@@ -713,6 +713,18 @@ write_generated_yaml_for_walk() {
           identity_serial_idx[idx]=1
         }
       }
+      # DNOS telemetry requires a local system description AND corroborating
+      # exact sysObjectID. A neighbour name or a shared Dell family alone
+      # must never cause a chassis-health entity to be mapped.
+      if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.1\.0 = /) {
+        if (line ~ /N2128PX-ON([^[:alnum:]_-]|$)/) dnos_n2128_descr=1
+        if (line ~ /N4032F([^[:alnum:]_-]|$)/) dnos_n4032_descr=1
+      }
+      if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.2\.0 = /) {
+        if (line ~ /\.674\.10895\.3077([^0-9]|$)/) dnos_n2128_oid=1
+        if (line ~ /\.674\.10895\.3044([^0-9]|$)/) dnos_n4032_oid=1
+      }
+
       # Dell N2128PX-ON optical diagnostics observed in verified field evidence.
       # The table row suffix is the same IF-MIB index used by the two Te uplinks
       # in both current full walks, allowing the diagnostics to bind directly
@@ -1013,14 +1025,15 @@ write_generated_yaml_for_walk() {
       }
       print "# Walk-aware traffic counters: " skipped_hc " missing counter OID(s) skipped; " (legacy_counter_fallbacks + 0) " legacy 32-bit counter fallback(s) used"
 
-      # Verified Dell N2128PX-ON DNOS chassis/system health. This is
+      # Verified Dell N2128PX-ON / N4032F DNOS chassis/system health. This is
       # independent of optic DDMI, has no fixed physical-unit count and only
       # emits individually returned, type/range-validated MIB objects.
       dnos_emit_ready=(dnos_cpu5 || dnos_cpu60 || dnos_cpu300 || dnos_memfree || dnos_memavail || dnos_globalhealth)
       for (i=1; i<=dnos_fan_n; i++) if (dnos_fan_key[i] in dnos_fan_state) dnos_emit_ready=1
       for (i=1; i<=dnos_psu_n; i++) if (dnos_psu_key[i] in dnos_psu_state) dnos_emit_ready=1
       for (i=1; i<=dnos_temp_n; i++) if ((dnos_temp_key[i] in dnos_temp_value) && (dnos_temp_key[i] in dnos_temp_state)) dnos_emit_ready=1
-      if (model == "N2128PX-ON" && dnos_emit_ready) {
+      dnos_exact_health_model=((model == "N2128PX-ON" && dnos_n2128_descr && dnos_n2128_oid) || (model == "N4032F" && dnos_n4032_descr && dnos_n4032_oid))
+      if (dnos_exact_health_model && dnos_emit_ready) {
         yaml_target_header("Switch Vision " prefix " DNOS System Health", 30)
         dnos_switchcpu="1.3.6.1.4.1.674.10895.5000.2.6132.1.1.1.1.4."
         dnos_box="1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1."

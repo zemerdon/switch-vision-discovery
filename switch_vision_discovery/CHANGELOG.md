@@ -1,3 +1,8 @@
+## 3.1.23 — Dell N4032F chassis telemetry
+
+- Collect and generate verified DNOS system-health telemetry for the Dell N4032F: CPU utilization, free/available memory, fan speed and state, power-supply state, and individual chassis temperature/status rows. Preserve its 24 SFP+ ports and only present optional 40G QSFP module ports.
+- Require the exact model description and corresponding system object identifier before generating DNOS health entities on either the N4032F or N2128PX-ON; exclude missing/uninstalled components and wrong-model sensor claims. Keep Dell N2128PX-ON optical diagnostics exclusive to that model.
+
 ## 3.1.22 — Dell N2128PX-ON evidence-backed DNOS chassis telemetry
 
 - Add exact-model, bounded targeted DNOS-SWITCHING-MIB CPU (5/60/300 second) and KByte memory objects plus DNOS-BOXSERVICES-PRIVATE-MIB fan speed/status, PSU presence/state, and chassis temperature/state when confirmed by the current walk.

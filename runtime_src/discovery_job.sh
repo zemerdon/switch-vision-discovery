@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.1.22"
+SWITCH_VISION_DISCOVERY_VERSION="3.1.23"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -1379,7 +1379,7 @@ $full_vendor_root
   # table that is not part of the standards-based targeted walk set. Full mode
   # already walks from root OID 1; targeted mode explicitly adds only the two
   # reviewed DDMI/identity subtrees proven by current hardware evidence.
-  if [ "$LIVE_SNMPWALK_MODE" != "full" ] && grep -Eqi 'N2128PX-ON' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ] && grep -Eqi 'N2128PX-ON([^[:alnum:]_-]|$)' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
     DELL_N2128_OPTICAL_OIDS="
 1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.18
 1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.19
@@ -1398,12 +1398,15 @@ $full_vendor_root
         echo "INFO: Dell N2128PX-ON optical OID unavailable: $oid" >> "$LIVE_LOG_PATH"
       fi
     done
+  fi
 
+  # Only the two individually verified Dell models share these bounded health tables.
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ] && grep -Eqi 'N2128PX-ON([^[:alnum:]_-]|$)|N4032F([^[:alnum:]_-]|$)' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
     # DNOS-SWITCHING-MIB and DNOS-BOXSERVICES-PRIVATE-MIB. The verified
-    # N2128PX-ON full captures expose CPU, free/available memory, chassis
+    # N2128PX-ON and N4032F full captures establish CPU, memory, chassis
     # fan/PSU/temperature, and a global health code. Keep scalar/table polls
     # bounded and model-specific; other Dell models remain unchanged.
-    DELL_N2128_DNOS_HEALTH_OIDS="
+    DELL_DNOS_HEALTH_OIDS="
 1.3.6.1.4.1.674.10895.5000.2.6132.1.1.1.1.4.1
 1.3.6.1.4.1.674.10895.5000.2.6132.1.1.1.1.4.2
 1.3.6.1.4.1.674.10895.5000.2.6132.1.1.1.1.4.10
@@ -1414,18 +1417,18 @@ $full_vendor_root
 1.3.6.1.4.1.674.10895.5000.2.6132.1.1.43.1.8
 1.3.6.1.4.1.674.10895.3000.1.2.110.1
 "
-    echo "Running Dell N2128PX-ON DNOS health supplemental walks" >> "$LIVE_LOG_PATH"
-    for oid in $DELL_N2128_DNOS_HEALTH_OIDS; do
+    echo "Running Dell exact-model DNOS health supplemental walks" >> "$LIVE_LOG_PATH"
+    for oid in $DELL_DNOS_HEALTH_OIDS; do
       current_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP $oid"
       echo "Running supplemental: $current_command" >> "$LIVE_LOG_PATH"
       {
         echo ""
-        echo "# --- Dell N2128PX-ON DNOS health supplemental: $oid ---"
+        echo "# --- Dell exact-model DNOS health supplemental: $oid ---"
       } >> "$LIVE_OUTPUT_PATH"
       if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
         echo "OK supplemental: $oid" >> "$LIVE_LOG_PATH"
       else
-        echo "INFO: Dell N2128PX-ON DNOS health OID unavailable: $oid" >> "$LIVE_LOG_PATH"
+        echo "INFO: Dell exact-model DNOS health OID unavailable: $oid" >> "$LIVE_LOG_PATH"
       fi
     done
   fi
