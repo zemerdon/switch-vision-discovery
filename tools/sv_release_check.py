@@ -32,6 +32,7 @@ PERMANENT_CHECKS = (
     "tools/test_tplink_walk_collection_contract.py",
     "tools/test_dell_n4032f.py",
     "tools/test_dell_n2128px_optics.py",
+    "tools/test_dell_powerconnect_5548.py",
     "tools/test_dell_n2128px_dnos_health.py",
     "tools/test_dell_n4032f_dnos_health.py",
     "tools/test_targeted_evidence_supplements.py",
