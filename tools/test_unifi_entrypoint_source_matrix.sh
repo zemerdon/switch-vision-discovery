@@ -39,7 +39,7 @@ make_dell_walk() {
   path=$1
   {
     echo '.1.3.6.1.2.1.1.1.0 = STRING: "Dell Networking PowerConnect 5548P"'
-    echo '.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.674.10895.3057'
+    echo '.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.674.10895.3033'
     i=1
     while [ "$i" -le 48 ]; do
       printf '.1.3.6.1.2.1.31.1.1.1.1.%s = STRING: "gi1/0/%s"\n' "$i" "$i"

@@ -1,3 +1,9 @@
+## 3.1.26 — Dell 5548 identity and bounded chassis telemetry
+
+- Recognise the non-PoE PowerConnect 5548 from its exact Dell OID, preserving 48 RJ45 and two SFP+ ports, and fix the incorrect 5548P fixture OID.
+- Expose observed read-only CPU 1s/60s/300s and chassis temperature only when validated; retain N2128PX-ON TX/RX dBm and SR/LR mappings without inventing measurements for unsupported optics.
+- Reuse unchanged neutral stock artwork and saved Calibration. No SNMP SET or unrelated device changes.
+
 ## 3.1.25 — Q-BRIDGE current VLAN membership collection
 
 - Collect only the two RFC 4363 read-only current VLAN membership columns (egress and untagged) during targeted SNMP scans, using the already reviewed diagnostics/parser contract. Historical full/targeted evidence establishes missing live VLAN membership on multiple hardware families. Devices without Q-BRIDGE support remain fail-soft.

@@ -83,12 +83,29 @@ cv_known_vendor_identity() {
   fi
 
   if [ "$vendor_id" = "dell" ]; then
-    case "${CV_ID_SYS_DESCR:-}" in
-      *PowerConnect*5548P*|*POWERCONNECT*5548P*)
+    # Product sysObjectID is authoritative: 5548 is non-PoE; 5548P is PoE.
+    case "${CV_ID_SYS_OBJECT_ID:-}" in
+      1.3.6.1.4.1.674.10895.3031)
+        CV_ID_FAMILY="PowerConnect 5500"
+        CV_ID_MODEL_HINT="PowerConnect 5548"
+        CV_ID_PRODUCT_MATCH="powerconnect-5548-verified-sysobjectid"
+        CV_ID_SUPPORT_STATUS="experimental"
+        ;;
+      1.3.6.1.4.1.674.10895.3033)
         CV_ID_FAMILY="PowerConnect 5500"
         CV_ID_MODEL_HINT="PowerConnect 5548P"
-        CV_ID_PRODUCT_MATCH="powerconnect-5548p-local-sysdescr"
+        CV_ID_PRODUCT_MATCH="powerconnect-5548p-verified-sysobjectid"
         CV_ID_SUPPORT_STATUS="experimental"
+        ;;
+      "")
+        case "${CV_ID_SYS_DESCR:-}" in
+          *PowerConnect*5548P*|*POWERCONNECT*5548P*)
+            CV_ID_FAMILY="PowerConnect 5500"
+            CV_ID_MODEL_HINT="PowerConnect 5548P"
+            CV_ID_PRODUCT_MATCH="powerconnect-5548p-descr-only"
+            CV_ID_SUPPORT_STATUS="detected"
+            ;;
+        esac
         ;;
     esac
   fi

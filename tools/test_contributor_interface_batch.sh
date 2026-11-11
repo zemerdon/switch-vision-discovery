@@ -40,12 +40,21 @@ set --
 i=1
 while [ "$i" -le 48 ]; do set -- "$@" "gi1/0/$i"; i=$((i + 1)); done
 set -- "$@" "te1/0/1" "te1/0/2"
-make_ifname_walk "$TMP/dell.txt" "Dell Networking PowerConnect 5548P" "1.3.6.1.4.1.674.10895.3057" "$@"
+make_ifname_walk "$TMP/dell.txt" "Dell Networking PowerConnect 5548P" "1.3.6.1.4.1.674.10895.3033" "$@"
 cv_detect_vendor_identity "$TMP/dell.txt"
 [ "$CV_ID_VENDOR" = "dell" ]
 [ "$CV_ID_MODEL_HINT" = "PowerConnect 5548P" ]
 cv_write_capabilities_json "$TMP/dell.txt" "$TMP/dell.json" ""
 jq -e '(.device.model_text == "PowerConnect 5548P") and (.summary.physical_count == 50) and (.summary.rj45_count == 48) and (.summary.sfp_plus_count == 2)' "$TMP/dell.json" >/dev/null
+
+# Real Dell 5548 non-PoE: generic sysDescr and exact product OID .3031.
+# Reject a conflicting manually selected 5548P contract without inventing PoE.
+make_ifname_walk "$TMP/dell5548.txt" "Dell Technologies 48G Ethernet Switch" "1.3.6.1.4.1.674.10895.3031" "$@"
+printf '.1.3.6.1.2.1.47.1.1.1.1.13.1 = STRING: "PowerConnect 5548"\n' >> "$TMP/dell5548.txt"
+cv_detect_vendor_identity "$TMP/dell5548.txt"
+[ "$CV_ID_MODEL_HINT" = "PowerConnect 5548" ]
+SWITCH_VISION_MODEL_OVERRIDE="PowerConnect 5548P" cv_write_capabilities_json "$TMP/dell5548.txt" "$TMP/dell5548.json" ""
+jq -e '(.device.model_text == "PowerConnect 5548") and (.device.model_override == null) and (.summary.physical_count == 50) and (.summary.rj45_count == 48) and (.summary.sfp_plus_count == 2)' "$TMP/dell5548.json" >/dev/null
 
 # Catalyst 3750X-48P two-member stack. Gi module aliases 1/1/1-2 and 2/1/1-2
 # are suppressed when corresponding Te names exist; Gi */1/3-4 remain 1G SFP.

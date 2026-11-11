@@ -1419,6 +1419,26 @@ profiles:
     - The same capture confirms sfp-sfpplus1 through sfp-sfpplus4 as four physical SFP+ cages; live optical-link validation remains pending.
     - bridge and lo are explicitly non-physical and must never be rendered as front-panel ports.
     - PoE and environmental telemetry remain Experimental until the new narrow supplemental OIDs are returned and field-validated.
+  dell-powerconnect-5548-48c-2x10g:
+    status: experimental
+    vendor: Dell
+    family: PowerConnect 5500
+    model_patterns:
+    - PowerConnect 5548
+    layout:
+      members: 1
+      rj45_ports: 48
+      sfp_1g_ports: 0
+      sfp_10g_ports: 2
+    interface_patterns:
+      rj45:
+      - gi1/0/{port}
+      sfp_1g: []
+      sfp_10g:
+      - te1/0/{port}
+    notes:
+    - Exact Dell sysObjectID .674.10895.3031 and hardware walk prove a non-PoE 5548 with 48 RJ45 and two 10G SFP+ ports.
+    - Optical DDMI remains unknown on this model; no inferred PoE or optical sensors.
   dell-powerconnect-5548p-48p-2x10g:
     status: experimental
     vendor: Dell

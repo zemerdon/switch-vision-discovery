@@ -53,6 +53,14 @@ cv_cap_set_front_panel_profile() {
   case "$CV_CAP_MODEL_OVERRIDE" in
     ""|auto|Auto-detect|AUTO) CV_CAP_MODEL_OVERRIDE="" ;;
   esac
+  # A saved manual model choice must not override the exact, contradictory
+  # 5548/5548P hardware identity and turn a non-PoE switch into a PoE one.
+  # The saved selection is not changed; only the generated contract is safe.
+  case "$CV_CAP_DETECTED_MODEL_TEXT:$CV_CAP_MODEL_OVERRIDE" in
+    "PowerConnect 5548:PowerConnect 5548P"|"PowerConnect 5548P:PowerConnect 5548")
+      CV_CAP_MODEL_OVERRIDE=""
+      ;;
+  esac
   CV_CAP_MODEL_TEXT=${CV_CAP_MODEL_OVERRIDE:-$CV_CAP_DETECTED_MODEL_TEXT}
 
   case "$CV_CAP_MODEL_TEXT" in

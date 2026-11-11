@@ -1425,6 +1425,27 @@ $full_vendor_root
     done
   fi
 
+  # A non-PoE 5548 may return generic sysDescr. Query exact sysObjectID
+  # before bounded read-only RADLAN CPU/temperature supplemental walks.
+  if [ "$LIVE_SNMPWALK_MODE" != "full" ] && grep -Eqi 'Dell|PowerConnect' "$SNMP_PRECHECK_PATH" 2>/dev/null; then
+    snmpget -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" 1.3.6.1.2.1.1.2.0 >> "$SNMP_PRECHECK_PATH" 2>> "$LIVE_LOG_PATH" || true
+    if grep -Eq '1\.3\.6\.1\.4\.1\.674\.10895\.3031([^0-9]|$)' "$SNMP_PRECHECK_PATH"; then
+      DELL_5548_CHASSIS_OIDS="
+1.3.6.1.4.1.89.1.7
+1.3.6.1.4.1.89.1.8
+1.3.6.1.4.1.89.1.9
+1.3.6.1.4.1.89.53.15.1.9
+"
+      echo "Running Dell PowerConnect 5548 read-only chassis telemetry" >> "$LIVE_LOG_PATH"
+      for oid in $DELL_5548_CHASSIS_OIDS; do
+        current_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP $oid"
+        echo "Running supplemental: $current_command" >> "$LIVE_LOG_PATH"
+        { echo ""; echo "# --- Dell 5548 chassis supplemental: $oid ---"; } >> "$LIVE_OUTPUT_PATH"
+        snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" "$oid" >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH" || echo "INFO: Dell 5548 chassis OID unavailable: $oid" >> "$LIVE_LOG_PATH"
+      done
+    fi
+  fi
+
   # Dell N2128PX-ON transceiver diagnostics live under a narrow enterprise
   # table that is not part of the standards-based targeted walk set. Full mode
   # already walks from root OID 1; targeted mode explicitly adds only the two

@@ -14,7 +14,7 @@ make_dell_walk() {
   ports=$2
   {
     echo '.1.3.6.1.2.1.1.1.0 = STRING: "Dell Networking PowerConnect 5548P"'
-    echo '.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.674.10895.3057'
+    echo '.1.3.6.1.2.1.1.2.0 = OID: .1.3.6.1.4.1.674.10895.3033'
     idx=1
     port=1
     while [ "$port" -le "$ports" ]; do

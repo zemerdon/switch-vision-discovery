@@ -147,9 +147,9 @@ cv_interface_class_for_name() {
     return 0
   fi
 
-  # Dell PowerConnect 5548P contribution: 48 fixed copper ports plus two
+  # Dell PowerConnect 5548 / 5548P:  48 fixed copper ports plus two
   # 10G SFP+ uplinks. Its IF-MIB uses lowercase gi1/0/N and te1/0/N names.
-  if [ "${CV_CAP_MODEL_TEXT:-}" = "PowerConnect 5548P" ]; then
+  if [ "${CV_CAP_MODEL_TEXT:-}" = "PowerConnect 5548P" ] || [ "${CV_CAP_MODEL_TEXT:-}" = "PowerConnect 5548" ]; then
     case "$name" in
       gi1/0/*|Gi1/0/*|GigabitEthernet1/0/*)
         port_number=${name##*/}

@@ -373,7 +373,7 @@ fi
 
 # PowerConnect 5548P: 48 lowercase Gi access ports + two lowercase Te uplinks.
 dell="$TMP/dell-5548p.txt"
-make_walk "$dell" 'Dell Networking PowerConnect 5548P' '1.3.6.1.4.1.674.10895.3057'
+make_walk "$dell" 'Dell Networking PowerConnect 5548P' '1.3.6.1.4.1.674.10895.3033'
 idx=1
 i=1
 while [ "$i" -le 48 ]; do append_iface "$dell" "$idx" "gi1/0/$i"; idx=$((idx + 1)); i=$((i + 1)); done

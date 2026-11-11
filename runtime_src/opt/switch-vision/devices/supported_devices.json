@@ -3566,6 +3566,64 @@
     {
       "vendor": "Dell",
       "family": "PowerConnect 5500",
+      "model": "PowerConnect 5548",
+      "status": "experimental",
+      "confirmed_since": "3.1.26",
+      "last_validated_version": "3.1.26",
+      "evidence": "exact_hardware_oid_and_real_snmp_walk",
+      "ports": {
+        "rj45": 48,
+        "poe": false,
+        "uplinks": 2,
+        "uplink_type": "2x 10G SFP+",
+        "gigabit_sfp": 0,
+        "ten_gigabit_sfp_plus": 2
+      },
+      "stack_support": false,
+      "discovery_support": true,
+      "dashboard_support": true,
+      "mapping_profile": "dell-powerconnect-5548-48c-2x10g",
+      "calibration_profile": "stock_48rj45_2sfp_compact",
+      "default_faceplate": "faceplates/48rj45-2sfp-compact.png",
+      "optional_faceplates": [
+        "faceplates/48rj45-2sfp.png"
+      ],
+      "tested_firmware": [],
+      "contributor": {
+        "display_name": "community contributor",
+        "public_credit": false
+      },
+      "notes": [
+        "Exact Dell sysObjectID 1.3.6.1.4.1.674.10895.3031 identifies non-PoE PowerConnect 5548; the distinct 5548P is .3033.",
+        "Verified real IF-MIB and ENTITY-MIB expose 48 copper and two 10G SFP+ ports.",
+        "Optical DOM is not observed. Read-only CPU and chassis temperature are supported only when values are captured.",
+        "Existing generic 48-RJ45/2-SFP+ stock faceplate is reused unchanged; Calibration and physical geometry are not modified."
+      ],
+      "validation": {
+        "exact_model_detection": "verified_local_sysobjectid",
+        "rj45_mapping": "observed_real_hardware",
+        "poe": "not_applicable",
+        "system_sensors": "validated_cpu_and_temperature",
+        "uplinks": "observed_real_hardware",
+        "stack": "not_applicable",
+        "optical_dom": "not_observed"
+      },
+      "visuals": {
+        "status": "experimental",
+        "recommended_faceplate": "faceplates/48rj45-2sfp-compact.png",
+        "optional_faceplates": [
+          "faceplates/48rj45-2sfp.png"
+        ],
+        "calibration_profile": "stock_48rj45_2sfp_compact",
+        "canvas": {
+          "width": 2048,
+          "height": 448
+        }
+      }
+    },
+    {
+      "vendor": "Dell",
+      "family": "PowerConnect 5500",
       "model": "PowerConnect 5548P",
       "status": "experimental",
       "confirmed_since": "2.3.24",

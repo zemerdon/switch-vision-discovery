@@ -434,6 +434,11 @@ write_generated_yaml_for_walk() {
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.138/) || (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && (tolower(line) ~ /j9774a/ || tolower(line) ~ /2530-8g-poep/))) hp_2530_model="HP J9774A 2530-8G-PoEP"
       if ((line ~ /1\.3\.6\.1\.4\.1\.11\.2\.3\.7\.11\.104/) || (line !~ /\.1\.0\.8802\./ && tolower(line) ~ /procurve 1810g[[:space:]]*-[[:space:]]*24/)) hp_1810g_model="HP ProCurve 1810G-24"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N4032F([^[:alnum:]_-]|$)/) dell_n4032f_model="N4032F"
+      # Exact local OID distinguishes non-PoE 5548 and PoE 5548P.
+      if (line ~ /\.1\.3\.6\.1\.2\.1\.1\.2\.0 = /) {
+        if (line ~ /\.674\.10895\.3031([^0-9]|$)/) { dell_5548_model="PowerConnect 5548"; dell_5548_oid=1 }
+        if (line ~ /\.674\.10895\.3033([^0-9]|$)/) dell_5548p_model="PowerConnect 5548P"
+      }
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /N2128PX-ON([^[:alnum:]_-]|$)/) dell_model="N2128PX-ON"
       if (line !~ /\.1\.0\.8802\./ && line !~ /\.3\.6\.1\.4\.1\.9\.9\.23\./ && line ~ /3524GT-PWR\+/) avaya_model="3524GT-PWR+"
       if (line ~ /WS-C3850-12XS/) c3850_model="WS-C3850-12XS"
@@ -739,6 +744,11 @@ write_generated_yaml_for_walk() {
         if (line ~ /\.674\.10895\.3044([^0-9]|$)/) dnos_n4032_oid=1
       }
 
+      # RADLAN CPU 101 means unmeasured; suppress invalid readings.
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.89\.1\.7\.0 = INTEGER:/ && val ~ /^[0-9]+$/ && (val+0) <= 100) dell_5548_cpu1=1
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.89\.1\.8\.0 = INTEGER:/ && val ~ /^[0-9]+$/ && (val+0) <= 100) dell_5548_cpu60=1
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.89\.1\.9\.0 = INTEGER:/ && val ~ /^[0-9]+$/ && (val+0) <= 100) dell_5548_cpu300=1
+      if (line ~ /\.1\.3\.6\.1\.4\.1\.89\.53\.15\.1\.9\.1 = INTEGER:/ && val ~ /^-?[0-9]+$/ && (val+0) >= -40 && (val+0) <= 125) dell_5548_temp=1
       # Dell N2128PX-ON optical diagnostics observed in verified field evidence.
       # The table row suffix is the same IF-MIB index used by the two Te uplinks
       # in both current full walks, allowing the diagnostics to bind directly
@@ -849,6 +859,8 @@ write_generated_yaml_for_walk() {
         model = dell_model
         manufacturer = "Dell"
       }
+      else if (dell_5548_model != "") { model = dell_5548_model; manufacturer = "Dell" }
+      else if (dell_5548p_model != "") { model = dell_5548p_model; manufacturer = "Dell" }
       else if (sirivision_model != "") {
         model = sirivision_model
         manufacturer = "Sirivision"
@@ -1071,6 +1083,15 @@ write_generated_yaml_for_walk() {
           if ((suffix in dnos_temp_value) && (suffix in dnos_temp_state)) yaml_sensor_meta(dnos_box "8.1.5." suffix, prefix " Chassis Temperature " suffix, "", "°C", "temperature", "measurement", "mdi:thermometer")
           if ((suffix in dnos_temp_value) && (suffix in dnos_temp_state)) yaml_sensor(dnos_box "8.1.4." suffix, prefix " Temperature " suffix " State Code")
         }
+      }
+
+      # PowerConnect 5548 exact-model read-only chassis sensors only.
+      if (model == "PowerConnect 5548" && dell_5548_oid && (dell_5548_cpu1 || dell_5548_cpu60 || dell_5548_cpu300 || dell_5548_temp)) {
+        yaml_target_header("Switch Vision " prefix " PowerConnect 5548 Chassis", 30)
+        if (dell_5548_cpu1) yaml_sensor_meta("1.3.6.1.4.1.89.1.7.0", prefix " CPU 1s", "", "%", "", "measurement", "mdi:cpu-64-bit")
+        if (dell_5548_cpu60) yaml_sensor_meta("1.3.6.1.4.1.89.1.8.0", prefix " CPU 60s", "", "%", "", "measurement", "mdi:cpu-64-bit")
+        if (dell_5548_cpu300) yaml_sensor_meta("1.3.6.1.4.1.89.1.9.0", prefix " CPU 300s", "", "%", "", "measurement", "mdi:cpu-64-bit")
+        if (dell_5548_temp) yaml_sensor_meta("1.3.6.1.4.1.89.53.15.1.9.1", prefix " Chassis Temperature", "", "°C", "temperature", "measurement", "mdi:thermometer")
       }
 
       if (model == "N2128PX-ON" && dell_optic_max_row > 0) {
