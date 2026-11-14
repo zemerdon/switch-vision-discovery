@@ -302,7 +302,7 @@ def _discovery_ui_preferences() -> dict[str, Any]:
 
 
 def _hub_motd_text() -> str:
-    """Return the bounded operator notice rendered in the Hub home view."""
+    """Return the bounded operator notice retained for future Hub use."""
     raw = os.environ.get(HUB_MOTD_ENV_VAR, "")
     value = " ".join(str(raw).split())
     if not value:
@@ -333,6 +333,8 @@ def _page_with_ui_preferences(version: str | None = None) -> str:
         ),
         1,
     )
+    # The current frontend omits this placeholder; preserve the safe rendering
+    # hook so a future opt-in MOTD needs no backend reconstruction.
     return page.replace("__SV_HUB_MOTD__", html.escape(_hub_motd_text()), 1)
 
 DISCOVERY_EXPORT_FORMAT = "switch-vision-discovery-config-v2"

@@ -48,47 +48,55 @@ def test_motd_default_and_bounded_normalisation() -> None:
         assert len(hub._hub_motd_text()) == hub.HUB_MOTD_MAX_CHARS
 
 
-def test_motd_is_html_escaped_before_rendering() -> None:
+def test_motd_backend_is_preserved_but_not_displayed() -> None:
     with motd_env("<b>Notice</b> & check status"):
+        assert hub._hub_motd_text() == "<b>Notice</b> & check status"
         page = hub._page_with_ui_preferences()
-    assert "<b>Notice</b>" not in page
-    assert "&lt;b&gt;Notice&lt;/b&gt; &amp; check status" in page
     assert "__SV_HUB_MOTD__" not in page
+    assert "<b>Notice</b>" not in page
+    assert "&lt;b&gt;Notice&lt;/b&gt; &amp; check status" not in page
+    # Reintroducing the template placeholder must still render safely.
+    original_page = hub._PAGE
+    try:
+        hub._PAGE = original_page.replace(
+            '<div class="nav-grid">',
+            '<p>__SV_HUB_MOTD__</p><div class="nav-grid">',
+            1,
+        )
+        with motd_env("<b>Notice</b> & check status"):
+            restored_page = hub._page_with_ui_preferences()
+        assert "&lt;b&gt;Notice&lt;/b&gt; &amp; check status" in restored_page
+        assert "<b>Notice</b>" not in restored_page
+    finally:
+        hub._PAGE = original_page
 
 
-def test_motd_home_layout_accessibility_and_persistence_contract() -> None:
+def test_motd_home_ui_is_fully_removed() -> None:
     page = hub._PAGE
     home = page.index('<section id="homeCard"')
-    motd = page.index('id="hubMotd"')
-    nav = page.index('<div class="nav-grid">', motd)
-    assert home < motd < nav
-
-    assert 'role="region" aria-labelledby="hubMotdTitle"' in page
-    assert 'id="hubMotdToggle"' in page
-    assert 'type="button" data-action="toggle-motd-visibility"' in page
-    assert 'aria-expanded="true"' in page
-    assert 'aria-controls="hubMotdBody"' in page
-    assert 'id="hubMotdBody"' in page
-    assert 'id="hubMotdMessage">__SV_HUB_MOTD__' in page
-
-    assert "switch-vision-hub-motd-visibility-v1" in page
-    assert "localStorage.getItem(MOTD_VISIBILITY_STORAGE_KEY)" in page
-    assert "localStorage.setItem(MOTD_VISIBILITY_STORAGE_KEY,shown?'shown':'hidden')" in page
-    assert "body.hidden=!shown" in page
-    assert "button.setAttribute('aria-expanded',String(shown))" in page
-    assert "button.textContent=shown?'Hide':'Show'" in page
-    assert "$('hubMotdToggle').addEventListener('click',toggleHubMotdVisibility)" in page
-    assert "initHubMotdVisibility()" in page
-
-    css = page[page.index('.hub-motd{'):page.index('#creditsCard{')]
-    assert "position:fixed" not in css
-    assert "position:sticky" not in css
+    nav = page.index('<div class="nav-grid">', home)
+    assert home < nav
+    for removed in (
+        'id="hubMotd"',
+        'id="hubMotdToggle"',
+        'id="hubMotdBody"',
+        'id="hubMotdMessage"',
+        "Message of the Day",
+        "__SV_HUB_MOTD__",
+        ".hub-motd{",
+        "MOTD_VISIBILITY_STORAGE_KEY",
+        "applyHubMotdVisibility",
+        "initHubMotdVisibility",
+        "toggleHubMotdVisibility",
+        "switch-vision-hub-motd-visibility-v1",
+    ):
+        assert removed not in page, removed
 
 
 def main() -> int:
     test_motd_default_and_bounded_normalisation()
-    test_motd_is_html_escaped_before_rendering()
-    test_motd_home_layout_accessibility_and_persistence_contract()
+    test_motd_backend_is_preserved_but_not_displayed()
+    test_motd_home_ui_is_fully_removed()
     print("Hub MOTD contract: PASS")
     return 0
 

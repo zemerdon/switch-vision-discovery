@@ -1,3 +1,8 @@
+## 3.1.28 — Remove Hub home-page MOTD
+
+- Remove the Message of the Day panel, Hide/Show control and browser-side visibility handling from the Hub home page.
+- Retain the bounded, configurable, HTML-escaped server-side MOTD contract for possible future reactivation without exposing a dormant notice in the current UI.
+
 ## 3.1.27 — Resilient full SNMP walks
 
 - Keep generic full walks in the internet-management MIB tree so malformed LLDP OID ordering cannot prevent system, interface, PoE and vendor evidence collection.
