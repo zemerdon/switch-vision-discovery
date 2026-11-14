@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-SWITCH_VISION_DISCOVERY_VERSION="3.1.26"
+SWITCH_VISION_DISCOVERY_VERSION="3.1.27"
 export SWITCH_VISION_DISCOVERY_VERSION
 
 CONFIG_FILE="${SWITCH_VISION_OPTIONS_FILE:-/data/options.json}"
@@ -917,6 +917,17 @@ walk_has_interface_name_table() {
     || grep -q "iso.3.6.1.2.1.2.2.1.2" "$f" 2>/dev/null
 }
 
+walk_has_system_identity() {
+  f="$1"
+  # Exact returned SNMP system identity rows, not comments or LLDP neighbours.
+  grep -Eq '^[.]?(1[.]3[.]6[.]1[.]2[.]1[.]1[.](1|2)[.]0|iso[.]3[.]6[.]1[.]2[.]1[.]1[.](1|2)[.]0)[[:space:]]*=' "$f" 2>/dev/null
+}
+
+walk_has_switch_tables() {
+  f="$1"
+  walk_has_system_identity "$f" && walk_has_interface_name_table "$f"
+}
+
 walk_marked_failed() {
   f="$1"
   grep -q "# Switch Vision SNMP walk result: failed" "$f" 2>/dev/null || grep -q "# Switch Vision SNMP walk result: insufficient_data" "$f" 2>/dev/null
@@ -1164,16 +1175,19 @@ $full_vendor_root
       done
     else
       echo "Running full SNMP walk" >> "$LIVE_LOG_PATH"
-      full_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP 1"
+      # Begin at the internet-management subtree. ISO 1.0.8802 (LLDP) is
+      # not a Discovery input and some agents emit out-of-order LLDP OIDs,
+      # prematurely terminating a root-1 walk before system/IF-MIB data.
+      full_command="snmpwalk -On -v2c -c ******** -t $LIVE_SNMP_TIMEOUT -r $LIVE_SNMP_RETRIES $LIVE_SWITCH_IP 1.3.6.1"
       echo "Command: $full_command" >> "$LIVE_LOG_PATH"
       sv_status "Running SNMP walks" "${SELECTED_SWITCH:-${LIVE_SWITCH_LABEL:-Switch}}" "$LIVE_SWITCH_IP" "$full_command" "Reading all SNMP data"
       sv_debug "COMMAND: $full_command"
       {
         echo ""
-        echo "# --- full walk: 1 ---"
+        echo "# --- full walk: 1.3.6.1 ---"
       } >> "$LIVE_OUTPUT_PATH"
       total=1
-      if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" 1 >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
+      if snmpwalk -On -v2c -c "$LIVE_SNMP_COMMUNITY" -t "$LIVE_SNMP_TIMEOUT" -r "$LIVE_SNMP_RETRIES" "$LIVE_SWITCH_IP" 1.3.6.1 >> "$LIVE_OUTPUT_PATH" 2>> "$LIVE_LOG_PATH"; then
         echo "OK: full walk" >> "$LIVE_LOG_PATH"
       else
         failures=1
@@ -1543,7 +1557,16 @@ $full_vendor_root
     result="WARN"
     reason="SNMP walk completed with warnings"
   fi
-  if [ "$line_count" -lt "${LIVE_MIN_VALID_LINES:-100}" ] && ! walk_has_interface_name_table "$LIVE_OUTPUT_PATH"; then
+  if [ "$LIVE_SNMPWALK_MODE" = "full" ] && ! walk_has_switch_tables "$LIVE_OUTPUT_PATH"; then
+    # A huge LLDP-only partial walk is not usable switch evidence.
+    result="FAIL"
+    reason="Full SNMP walk missing system identity or interface-name table"
+    echo "# Switch Vision SNMP walk result: insufficient_data" >> "$LIVE_OUTPUT_PATH"
+  elif ! walk_has_system_identity "$LIVE_OUTPUT_PATH" && ! walk_has_interface_name_table "$LIVE_OUTPUT_PATH"; then
+    result="FAIL"
+    reason="SNMP walk missing system identity and interface-name table"
+    echo "# Switch Vision SNMP walk result: insufficient_data" >> "$LIVE_OUTPUT_PATH"
+  elif [ "$line_count" -lt "${LIVE_MIN_VALID_LINES:-100}" ] && ! walk_has_interface_name_table "$LIVE_OUTPUT_PATH"; then
     result="FAIL"
     reason="SNMP output too small or missing ifName/ifDescr interface-name table"
     echo "# Switch Vision SNMP walk result: insufficient_data" >> "$LIVE_OUTPUT_PATH"

@@ -30,6 +30,7 @@ PERMANENT_CHECKS = (
     "tools/test_avaya_chassis_temperature.py",
     "tools/test_tplink_full_walk_registration.py",
     "tools/test_tplink_walk_collection_contract.py",
+    "tools/test_full_snmp_walk_integrity.py",
     "tools/test_dell_n4032f.py",
     "tools/test_dell_n2128px_optics.py",
     "tools/test_dell_powerconnect_5548.py",

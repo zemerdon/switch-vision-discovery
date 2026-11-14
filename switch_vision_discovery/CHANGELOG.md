@@ -1,3 +1,9 @@
+## 3.1.27 — Resilient full SNMP walks
+
+- Keep generic full walks in the internet-management MIB tree so malformed LLDP OID ordering cannot prevent system, interface, PoE and vendor evidence collection.
+- Reject incomplete full walks without system identity and interface tables rather than accepting an unrelated high row count; retain transparent failures and do not reuse failed partial walks.
+- Preserve the existing model/port contracts, read-only collection and vendor-specific full-walk handling.
+
 ## 3.1.26 — Dell 5548 identity and bounded chassis telemetry
 
 - Recognise the non-PoE PowerConnect 5548 from its exact Dell OID, preserving 48 RJ45 and two SFP+ ports, and fix the incorrect 5548P fixture OID.
